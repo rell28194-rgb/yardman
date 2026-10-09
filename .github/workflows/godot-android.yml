@@ -1,0 +1,37 @@
+name: Yardman Godot Android
+
+on:
+  push:
+    branches:
+      - codex/godot-beta-001
+    paths:
+      - 'godot/**'
+      - '.github/workflows/godot-android.yml'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Export Yardman Android APK
+        uses: dulvui/godot-android-export@v4.0.0
+        with:
+          working-directory: godot
+          godot-version: '4.7.2'
+          godot-channel: stable
+
+      - name: Inspect build output
+        run: |
+          find godot -maxdepth 3 -type f -printf '%p %s bytes\n' | sort
+          test -f godot/build/Yardman-Beta.apk
+
+      - name: Upload Yardman APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Beta-Android
+          path: godot/build/Yardman-Beta.apk
+          if-no-files-found: error
+          retention-days: 30
