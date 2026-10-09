@@ -23,21 +23,15 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq osmium-tool
-          python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4'
+          python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4' 'osmium>=4,<5'
+          python -m unittest discover -s godot/tests -p 'test_*.py' -v
 
           wget -q \
             https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf \
             -O /tmp/jamaica.osm.pbf
 
-          osmium tags-filter /tmp/jamaica.osm.pbf w/highway \
-            -o /tmp/jamaica-roads.osm.pbf --overwrite
-          osmium export /tmp/jamaica-roads.osm.pbf \
-            -f geojson -o /tmp/jamaica-roads.geojson --overwrite
-
           python godot/tools/build_jamaica_roads.py \
-            /tmp/jamaica-roads.geojson godot/data/roads --tile-size 4096
+            /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096
 
           python - <<'PY'
           import json
@@ -136,6 +130,14 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/smoke.log; then exit 1; fi
           grep -q 'YARDMAN_SMOKE_PASS' godot/build/smoke.log
 
+      - name: Test streaming and national road topology
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/streaming_test.gd 2>&1 | tee godot/build/streaming.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/streaming.log; then exit 1; fi
+          grep -q 'YARDMAN_STREAMING_TEST PASS' godot/build/streaming.log
+
       - name: Export Yardman debug APK
         shell: bash
         run: |
@@ -150,10 +152,8 @@ jobs:
           set -euxo pipefail
           ls -lh godot/build/Yardman-Beta.apk
           sha256sum godot/build/Yardman-Beta.apk | tee godot/build/Yardman-Beta.apk.sha256
-          unzip -tq godot/build/Yardman-Beta.apk
-          if command -v apkanalyzer >/dev/null 2>&1; then
-            apkanalyzer manifest application-id godot/build/Yardman-Beta.apk || true
-          fi
+          python godot/tools/validate_apk.py godot/build/Yardman-Beta.apk godot/data/roads/manifest.json
+          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose godot/build/Yardman-Beta.apk
 
       - name: Upload map QA and Yardman APK
         uses: actions/upload-artifact@v4

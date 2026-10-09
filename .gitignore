@@ -30,3 +30,4 @@ world-registry/
 godot/.godot/
 godot/build/
 godot/data/roads/
+godot/data/roads.staging/

@@ -6,11 +6,13 @@ import argparse
 import json
 import math
 import shutil
+import hashlib
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict, Iterator, List, Sequence, Tuple
 
 from pyproj import Transformer
+from road_graph import build_network, partition_id, read_osm_features
 
 CRS_SOURCE = "EPSG:4326"
 CRS_TARGET = "EPSG:3448"
@@ -52,7 +54,7 @@ PARISH_COVERAGE_ANCHORS = {
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
-    p.add_argument("input_geojson", type=Path)
+    p.add_argument("input_geojson", type=Path, help="OSM PBF or GeoJSON")
     p.add_argument("output_dir", type=Path)
     p.add_argument("--tile-size", type=float, default=DEFAULT_TILE_SIZE)
     return p.parse_args()
@@ -86,137 +88,82 @@ def road_flags(properties: dict) -> int:
     return flags
 
 
-def main() -> int:
-    args = parse_args()
-    if args.tile_size <= 0:
-        raise SystemExit("--tile-size must be positive")
-
-    data = json.loads(args.input_geojson.read_text(encoding="utf-8"))
-    if data.get("type") != "FeatureCollection":
-        raise SystemExit("Expected a GeoJSON FeatureCollection from osmium export")
-
-    out = args.output_dir
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True, exist_ok=True)
-
+def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE_SIZE,
+                    require_national_coverage: bool = True, height_sampler=None) -> dict:
+    if tile_size <= 0 or not math.isfinite(tile_size):
+        raise ValueError("--tile-size must be finite and positive")
+    if input_path.suffix == ".pbf":
+        features = read_osm_features(input_path)
+    else:
+        data = json.loads(input_path.read_text(encoding="utf-8"))
+        if data.get("type") != "FeatureCollection":
+            raise ValueError("Expected a GeoJSON FeatureCollection or OSM PBF")
+        features = data.get("features", [])
     transformer = Transformer.from_crs(CRS_SOURCE, CRS_TARGET, always_xy=True)
     origin_e, origin_n = transformer.transform(ORIGIN_LON, ORIGIN_LAT)
-    anchor_local = {}
-    for parish, (lat, lon) in PARISH_COVERAGE_ANCHORS.items():
+    anchors = {}
+    for name, (lat, lon) in PARISH_COVERAGE_ANCHORS.items():
         e, n = transformer.transform(lon, lat)
-        anchor_local[parish] = (e - origin_e, origin_n - n)
-    anchor_min_d2 = {parish: float("inf") for parish in anchor_local}
-
-    tiles: Dict[Tuple[int, int], List[list]] = defaultdict(list)
-    by_type: Counter[str] = Counter()
-    feature_count = 0
-    segment_count = 0
-    skipped_non_drivable = 0
-    degenerate_segments = 0
-    min_x = min_z = float("inf")
-    max_x = max_z = float("-inf")
-
-    for feature in data.get("features", []):
-        props = feature.get("properties") or {}
-        highway = props.get("highway")
-        if highway is None and isinstance(props.get("tags"), dict):
-            highway = props["tags"].get("highway")
-        if highway not in ROAD_WIDTHS:
-            if highway:
-                skipped_non_drivable += 1
-            continue
-
-        geometry = feature.get("geometry") or {}
-        had_segment = False
-        width = ROAD_WIDTHS[highway]
-        class_id = ROAD_CLASSES[highway]
-        flags = road_flags(props)
-
-        for line in iter_lines(geometry):
-            if len(line) < 2:
-                continue
-            projected: List[Tuple[float, float]] = []
-            for lon, lat, *_ in line:
-                e, n = transformer.transform(float(lon), float(lat))
-                local = (e - origin_e, origin_n - n)
-                projected.append(local)
-                for parish, anchor in anchor_local.items():
-                    d2 = (local[0] - anchor[0]) ** 2 + (local[1] - anchor[1]) ** 2
-                    if d2 < anchor_min_d2[parish]:
-                        anchor_min_d2[parish] = d2
-
-            for (x1, z1), (x2, z2) in zip(projected, projected[1:]):
-                if math.hypot(x2 - x1, z2 - z1) < 0.25:
-                    degenerate_segments += 1
-                    continue
-                tile = midpoint_tile(x1, z1, x2, z2, args.tile_size)
-                tiles[tile].append([
-                    round(x1, 1), round(z1, 1), round(x2, 1), round(z2, 1),
-                    width, class_id, flags,
-                ])
-                min_x = min(min_x, x1, x2)
-                max_x = max(max_x, x1, x2)
-                min_z = min(min_z, z1, z2)
-                max_z = max(max_z, z1, z2)
-                segment_count += 1
-                had_segment = True
-
-        if had_segment:
-            feature_count += 1
-            by_type[highway] += 1
-
-    if segment_count == 0:
-        raise SystemExit("No drivable road segments were generated")
-
-    span_x = max_x - min_x
-    span_z = max_z - min_z
-    if span_x < 180000.0 or span_z < 45000.0:
-        raise SystemExit(f"Road coverage is too small for Jamaica: span={span_x:.0f}m x {span_z:.0f}m")
-
-    anchor_coverage = {parish: round(math.sqrt(d2), 1) for parish, d2 in anchor_min_d2.items()}
-    missing_parishes = [name for name, distance in anchor_coverage.items() if distance > 10000.0]
-    if missing_parishes:
-        raise SystemExit(
-            "Parish road coverage check failed (>10 km from nearest road): " + ", ".join(missing_parishes)
-        )
-
+        anchors[name] = (e - origin_e, origin_n - n)
+    network = build_network(features, transformer, (origin_e, origin_n), tile_size,
+                            ROAD_WIDTHS, ROAD_CLASSES, road_flags, anchors, height_sampler)
+    stats, bounds = network["stats"], network["bounds"]
+    if not stats["source_segments"]:
+        raise ValueError("No drivable road segments were generated")
+    if require_national_coverage:
+        if bounds[2] - bounds[0] < 180000 or bounds[3] - bounds[1] < 45000:
+            raise ValueError("Road coverage is too small for Jamaica")
+        missing = [p for p, d in stats["parish_anchor_distance_m"].items() if d > 10000]
+        if missing:
+            raise ValueError("Missing parish coverage: " + ", ".join(missing))
+    # Build into a sibling staging directory; failed compiles retain old outputs.
+    staging = out.with_name(out.name + ".staging")
+    if staging.exists():
+        shutil.rmtree(staging)
+    (staging / "graph").mkdir(parents=True)
     tile_entries = []
-    for (tx, tz), segments in sorted(tiles.items()):
-        name = f"tile_{tx}_{tz}.json"
+    for (tx, tz), segments in sorted(network["tiles"].items()):
+        filename = f"tile_{tx}_{tz}.json"
         payload = {"tile": [tx, tz], "segments": segments}
-        (out / name).write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
-        tile_entries.append({"x": tx, "z": tz, "file": name, "segments": len(segments)})
-
+        (staging / filename).write_text(json.dumps(payload, separators=(",", ":")))
+        tile_entries.append({"x": tx, "z": tz, "file": filename, "segments": len(segments)})
+    for kind in ("nodes", "edges"):
+        partitions = defaultdict(dict)
+        for identifier, item in sorted(network[kind].items()):
+            partitions[partition_id(identifier)][identifier] = item
+        for partition, values in sorted(partitions.items()):
+            (staging / "graph" / f"{kind}_{partition}.json").write_text(
+                json.dumps(values, separators=(",", ":")), encoding="utf-8")
     manifest = {
-        "format": 1,
-        "source": "OpenStreetMap / Geofabrik Jamaica extract",
-        "crs": CRS_TARGET,
-        "origin": {
-            "lat": ORIGIN_LAT, "lon": ORIGIN_LON,
-            "easting": round(origin_e, 3), "northing": round(origin_n, 3),
-        },
-        "axis": "X=east, Z=south, metres",
-        "tile_size": args.tile_size,
-        "bounds": [round(min_x, 1), round(min_z, 1), round(max_x, 1), round(max_z, 1)],
-        "road_classes": ROAD_CLASSES,
-        "road_widths": ROAD_WIDTHS,
-        "tiles": tile_entries,
-        "stats": {
-            "road_features": feature_count,
-            "segments": segment_count,
-            "tiles": len(tile_entries),
-            "skipped_non_drivable_features": skipped_non_drivable,
-            "degenerate_segments": degenerate_segments,
-            "by_highway_type": dict(sorted(by_type.items())),
-            "parish_anchor_distance_m": anchor_coverage,
-        },
+        "format": 2, "source": "OpenStreetMap / Geofabrik Jamaica extract",
+        "source_sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
+        "attribution": "© OpenStreetMap contributors — https://www.openstreetmap.org/copyright (ODbL)",
+        "crs": CRS_TARGET, "origin": {"lat": ORIGIN_LAT, "lon": ORIGIN_LON,
+                                      "easting": origin_e, "northing": origin_n},
+        "axis": "X=east, Y=elevation, Z=south, metres",
+        "tile_size": tile_size, "bounds": [round(v, 3) for v in bounds],
+        "road_classes": ROAD_CLASSES, "road_widths": ROAD_WIDTHS,
+        "graph": {"format": 1, "partition": "sha1(id)[0:2]", "directory": "graph",
+                  "nodes": stats["graph_nodes"], "edges": stats["graph_edges"]},
+        "elevation_source": "DEM" if height_sampler else "unmeasured-flat",
+        "tiles": tile_entries, "stats": stats,
+        "parish_anchors": {name: {"lat": PARISH_COVERAGE_ANCHORS[name][0],
+                                   "lon": PARISH_COVERAGE_ANCHORS[name][1],
+                                   "x": position[0], "z": position[1]} for name, position in anchors.items()},
     }
-    (out / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+    (staging / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
+    if out.exists():
+        shutil.rmtree(out)
+    staging.replace(out)
+    return manifest
 
+
+def main() -> int:
+    args = parse_args()
+    manifest = compile_dataset(args.input_geojson, args.output_dir, args.tile_size)
     print(json.dumps(manifest["stats"], indent=2, sort_keys=True))
     print(f"Bounds (m): {manifest['bounds']}")
-    print(f"Wrote {len(tile_entries)} streamed road tiles to {out}")
+    print(f"Wrote {len(manifest['tiles'])} road tiles and persistent topology to {args.output_dir}")
     return 0
 
 

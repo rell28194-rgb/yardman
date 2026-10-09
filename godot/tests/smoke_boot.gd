@@ -16,10 +16,12 @@ func _run() -> void:
         return
     var scene := packed.instantiate()
     root.add_child(scene)
-    for frame in range(60):
-        await physics_frame
-    var car := scene.get_node_or_null("RoadQA") as CharacterBody3D
     var roads := scene.get_node_or_null("JamaicaRoadStreamer")
+    for frame in range(600):
+        await physics_frame
+        if frame >= 60 and roads != null and roads.is_tile_ready(Vector2i.ZERO):
+            break
+    var car := scene.get_node_or_null("RoadQA") as CharacterBody3D
     if car == null or roads == null:
         _fail("Vehicle or road streamer is absent after boot")
         return
