@@ -1,0 +1,12 @@
+{
+  "source_id": "yardman-synthetic-v1",
+  "author": "Yardman project",
+  "source_uri": "project://World/Fixtures/synthetic_world.json",
+  "source_date": "2026-10-09",
+  "license": "Original project test fixture; repository license",
+  "rights_status": "APPROVED",
+  "horizontal_crs": "SYNTHETIC_PROJECTED_METRES",
+  "vertical_datum_id": "SYNTHETIC_METRES",
+  "evidence_class": "SYNTHETIC_TEST_ONLY",
+  "input_file": "synthetic_world.json"
+}
