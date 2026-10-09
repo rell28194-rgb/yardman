@@ -27,7 +27,7 @@ jobs:
           sudo apt-get install -y -qq osmium-tool
           python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4'
 
-          wget -q --show-progress \
+          wget -q \
             https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf \
             -O /tmp/jamaica.osm.pbf
 
@@ -81,12 +81,12 @@ jobs:
         run: |
           set -euxo pipefail
           BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
-          wget -q --show-progress "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
           unzip -q /tmp/godot.zip -d /tmp/godot-bin
           chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
           sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
 
-          wget -q --show-progress "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_export_templates.tpz" -O /tmp/godot-templates.tpz
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_export_templates.tpz" -O /tmp/godot-templates.tpz
           rm -rf /tmp/godot-templates
           mkdir -p /tmp/godot-templates
           unzip -q /tmp/godot-templates.tpz -d /tmp/godot-templates
@@ -125,15 +125,23 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          timeout 90 godot --headless --path godot --editor --quit || test $? -eq 124
-          godot --headless --path godot --editor --quit --verbose
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/import.log; then exit 1; fi
+
+      - name: Smoke-test project boot
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/smoke_boot.gd 2>&1 | tee godot/build/smoke.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/smoke.log; then exit 1; fi
+          grep -q 'YARDMAN_SMOKE_PASS' godot/build/smoke.log
 
       - name: Export Yardman debug APK
         shell: bash
         run: |
           set -euxo pipefail
           cd godot
-          godot --headless --export-debug Android build/Yardman-Beta.apk --verbose
+          godot --headless --export-debug Android build/Yardman-Beta.apk 2>&1 | tee build/export.log
           test -s build/Yardman-Beta.apk
 
       - name: Validate APK
@@ -156,4 +164,15 @@ jobs:
             godot/build/Yardman-Beta.apk.sha256
             godot/data/roads/manifest.json
           if-no-files-found: error
+          retention-days: 30
+
+      - name: Preserve build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Build-Diagnostics
+          path: |
+            godot/build/*.log
+            godot/data/roads/manifest.json
+          if-no-files-found: warn
           retention-days: 30

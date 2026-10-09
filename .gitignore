@@ -27,3 +27,6 @@ world-registry/
 *.aab
 *.log
 .artifacts-*
+godot/.godot/
+godot/build/
+godot/data/roads/
