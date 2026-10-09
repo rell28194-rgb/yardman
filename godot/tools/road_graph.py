@@ -199,6 +199,7 @@ def build_network(features, transformer, origin, tile_size, widths, classes,
     nodes, edges, tiles = {}, {}, defaultdict(list)
     counts = Counter()
     anchor_min = {name: float("inf") for name in anchors}
+    anchor_roads = {}
     bounds = [float("inf"), float("inf"), float("-inf"), float("-inf")]
     source_segments = degenerate = continuations = 0
     for source_id, line_index, tags, points, refs in sorted(ways, key=lambda w: (w[0], w[1])):
@@ -241,14 +242,21 @@ def build_network(features, transformer, origin, tile_size, widths, classes,
                 continuations += max(0, len(center_pieces) - 1)
                 for tile, polygon in ribbon_tiles(a, b, width, tile_size):
                     # First seven fields remain compatible with the old renderer.
-                    tiles[tile].append([a[0], a[2], b[0], b[2], width, classes[highway], flags,
-                                        eid, segment_index, a[1], b[1], polygon])
+                    surfaces = height_sampler.conform_polygon(polygon) if hasattr(height_sampler, "conform_polygon") else [polygon]
+                    for surface in surfaces:
+                        tiles[tile].append([a[0], a[2], b[0], b[2], width, classes[highway], flags,
+                                            eid, segment_index, a[1], b[1], surface])
                     touched.add(tile)
                 for point in (a, b):
                     bounds[0] = min(bounds[0], point[0]); bounds[1] = min(bounds[1], point[2])
                     bounds[2] = max(bounds[2], point[0]); bounds[3] = max(bounds[3], point[2])
                     for parish, anchor in anchors.items():
-                        anchor_min[parish] = min(anchor_min[parish], math.hypot(point[0] - anchor[0], point[2] - anchor[1]))
+                        distance = math.hypot(point[0] - anchor[0], point[2] - anchor[1])
+                        if distance < anchor_min[parish]:
+                            anchor_min[parish] = distance
+                            direction = -1 if edge["direction"] == -1 else 1
+                            anchor_roads[parish] = {"road_position": point, "road_edge_id": eid,
+                                "heading": math.atan2(-(b[0] - a[0]) * direction, -(b[2] - a[2]) * direction)}
             edge["tiles"] = sorted(touched)
             had_edge = True
         if had_edge:
@@ -264,4 +272,4 @@ def build_network(features, transformer, origin, tile_size, widths, classes,
              "skipped_non_drivable_features": skipped, "degenerate_segments": degenerate,
              "by_highway_type": dict(sorted(counts.items())),
              "parish_anchor_distance_m": {k: round(v, 1) for k, v in sorted(anchor_min.items())}}
-    return {"nodes": nodes, "edges": edges, "tiles": tiles, "bounds": bounds, "stats": stats}
+    return {"nodes": nodes, "edges": edges, "tiles": tiles, "bounds": bounds, "stats": stats, "anchor_roads": anchor_roads}

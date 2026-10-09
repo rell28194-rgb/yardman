@@ -1,0 +1,11 @@
+# Registered national terrain
+
+The compiler acquires the five public Copernicus GLO-30 COGs covering Jamaica from the AWS public bucket. Source URLs and SHA-256 hashes are retained in each terrain manifest. This is a 2021 public release of a digital surface model, including canopy/building effects; it is not a current bare-earth survey. Its vertical datum is EGM2008. Horizontal registration is EPSG:3448 with exactly the same origin and east/south axes as roads. Both horizontal distance and elevation retain real metres.
+
+The first interaction grid has 4,096 m tiles and 65 × 65 float32 samples per tile, hence 64 m runtime spacing. Higher sample density can replace this grid without changing canonical tile addresses, graph IDs or saves. One shared national sampling grid produces byte-identical adjacent edges. The current real source generates 1,416 tiles and a 2,248.87 m sampled peak. Missing ocean source cells are zero; a DEM-derived water edge is only an initial shoreline approximation. Surveyed coastline, hydrography, higher resolution ground data and land-cover materials remain future layers.
+
+The renderer streams a bounded near ring with terrain collision. Reads run on capped worker threads and mesh rows integrate within a frame budget. Far terrain uses a coarse national shell with a cutout over the interaction ring. The player is held until the footprint's collision tiles are ready, including both sides of tile borders. Terrain and road roots share a double-precision world frame; origin shifts move local representations together. Evicting a collider or render root does not change geography.
+
+Road surfaces are clipped onto the exact same terrain grid triangles as the physics mesh, including road width. Sampling only centreline endpoints would bury ribbons between samples. Triangle clipping prevents that mismatch and preserves common seam elevation. Bridge/tunnel metadata survives, but deck and portal heights are not surveyed and must not be mistaken for finished engineering structures.
+
+Compiler checks validate every shared height edge and plausible national peak height. Unit checks cover piecewise triangle sampling, seam continuity, and complete road-surface conformity on non-planar terrain. CI packages and checks every height file and the overview, so passing on the host cannot hide missing Android terrain data.

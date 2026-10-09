@@ -57,6 +57,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("input_geojson", type=Path, help="OSM PBF or GeoJSON")
     p.add_argument("output_dir", type=Path)
     p.add_argument("--tile-size", type=float, default=DEFAULT_TILE_SIZE)
+    p.add_argument("--terrain", type=Path, help="Compiled terrain root for registered road elevation")
     return p.parse_args()
 
 
@@ -147,7 +148,7 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
                   "nodes": stats["graph_nodes"], "edges": stats["graph_edges"]},
         "elevation_source": "DEM" if height_sampler else "unmeasured-flat",
         "tiles": tile_entries, "stats": stats,
-        "parish_anchors": {name: {"lat": PARISH_COVERAGE_ANCHORS[name][0],
+        "parish_anchors": {name: {**network["anchor_roads"].get(name, {}), "lat": PARISH_COVERAGE_ANCHORS[name][0],
                                    "lon": PARISH_COVERAGE_ANCHORS[name][1],
                                    "x": position[0], "z": position[1]} for name, position in anchors.items()},
     }
@@ -160,7 +161,11 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
 
 def main() -> int:
     args = parse_args()
-    manifest = compile_dataset(args.input_geojson, args.output_dir, args.tile_size)
+    sampler = None
+    if args.terrain:
+        from build_terrain import TerrainSampler
+        sampler = TerrainSampler(args.terrain)
+    manifest = compile_dataset(args.input_geojson, args.output_dir, args.tile_size, height_sampler=sampler)
     print(json.dumps(manifest["stats"], indent=2, sort_keys=True))
     print(f"Bounds (m): {manifest['bounds']}")
     print(f"Wrote {len(manifest['tiles'])} road tiles and persistent topology to {args.output_dir}")
