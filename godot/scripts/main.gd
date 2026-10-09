@@ -1,21 +1,6 @@
 extends Node3D
 
-const PARISHES = [
-    ["Kingston", Vector3(0,0,0)],
-    ["St. Andrew", Vector3(-4200,0,-6200)],
-    ["St. Catherine", Vector3(-21000,0,-1800)],
-    ["Clarendon", Vector3(-41000,0,3500)],
-    ["Manchester", Vector3(-56000,0,9000)],
-    ["St. Elizabeth", Vector3(-76000,0,13000)],
-    ["Westmoreland", Vector3(-96000,0,6000)],
-    ["Hanover", Vector3(-106000,0,-8000)],
-    ["St. James", Vector3(-91000,0,-16500)],
-    ["Trelawny", Vector3(-70000,0,-19000)],
-    ["St. Ann", Vector3(-47000,0,-21000)],
-    ["St. Mary", Vector3(-25000,0,-22500)],
-    ["Portland", Vector3(-5000,0,-19000)],
-    ["St. Thomas", Vector3(12000,0,-8500)]
-]
+const RoadStreamerScript = preload("res://scripts/road_streamer.gd")
 
 var car: CharacterBody3D
 var hud_label: Label
@@ -28,10 +13,9 @@ var touch_brake := false
 
 func _ready() -> void:
     _make_environment()
-    _make_island_proxy()
-    _make_kingston_test_grid()
-    _make_parish_markers()
-    _make_car()
+    _make_low_detail_island_base()
+    _make_qa_car()
+    _make_road_streamer()
     _make_camera()
     _make_hud()
 
@@ -52,84 +36,41 @@ func _make_environment() -> void:
     sun.shadow_enabled = true
     add_child(sun)
 
-func _make_island_proxy() -> void:
-    # Full-island coordinate envelope. One Godot unit equals one real-world metre.
+func _make_low_detail_island_base() -> void:
+    # Temporary low-detail traversal surface. The road network is geographically
+    # real and 1:1; terrain elevation/coastline detail is the next map layer.
     var ground := MeshInstance3D.new()
     var mesh := PlaneMesh.new()
-    mesh.size = Vector2(235000, 82000)
+    mesh.size = Vector2(235000.0, 82000.0)
     ground.mesh = mesh
-    ground.position = Vector3(-47000, -0.05, -3000)
+    ground.position = Vector3(-47000.0, -0.05, -3000.0)
     var mat := StandardMaterial3D.new()
     mat.albedo_color = Color(0.18, 0.38, 0.16)
+    mat.roughness = 1.0
     ground.material_override = mat
     add_child(ground)
 
     var body := StaticBody3D.new()
     var shape := CollisionShape3D.new()
     var box := BoxShape3D.new()
-    box.size = Vector3(235000, 1, 82000)
+    box.size = Vector3(235000.0, 1.0, 82000.0)
     shape.shape = box
-    body.position = Vector3(-47000, -0.55, -3000)
+    body.position = Vector3(-47000.0, -0.55, -3000.0)
     body.add_child(shape)
     add_child(body)
 
-func _make_kingston_test_grid() -> void:
-    # First local fidelity layer: a light Kingston road/building grid while the
-    # full Jamaica coordinate space remains active at true horizontal scale.
-    var road_mat := StandardMaterial3D.new()
-    road_mat.albedo_color = Color(0.12, 0.13, 0.14)
-    road_mat.roughness = 0.9
+func _make_road_streamer() -> void:
+    var streamer = RoadStreamerScript.new()
+    streamer.name = "JamaicaRoadStreamer"
+    streamer.target = car
+    streamer.load_radius = 2
+    add_child(streamer)
 
-    for z in [-420.0, -140.0, 140.0, 420.0]:
-        var road := MeshInstance3D.new()
-        var road_mesh := BoxMesh.new()
-        road_mesh.size = Vector3(1400.0, 0.04, 18.0)
-        road.mesh = road_mesh
-        road.position = Vector3(0, 0.03, z)
-        road.material_override = road_mat
-        add_child(road)
-
-    for x in [-420.0, -140.0, 140.0, 420.0]:
-        var road := MeshInstance3D.new()
-        var road_mesh := BoxMesh.new()
-        road_mesh.size = Vector3(18.0, 0.04, 1100.0)
-        road.mesh = road_mesh
-        road.position = Vector3(x, 0.03, 0)
-        road.material_override = road_mat
-        add_child(road)
-
-    var building_mat := StandardMaterial3D.new()
-    building_mat.albedo_color = Color(0.62, 0.58, 0.50)
-    for i in range(48):
-        var gx := float((i % 8) - 4) * 105.0 + 48.0
-        var gz := float((i / 8) - 3) * 125.0 + 52.0
-        if abs(gx) < 28.0 or abs(gz) < 28.0:
-            continue
-        var h := 12.0 + float((i * 17) % 45)
-        var building := MeshInstance3D.new()
-        var bm := BoxMesh.new()
-        bm.size = Vector3(42.0 + float(i % 3) * 8.0, h, 52.0)
-        building.mesh = bm
-        building.position = Vector3(gx, h * 0.5, gz)
-        building.material_override = building_mat
-        add_child(building)
-
-func _make_parish_markers() -> void:
-    for p in PARISHES:
-        var marker := MeshInstance3D.new()
-        var cyl := CylinderMesh.new()
-        cyl.top_radius = 80
-        cyl.bottom_radius = 80
-        cyl.height = 8
-        marker.mesh = cyl
-        marker.position = p[1]
-        var mat := StandardMaterial3D.new()
-        mat.albedo_color = Color(0.9, 0.85, 0.2)
-        marker.material_override = mat
-        add_child(marker)
-
-func _make_car() -> void:
+func _make_qa_car() -> void:
+    # This is intentionally only a traversal/QA vehicle. Handling tuning comes
+    # after the map baseline passes island-wide road coverage checks.
     car = CharacterBody3D.new()
+    car.name = "RoadQA"
     car.position = Vector3(0, 1.0, 0)
 
     var body_mesh := MeshInstance3D.new()
@@ -157,9 +98,9 @@ func _make_car() -> void:
     car.add_child(cabin)
 
     var collider := CollisionShape3D.new()
-    var shape := BoxShape3D.new()
-    shape.size = Vector3(1.9, 0.7, 4.2)
-    collider.shape = shape
+    var collision_shape := BoxShape3D.new()
+    collision_shape.size = Vector3(1.9, 0.7, 4.2)
+    collider.shape = collision_shape
     collider.position.y = 0.55
     car.add_child(collider)
     add_child(car)
@@ -174,7 +115,7 @@ func _make_camera() -> void:
 
 func _make_hud() -> void:
     var layer := CanvasLayer.new()
-    layer.name = "MobileHUD"
+    layer.name = "MapQAHUD"
     add_child(layer)
 
     var root := Control.new()
@@ -192,27 +133,27 @@ func _make_hud() -> void:
     root.add_child(hud_label)
 
     var left := _touch_button("◀", 0.0, 1.0, Vector2(24, -174), Vector2(150, 150))
-    left.button_down.connect(Callable(self, "_left_down"))
-    left.button_up.connect(Callable(self, "_left_up"))
+    left.button_down.connect(_left_down)
+    left.button_up.connect(_left_up)
     root.add_child(left)
 
     var right := _touch_button("▶", 0.0, 1.0, Vector2(190, -174), Vector2(150, 150))
-    right.button_down.connect(Callable(self, "_right_down"))
-    right.button_up.connect(Callable(self, "_right_up"))
+    right.button_down.connect(_right_down)
+    right.button_up.connect(_right_up)
     root.add_child(right)
 
     var brake := _touch_button("BRAKE", 1.0, 1.0, Vector2(-350, -174), Vector2(150, 150))
-    brake.button_down.connect(Callable(self, "_brake_down"))
-    brake.button_up.connect(Callable(self, "_brake_up"))
+    brake.button_down.connect(_brake_down)
+    brake.button_up.connect(_brake_up)
     root.add_child(brake)
 
     var gas := _touch_button("GAS", 1.0, 1.0, Vector2(-174, -174), Vector2(150, 150))
-    gas.button_down.connect(Callable(self, "_gas_down"))
-    gas.button_up.connect(Callable(self, "_gas_up"))
+    gas.button_down.connect(_gas_down)
+    gas.button_up.connect(_gas_up)
     root.add_child(gas)
 
     var reset := _touch_button("RESET", 1.0, 0.0, Vector2(-174, 24), Vector2(150, 72))
-    reset.pressed.connect(Callable(self, "_reset_car"))
+    reset.pressed.connect(_reset_car)
     root.add_child(reset)
 
 func _touch_button(label_text: String, ax: float, ay: float, offset: Vector2, button_size: Vector2) -> Button:
@@ -261,18 +202,6 @@ func _reset_car() -> void:
     speed = 0.0
     steer = 0.0
 
-func _nearest_parish_name() -> String:
-    var best_name := "Kingston"
-    var best_dist := INF
-    for p in PARISHES:
-        var a := Vector2(car.global_position.x, car.global_position.z)
-        var b := Vector2(p[1].x, p[1].z)
-        var d := a.distance_squared_to(b)
-        if d < best_dist:
-            best_dist = d
-            best_name = p[0]
-    return best_name
-
 func _physics_process(delta: float) -> void:
     var throttle := Input.get_axis("ui_down", "ui_up")
     var turn := Input.get_axis("ui_left", "ui_right")
@@ -300,4 +229,8 @@ func _physics_process(delta: float) -> void:
     car.move_and_slide()
 
     if hud_label != null:
-        hud_label.text = "YARDMAN BETA 0.1\n%.0f km/h  |  %s\nX %.0f m   Z %.0f m\nJamaica: 1 m = 1 world unit | 14 parishes" % [abs(speed) * 3.6, _nearest_parish_name(), car.global_position.x, car.global_position.z]
+        hud_label.text = "YARDMAN • MAP BASELINE\n%.0f km/h  |  road-stream QA\nX %.0f m   Z %.0f m\nJAD2001 / EPSG:3448 • 1 unit = 1 metre" % [
+            abs(speed) * 3.6,
+            car.global_position.x,
+            car.global_position.z,
+        ]
