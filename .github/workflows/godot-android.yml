@@ -12,26 +12,114 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
     steps:
       - uses: actions/checkout@v4
 
-      - name: Export Yardman Android APK
-        uses: dulvui/godot-android-export@v4.0.0
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
-          working-directory: godot
-          godot-version: '4.7.2'
-          godot-channel: stable
+          distribution: temurin
+          java-version: '17'
 
-      - name: Inspect build output
+      - name: Set up current Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools build-tools;35.0.1 platforms;android-35'
+          log-accepted-android-sdk-licenses: 'false'
+
+      - name: Verify Android toolchain
+        shell: bash
         run: |
-          find godot -maxdepth 3 -type f -printf '%p %s bytes\n' | sort
-          test -f godot/build/Yardman-Beta.apk
+          set -euxo pipefail
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          java -version
+          sdkmanager --list_installed
+          adb version
+
+      - name: Download Godot 4.7.2 and Android export templates
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q --show-progress "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+
+          wget -q --show-progress "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_export_templates.tpz" -O /tmp/godot-templates.tpz
+          rm -rf /tmp/godot-templates
+          mkdir -p /tmp/godot-templates
+          unzip -q /tmp/godot-templates.tpz -d /tmp/godot-templates
+          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_CHANNEL}"
+          mkdir -p "$TEMPLATE_DIR"
+          cp -a /tmp/godot-templates/templates/. "$TEMPLATE_DIR/"
+          godot --version
+          test -f "$TEMPLATE_DIR/android_debug.apk"
+
+      - name: Configure Godot Android exporter
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "$HOME/.config/godot" "$RUNNER_TEMP/yardman-signing" godot/build
+          KEYSTORE="$RUNNER_TEMP/yardman-signing/debug.keystore"
+          keytool -genkeypair -v \
+            -keystore "$KEYSTORE" \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -dname "CN=Android Debug,O=Yardman,C=US" \
+            -keyalg RSA -keysize 2048 -validity 10000
+
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/debug_keystore = "$KEYSTORE"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+
+          cat "$HOME/.config/godot/editor_settings-4.tres"
+
+      - name: Import and validate Yardman project
+        shell: bash
+        run: |
+          set -euxo pipefail
+          timeout 90 godot --headless --path godot --editor --quit || test $? -eq 124
+          godot --headless --path godot --editor --quit --verbose
+
+      - name: Export Yardman debug APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd godot
+          godot --headless --export-debug Android build/Yardman-Beta.apk --verbose
+          test -s build/Yardman-Beta.apk
+
+      - name: Validate APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ls -lh godot/build/Yardman-Beta.apk
+          sha256sum godot/build/Yardman-Beta.apk | tee godot/build/Yardman-Beta.apk.sha256
+          unzip -tq godot/build/Yardman-Beta.apk
+          if command -v apkanalyzer >/dev/null 2>&1; then
+            apkanalyzer manifest application-id godot/build/Yardman-Beta.apk || true
+          fi
 
       - name: Upload Yardman APK
         uses: actions/upload-artifact@v4
         with:
           name: Yardman-Beta-Android
-          path: godot/build/Yardman-Beta.apk
+          path: |
+            godot/build/Yardman-Beta.apk
+            godot/build/Yardman-Beta.apk.sha256
           if-no-files-found: error
           retention-days: 30
