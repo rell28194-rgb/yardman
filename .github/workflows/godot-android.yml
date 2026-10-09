@@ -1,0 +1,202 @@
+name: Yardman Godot Android
+
+on:
+  push:
+    branches:
+      - codex/godot-beta-001
+    paths:
+      - 'godot/**'
+      - '.github/workflows/godot-android.yml'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build full Jamaica road dataset
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4' 'osmium>=4,<5' 'numpy>=2,<3' 'rasterio>=1.4,<2'
+          python -m unittest discover -s godot/tests -p 'test_*.py' -v
+
+          wget -q \
+            https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf \
+            -O /tmp/jamaica.osm.pbf
+
+          python godot/tools/build_jamaica_roads.py \
+            /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096
+
+          python godot/tools/build_terrain.py /tmp/yardman-dem \
+            godot/data/roads/manifest.json godot/data/terrain --acquire
+          python godot/tools/build_jamaica_roads.py \
+            /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096 --terrain godot/data/terrain
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('godot/data/roads/manifest.json')
+          m = json.loads(p.read_text())
+          s = m['stats']
+          assert s['road_features'] >= 1000, s
+          assert s['segments'] >= 10000, s
+          assert s['tiles'] >= 100, s
+          assert len(s['parish_anchor_distance_m']) == 14, s
+          print('Jamaica map QA passed:', s['road_features'], 'roads,', s['segments'], 'segments,', s['tiles'], 'tiles')
+          PY
+          du -sh godot/data/roads
+          ls -lh godot/data/roads/manifest.json
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up current Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools build-tools;35.0.1 platforms;android-35'
+          log-accepted-android-sdk-licenses: 'false'
+
+      - name: Verify Android toolchain
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          java -version
+          sdkmanager --list_installed
+          adb version
+
+      - name: Download Godot 4.7.2 and Android export templates
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_export_templates.tpz" -O /tmp/godot-templates.tpz
+          rm -rf /tmp/godot-templates
+          mkdir -p /tmp/godot-templates
+          unzip -q /tmp/godot-templates.tpz -d /tmp/godot-templates
+          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_CHANNEL}"
+          mkdir -p "$TEMPLATE_DIR"
+          cp -a /tmp/godot-templates/templates/. "$TEMPLATE_DIR/"
+          godot --version
+          test -f "$TEMPLATE_DIR/android_debug.apk"
+
+      - name: Keep the development signing identity for APK updates
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/yardman-signing
+          key: yardman-android-debug-v1-${{ runner.os }}
+
+      - name: Configure Godot Android exporter
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "$HOME/.config/godot" "$HOME/.local/share/yardman-signing" godot/build
+          KEYSTORE="$HOME/.local/share/yardman-signing/debug.keystore"
+          if [ ! -s "$KEYSTORE" ]; then
+          keytool -genkeypair -v \
+            -keystore "$KEYSTORE" \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -dname "CN=Android Debug,O=Yardman,C=US" \
+            -keyalg RSA -keysize 2048 -validity 10000
+          fi
+
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/debug_keystore = "$KEYSTORE"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+
+      - name: Import and validate Yardman project
+        shell: bash
+        run: |
+          set -euxo pipefail
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/import.log; then exit 1; fi
+
+      - name: Smoke-test project boot
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/smoke_boot.gd 2>&1 | tee godot/build/smoke.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/smoke.log; then exit 1; fi
+          grep -q 'YARDMAN_SMOKE_PASS' godot/build/smoke.log
+
+      - name: Test streaming and national road topology
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/streaming_test.gd 2>&1 | tee godot/build/streaming.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/streaming.log; then exit 1; fi
+          grep -q 'YARDMAN_STREAMING_TEST PASS' godot/build/streaming.log
+
+      - name: Test traversal, all parishes, saves and mobile controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 240 godot --headless --path godot --script res://tests/gameplay_test.gd 2>&1 | tee godot/build/gameplay.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/gameplay.log; then exit 1; fi
+          grep -q 'YARDMAN_GAMEPLAY_TEST PASS' godot/build/gameplay.log
+
+      - name: Export Yardman debug APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd godot
+          godot --headless --export-debug Android build/Yardman-Beta.apk 2>&1 | tee build/export.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' build/export.log; then exit 1; fi
+          test -s build/Yardman-Beta.apk
+
+      - name: Validate APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ls -lh godot/build/Yardman-Beta.apk
+          sha256sum godot/build/Yardman-Beta.apk | tee godot/build/Yardman-Beta.apk.sha256
+          python godot/tools/validate_apk.py godot/build/Yardman-Beta.apk godot/data/roads/manifest.json --terrain-manifest godot/data/terrain/manifest.json
+          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose godot/build/Yardman-Beta.apk
+
+      - name: Upload map QA and Yardman APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Beta-Android
+          path: |
+            godot/build/Yardman-Beta.apk
+            godot/build/Yardman-Beta.apk.sha256
+            godot/data/roads/manifest.json
+            godot/data/terrain/manifest.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Preserve build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Build-Diagnostics
+          path: |
+            godot/build/*.log
+            godot/data/roads/manifest.json
+            godot/data/terrain/manifest.json
+          if-no-files-found: warn
+          retention-days: 30

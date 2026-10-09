@@ -1,0 +1,11 @@
+# Current project context — read 2026-10-09
+
+The connected Drive document [YARDMAN — CANONICAL ENGINE & PIPELINE — GODOT 4.7](https://docs.google.com/document/d/1pMHr95VWzApVtNGtthRPKC0JW3IonxguR28UTHYTjbE/edit) was read in full. It was updated on 2026-10-09 and explicitly makes Godot 4.x, GL Compatibility and GitHub Actions the active runtime/build path. It preserves all fourteen parishes, true metre scale, independent world data, floating origins, bounded streaming and five quality profiles. Old Unity instructions are historical.
+
+The connected [Jamaica 1:1 Godot Dataset Catalog and Import Pipeline](https://docs.google.com/document/d/1TWmBVcCfxymoWtr--RwZ0lp8KOmSdpQwcVTlNsBdf4I/edit) was read in full. Its working CRS is EPSG:3448. It prefers a fixed 2048 or 4096 metre grid, shared terrain edge samples, separate road topology/rendering/traffic products, source IDs, provenance and attribution. Terrain preference remains authoritative bare-earth data, with open global DEM fallback. Current accessible-source candidates include Geofabrik OSM, Copernicus GLO-30, Sentinel-2, ESA WorldCover, Overture and GEBCO. Government imagery/data require their own redistribution terms; access is not a licence.
+
+The catalog still contains one historical Cesium scene-hierarchy example. Its explicit canonical-engine update and the newer engine document take precedence: Yardman implements its own Godot chunk streamer and does not depend on a Unity/Cesium runtime.
+
+The [Yardman beta reference folder](https://drive.google.com/drive/folders/19wGd3wtvvfemXlybsoH-9sl6t5D5AvT8) was listed. It contains the two documents and a multipart `beta.7z.*` archive. The first bounded listing returned 100 entries, so it is not evidence of a complete archive. The archive has not been reconstructed or inspected; no engine, licence or asset-reuse claims are made from filenames. Further Drive searches for Yardman, Jamaica, GIS, terrain, Godot, PVZ and Gangstar did not locate additional relevant documents beyond these two. Library references reviewed in the previous checkpoint remain separate supporting material.
+
+No proprietary reference-game assets or code are shipped by the Godot build. OSM-derived road data is generated independently from Geofabrik and must retain OpenStreetMap contributor attribution and ODbL notices.
