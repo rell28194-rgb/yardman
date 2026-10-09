@@ -1,3 +1,17 @@
+# Active Godot checkpoint — 2026-10-09
+
+The production runtime is Godot 4.7.2 / GL Compatibility on `codex/godot-beta-001`. The material below the historical divider records the previous Unity proof and does not control current engine selection or authentication.
+
+The actual failed Android export in run `37969188477` was repaired by enabling ETC2/ASTC and explicitly packaging road JSON. Recovery commit `aa26c35` and road-continuity commit `cd0da9a` both completed green Android builds. National graph/streaming run: https://github.com/rell28194-rgb/yardman/actions/runs/37977755522.
+
+The next local milestone has registered Copernicus terrain, all-parish road spawns, safe streamed collision, pedestrian movement, vehicle entry/exit/driving, multi-touch, rebased projected-coordinate saves, corruption recovery and five quality profiles. Local gates passed: 15 Python tests, Godot boot, graph/streaming, all fourteen parish visits, walking/driving/entry-exit, save/backup and input checks. A real software OpenGL frame rendered; a signed arm64 APK exported and passed resource/ABI/signature validation. The new commit's CI and Android device evidence must be recorded when available; do not infer them from these host results.
+
+Read `godot/docs/ANDROID.md`, `TERRAIN.md`, `ROAD_GRAPH.md`, `STREAMING.md`, `GAMEPLAY.md` and `DRIVE_CONTEXT.md`. Full-island geography and real metre scale remain the canonical model. Terrain is a coarse DSM shell, not surveyed bare earth. Art, building detail, traffic/NPCs, economy/jobs and device performance remain unfinished; the visual-quality gate is open.
+
+---
+
+## Historical Unity source checkpoint
+
 # Source checkpoint — 2026-10-09
 
 ARCH-PROOF-001 status: **implemented in source; Unity/Android execution pending**.

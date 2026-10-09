@@ -33,6 +33,11 @@ jobs:
           python godot/tools/build_jamaica_roads.py \
             /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096
 
+          python godot/tools/build_terrain.py /tmp/yardman-dem \
+            godot/data/roads/manifest.json godot/data/terrain --acquire
+          python godot/tools/build_jamaica_roads.py \
+            /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096 --terrain godot/data/terrain
+
           python - <<'PY'
           import json
           from pathlib import Path
@@ -90,12 +95,19 @@ jobs:
           godot --version
           test -f "$TEMPLATE_DIR/android_debug.apk"
 
+      - name: Keep the development signing identity for APK updates
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/yardman-signing
+          key: yardman-android-debug-v1-${{ runner.os }}
+
       - name: Configure Godot Android exporter
         shell: bash
         run: |
           set -euxo pipefail
-          mkdir -p "$HOME/.config/godot" "$RUNNER_TEMP/yardman-signing" godot/build
-          KEYSTORE="$RUNNER_TEMP/yardman-signing/debug.keystore"
+          mkdir -p "$HOME/.config/godot" "$HOME/.local/share/yardman-signing" godot/build
+          KEYSTORE="$HOME/.local/share/yardman-signing/debug.keystore"
+          if [ ! -s "$KEYSTORE" ]; then
           keytool -genkeypair -v \
             -keystore "$KEYSTORE" \
             -storepass android \
@@ -103,6 +115,7 @@ jobs:
             -keypass android \
             -dname "CN=Android Debug,O=Yardman,C=US" \
             -keyalg RSA -keysize 2048 -validity 10000
+          fi
 
           cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
           [gd_resource type="EditorSettings" format=3]
@@ -138,12 +151,21 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/streaming.log; then exit 1; fi
           grep -q 'YARDMAN_STREAMING_TEST PASS' godot/build/streaming.log
 
+      - name: Test traversal, all parishes, saves and mobile controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 240 godot --headless --path godot --script res://tests/gameplay_test.gd 2>&1 | tee godot/build/gameplay.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/gameplay.log; then exit 1; fi
+          grep -q 'YARDMAN_GAMEPLAY_TEST PASS' godot/build/gameplay.log
+
       - name: Export Yardman debug APK
         shell: bash
         run: |
           set -euxo pipefail
           cd godot
           godot --headless --export-debug Android build/Yardman-Beta.apk 2>&1 | tee build/export.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' build/export.log; then exit 1; fi
           test -s build/Yardman-Beta.apk
 
       - name: Validate APK
@@ -152,7 +174,7 @@ jobs:
           set -euxo pipefail
           ls -lh godot/build/Yardman-Beta.apk
           sha256sum godot/build/Yardman-Beta.apk | tee godot/build/Yardman-Beta.apk.sha256
-          python godot/tools/validate_apk.py godot/build/Yardman-Beta.apk godot/data/roads/manifest.json
+          python godot/tools/validate_apk.py godot/build/Yardman-Beta.apk godot/data/roads/manifest.json --terrain-manifest godot/data/terrain/manifest.json
           "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose godot/build/Yardman-Beta.apk
 
       - name: Upload map QA and Yardman APK
@@ -163,6 +185,7 @@ jobs:
             godot/build/Yardman-Beta.apk
             godot/build/Yardman-Beta.apk.sha256
             godot/data/roads/manifest.json
+            godot/data/terrain/manifest.json
           if-no-files-found: error
           retention-days: 30
 
@@ -174,5 +197,6 @@ jobs:
           path: |
             godot/build/*.log
             godot/data/roads/manifest.json
+            godot/data/terrain/manifest.json
           if-no-files-found: warn
           retention-days: 30

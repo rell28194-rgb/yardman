@@ -1,0 +1,11 @@
+# Android build
+
+The active workflow is `.github/workflows/godot-android.yml`, on `codex/godot-beta-001`. Godot 4.7.2 stable / GL Compatibility exports a signed development APK for arm64-v8a, package `com.rell.yardman`. App-store publication is not a milestone.
+
+CI installs Python geodata dependencies, tests the compiler, obtains the national OSM PBF and public DEM, builds geographic tiles/graph, imports Godot, boots the main scene, runs streaming and gameplay tests, exports, validates packaged geographic resources and verifies signing. Script/import/export errors fail the job. APK, checksum, source manifests and diagnostic logs are retained as Actions artifacts.
+
+Road JSON, graph shards and terrain JSON/binary samples are explicitly included by the export preset. FileAccess reads do not imply automatic resource inclusion. The APK validator rejects missing/truncated data, a mismatched manifest, wrong ABI or native architecture. A development signing identity is kept outside source control in the workflow cache so future builds can update the installed app. Earlier experimental APKs used ephemeral certificates and may require uninstalling before this new signing identity; preserve needed saves first.
+
+For local builds, use a Godot 4.7.2 binary, its Android debug template, JDK 17 and the Android SDK. Keep exporter configuration and signing files outside Git. Generate `godot/data/roads` with `tools/build_jamaica_roads.py`, compile `godot/data/terrain` with `tools/build_terrain.py --acquire`, then regenerate roads with `--terrain godot/data/terrain`. Run editor import, `tests/smoke_boot.gd`, `tests/streaming_test.gd`, `tests/gameplay_test.gd`, then `--export-debug Android build/Yardman-Beta.apk`.
+
+A valid exported APK and desktop/headless tests do not prove an Android device boot or performance. Record actual emulator/device evidence separately. Downloads should identify the exact CI commit; no APK is committed to the source repository.

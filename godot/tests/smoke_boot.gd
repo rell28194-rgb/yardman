@@ -17,9 +17,9 @@ func _run() -> void:
     var scene := packed.instantiate()
     root.add_child(scene)
     var roads := scene.get_node_or_null("JamaicaRoadStreamer")
-    for frame in range(600):
+    for frame in range(1800):
         await physics_frame
-        if frame >= 60 and roads != null and roads.is_tile_ready(Vector2i.ZERO):
+        if frame >= 60 and roads != null and scene.get("world_ready"):
             break
     var car := scene.get_node_or_null("RoadQA") as CharacterBody3D
     if car == null or roads == null:
@@ -27,6 +27,10 @@ func _run() -> void:
         return
     if not car.global_position.is_finite() or car.global_position.y < -2.0:
         _fail("Vehicle did not remain on the driving surface")
+        return
+    var terrain := scene.get_node_or_null("JamaicaTerrainStreamer")
+    if terrain == null or not scene.world_ready or not car.is_on_floor():
+        _fail("Real terrain did not become ready or the vehicle did not settle")
         return
     var loaded = roads.get("_loaded")
     if not loaded is Dictionary or loaded.is_empty():

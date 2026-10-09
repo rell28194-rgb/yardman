@@ -1,61 +1,23 @@
 # Yardman
 
-A Unity project for a full-scale Jamaica simulation. One world metre remains one metre. All 14 parishes retain equal project priority.
+A Godot Android open-world game based on the full island of Jamaica. One real metre remains one world metre horizontally and vertically. All fourteen parishes are first-class. The active branch is `codex/godot-beta-001`; runtime source lives in `godot/`. Unity source is preserved as historical work and is not the active build path.
 
-This first source checkpoint implements the **ARCH-PROOF-001 technical foundation**. It includes 144 synthetic 1 km cells, deterministic content compilation, floating origin, cancellable predictive streaming, collision-readiness gating, persistent entity identity, event scheduling, and an Android build entry point.
+The current traversal milestone adds registered national terrain, a persistent road graph, bounded terrain/road streaming, a rebased local origin, a third-person pedestrian, an original drivable vehicle with entry/exit, independent multi-touch controls, saves with backup recovery, five graphics profiles and access to every parish. Geographic breadth is island-wide; street-level fidelity remains early. This is not a finished game or a claim of shipping visual quality.
 
-**The architecture gate is still open.** The Unity runtime has not yet been compiled or measured on Android. The synthetic terrain, straight roads and traversal cube are test fixtures, not Jamaican geographic coverage or the game's intended visual quality. See [current status](Docs/STATUS.md) and [engine decision](Docs/ENGINE_SELECTION.md).
+The real OSM dataset contains 59,389 drivable ways, 120,231 logical edges and 712 road tiles. The initial Copernicus terrain representation contains 1,416 shared-edge tiles at 64 m runtime sample spacing. Roads and terrain use EPSG:3448; saves retain projected double-precision coordinates. See [terrain](godot/docs/TERRAIN.md), [roads](godot/docs/ROAD_GRAPH.md), [streaming](godot/docs/STREAMING.md) and [gameplay](godot/docs/GAMEPLAY.md).
 
-## Source layout
+## Android
 
-| Path | Responsibility |
-| --- | --- |
-| `Assets/Yardman/Domain` | Double-precision coordinates, cell IDs, origin frame and entity IDs |
-| `Assets/Yardman/Content` | Versioned manifest contract and dependency validation |
-| `Assets/Yardman/Streaming` | Predictive requests, cancellation, retries, bounded integration and readiness |
-| `Assets/Yardman/Simulation` | Persistent entity state and deterministic event scheduling |
-| `Assets/Yardman/Runtime` | Unity meshes, collision, async content loading, traversal harness and telemetry |
-| `Assets/Yardman/Editor` | Scene generation and Android build methods |
-| `Tools/jmworld` | Standard-library Python content compiler and candidate source registry |
-| `Assets/StreamingAssets/Yardman` | Committed, hashed synthetic content ready for cloud checkout |
-| `Cloud` | Build Automation target configuration; no credentials |
-| `Tests` | Compiler, cloud-client and standalone C# contract tests |
+[GitHub Actions Android builds](https://github.com/rell28194-rgb/yardman/actions/workflows/godot-android.yml) retain the APK, checksum, source manifests and diagnostic logs. Android is arm64-v8a, package `com.rell.yardman`, using Godot 4.7.2 stable and GL Compatibility. Download a successful run's **Yardman-Beta-Android** artifact. Source code alone is not APK delivery. See [build instructions and validation](godot/docs/ANDROID.md).
 
-## Verification
+Touch supports steering and throttle together. On foot the same controls become movement, and dragging looks around. Use the Enter/Exit, Save, Recover, region and quality controls. Keyboard: WASD/arrows, E enter/exit, Shift sprint, F5 save, R recover.
 
-Python 3.10+ and either .NET 8 SDK or Mono are sufficient for the standalone tests:
+## Validation
 
-```sh
-bash Tools/test.sh
-bash Tools/build_content.sh
-python3 Tools/sync_meta.py
-```
+CI runs Python road/terrain tests, Godot import and boot, national streaming/graph tests, fourteen-parish traversal/gameplay/save/mobile-input checks, Android export, packaged-resource checks and APK signature verification. Local software OpenGL rendering is inspected separately. Android device frame rate and thermals require actual device evidence; host test results do not establish them.
 
-GitHub Actions runs these checks on pushes and pull requests. No Unity license is needed for these core checks.
+## Data and expansion
 
-## Unity and Android
+OSM roads retain source node/way identity, adjacency and metadata independently of rendered tiles. Terrain, roads and future buildings, vegetation, NPCs and jobs are separate streamed layers. Better data and assets can replace the same cells without shrinking or rebuilding the canonical world. [Drive context](godot/docs/DRIVE_CONTEXT.md) and the [data register](godot/docs/DATA_REGISTER.csv) record sources and current decisions. Required attribution is available in game.
 
-Open the project with the provisional editor version in `ProjectSettings/ProjectVersion.txt`. On first interactive import, the editor script creates `Assets/Yardman/Generated/StreamingProof.unity`. The menu **Yardman → Create streaming proof scene** regenerates it. This deliberately replaces the open scene, so save other scene edits first.
-
-For a licensed editor with Android IL2CPP support:
-
-```sh
-mkdir -p Builds/Android
-Unity -batchmode -quit -projectPath . -buildTarget Android \
-  -executeMethod Jamaica.Unity.Editor.YardmanBuild.Android \
-  -logFile Builds/Android/editor.log
-```
-
-The development APK target is `Builds/Android/Yardman-Proof.apk`. The cloud pre-export method is `Jamaica.Unity.Editor.YardmanBuild.PreExport`. See [cloud continuation](Docs/CLOUD_BUILD.md).
-
-The runtime drives a synthetic corridor at 70 m/s for 1,800 seconds, waits when collision is unavailable, rebases near the traversal probe, and writes telemetry, a result envelope and an entity save under `Application.persistentDataPath`. The default run is automatic. On-screen Performance / Balanced / Quality / Ultra / Custom controls currently exercise shadow, LOD, AA and camera-distance settings; density, vegetation, NPC and traffic scaling awaits those systems.
-
-## Content rules
-
-The compiler accepts only `SYNTHETIC_TEST_ONLY` fixtures in this checkpoint. Its zero anchor and `SYNTHETIC_METRES` datum are explicitly **not** Jamaica's canonical coordinates. Accepted real source acquisition, CRS transformation and PostGIS integration remain separate work.
-
-Every artifact is addressed by its SHA-256 hash. Build keys include compiler code, schema, relevant source fragment, target, options, asset-library version and dependencies. A road-width edit rebuilds its road artifact without rebuilding unchanged terrain. Corrupt cached artifacts are quarantined and rebuilt.
-
-External sources can be registered with provenance and rights metadata and placed in a candidate changeset. There is no automatic path from a candidate to accepted geography.
-
-Runtime credentials come from secret environment injection only. `.env.example` contains variable names and public project identifiers. Never put secret values, authorization headers, tokens or signing keys in source files or artifacts.
+Next layers include actual building footprints, land-cover-based vegetation, traffic/NPCs, jobs/economy, animation/audio/weather, surveyed shoreline and bridge/tunnel detail, and sustained Android profiling. Existing art and the kinematic vehicle are original early implementations, not the final fidelity target. No proprietary reference-game assets are redistributed. Credentials and signing files remain outside source control.

@@ -5,6 +5,7 @@ const CoordinatesScript = preload("res://scripts/world_coordinates.gd")
 const GraphScript = preload("res://scripts/road_graph.gd")
 signal tile_ready(tile: Vector2i)
 signal tile_removed(tile: Vector2i)
+signal tile_content_ready(tile: Vector2i, tile_root: Node3D, segments: Array)
 
 var target: Node3D
 var data_root := "res://data/roads"
@@ -59,9 +60,11 @@ func _make_materials() -> void:
     _asphalt_material = StandardMaterial3D.new()
     _asphalt_material.albedo_color = Color(0.10, 0.105, 0.11)
     _asphalt_material.roughness = 0.92
+    _asphalt_material.cull_mode = BaseMaterial3D.CULL_DISABLED
     _dirt_material = StandardMaterial3D.new()
     _dirt_material.albedo_color = Color(0.34, 0.27, 0.18)
     _dirt_material.roughness = 1.0
+    _dirt_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 
 func _load_manifest() -> void:
     var path := "%s/manifest.json" % data_root
@@ -204,6 +207,7 @@ func _prepare_geometry() -> void:
         _loaded[key] = tile_root
         _building.clear()
         tile_ready.emit(tile)
+        tile_content_ready.emit(tile, tile_root, segments)
 
 func _append_segment(vertices: PackedVector3Array, indices: PackedInt32Array, segment: Array, tile: Vector2i) -> void:
     var origin_x := float(tile.x) * tile_size
@@ -224,7 +228,9 @@ func _append_segment(vertices: PackedVector3Array, indices: PackedInt32Array, se
     for p in polygon:
         vertices.append(Vector3(float(p[0]) - origin_x, float(p[1]) + 0.08, float(p[2]) - origin_z))
     for i in range(1, polygon.size() - 1):
-        indices.append_array(PackedInt32Array([base, base + i, base + i + 1]))
+        # Ribbons are counterclockwise in X/Z. Reverse for Godot's upward
+        # facing front side rather than relying on double-sided backfaces.
+        indices.append_array(PackedInt32Array([base, base + i + 1, base + i]))
 
 func _flush_mesh_batch() -> void:
     _add_surface_mesh(_building.root, _building.paved_vertices, _building.paved_indices, _asphalt_material, "Paved")
@@ -252,6 +258,7 @@ func _add_surface_mesh(parent: Node3D, vertices: PackedVector3Array, indices: Pa
     var instance := MeshInstance3D.new()
     instance.name = label
     instance.mesh = mesh
+    instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     parent.add_child(instance)
 
 func is_tile_ready(tile: Vector2i) -> bool:
