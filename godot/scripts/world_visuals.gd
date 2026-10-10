@@ -149,8 +149,18 @@ func configure_environment(environment: Environment, sun: DirectionalLight3D) ->
     environment.ambient_light_color = Color(0.86, 0.89, 0.93)
     environment.ambient_light_energy = 0.72
     environment.ambient_light_sky_contribution = 0.22
-    environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR
-    environment.tonemap_exposure = 1.05
+    # Filmic mapping preserves bright tropical skies while keeping shaded roads
+    # and vegetation legible on phone displays. Glow is gated by quality below.
+    environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+    environment.tonemap_exposure = 1.02
+    environment.glow_enabled = true
+    environment.glow_intensity = 0.22
+    environment.glow_strength = 0.72
+    environment.glow_bloom = 0.06
+    environment.adjustment_enabled = true
+    environment.adjustment_brightness = 1.0
+    environment.adjustment_contrast = 1.06
+    environment.adjustment_saturation = 1.08
     environment.fog_enabled = true
     environment.fog_density = 0.000020
     environment.fog_light_color = Color(0.78, 0.85, 0.86)
@@ -162,6 +172,19 @@ func configure_environment(environment: Environment, sun: DirectionalLight3D) ->
     sun.shadow_bias = 0.04
     sun.shadow_normal_bias = 1.2
     update_daylight(10.0, environment)
+
+func apply_environment_quality(environment: Environment, profile: String) -> void:
+    # Prioritize the image on Quality/Ultra without taxing the lowest tier.
+    # Compatibility rendering supports this lightweight glow/grade path.
+    var high_quality := profile == "Quality" or profile == "Ultra" or profile == "Custom"
+    environment.glow_enabled = high_quality
+    environment.glow_intensity = 0.28 if profile == "Ultra" else 0.22
+    environment.glow_strength = 0.72
+    environment.glow_bloom = 0.06
+    environment.adjustment_enabled = true
+    environment.adjustment_brightness = 1.0
+    environment.adjustment_contrast = 1.06
+    environment.adjustment_saturation = 1.08
 
 func update_daylight(hour: float, environment: Environment) -> void:
     var daylight := clampf(sin((hour - 6.0) * PI / 12.0), 0.0, 1.0)
