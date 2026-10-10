@@ -1,13 +1,21 @@
 extends Node3D
 class_name YardmanVehicleModel
 
-# Original procedural 4.3 m compact sedan. No reference-game mesh, texture,
-# branding or proprietary art is copied into the build.
+# Owner-supplied reference art is optional so source-only builds still boot.
+const References = preload("res://scripts/reference_assets.gd")
+
 var shell: Node3D
 var front_pivots: Array[Node3D] = []
 var wheels: Array[Node3D] = []
 var brake_material: StandardMaterial3D
 var reverse_material: StandardMaterial3D
+var is_reference_model := false
+var wheelbase_m := 2.56
+var wheel_radius_m := 0.35
+var geometry_bounds := AABB(Vector3(-0.925, 0.0, -2.0), Vector3(1.85, 1.3, 4.0))
+var _brake_materials: Array[StandardMaterial3D] = []
+var _reverse_materials: Array[StandardMaterial3D] = []
+var _shell_rest_position := Vector3.ZERO
 var _wheel_rotation := 0.0
 var _paint: StandardMaterial3D
 var _trim: StandardMaterial3D
@@ -16,6 +24,8 @@ var _silver: StandardMaterial3D
 
 func build() -> void:
     if shell != null:
+        return
+    if _try_reference_sedan():
         return
     _paint = _material(Color(0.14, 0.31, 0.37), 0.52, 0.27)
     _trim = _material(Color(0.024, 0.032, 0.037), 0.15, 0.62)
@@ -37,7 +47,7 @@ func build() -> void:
 func update_motion(delta: float, speed: float, steering: float, braking: float, reversing: bool, running: bool, pitch: float, roll: float) -> void:
     if shell == null:
         return
-    _wheel_rotation = fmod(_wheel_rotation - speed * delta / 0.35, TAU)
+    _wheel_rotation = fmod(_wheel_rotation - speed * delta / wheel_radius_m, TAU)
     for wheel in wheels:
         wheel.rotation.x = _wheel_rotation
     for pivot in front_pivots:
@@ -45,9 +55,125 @@ func update_motion(delta: float, speed: float, steering: float, braking: float, 
     var response := 1.0 - exp(-delta * 8.0)
     shell.rotation.x = lerpf(shell.rotation.x, pitch, response)
     shell.rotation.z = lerpf(shell.rotation.z, roll, response)
-    shell.position.y = lerpf(shell.position.y, -minf(absf(roll) * 0.12, 0.018), response)
-    brake_material.emission_energy_multiplier = 2.0 if braking > 0.05 else (0.35 if running else 0.0)
-    reverse_material.emission_energy_multiplier = 1.4 if reversing else 0.0
+    shell.position.y = lerpf(shell.position.y, _shell_rest_position.y - minf(absf(roll) * 0.12, 0.018), response)
+    var brake_energy := 2.0 if braking > 0.05 else (0.35 if running else 0.0)
+    var reverse_energy := 1.4 if reversing else 0.0
+    if brake_material != null:
+        brake_material.emission_energy_multiplier = brake_energy
+    if reverse_material != null:
+        reverse_material.emission_energy_multiplier = reverse_energy
+    for material in _brake_materials:
+        material.emission_energy_multiplier = brake_energy
+    for material in _reverse_materials:
+        material.emission_energy_multiplier = reverse_energy
+
+func _try_reference_sedan() -> bool:
+    var packed: PackedScene = References.scene("road_car.glb")
+    if packed == null:
+        return false
+    var imported := packed.instantiate() as Node3D
+    if imported == null:
+        return false
+    var body_shell := imported.find_child("BodyShell", true, false) as Node3D
+    var pivots: Array[Node3D] = []
+    var spins: Array[Node3D] = []
+    for wheel_name in ["FrontWheelLeft", "FrontWheelRight", "RearWheelLeft", "RearWheelRight"]:
+        var pivot := imported.find_child(wheel_name, true, false) as Node3D
+        var spin := imported.find_child(wheel_name + "Spin", true, false) as Node3D
+        if pivot == null or spin == null or not pivot.is_ancestor_of(spin):
+            imported.free()
+            push_warning("Yardman reference sedan has no independent wheel rig; using the source fallback")
+            return false
+        pivots.append(pivot)
+        spins.append(spin)
+    if body_shell == null:
+        imported.free()
+        push_warning("Yardman reference sedan has no BodyShell; using the source fallback")
+        return false
+    var bounds: AABB = _measure_mesh_bounds(imported)
+    if bounds.size.x < 1.0 or bounds.size.x > 4.0 or bounds.size.z < 2.0 or bounds.size.z > 8.0:
+        imported.free()
+        push_warning("Yardman reference sedan has invalid metre-scale bounds; using the source fallback")
+        return false
+    add_child(imported)
+    shell = body_shell
+    _shell_rest_position = shell.position
+    front_pivots.assign([pivots[0], pivots[1]])
+    wheels.assign(spins)
+    geometry_bounds = bounds
+    wheelbase_m = absf(_relative_pose(pivots[0]).origin.z - _relative_pose(pivots[2]).origin.z)
+    var tyre_bounds: AABB = _measure_mesh_bounds(spins[0])
+    wheel_radius_m = clampf(maxf(tyre_bounds.size.y, tyre_bounds.size.z) * 0.5, 0.25, 0.60)
+    _bind_reference_lamps(imported)
+    is_reference_model = true
+    print("YARDMAN_REFERENCE_VEHICLE bounds_m=%s wheelbase_m=%.3f tyre_radius_m=%.3f brake_materials=%d reverse_materials=%d" % [geometry_bounds.size, wheelbase_m, wheel_radius_m, _brake_materials.size(), _reverse_materials.size()])
+    return true
+
+func _relative_pose(node: Node3D) -> Transform3D:
+    var pose := node.transform
+    var parent: Node = node.get_parent()
+    while parent != null and parent != self:
+        if parent is Node3D:
+            pose = (parent as Node3D).transform * pose
+        parent = parent.get_parent()
+    return pose
+
+func _collect_meshes(node: Node, parent_pose: Transform3D, result: Array[Dictionary]) -> void:
+    var pose := parent_pose
+    if node is Node3D:
+        pose *= (node as Node3D).transform
+    if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+        result.append({"instance": node, "pose": pose})
+    for child in node.get_children():
+        _collect_meshes(child, pose, result)
+
+func _measure_mesh_bounds(node: Node3D) -> AABB:
+    var entries: Array[Dictionary] = []
+    _collect_meshes(node, Transform3D.IDENTITY, entries)
+    var combined := AABB()
+    var first := true
+    for entry in entries:
+        var instance: MeshInstance3D = entry["instance"]
+        var pose: Transform3D = entry["pose"]
+        var bounds: AABB = pose * instance.mesh.get_aabb()
+        combined = bounds if first else combined.merge(bounds)
+        first = false
+    return combined
+
+func _bind_reference_lamps(imported: Node3D) -> void:
+    var entries: Array[Dictionary] = []
+    _collect_meshes(imported, Transform3D.IDENTITY, entries)
+    var cloned: Dictionary = {}
+    for entry in entries:
+        var instance: MeshInstance3D = entry["instance"]
+        for surface_index in range(instance.mesh.get_surface_count()):
+            var original := instance.get_active_material(surface_index) as StandardMaterial3D
+            if original == null:
+                continue
+            var material_name := original.resource_name.to_lower()
+            var is_brake := material_name.contains("stoplight")
+            var is_reverse := material_name.contains("lightsrear")
+            if not is_brake and not is_reverse:
+                continue
+            var source_id := original.get_instance_id()
+            var material: StandardMaterial3D = cloned.get(source_id) as StandardMaterial3D
+            if material == null:
+                # Each vehicle owns its lamp state; cached GLB resources stay immutable.
+                material = original.duplicate() as StandardMaterial3D
+                material.emission_enabled = true
+                material.emission_texture = material.albedo_texture
+                material.emission = Color(1.0, 0.05, 0.02) if is_brake else Color(0.93, 0.94, 0.86)
+                material.emission_energy_multiplier = 0.0
+                cloned[source_id] = material
+                if is_brake:
+                    _brake_materials.append(material)
+                    if brake_material == null:
+                        brake_material = material
+                else:
+                    _reverse_materials.append(material)
+                    if reverse_material == null:
+                        reverse_material = material
+            instance.set_surface_override_material(surface_index, material)
 
 func _make_body() -> void:
     # Profiled hood, shoulders and trunk form a silhouette independent of the

@@ -202,7 +202,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in road_surface road_structure_data coastline terrain_coast controls_hud vehicle visuals audio building_streamer polish_integration; do
+          for TEST in road_surface road_structure_data coastline terrain_coast controls_hud vehicle visuals audio building_streamer reference_assets polish_integration; do
             timeout 300 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"

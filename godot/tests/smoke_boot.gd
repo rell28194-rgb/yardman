@@ -17,11 +17,15 @@ func _run() -> void:
     var scene := packed.instantiate()
     root.add_child(scene)
     var roads := scene.get_node_or_null("JamaicaRoadStreamer")
+    var car := scene.get_node_or_null("RoadQA") as CharacterBody3D
     for frame in range(1800):
         await physics_frame
-        if frame >= 60 and roads != null and scene.get("world_ready"):
+        # A newly streamed collision tile is ready before gravity has settled
+        # the spawned car onto it. Finish on actual grounded boot, not that
+        # earlier streaming signal, or exporter performance changes race CI.
+        if frame >= 60 and roads != null and scene.get("world_ready") \
+                and car != null and car.is_on_floor():
             break
-    var car := scene.get_node_or_null("RoadQA") as CharacterBody3D
     if car == null or roads == null:
         _fail("Vehicle or road streamer is absent after boot")
         return

@@ -16,6 +16,7 @@ var handbrake := false
 var on_road := true
 var engine_rpm := 900.0
 var steering_angle := 0.0
+var wheelbase_m := WHEELBASE_M
 var visual: Node3D
 var _steer := 0.0
 var _ground_basis := Basis.IDENTITY
@@ -38,7 +39,24 @@ func configure(vehicle: CharacterBody3D) -> void:
     visual.name = "VisualRig"
     body.add_child(visual)
     visual.call("build")
+    wheelbase_m = clampf(float(visual.get("wheelbase_m")), 1.8, 4.5)
+    if bool(visual.get("is_reference_model")):
+        _fit_reference_collision()
     _ground_basis = Basis.IDENTITY
+
+func _fit_reference_collision() -> void:
+    var bounds: AABB = visual.get("geometry_bounds")
+    for node in body.find_children("*", "CollisionShape3D", true, false):
+        var collision := node as CollisionShape3D
+        if collision == null or not collision.shape is BoxShape3D:
+            continue
+        # Keep the shape local to this vehicle instead of mutating shared scene resources.
+        var shape := collision.shape.duplicate() as BoxShape3D
+        shape.size = Vector3(bounds.size.x * 0.97, maxf(bounds.end.y, 1.0), bounds.size.z * 0.97)
+        collision.shape = shape
+        var centre := bounds.get_center()
+        collision.position = Vector3(centre.x, shape.size.y * 0.5, centre.z)
+        break
 
 func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
     # A parked car outside collision residency must not fall or change pose.
@@ -89,7 +107,7 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
     _steer = move_toward(_steer, turn, dt * 5.8)
     var steering_limit := lerpf(deg_to_rad(34.0), deg_to_rad(10.0), clampf(absf(speed_mps) / MAX_FORWARD_MPS, 0.0, 1.0))
     steering_angle = -_steer * steering_limit
-    var yaw_rate := speed_mps * tan(steering_angle) / WHEELBASE_M
+    var yaw_rate := speed_mps * tan(steering_angle) / wheelbase_m
     # Tyre grip bounds lateral acceleration at speed. Full-lock input cannot
     # spin a 150 km/h car around its centre as the previous controller did.
     var grip := 8.4 if on_road else 4.8
