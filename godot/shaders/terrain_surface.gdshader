@@ -4,19 +4,34 @@ render_mode cull_disabled;
 // Original procedural surface. Canonical origins deliberately replace
 // MODEL_MATRIX translation: shifting the renderer never slides the texture.
 uniform sampler2D surface_noise : repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D tunnel_portal_mask : filter_nearest, repeat_disable;
+uniform bool tunnel_portal_mask_enabled = false;
+uniform float terrain_tile_size = 4096.0;
 uniform vec2 tile_origin = vec2(0.0);
 uniform bool overview = false;
 varying vec3 ground_position;
 varying vec3 ground_normal;
 varying vec2 national_position;
+varying vec2 tile_position;
 
 void vertex() {
     ground_position = vec3(VERTEX.x + mod(tile_origin.x, 16384.0), VERTEX.y, VERTEX.z + mod(tile_origin.y, 16384.0));
     national_position = VERTEX.xz + tile_origin;
+    tile_position = VERTEX.xz;
     ground_normal = NORMAL;
 }
 
 void fragment() {
+    // Only true negative-layer tunnel portals receive a mask. The mountain
+    // remains intact over the tunnel interior; this removes just the opening
+    // where the profiled road deck passes beneath the terrain surface.
+    if (tunnel_portal_mask_enabled) {
+        vec2 portal_uv = clamp(tile_position / max(terrain_tile_size, 1.0), vec2(0.0), vec2(1.0));
+        if (texture(tunnel_portal_mask, portal_uv).r > 0.5) {
+            discard;
+        }
+    }
+
     vec3 blend = pow(abs(normalize(ground_normal)), vec3(5.0));
     blend /= max(blend.x + blend.y + blend.z, 0.0001);
     vec3 p = ground_position;
