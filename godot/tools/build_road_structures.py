@@ -2,10 +2,10 @@
 """Build terrain-independent road structures after DEM road conformance.
 
 OSM bridge centre-lines are initially sampled against the DEM so their
-abutments register perfectly with ordinary roads.  This pass keeps those
+abutments register perfectly with ordinary roads. This pass keeps those
 abutment elevations but replaces the interior bridge deck with a continuous
-linear profile.  The bridge ribbon is therefore no longer draped into the
-river/valley/road underneath it.  Tunnels are counted but deliberately left
+linear profile. The bridge ribbon is therefore no longer draped into the
+river/valley/road underneath it. Tunnels are counted but deliberately left
 untouched until a terrain-corridor/portal mesh is present; lowering them without
 carving terrain would make them less driveable, not more correct.
 """
@@ -15,6 +15,8 @@ import argparse
 import json
 import math
 from pathlib import Path
+
+PROFILE_SOURCE = "DEM abutments + terrain-independent bridge deck"
 
 
 def parse_args() -> argparse.Namespace:
@@ -86,6 +88,18 @@ def compile_structures(roads_root: Path) -> dict:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     edges, owners = _load_edges(roads_root)
 
+    prior_summary = {}
+    summary_path = roads_root / "structures.json"
+    if summary_path.is_file():
+        try:
+            prior_summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            prior_summary = {}
+    already_profiled = bool(edges) and all(
+        not edge.get("bridge") or edge.get("elevation_source") == PROFILE_SOURCE
+        for edge in edges.values()
+    )
+
     bridge_profiles = {}
     original_endpoints = {}
     bridge_length = 0.0
@@ -107,14 +121,20 @@ def compile_structures(roads_root: Path) -> dict:
         profile, correction = _bridge_profile(edge)
         bridge_profiles[edge_id] = profile
         edge["path"] = profile
-        edge["elevation_source"] = "DEM abutments + terrain-independent bridge deck"
+        edge["elevation_source"] = PROFILE_SOURCE
         bridge_length += float(edge.get("length_m", 0.0) or 0.0)
         max_vertical_correction = max(max_vertical_correction, correction)
         klass = str(edge.get("class", "unknown"))
         by_class[klass] = by_class.get(klass, 0) + 1
 
-    # Rewrite only partitions that own bridge edges, preserving partitioning and
-    # deterministic JSON ordering used by the runtime graph loader.
+    # If this exact generated dataset has already passed once, preserve the
+    # measured amount of DEM drape removed. Geometry stays byte-stable on a
+    # second pass instead of rewriting the diagnostic as zero.
+    if already_profiled:
+        previous = (prior_summary.get("bridge") or {}).get("maximum_removed_dem_drape_m")
+        if previous is not None:
+            max_vertical_correction = float(previous)
+
     changed_partitions = set(owners[eid] for eid in bridge_profiles)
     for path in changed_partitions:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -171,7 +191,7 @@ def compile_structures(roads_root: Path) -> dict:
             "status": "source-tagged; terrain corridor/portal pass required before vertical remapping",
         },
     }
-    (roads_root / "structures.json").write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
+    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
     manifest["structures"] = summary
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
     return summary
