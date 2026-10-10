@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Streamer = preload("res://scripts/road_streamer.gd")
+const StructureCollision = preload("res://scripts/road_structure_collision.gd")
 var failures := 0
 
 func _initialize() -> void:
@@ -35,6 +36,30 @@ func _run() -> void:
     _check(not stream.road_surface_at(140.0, 64.0).found, "Unloaded geometry left a stale road surface")
     _check(stream.nearby_paths(140.0, 64.0).is_empty(), "Unloaded geometry left stale radar paths")
     _check(stream.road_surface_at(NAN, 0.0).found == false, "Invalid coordinates must return no surface")
+
+    # A bridge is not allowed to rely on the terrain collider underneath it.
+    # The structure listener must build a deck collider from the same streamed
+    # ribbon used by the visible bridge surface.
+    var bridge: Array = [0.0, 0.0, 20.0, 0.0, 7.2, 4, 2, "bridge:0:osm:1:osm:2", 0, 12.0, 12.5,
+        [[0.0, 12.0, -3.6], [20.0, 12.5, -3.6], [20.0, 12.5, 3.6], [0.0, 12.0, 3.6]],
+        [[0.0, -3.6], [20.0, -3.6], [20.0, 3.6], [0.0, 3.6]], 1, 2, 16.7, 0.0, 20.0]
+    var helper = StructureCollision.new()
+    helper.roads = stream
+    var tile_root := Node3D.new()
+    helper._on_tile_content_ready(Vector2i.ZERO, tile_root, [bridge])
+    var body := tile_root.get_node_or_null("BridgeDeckCollision")
+    _check(body != null, "Bridge tile did not receive an independent deck collider")
+    if body != null:
+        var collider := body.get_node_or_null("BridgeDeckCollisionShape") as CollisionShape3D
+        _check(collider != null and collider.shape is ConcavePolygonShape3D,
+            "Bridge deck collision shape is missing or wrong type")
+        if collider != null and collider.shape is ConcavePolygonShape3D:
+            _check((collider.shape as ConcavePolygonShape3D).get_faces().size() == 6,
+                "Bridge quad must produce exactly two collision triangles")
+    _check(helper.bridge_tiles_built == 1 and helper.bridge_triangles_built == 2,
+        "Bridge collision diagnostics did not match generated deck")
+    tile_root.free()
+    helper.free()
     stream.free()
-    print("YARDMAN_ROAD_SURFACE_TEST %s grid=128 dedup=1 unload=1 surface=1" % ["PASS" if failures == 0 else "FAIL"])
+    print("YARDMAN_ROAD_SURFACE_TEST %s grid=128 dedup=1 unload=1 surface=1 bridge_collision=1" % ["PASS" if failures == 0 else "FAIL"])
     quit(0 if failures == 0 else 1)
