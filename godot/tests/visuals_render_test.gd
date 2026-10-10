@@ -42,7 +42,7 @@ func _run() -> void:
             normals.append(Vector3(dx, 1.0, dz).normalized())
             if x < 64 and z < 64:
                 var a := z * 65 + x
-                indices.append_array(PackedInt32Array([a, a + 65, a + 1, a + 1, a + 65, a + 66]))
+                indices.append_array(PackedInt32Array([a, a + 1, a + 65, a + 1, a + 66, a + 65]))
     var arrays: Array = []
     arrays.resize(Mesh.ARRAY_MAX)
     arrays[Mesh.ARRAY_VERTEX] = vertices

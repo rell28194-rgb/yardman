@@ -115,6 +115,39 @@ func _run() -> void:
     _check(terrain_collider != null, "The actual registered terrain collider is absent")
     await physics_frame
     await physics_frame
+    var road_root: Node3D = roads._loaded[key]
+    var deck_body := road_root.get_node_or_null("RoadStructureDeckCollision") as StaticBody3D
+    _check(deck_body != null, "Real tunnel road tile has no independent deck body")
+    if deck_body != null:
+        var source_tile := _json("res://data/roads/tile_%d_%d.json" % [selected_tile.x, selected_tile.y])
+        var tested_deck := false
+        for record in source_tile.get("segments", []):
+            if str(record[7]) != str(selected.edge_id) or record[11].is_empty():
+                continue
+            var x := 0.0
+            var y := 0.0
+            var z := 0.0
+            for point in record[11]:
+                x += float(point[0])
+                y += float(point[1])
+                z += float(point[2])
+            var count: float = record[11].size()
+            x /= count
+            y = y / count + DeckCollision.DECK_COLLISION_BIAS
+            z /= count
+            var excluded_decks: Array[RID] = []
+            _exclude_except(stage, deck_body, excluded_decks)
+            var ray := PhysicsRayQueryParameters3D.create(
+                terrain.coordinates.world_to_local(x, z, y + 1.0),
+                terrain.coordinates.world_to_local(x, z, y - 1.0), 1, excluded_decks)
+            var hit := target.get_world_3d().direct_space_state.intersect_ray(ray)
+            _check(not hit.is_empty(), "Actual tunnel deck triangles do not collide")
+            if not hit.is_empty():
+                _check(hit.collider == deck_body and absf(float(hit.position.y) - y) < 0.03,
+                    "Actual tunnel deck collision height differs from its compiled ribbon")
+            tested_deck = true
+            break
+        _check(tested_deck, "Actual tunnel edge has no rendered driving ribbon")
     if terrain_collider != null:
         var terrain_body := terrain_collider.get_parent() as StaticBody3D
         var excluded: Array[RID] = []

@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode cull_disabled;
+render_mode cull_back;
 
 // Original procedural surface. Canonical origins deliberately replace
 // MODEL_MATRIX translation: shifting the renderer never slides the texture.

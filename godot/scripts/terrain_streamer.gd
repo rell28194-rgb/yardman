@@ -196,7 +196,8 @@ func _append_height_row(job: Dictionary, z: int) -> void:
         var b := a + 1
         var c := a + resolution
         var d := c + 1
-        job.indices.append_array(PackedInt32Array([a, c, b, b, c, d]))
+        # Godot front faces are clockwise, opposite the upward shading normal.
+        job.indices.append_array(PackedInt32Array([a, b, c, b, d, c]))
 
 func _append_near_triangle(job: Dictionary, vertices: PackedVector3Array, cursor: int) -> void:
     var a := vertices[cursor]
@@ -206,13 +207,16 @@ func _append_near_triangle(job: Dictionary, vertices: PackedVector3Array, cursor
     if cross.length_squared() < 0.000000000001:
         return
     var normal := cross.normalized()
+    if normal.y < 0.0:
+        normal = -normal
     var slope := Vector2(normal.x, normal.z).length() / maxf(absf(normal.y), 0.001)
     var first: int = job.vertices.size()
     for point in [a, b, c]:
         job.vertices.append(point)
         job.normals.append(normal)
         job.colors.append(_height_color(point.y, slope))
-    job.indices.append_array(PackedInt32Array([first, first + 1, first + 2]))
+    var order := PackedInt32Array([first, first + 2, first + 1]) if cross.dot(normal) > 0.0 else PackedInt32Array([first, first + 1, first + 2])
+    job.indices.append_array(order)
 
 func _mesh(job: Dictionary, origin: Vector2, overview: bool = false) -> ArrayMesh:
     var mesh := ArrayMesh.new()
@@ -379,6 +383,8 @@ func _append_far_land(a: Vector3, b: Vector3, c: Vector3, overview: Dictionary) 
     if cross.length_squared() < 0.000000000001:
         return
     var normal := cross.normalized()
+    if normal.y < 0.0:
+        normal = -normal
     var center := (a + b + c) / 3.0
     var ox := float(overview.origin_x)
     var oz := float(overview.origin_z)
@@ -392,7 +398,8 @@ func _append_far_land(a: Vector3, b: Vector3, c: Vector3, overview: Dictionary) 
         group.vertices.append(vertex)
         group.normals.append(normal)
         group.colors.append(_height_color(vertex.y, slope))
-    group.indices.append_array(PackedInt32Array([first, first + 1, first + 2]))
+    var order := PackedInt32Array([first, first + 2, first + 1]) if cross.dot(normal) > 0.0 else PackedInt32Array([first, first + 1, first + 2])
+    group.indices.append_array(order)
 
 func _append_far_water(cursor: int, overview: Dictionary) -> void:
     var water: PackedVector3Array = _far_build.coast.water

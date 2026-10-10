@@ -84,6 +84,15 @@ culling avoids the inverted, dark shore surfaces caused by double-sided meshes
 with inconsistent winding. Neither correction changes source vertices or
 canonical sea level.
 
+The same clockwise repair applies to full-grid and clipped land in both near
+tiles and distant sectors. Upward normals remain upward even if a source
+triangle arrives in reversed order. Terrain collision remains double-sided,
+and downward-ray tests check that ground contact normals point up. The
+`terrain_coast_test.gd` regression can also run on a GL display: its unshaded,
+back-face-culled material independently proves that cameras see full and
+clipped land from above, with mapped water still exposed. Before this repair,
+both near and distant land disappeared under that render test.
+
 The source manifest records SHA256, OSM attribution, area, geometry counts,
 compiled terrain checksum, and limitations. Visual shoreline distance is a
 colour input, not measured bathymetry. OSM may omit beaches or contain coastal
