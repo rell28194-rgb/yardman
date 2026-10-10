@@ -4,6 +4,11 @@ render_mode cull_disabled;
 // Original procedural surface. Canonical origins deliberately replace
 // MODEL_MATRIX translation: shifting the renderer never slides the texture.
 uniform sampler2D surface_noise : repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_grass : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_dry_grass : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_rock : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform bool has_reference_ground = false;
+uniform bool has_reference_rock = false;
 uniform sampler2D tunnel_portal_mask : filter_nearest, repeat_disable;
 uniform bool tunnel_portal_mask_enabled = false;
 uniform float terrain_tile_size = 4096.0;
@@ -51,9 +56,24 @@ void fragment() {
     vec3 wet_grass = vec3(0.24, 0.34, 0.105);
     vec3 dry_grass = vec3(0.48, 0.40, 0.19);
     vec3 grass = mix(wet_grass, dry_grass, dry);
+    if (has_reference_ground) {
+        vec3 wet = texture(reference_grass, p.yz / 8.0).rgb * blend.x
+            + texture(reference_grass, p.xz / 8.0).rgb * blend.y
+            + texture(reference_grass, p.xy / 8.0).rgb * blend.z;
+        vec3 dry_texture = texture(reference_dry_grass, p.yz / 8.0).rgb * blend.x
+            + texture(reference_dry_grass, p.xz / 8.0).rgb * blend.y
+            + texture(reference_dry_grass, p.xy / 8.0).rgb * blend.z;
+        grass = mix(wet, dry_texture, dry) * 1.30;
+    }
     grass *= mix(0.73, 1.29, patch.r) * mix(0.84, 1.14, macro);
     vec3 soil = mix(vec3(0.30, 0.22, 0.12), vec3(0.53, 0.38, 0.24), patch.b);
     vec3 rock = mix(vec3(0.34, 0.34, 0.28), vec3(0.61, 0.60, 0.49), detail.r);
+    if (has_reference_rock) {
+        rock = texture(reference_rock, p.yz / 8.0).rgb * blend.x
+            + texture(reference_rock, p.xz / 8.0).rgb * blend.y
+            + texture(reference_rock, p.xy / 8.0).rgb * blend.z;
+        rock *= 1.12;
+    }
     float bare = smoothstep(0.66, 0.85, patch.g) * (0.16 + dry * 0.65);
     float rocky = smoothstep(0.22, 0.59, slope) * mix(0.72, 1.0, patch.b);
     vec3 color = mix(mix(grass, soil, bare), rock, rocky);

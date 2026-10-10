@@ -2,8 +2,8 @@
 extends Node
 class_name YardmanGameAudio
 
-# Original PCM is synthesised once and reused across instances. There are no
-# downloaded samples, licensed sound packs, or per-frame waveform allocations.
+# Owner-supplied samples replace cached fallback PCM in personal builds.
+const References = preload("res://scripts/reference_assets.gd")
 const SAMPLE_RATE := 22050
 const SILENT_DB := -80.0
 static var _stream_cache: Dictionary = {}
@@ -154,6 +154,11 @@ static func _prepare_streams() -> void:
         stream.loop_begin = 0
         stream.loop_end = samples
         _stream_cache[kind] = stream
+    for kind in ["engine", "footsteps", "road"]:
+        var filename: String = "road_roll_loop.wav" if kind == "road" else kind + "_loop.wav"
+        var reference := References.audio(filename, true) as AudioStreamWAV
+        if reference != null:
+            _stream_cache[kind] = reference
     _cache_build_count += 1
 
 static func _sample(kind: String, t: float) -> float:

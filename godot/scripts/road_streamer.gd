@@ -4,6 +4,7 @@ class_name JamaicaRoadStreamer
 const CoordinatesScript = preload("res://scripts/world_coordinates.gd")
 const GraphScript = preload("res://scripts/road_graph.gd")
 const RoadShader = preload("res://shaders/road_surface.gdshader")
+const References = preload("res://scripts/reference_assets.gd")
 const SURFACE_CELL_SIZE := 128.0
 signal tile_ready(tile: Vector2i)
 signal tile_removed(tile: Vector2i)
@@ -73,6 +74,18 @@ func _make_materials() -> void:
     _dirt_material.shader = RoadShader
     _dirt_material.set_shader_parameter("unpaved", true)
     _dirt_material.set_shader_parameter("visibility_distance", surface_visibility_distance)
+    var asphalt := References.texture("road_asphalt.png")
+    var detail := References.texture("road_asphalt_detail.png")
+    var gravel := References.texture("road_gravel.png")
+    if asphalt != null:
+        _asphalt_material.set_shader_parameter("reference_albedo", asphalt)
+        _asphalt_material.set_shader_parameter("has_reference_albedo", true)
+    if detail != null:
+        _asphalt_material.set_shader_parameter("reference_detail", detail)
+        _asphalt_material.set_shader_parameter("has_reference_detail", true)
+    if gravel != null:
+        _dirt_material.set_shader_parameter("reference_albedo", gravel)
+        _dirt_material.set_shader_parameter("has_reference_albedo", true)
 
 func _load_manifest() -> void:
     var path := "%s/manifest.json" % data_root

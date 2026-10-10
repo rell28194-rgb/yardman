@@ -41,3 +41,6 @@ godot/data/buildings.staging/
 godot/data/coast/
 
 godot/data/coast.staging/
+
+# Owner-supplied reference art is staged for personal builds, outside Git.
+godot/assets/user_reference/

@@ -4,6 +4,7 @@ class_name YardmanWorldVisuals
 const TERRAIN_SHADER = preload("res://shaders/terrain_surface.gdshader")
 const LEAF_SHADER = preload("res://shaders/foliage.gdshader")
 const BARK_SHADER = preload("res://shaders/tree_bark.gdshader")
+const References = preload("res://scripts/reference_assets.gd")
 const CULL_CELL_M := 256.0
 const ROAD_BUCKET_M := 64.0
 const MAX_PLANTS := 1800
@@ -91,6 +92,16 @@ func terrain_material(tile_origin: Vector2, overview: bool = false) -> ShaderMat
     # Noise repeats on a 16 km canonical grid, so small GPU floats suffice.
     material.set_shader_parameter("tile_origin", tile_origin)
     material.set_shader_parameter("overview", overview)
+    var grass := References.texture("ground_grass.png")
+    var dry_grass := References.texture("ground_dry_grass.png")
+    if grass != null and dry_grass != null:
+        material.set_shader_parameter("reference_grass", grass)
+        material.set_shader_parameter("reference_dry_grass", dry_grass)
+        material.set_shader_parameter("has_reference_ground", true)
+    var rock := References.texture("ground_rock.png")
+    if rock != null:
+        material.set_shader_parameter("reference_rock", rock)
+        material.set_shader_parameter("has_reference_rock", true)
     return material
 
 func _make_surface_noise() -> ImageTexture:

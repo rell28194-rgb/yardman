@@ -2,6 +2,10 @@ shader_type spatial;
 render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 
 uniform bool unpaved = false;
+uniform sampler2D reference_albedo : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_detail : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform bool has_reference_albedo = false;
+uniform bool has_reference_detail = false;
 uniform float visibility_distance = 2600.0;
 varying float camera_distance;
 
@@ -35,6 +39,14 @@ void fragment() {
     float patch = mix(hash21(floor(UV * vec2(0.18, 0.65))), 0.5, patch_filter);
     vec3 base = unpaved ? vec3(0.34, 0.275, 0.18) : vec3(0.205, 0.217, 0.225);
     base *= 0.91 + grain * 0.12 + patch * 0.06;
+    if (has_reference_albedo) {
+        vec3 reference_color = texture(reference_albedo, UV / 8.0).rgb;
+        base = clamp(reference_color * (unpaved ? 1.10 : 2.30), vec3(0.055), vec3(0.46));
+        if (has_reference_detail) {
+            float aggregate = dot(texture(reference_detail, UV / 2.0).rgb, vec3(0.2126, 0.7152, 0.0722));
+            base *= clamp(0.80 + aggregate * 1.90, 0.82, 1.30);
+        }
+    }
     float edge_distance = max(0.0, width * 0.5 - abs(UV.y));
     float shoulder = 1.0 - smoothstep(0.0, 0.32, edge_distance);
     base = mix(base, unpaved ? vec3(0.40, 0.33, 0.22) : vec3(0.27, 0.265, 0.245), shoulder * 0.23);
