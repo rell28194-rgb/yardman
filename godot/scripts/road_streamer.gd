@@ -248,11 +248,11 @@ func _append_segment(vertices: PackedVector3Array, indices: PackedInt32Array,
     if polygon.size() < 3:
         return
     var base := vertices.size()
-    var a := Vector3(float(polygon[0][0]), float(polygon[0][1]), float(polygon[0][2]))
+    var a := Vector3(float(polygon[0][0]) - origin_x, float(polygon[0][1]), float(polygon[0][2]) - origin_z)
     var normal := Vector3.UP
     for i in range(1, polygon.size() - 1):
-        var b := Vector3(float(polygon[i][0]), float(polygon[i][1]), float(polygon[i][2]))
-        var c := Vector3(float(polygon[i + 1][0]), float(polygon[i + 1][1]), float(polygon[i + 1][2]))
+        var b := Vector3(float(polygon[i][0]) - origin_x, float(polygon[i][1]), float(polygon[i][2]) - origin_z)
+        var c := Vector3(float(polygon[i + 1][0]) - origin_x, float(polygon[i + 1][1]), float(polygon[i + 1][2]) - origin_z)
         var candidate := (c - a).cross(b - a)
         if candidate.length_squared() > 0.000001:
             normal = candidate.normalized()
@@ -264,12 +264,17 @@ func _append_segment(vertices: PackedVector3Array, indices: PackedInt32Array,
     var lanes := int(segment[14]) if segment.size() > 14 else 2
     var start_station := float(segment[16]) if segment.size() > 16 else 0.0
     var end_station := float(segment[17]) if segment.size() > 17 else 1000000.0
+    # Different source ways can overlap at a real at-grade junction. A tiny
+    # stable source-way bias prevents equal-depth asphalt from flickering,
+    # while all graph pieces/tiles of the same way share one exact offset.
+    var source_way := str(segment[7]).get_slice(":", 0) if segment.size() > 7 else "legacy"
+    var height_bias := 0.14 + float(source_way.hash() % 32) * 0.001
     var tangent := Vector2(float(segment[2]) - float(segment[0]), float(segment[3]) - float(segment[1])).normalized()
     for vertex_index in range(polygon.size()):
         var p: Array = polygon[vertex_index]
         # A local decimetre overlay plus a near camera plane and bounded draw
         # distance avoids precision fighting the 45 km overview depth range.
-        vertices.append(Vector3(float(p[0]) - origin_x, float(p[1]) + 0.14, float(p[2]) - origin_z))
+        vertices.append(Vector3(float(p[0]) - origin_x, float(p[1]) + height_bias, float(p[2]) - origin_z))
         normals.append(normal)
         var uv := Vector2.ZERO
         if segment.size() > 12 and segment[12].size() == polygon.size():
@@ -348,7 +353,7 @@ func _index_surface_segment(index: Dictionary, segment: Array) -> void:
 
 func _nearby_surface_segments(x: float, z: float, radius: float) -> Dictionary:
     var result: Dictionary = {}
-    if not is_finite(x) or not is_finite(z):
+    if not is_finite(x) or not is_finite(z) or not is_finite(radius):
         return result
     var reach := clampf(radius, 1.0, 512.0)
     var first := Vector2i(floori((x - reach) / SURFACE_CELL_SIZE), floori((z - reach) / SURFACE_CELL_SIZE))
@@ -378,10 +383,12 @@ func road_surface_at(x: float, z: float) -> Dictionary:
     var records := _nearby_surface_segments(x, z, 32.0)
     for record: Dictionary in records.values():
         var distance_squared := _segment_distance_squared(point, record.a, record.b)
-        if distance_squared >= nearest_squared:
+        var on_surface := distance_squared <= pow(float(record.width_m) * 0.5 + 0.15, 2.0)
+        if nearest.found and not on_surface:
+            continue
+        if on_surface == bool(nearest.found) and distance_squared >= nearest_squared:
             continue
         nearest_squared = distance_squared
-        var on_surface := distance_squared <= pow(float(record.width_m) * 0.5 + 0.15, 2.0)
         var tangent: Vector2 = record.b - record.a
         nearest = record.duplicate()
         nearest["found"] = on_surface
