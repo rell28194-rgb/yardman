@@ -12,6 +12,7 @@ def write_dataset(root: Path):
     (root / "graph").mkdir(parents=True)
     bridge_id = "bridge:0:osm:1:osm:2"
     tunnel_id = "tunnel:0:osm:3:osm:4"
+    passage_id = "passage:0:osm:5:osm:6"
     edges = {
         bridge_id: {
             "id": bridge_id, "source_way": "bridge", "from": "osm:1", "to": "osm:2",
@@ -21,46 +22,59 @@ def write_dataset(root: Path):
         },
         tunnel_id: {
             "id": tunnel_id, "source_way": "tunnel", "from": "osm:3", "to": "osm:4",
-            "path": [[0.0, 20.0, 50.0], [10.0, 30.0, 50.0]],
-            "length_m": 10.0, "class": "primary", "bridge": False, "tunnel": True,
+            "path": [[0.0, 20.0, 50.0], [10.0, 48.0, 50.0], [20.0, 22.0, 50.0]],
+            "length_m": 20.0, "class": "primary", "bridge": False, "tunnel": True,
             "layer": "-1", "direction": 0,
+        },
+        passage_id: {
+            "id": passage_id, "source_way": "passage", "from": "osm:5", "to": "osm:6",
+            "path": [[0.0, 7.0, 80.0], [12.0, 9.0, 80.0]],
+            "length_m": 12.0, "class": "residential", "bridge": False, "tunnel": True,
+            "layer": "0", "direction": 0,
         },
     }
     (root / "graph" / "edges_00.json").write_text(json.dumps(edges))
-    # Node partitions only need to exist for a structurally valid dataset; the
-    # structure pass intentionally does not rewrite graph nodes/abutments.
     nodes = {
         "osm:1": {"id": "osm:1", "position": [0.0, 10.0, 0.0], "edges": [bridge_id]},
         "osm:2": {"id": "osm:2", "position": [20.0, 14.0, 0.0], "edges": [bridge_id]},
         "osm:3": {"id": "osm:3", "position": [0.0, 20.0, 50.0], "edges": [tunnel_id]},
-        "osm:4": {"id": "osm:4", "position": [10.0, 30.0, 50.0], "edges": [tunnel_id]},
+        "osm:4": {"id": "osm:4", "position": [20.0, 22.0, 50.0], "edges": [tunnel_id]},
+        "osm:5": {"id": "osm:5", "position": [0.0, 7.0, 80.0], "edges": [passage_id]},
+        "osm:6": {"id": "osm:6", "position": [12.0, 9.0, 80.0], "edges": [passage_id]},
     }
     (root / "graph" / "nodes_00.json").write_text(json.dumps(nodes))
-    bridge_segment = [0.0, 0.0, 20.0, 0.0, 7.2, 4, 2, bridge_id, 0, 10.0, -5.0,
-                      [[0.0, 10.0, -3.6], [10.0, -5.0, -3.6], [10.0, -5.0, 3.6], [0.0, 10.0, 3.6]],
-                      [[0.0, -3.6], [10.0, -3.6], [10.0, 3.6], [0.0, 3.6]], 1, 2, 13.9, 0.0, 20.0]
-    bridge_segment_2 = [0.0, 0.0, 20.0, 0.0, 7.2, 4, 2, bridge_id, 1, -5.0, 14.0,
-                        [[10.0, -5.0, -3.6], [20.0, 14.0, -3.6], [20.0, 14.0, 3.6], [10.0, -5.0, 3.6]],
-                        [[10.0, -3.6], [20.0, -3.6], [20.0, 3.6], [10.0, 3.6]], 1, 2, 13.9, 0.0, 20.0]
-    tunnel_segment = [0.0, 50.0, 10.0, 50.0, 7.2, 4, 4, tunnel_id, 0, 20.0, 30.0,
-                      [[0.0, 20.0, 46.4], [10.0, 30.0, 46.4], [10.0, 30.0, 53.6], [0.0, 20.0, 53.6]],
-                      [[0.0, -3.6], [10.0, -3.6], [10.0, 3.6], [0.0, 3.6]], 1, 2, 13.9, 0.0, 10.0]
-    tile = {"tile": [0, 0], "segments": [bridge_segment, bridge_segment_2, tunnel_segment]}
+
+    bridge_0 = [0.0, 0.0, 10.0, 0.0, 7.2, 4, 2, bridge_id, 0, 10.0, -5.0,
+                [[0.0, 10.0, -3.6], [10.0, -5.0, -3.6], [10.0, -5.0, 3.6], [0.0, 10.0, 3.6]],
+                [[0.0, -3.6], [10.0, -3.6], [10.0, 3.6], [0.0, 3.6]], 1, 2, 13.9, 0.0, 20.0]
+    bridge_1 = [10.0, 0.0, 20.0, 0.0, 7.2, 4, 2, bridge_id, 1, -5.0, 14.0,
+                [[10.0, -5.0, -3.6], [20.0, 14.0, -3.6], [20.0, 14.0, 3.6], [10.0, -5.0, 3.6]],
+                [[10.0, -3.6], [20.0, -3.6], [20.0, 3.6], [10.0, 3.6]], 1, 2, 13.9, 0.0, 20.0]
+    tunnel_0 = [0.0, 50.0, 10.0, 50.0, 7.2, 4, 4, tunnel_id, 0, 20.0, 48.0,
+                [[0.0, 20.0, 46.4], [10.0, 48.0, 46.4], [10.0, 48.0, 53.6], [0.0, 20.0, 53.6]],
+                [[0.0, -3.6], [10.0, -3.6], [10.0, 3.6], [0.0, 3.6]], 1, 2, 13.9, 0.0, 20.0]
+    tunnel_1 = [10.0, 50.0, 20.0, 50.0, 7.2, 4, 4, tunnel_id, 1, 48.0, 22.0,
+                [[10.0, 48.0, 46.4], [20.0, 22.0, 46.4], [20.0, 22.0, 53.6], [10.0, 48.0, 53.6]],
+                [[10.0, -3.6], [20.0, -3.6], [20.0, 3.6], [10.0, 3.6]], 1, 2, 13.9, 0.0, 20.0]
+    passage = [0.0, 80.0, 12.0, 80.0, 5.5, 6, 4, passage_id, 0, 7.0, 9.0,
+               [[0.0, 7.0, 77.25], [12.0, 9.0, 77.25], [12.0, 9.0, 82.75], [0.0, 7.0, 82.75]],
+               [[0.0, -2.75], [12.0, -2.75], [12.0, 2.75], [0.0, 2.75]], 0, 2, None, 0.0, 12.0]
+    tile = {"tile": [0, 0], "segments": [bridge_0, bridge_1, tunnel_0, tunnel_1, passage]}
     (root / "tile_0_0.json").write_text(json.dumps(tile))
     manifest = {
         "format": 3,
-        "graph": {"nodes": 4, "edges": 2},
-        "tiles": [{"x": 0, "z": 0, "file": "tile_0_0.json", "segments": 3}],
+        "graph": {"nodes": 6, "edges": 3},
+        "tiles": [{"x": 0, "z": 0, "file": "tile_0_0.json", "segments": 5}],
     }
     (root / "manifest.json").write_text(json.dumps(manifest))
-    return bridge_id, tunnel_id
+    return bridge_id, tunnel_id, passage_id
 
 
 class RoadStructureTests(unittest.TestCase):
     def test_bridge_deck_removes_interior_dem_drape_and_keeps_abutments(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            bridge_id, _ = write_dataset(root)
+            bridge_id, _, _ = write_dataset(root)
             summary = compile_structures(root)
             edges = json.loads((root / "graph" / "edges_00.json").read_text())
             path = edges[bridge_id]["path"]
@@ -73,24 +87,43 @@ class RoadStructureTests(unittest.TestCase):
     def test_bridge_render_polygons_follow_same_continuous_profile(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            bridge_id, _ = write_dataset(root)
+            bridge_id, _, _ = write_dataset(root)
             compile_structures(root)
             tile = json.loads((root / "tile_0_0.json").read_text())
             records = [s for s in tile["segments"] if s[7] == bridge_id]
-            ys_at_midpoint = [p[1] for s in records for p in s[11] if abs(float(s[12][s[11].index(p)][0]) - 10.0) < 1e-9]
-            self.assertTrue(ys_at_midpoint)
-            self.assertTrue(all(abs(y - 12.0) < 1e-6 for y in ys_at_midpoint))
+            samples = []
+            for record in records:
+                for point, uv in zip(record[11], record[12]):
+                    if abs(float(uv[0]) - 10.0) < 1e-9:
+                        samples.append(float(point[1]))
+            self.assertTrue(samples)
+            self.assertTrue(all(abs(y - 12.0) < 1e-6 for y in samples))
 
-    def test_tunnel_is_not_lowered_before_corridor_exists(self):
+    def test_negative_layer_tunnel_gets_portal_profile_and_compact_corridor_tile(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            _, tunnel_id = write_dataset(root)
-            before = json.loads((root / "graph" / "edges_00.json").read_text())[tunnel_id]["path"]
+            _, tunnel_id, _ = write_dataset(root)
             summary = compile_structures(root)
-            after = json.loads((root / "graph" / "edges_00.json").read_text())[tunnel_id]["path"]
+            edge = json.loads((root / "graph" / "edges_00.json").read_text())[tunnel_id]
+            self.assertEqual(edge["path"][0][1], 20.0)
+            self.assertAlmostEqual(edge["path"][1][1], 21.0)
+            self.assertEqual(edge["path"][-1][1], 22.0)
+            self.assertEqual(summary["tunnel"]["profiled_edges"], 1)
+            self.assertGreater(summary["tunnel"]["maximum_removed_dem_drape_m"], 26.0)
+            corridor = json.loads((root / "structures" / "tile_0_0.json").read_text())
+            self.assertEqual(len(corridor["tunnels"]), 2)
+            self.assertEqual({item["edge_id"] for item in corridor["tunnels"]}, {tunnel_id})
+
+    def test_layer_zero_tunnel_is_deferred_without_cutting_terrain(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, _, passage_id = write_dataset(root)
+            before = json.loads((root / "graph" / "edges_00.json").read_text())[passage_id]["path"]
+            summary = compile_structures(root)
+            after = json.loads((root / "graph" / "edges_00.json").read_text())[passage_id]["path"]
             self.assertEqual(before, after)
-            self.assertEqual(summary["tunnel"]["edges"], 1)
-            self.assertIn("corridor", summary["tunnel"]["status"])
+            self.assertEqual(summary["tunnel"]["source_edges"], 2)
+            self.assertEqual(summary["tunnel"]["deferred_nonnegative_layer_edges"], 1)
 
     def test_structure_pass_is_deterministic(self):
         with tempfile.TemporaryDirectory() as tmp:
