@@ -1,7 +1,9 @@
 shader_type spatial;
-render_mode cull_disabled;
+render_mode cull_back;
 
 uniform vec3 sand_color : source_color = vec3(0.70, 0.65, 0.50);
+uniform sampler2D reference_sand : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform bool has_reference_sand = false;
 
 float grain(vec2 p) {
     p = fract(p * vec2(0.1031, 0.1030));
@@ -24,7 +26,13 @@ void fragment() {
     float fine = grain(floor(UV * 40.0));
     float filter_amount = smoothstep(0.45, 1.5, max(fwidth(UV.x * 40.0), fwidth(UV.y * 40.0)));
     fine = mix(fine, 0.5, filter_amount);
-    ALBEDO = sand_color * (0.91 + broad * 0.10 + detail * 0.045 + fine * 0.035);
+    vec3 sand = sand_color;
+    if (has_reference_sand) {
+        // The supplied sand image repeats every three real metres; the same
+        // world UV survives tile streaming and a floating-origin shift.
+        sand = clamp(texture(reference_sand, UV).rgb * 1.28, vec3(0.15), vec3(0.86));
+    }
+    ALBEDO = sand * (0.91 + broad * 0.10 + detail * 0.045 + fine * 0.035);
     ROUGHNESS = 0.96;
     SPECULAR = 0.14;
 }

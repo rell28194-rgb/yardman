@@ -1,6 +1,6 @@
 # Real-footprint building layer
 
-The national compiler uses **OpenStreetMap building areas**. It produces original extruded meshes with generic procedural facades; it does not borrow proprietary game assets or claim surveyed Jamaican architecture.
+The national compiler uses **OpenStreetMap building areas**. Runtime meshes preserve those footprints and declared source/inferred heights. The public build has procedural facades; the owner's personal build can load the supplied material pack. Neither presentation claims surveyed Jamaican architecture.
 
 ## Source and geometry
 
@@ -16,7 +16,7 @@ Height precedence is explicit in every record:
 2. Source `building:levels` × 3.15 m + 0.35 m; storey height is inferred.
 3. A declared building-class estimate, default 4.4 m.
 
-Foundation elevations inherit the Copernicus DSM's limitations. They are not surveyed bare-earth building levels. Generic facade windows, colours and roof materials are inferred original presentation.
+Foundation elevations inherit the Copernicus DSM's limitations. They are not surveyed bare-earth building levels. Generic facade windows and colours are inferred presentation. Small rectangular houses/sheds with class-inferred heights can receive inferred hip roofs: the ridge retains the compiled maximum height, with lowered eaves and sixteen centimetres of roof overhang. Source-tagged heights, source storeys, courtyards and irregular footprints retain the compiled flat roof. The original source record and foundation footprint are never rewritten by this presentation choice.
 
 ## Storage and bounded ingestion
 
@@ -48,7 +48,11 @@ It seeks and decompresses only nearby cell payloads using two capped IO threads.
 
 Default visible distances and maximum residency are 450 m/64 cells (Performance), 800 m/96 (Balanced), 1100 m/144 (Quality) and 1450 m/192 (Ultra). Visibility, content residency and near collision are separate. Physics BVHs exist only near the actor, are prepared one per pass, and are discarded when distant while render meshes may remain visible. World collision layer 1 allows walking and driving to contact the structures.
 
-Imported materials do not need the fallback shader's `visibility_distance` uniform. Existing mesh visibility ranges change with the quality setting, so replacing a fallback with an imported material retains the same mobile residency and draw-distance controls. The material input is a connection point for authorized reference art; an input resource alone does not establish that the graphics target has been met. No reference-game materials were available locally when this connection was added.
+Imported materials do not need the fallback shader's `visibility_distance` uniform. Existing mesh visibility ranges change with the quality setting, so replacing a fallback with an imported material retains the same mobile residency and draw-distance controls.
+
+When present, `assets/user_reference` supplies decoded plaster, brick, timber, stone, concrete roof and slate roof textures. Facade textures repeat in real metres rather than stretching an entire atlas over a building. A vertex attribute chooses deterministic material families while retaining two merged meshes per cell. Missing private art falls back to the public procedural material; the asset pack remains outside public Git. Adding textures alone does not establish that the overall graphics target has been met.
+
+All wall and roof indices are checked against their outward normals and converted to Godot's clockwise front-face convention. Back-face culling now exposes the correct outward surface instead of rendering inverted triangles with flipped lighting. This repair also applies to source roof triangulations and courtyard walls.
 
 ## Verified national snapshot
 
@@ -71,6 +75,6 @@ python -m unittest discover -s godot/tests -p test_buildings.py -v
 godot --headless --path godot --script res://tests/building_streamer_test.gd
 ```
 
-The Python suite covers height precedence, courtyard-safe triangulation, exact terrain-triangle foundation conformance, whole-building seam ownership and deterministic independent cell packs. The runtime suite checks merged meshes, nearby collision, distant BVH release/recreation, far-load cancellation, origin rebasing, negative addressing, resource bounds and malformed pack rejection. It also verifies that imported materials survive travel, can be replaced without changing geometry or adding nodes, and preserve live mesh visibility bounds.
+The Python suite covers height precedence, courtyard-safe triangulation, exact terrain-triangle foundation conformance, whole-building seam ownership and deterministic independent cell packs. The runtime suite checks merged meshes, nearby collision, distant BVH release/recreation, far-load cancellation, origin rebasing, negative addressing, resource bounds and malformed pack rejection. It also verifies that imported materials survive travel, can be replaced without changing geometry or adding nodes, and preserve live mesh visibility bounds. Additional checks cover clockwise normals, retained roof peak height, and exclusion of source heights, source levels, courtyards and irregular footprints from inferred hip roofs.
 
 Official implementation references: [Pyosmium geometry factory](https://docs.osmcode.org/pyosmium/latest/reference/Geometry-Functions/) and [Shapely constrained triangulation](https://shapely.readthedocs.io/en/2.1.2/reference/shapely.constrained_delaunay_triangles.html).

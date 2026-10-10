@@ -1,9 +1,15 @@
 shader_type spatial;
-render_mode cull_disabled, depth_draw_opaque;
+render_mode cull_back, depth_draw_opaque;
 
 uniform vec3 ocean_color : source_color = vec3(0.028, 0.17, 0.23);
 uniform vec3 coastal_color : source_color = vec3(0.10, 0.37, 0.40);
 uniform float wave_height = 0.045;
+uniform sampler2D reference_surface : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_foam : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_caustics : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform bool has_reference_surface = false;
+uniform bool has_reference_foam = false;
+uniform bool has_reference_caustics = false;
 varying vec2 ocean_uv;
 varying float shore_fraction;
 
@@ -45,6 +51,20 @@ void fragment() {
     float depth_tint = smoothstep(0.0, 0.75, shore_fraction);
     vec3 water = mix(coastal_color, ocean_color, depth_tint);
     water *= 0.985 + broad * 0.025;
+    if (has_reference_surface) {
+        // Read the source water image as luminance detail rather than applying
+        // its baked black/teal colours over Jamaica's registered coastline.
+        vec2 flow = ocean_uv * 2.1 + vec2(TIME * 0.0021, TIME * 0.0013);
+        float detail = dot(texture(reference_surface, flow).rgb, vec3(0.2126, 0.7152, 0.0722));
+        water *= 0.975 + detail * 0.075;
+    }
+    if (has_reference_caustics) {
+        float caustic = dot(texture(reference_caustics,
+            ocean_uv * 3.7 + vec2(TIME * 0.004, -TIME * 0.002)).rgb,
+            vec3(0.2126, 0.7152, 0.0722));
+        water += vec3(0.014, 0.021, 0.018) * caustic
+            * (1.0 - smoothstep(2.0, 12.0, shore_m));
+    }
     float fresnel = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 4.0);
     water = mix(water, vec3(0.22, 0.37, 0.42), fresnel * 0.30);
 
@@ -53,6 +73,12 @@ void fragment() {
     float foam_phase = shore_m * 2.6 + p1 * 0.12 + p2 * 0.07 - TIME * 0.78;
     float surf = (1.0 - smoothstep(0.20, 1.9, shore_m))
         * smoothstep(0.22, 0.82, sin(foam_phase) * 0.5 + 0.5);
+    if (has_reference_foam) {
+        float foam = dot(texture(reference_foam,
+            ocean_uv * 6.1 + vec2(TIME * 0.010, TIME * 0.006)).rgb,
+            vec3(0.2126, 0.7152, 0.0722));
+        surf *= 0.56 + smoothstep(0.10, 0.46, foam) * 0.64;
+    }
     ALBEDO = mix(water * (0.995 + ripple * 0.012), vec3(0.76, 0.82, 0.79), surf * 0.43);
     ROUGHNESS = clamp(0.235 + ripple * 0.018, 0.18, 0.30);
     SPECULAR = 0.60;

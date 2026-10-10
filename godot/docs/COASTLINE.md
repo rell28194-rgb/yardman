@@ -67,6 +67,21 @@ identical terrain plane to avoid coplanar flicker, without modifying collision.
 Sand variation is continuous and derivative-filtered, replacing conspicuous
 eight-metre square grain patches in the first coastal GL inspection.
 
+The owner's optional reference pack binds decoded sand with a three-metre
+world-registered repeat and mip filtering. The supplied water image contributes
+subtle luminance variation rather than replacing the geographic ocean colours.
+Decoded foam modulates the moving surf only at the mapped shoreline; neutral
+caustics remain confined to the near-shore colour band. These effects remain
+visual proxies, not measured bathymetry. Missing private textures retain the
+public material, and source images remain outside public Git.
+
+Ocean and sand triangles are converted to Godot's clockwise front faces with
+matching upward/outward shading normals. Ocean distance attributes follow the
+same vertex permutation, preserving the exact forty-metre tint band. Back-face
+culling avoids the inverted, dark shore surfaces caused by double-sided meshes
+with inconsistent winding. Neither correction changes source vertices or
+canonical sea level.
+
 The source manifest records SHA256, OSM attribution, area, geometry counts,
 compiled terrain checksum, and limitations. Visual shoreline distance is a
 colour input, not measured bathymetry. OSM may omit beaches or contain coastal

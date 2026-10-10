@@ -17,6 +17,19 @@ func _record(identifier: String) -> Array:
         [[[0, 5, 0], [20, 5, 0], [20, 5, 20], [0, 5, 20]]],
         [[0, 0], [20, 0], [20, 20], [0, 20]], [0, 2, 1, 0, 3, 2]]
 
+func _check_visible_winding(mesh: ArrayMesh, label: String) -> void:
+    var arrays := mesh.surface_get_arrays(0)
+    var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+    var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+    var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+    for triangle in range(0, indices.size(), 3):
+        var a: int = indices[triangle]
+        var b: int = indices[triangle + 1]
+        var c: int = indices[triangle + 2]
+        var cross := (vertices[b] - vertices[a]).cross(vertices[c] - vertices[a])
+        if cross.length_squared() > 0.000000001:
+            _check(cross.dot(normals[a]) < 0.0, label + " contains a back-facing clockwise/normal mismatch")
+
 func _write_pack(path: String, identifier: String) -> void:
     var bytes := JSON.stringify([_record(identifier)]).to_utf8_buffer().compress(FileAccess.COMPRESSION_GZIP)
     var file := FileAccess.open(path, FileAccess.WRITE)
@@ -67,6 +80,27 @@ func _run() -> void:
         _check(entry.count == 1 and entry.root.get_node("Walls").mesh.get_surface_count() == 1 and entry.root.get_node("Roofs").mesh.get_surface_count() == 1, "Cell did not produce merged wall and roof meshes")
         var walls := entry.root.get_node("Walls") as MeshInstance3D
         var roofs := entry.root.get_node("Roofs") as MeshInstance3D
+        _check_visible_winding(walls.mesh, "Walls")
+        _check_visible_winding(roofs.mesh, "Roofs")
+        var roof_arrays := roofs.mesh.surface_get_arrays(0)
+        var minimum_roof := INF
+        var maximum_roof := -INF
+        for point: Vector3 in roof_arrays[Mesh.ARRAY_VERTEX]:
+            minimum_roof = minf(minimum_roof, point.y)
+            maximum_roof = maxf(maximum_roof, point.y)
+        _check(maximum_roof - minimum_roof > 0.5 and is_equal_approx(maximum_roof, 9.4), "Inferred hip roof lost source maximum height or remained a flat box")
+        var measured := _record("measured")
+        measured[2] = 1
+        _check(streamer._inferred_hip_roof(measured).is_empty(), "Measured height was assigned an invented hip roof")
+        var levels := measured.duplicate(true)
+        levels[2] = 2
+        _check(streamer._inferred_hip_roof(levels).is_empty(), "Source storeys were assigned an invented hip roof")
+        var courtyard := _record("courtyard")
+        courtyard[5].append([[8, 5, 8], [8, 5, 12], [12, 5, 12], [12, 5, 8]])
+        _check(streamer._inferred_hip_roof(courtyard).is_empty(), "A courtyard was covered by an invented roof")
+        var irregular := _record("irregular")
+        irregular[5][0][2][0] = 14
+        _check(streamer._inferred_hip_roof(irregular).is_empty(), "An irregular footprint was replaced with a rectangle")
         var wall_material := walls.mesh.surface_get_material(0) as StandardMaterial3D
         var roof_material := roofs.mesh.surface_get_material(0) as StandardMaterial3D
         _check(wall_material != null and wall_material != wall_source and wall_material.albedo_color == wall_source.albedo_color, "Imported wall material was not copied into the merged mesh")
@@ -112,7 +146,7 @@ func _run() -> void:
         var walls := streamer._loaded["160:0"].root.get_node("Walls") as MeshInstance3D
         _check(is_equal_approx(walls.visibility_range_end, streamer.draw_distance + streamer.cell_size), "Imported material bypassed live mesh visibility settings")
         _check(walls.mesh.surface_get_material(0) is StandardMaterial3D, "Travel discarded the supplied imported wall material")
-    print("YARDMAN_BUILDING_STREAMER_TEST %s cells=1 meshes=1 collision=1 cancel=1 rebase=1 bounds=1 corruption=1 imported_materials=1 art_geometry_invariance=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_BUILDING_STREAMER_TEST %s cells=1 meshes=1 collision=1 cancel=1 rebase=1 bounds=1 corruption=1 imported_materials=1 art_geometry_invariance=1 clockwise_normals=1 inferred_hip_roof=1 source_heights_courtyards_preserved=1" % ("PASS" if failures == 0 else "FAIL"))
     streamer.queue_free()
     await process_frame
     quit(0 if failures == 0 else 1)

@@ -4,6 +4,7 @@ class_name JamaicaBuildingStreamer
 signal cell_ready(cell: Vector2i, building_count: int)
 signal cell_removed(cell: Vector2i)
 const BuildingShader = preload("res://shaders/building_surface.gdshader")
+const ReferenceAssets = preload("res://scripts/reference_assets.gd")
 const MAX_CELL_BYTES := 32 * 1024 * 1024
 const PALETTE := [Color(0.78, 0.73, 0.59), Color(0.67, 0.72, 0.66), Color(0.72, 0.48, 0.38), Color(0.64, 0.72, 0.78), Color(0.87, 0.83, 0.71), Color(0.54, 0.64, 0.51)]
 
@@ -86,6 +87,17 @@ func _resolve_material(override_material: Material, roof: bool) -> Material:
     var material := ShaderMaterial.new()
     material.shader = BuildingShader
     material.set_shader_parameter("roof_surface", roof)
+    var bindings := [["reference_roof", "has_reference_roof", "building_roof.png"],
+        ["reference_tiles", "has_reference_tiles", "building_tiled_roof.png"]] if roof else [
+        ["reference_plaster", "has_reference_plaster", "building_plaster.png"],
+        ["reference_brick", "has_reference_brick", "building_brick.png"],
+        ["reference_timber", "has_reference_timber", "building_timber.png"],
+        ["reference_stone", "has_reference_stone", "building_stonewall.png"]]
+    for binding: Array in bindings:
+        var texture: Texture2D = ReferenceAssets.texture(str(binding[2]))
+        if texture != null:
+            material.set_shader_parameter(str(binding[0]), texture)
+            material.set_shader_parameter(str(binding[1]), true)
     _set_material_visibility(material)
     return material
 
@@ -315,11 +327,23 @@ func _prepare_geometry() -> void:
 func _append_building(record: Variant) -> bool:
     if not record is Array or record.size() != 8 or not record[5] is Array or not record[6] is Array or not record[7] is Array or not is_finite(float(record[4])):
         return false
+    for ring: Variant in record[5]:
+        if not ring is Array or ring.size() < 3:
+            return false
+        for point: Variant in ring:
+            if not point is Array or point.size() != 3 or not Vector3(float(point[0]), float(point[1]), float(point[2])).is_finite():
+                return false
     var identifier := str(record[0])
     var variant := absi(identifier.hash()) % PALETTE.size()
     var color: Color = PALETTE[variant]
+    # Alpha carries a deterministic material family in the merged cell mesh.
+    # It is not opacity and does not create a separate draw call per building.
+    color.a = float(variant) / float(PALETTE.size() - 1)
     var roof_color := Color(0.43, 0.45, 0.43).lerp(Color(0.61, 0.33, 0.24), float(variant % 3) * 0.28)
     var roof_y := float(record[4])
+    var hip := _inferred_hip_roof(record)
+    var wall_top: float = float(hip.get("eaves_y", roof_y))
+    roof_color.a = 1.0 if not hip.is_empty() else 0.0
     var ring_index := 0
     for ring in record[5]:
         if not ring is Array or ring.size() < 3:
@@ -347,14 +371,18 @@ func _append_building(record: Variant) -> bool:
                 continue
             var normal := Vector3(b.z - a.z, 0.0, a.x - b.x).normalized() * normal_sign
             var offset: int = _build.wall_vertices.size()
-            _build.wall_vertices.append_array(PackedVector3Array([a, Vector3(a.x, roof_y, a.z), b, Vector3(b.x, roof_y, b.z)]))
+            _build.wall_vertices.append_array(PackedVector3Array([a, Vector3(a.x, wall_top, a.z), b, Vector3(b.x, wall_top, b.z)]))
             for vertex in range(4):
                 _build.wall_normals.append(normal)
                 _build.wall_colors.append(color)
-            _build.wall_uvs.append_array(PackedVector2Array([Vector2(station, a.y - roof_y), Vector2(station, 0.0), Vector2(station + length, b.y - roof_y), Vector2(station + length, 0.0)]))
-            _build.wall_indices.append_array(PackedInt32Array([offset, offset + 1, offset + 2, offset + 2, offset + 1, offset + 3]))
+            _build.wall_uvs.append_array(PackedVector2Array([Vector2(station, a.y - wall_top), Vector2(station, 0.0), Vector2(station + length, b.y - wall_top), Vector2(station + length, 0.0)]))
+            _append_clockwise("wall", offset, offset + 1, offset + 2, normal)
+            _append_clockwise("wall", offset + 2, offset + 1, offset + 3, normal)
             station += length
         ring_index += 1
+    if not hip.is_empty():
+        _append_hip_roof(hip, roof_color)
+        return true
     var roof_offset: int = _build.roof_vertices.size()
     for point in record[6]:
         if not point is Array or point.size() != 2 or not is_finite(float(point[0])) or not is_finite(float(point[1])):
@@ -365,12 +393,110 @@ func _append_building(record: Variant) -> bool:
         _build.roof_colors.append(roof_color)
     if record[7].size() % 3 != 0:
         return false
-    for value in record[7]:
-        var index := int(value)
-        if index < 0 or index >= record[6].size():
-            return false
-        _build.roof_indices.append(roof_offset + index)
+    for triangle in range(0, record[7].size(), 3):
+        var indices := PackedInt32Array()
+        for offset in range(3):
+            var index := int(record[7][triangle + offset])
+            if index < 0 or index >= record[6].size():
+                return false
+            indices.append(roof_offset + index)
+        _append_clockwise("roof", indices[0], indices[1], indices[2], Vector3.UP)
     return true
+
+func _append_clockwise(kind: String, a: int, b: int, c: int, normal: Vector3) -> void:
+    var vertices: PackedVector3Array = _build[kind + "_vertices"]
+    # Godot's visible side is clockwise: the geometric cross product points
+    # opposite its outward shading normal. Correct source triangulations at
+    # ingestion, instead of hiding inverted faces with cull_disabled.
+    if (vertices[b] - vertices[a]).cross(vertices[c] - vertices[a]).dot(normal) > 0.0:
+        var swap := b
+        b = c
+        c = swap
+    _build[kind + "_indices"].append_array(PackedInt32Array([a, b, c]))
+
+func _inferred_hip_roof(record: Array) -> Dictionary:
+    # Source heights/levels, courtyards and irregular footprints retain the
+    # compiled roof. Only small rectangular inferred houses/sheds get this
+    # declared presentation detail; the registered maximum height is retained.
+    if int(record[2]) != 3 or int(record[3]) not in [0, 5] or record[5].size() != 1:
+        return {}
+    var height := float(record[1])
+    if height < 2.4 or height > 5.0:
+        return {}
+    var ring: Array = record[5][0]
+    var corners: Array[Vector2] = []
+    var foundation := -INF
+    for index in ring.size():
+        var before := Vector2(float(ring[posmod(index - 1, ring.size())][0]), float(ring[posmod(index - 1, ring.size())][2]))
+        var point := Vector2(float(ring[index][0]), float(ring[index][2]))
+        var after := Vector2(float(ring[(index + 1) % ring.size()][0]), float(ring[(index + 1) % ring.size()][2]))
+        foundation = maxf(foundation, float(ring[index][1]))
+        var a := point - before
+        var b := after - point
+        if a.length_squared() > 0.000001 and b.length_squared() > 0.000001 and absf(a.normalized().cross(b.normalized())) > 0.002:
+            corners.append(point)
+    if corners.size() != 4:
+        return {}
+    var edges: Array[Vector2] = []
+    var center := Vector2.ZERO
+    for index in range(4):
+        var edge := corners[(index + 1) % 4] - corners[index]
+        if edge.length() < 3.0 or edge.length() > 30.0:
+            return {}
+        edges.append(edge)
+        center += corners[index] * 0.25
+    for index in range(4):
+        if absf(edges[index].normalized().dot(edges[(index + 1) % 4].normalized())) > 0.025:
+            return {}
+        if absf(edges[index].length() - edges[(index + 2) % 4].length()) > 0.025:
+            return {}
+    var long_index := 0 if edges[0].length() >= edges[1].length() else 1
+    var axis := edges[long_index].normalized()
+    var across := Vector2(-axis.y, axis.x)
+    var half_length := edges[long_index].length() * 0.5
+    var half_width := edges[(long_index + 1) % 4].length() * 0.5
+    var roof_y := float(record[4])
+    var rise := minf(clampf(height * 0.24, 0.55, 1.45), half_width * 0.42)
+    var eaves_y := roof_y - rise
+    if eaves_y - foundation < 1.8:
+        return {}
+    # Sixteen centimetres of eave cover are inferred roof detail. Building
+    # ownership, foundation footprint and source record remain unchanged.
+    var x := axis * (half_length + 0.16)
+    var z := across * (half_width + 0.16)
+    var points: Array[Vector2] = [center - x - z, center + x - z, center + x + z, center - x + z]
+    var ridge := axis * maxf(0.0, half_length - half_width)
+    return {"corners": points, "ridge_a": center - ridge, "ridge_b": center + ridge,
+        "eaves_y": eaves_y, "roof_y": roof_y}
+
+func _append_hip_roof(hip: Dictionary, color: Color) -> void:
+    var corners: Array = hip.corners
+    var ridge_a := Vector3(float(hip.ridge_a.x), float(hip.roof_y), float(hip.ridge_a.y))
+    var ridge_b := Vector3(float(hip.ridge_b.x), float(hip.roof_y), float(hip.ridge_b.y))
+    var eaves: Array[Vector3] = []
+    for corner: Vector2 in corners:
+        eaves.append(Vector3(corner.x, float(hip.eaves_y), corner.y))
+    var faces: Array = [
+        [eaves[0], eaves[1], ridge_b, ridge_a],
+        [eaves[1], eaves[2], ridge_b],
+        [eaves[2], eaves[3], ridge_a, ridge_b],
+        [eaves[3], eaves[0], ridge_a],
+    ]
+    for face: Array in faces:
+        var normal: Vector3 = (face[1] - face[0]).cross(face[2] - face[0]).normalized()
+        if normal.y < 0.0:
+            normal = -normal
+        var offset: int = _build.roof_vertices.size()
+        var horizontal: Vector3 = (face[1] - face[0]).normalized()
+        var up_slope: Vector3 = normal.cross(horizontal).normalized()
+        for point: Vector3 in face:
+            _build.roof_vertices.append(point)
+            _build.roof_normals.append(normal)
+            _build.roof_uvs.append(Vector2((point - face[0]).dot(horizontal), (point - face[0]).dot(up_slope)))
+            _build.roof_colors.append(color)
+        _append_clockwise("roof", offset, offset + 1, offset + 2, normal)
+        if face.size() == 4:
+            _append_clockwise("roof", offset, offset + 2, offset + 3, normal)
 
 func _make_mesh(kind: String, material: Material) -> ArrayMesh:
     var mesh := ArrayMesh.new()
