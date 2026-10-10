@@ -32,11 +32,16 @@ var _controls_built := false
 var _parishes: Array = []
 var _qualities: Array = []
 var _settings_widgets: Dictionary = {}
+var _settings_value_labels: Dictionary = {}
+var _menu_scroll: ScrollContainer
+var _last_draw_state: Dictionary = {}
+var _message_style: StyleBoxFlat
 
 func _ready() -> void:
     set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     theme = _make_theme()
+    _message_style = _style(Color(CHARCOAL, 0.78), Color(0, 0, 0, 0), 6, 10)
     _menu_button = _button("≡", func() -> void: set_menu_open(not menu_open))
     _menu_button.tooltip_text = "Menu · Escape"
     _menu_button.add_theme_font_size_override("font_size", 30)
@@ -69,8 +74,21 @@ func set_status(value: Dictionary) -> void:
         _controls.interaction_enabled = can_interact
     if _interact_button != null:
         _interact_button.visible = can_interact and (_controls == null or not _controls.is_touch_mode()) and not menu_open
-        _interact_button.text = "E  Leave vehicle" if bool(_status.driving) else "E  Enter vehicle"
-    queue_redraw()
+        var caption := "E  Leave vehicle" if bool(_status.driving) else "E  Enter vehicle"
+        if _interact_button.text != caption:
+            _interact_button.text = caption
+    # Main provides state each physics frame. Rebuild the custom canvas only
+    # when one of its displayed values actually changes.
+    var draw_state := {
+        "parish": str(_status.parish), "speed": int(roundf(float(_status.speed_kmh))),
+        "bar": int(roundf(float(_status.speed_kmh) / 160.0 * 157.0)),
+        "driving": bool(_status.driving), "ready": bool(_status.ready),
+        "message": str(_status.message), "heading": snappedf(float(_status.heading), 0.002),
+        "gear": str(_status.gear), "minutes": int(float(_status.time_hour) * 60.0)
+    }
+    if draw_state != _last_draw_state:
+        _last_draw_state = draw_state
+        queue_redraw()
 
 func set_radar_paths(paths: Array, center: Vector2, heading: float) -> void:
     _paths = paths
@@ -166,8 +184,10 @@ func _make_menu() -> void:
     close.add_theme_font_size_override("font_size", 28)
     title_row.add_child(close)
     var scroll := ScrollContainer.new()
+    _menu_scroll = scroll
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    scroll.follow_focus = true
     column.add_child(scroll)
     var rows := VBoxContainer.new()
     rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -213,7 +233,9 @@ func _make_menu() -> void:
     rows.add_child(_control_rows)
     _make_controls_settings()
     rows.add_child(HSeparator.new())
-    rows.add_child(_label("On foot: left stick moves relative to the camera.\nRight side looks. Hold the runner to sprint.\nDrive: left stick steers, separate gas and brake.\nD / R selects direction; circled P is handbrake.\nKeyboard: WASD / arrows · E · Shift · F5", 15, MUTED))
+    var help := _label("On foot: left stick moves relative to the camera. Right side looks. Hold SPRINT to run.\n\nDrive: left stick steers; GAS accelerates and BRAKE slows. REVERSE toggles direction; gold means reverse is selected. Hold HANDBRAKE to slide.\n\nKeyboard: WASD / arrows · E · Shift · F5", 15, MUTED)
+    help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    rows.add_child(help)
     rows.add_child(_button("World data & credits", func() -> void:
         set_menu_open(false)
         credits_requested.emit()))
@@ -230,6 +252,7 @@ func _make_controls_settings() -> void:
                 widget.set_value_no_signal(float(_controls.settings[key]))
             elif widget is BaseButton:
                 widget.set_pressed_no_signal(bool(_controls.settings[key]))
+            _refresh_setting_value(str(key))
         return
     _controls_built = true
     var mode := OptionButton.new()
@@ -247,17 +270,24 @@ func _make_controls_settings() -> void:
             ["button_scale", "Control size", 0.75, 1.4, 0.05],
             ["button_opacity", "Control opacity", 0.15, 1.0, 0.05]]:
         var key := str(item[0])
+        var row := HBoxContainer.new()
         var label := _label(str(item[1]), 16, MUTED)
-        _control_rows.add_child(label)
+        label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        row.add_child(label)
+        var value_label := _label("", 16, CREAM)
+        row.add_child(value_label)
+        _settings_value_labels[key] = value_label
+        _control_rows.add_child(row)
         var slider := HSlider.new()
         slider.min_value = float(item[2])
         slider.max_value = float(item[3])
         slider.step = float(item[4])
         slider.value = float(_controls.settings[key])
-        slider.custom_minimum_size.y = 38
+        slider.custom_minimum_size.y = 44
         slider.value_changed.connect(func(value: float) -> void: _change_setting(key, value))
         _control_rows.add_child(slider)
         _settings_widgets[key] = slider
+        _refresh_setting_value(key)
     for item in [["invert_y", "Invert vertical look"], ["reduced_motion", "Reduced motion"]]:
         var key := str(item[0])
         var check := CheckBox.new()
@@ -280,7 +310,15 @@ func _change_setting(key: String, value: Variant) -> void:
     var current: Dictionary = _controls.get_settings()
     current[key] = value
     _controls.apply_settings(current)
+    _refresh_setting_value(key)
     _controls.settings_changed.emit(_controls.get_settings())
+
+func _refresh_setting_value(key: String) -> void:
+    if not _settings_value_labels.has(key) or _controls == null:
+        return
+    var value := float(_controls.settings[key])
+    var label: Label = _settings_value_labels[key]
+    label.text = "%.2f×" % value if key == "look_sensitivity" else "%d%%" % int(roundf(value * 100.0))
 
 func _button(value: String, action: Callable) -> Button:
     var button := Button.new()
@@ -323,7 +361,25 @@ func _make_theme() -> Theme:
     result.set_stylebox("hover", "OptionButton", _style(Color(0.13, 0.20, 0.16), GREEN, 8, 10))
     result.set_stylebox("pressed", "OptionButton", _style(Color(0.10, 0.16, 0.12), GOLD, 8, 10))
     result.set_color("font_color", "OptionButton", CREAM)
+    result.set_color("font_color", "CheckBox", CREAM)
+    result.set_color("font_hover_color", "CheckBox", Color.WHITE)
+    result.set_icon("unchecked", "CheckBox", _checkbox_texture(false))
+    result.set_icon("checked", "CheckBox", _checkbox_texture(true))
     return result
+
+func _checkbox_texture(checked: bool) -> ImageTexture:
+    var image := Image.create(24, 24, false, Image.FORMAT_RGBA8)
+    image.fill(Color.TRANSPARENT)
+    if checked:
+        image.fill_rect(Rect2i(3, 3, 18, 18), Color(GREEN, 0.30))
+    for edge in [Rect2i(3, 3, 18, 2), Rect2i(3, 19, 18, 2), Rect2i(3, 3, 2, 18), Rect2i(19, 3, 2, 18)]:
+        image.fill_rect(edge, CREAM)
+    if checked:
+        for step in range(5):
+            image.fill_rect(Rect2i(6 + step, 11 + step, 2, 2), CREAM)
+        for step in range(9):
+            image.fill_rect(Rect2i(10 + step, 15 - step, 2, 2), CREAM)
+    return ImageTexture.create_from_image(image)
 
 func _draw() -> void:
     var dimensions := get_viewport_rect().size
@@ -351,18 +407,15 @@ func _draw() -> void:
         var speed_position := Vector2(dimensions.x * 0.5 - 60.0, dimensions.y - 40.0)
         _text("%03d" % int(roundf(speed)), speed_position, 44, CREAM)
         _text("km/h", speed_position + Vector2(84, -2), 14, MUTED)
-        _text(str(_status.gear), speed_position + Vector2(120, -1), 22, GOLD)
+        _text(str(_status.gear), speed_position + Vector2(135, -1), 22, GOLD)
         draw_line(speed_position + Vector2(-7, 9), speed_position + Vector2(150, 9), Color(CREAM, 0.20), 2.0, true)
         draw_line(speed_position + Vector2(-7, 9), speed_position + Vector2(-7 + minf(speed / 160.0, 1.0) * 157.0, 9), GREEN, 2.0, true)
     var message := "Loading local world…" if not bool(_status.ready) else str(_status.message)
     if not message.is_empty():
         var text_size := font.get_string_size(message, HORIZONTAL_ALIGNMENT_LEFT, -1, 17)
         var message_position := Vector2((dimensions.x - text_size.x) * 0.5, 90.0)
-        draw_style_box(_style(Color(CHARCOAL, 0.78), Color(0, 0, 0, 0), 6, 10), Rect2(message_position - Vector2(12, 23), text_size + Vector2(24, 13)))
+        draw_style_box(_message_style, Rect2(message_position - Vector2(12, 23), text_size + Vector2(24, 13)))
         _text(message, message_position, 17, CREAM)
-    if _controls != null and _controls.is_touch_mode() and bool(_status.can_interact) and not menu_open:
-        var point: Vector2 = _controls._center("interact")
-        _text("EXIT" if bool(_status.driving) else "ENTER", point + Vector2(-19, -44), 11, CREAM)
 
 func _text(value: String, point: Vector2, font_size: int, color: Color) -> void:
     draw_string(ThemeDB.fallback_font, point + Vector2(1, 2), value, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(0.01, 0.02, 0.015, 0.75))

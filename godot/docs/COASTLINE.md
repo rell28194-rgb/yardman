@@ -45,13 +45,27 @@ surfaces. Building the overview is spread across the frame budget, and origin
 rebases shift a shared far parent exactly once, including sectors assembled
 after a rebase. Sector meshes can be culled independently by the renderer.
 
+Ocean colour now uses a geometric band within 40m of the mapped coastline.
+That narrow band is tessellated on a global 16m grid; offshore water retains
+its 512m grid. Fine preparation occurs in bounded coastal 512m blocks, including
+the island overview, rather than allocating a national 16m grid. Previously,
+clamping distance samples to 40m at 512m triangle corners stretched coastal
+colour hundreds of metres offshore and produced triangular shallow patches.
+The new regression test bounds the transition to the actual coast band and
+checks matching samples on adjacent tile boundaries. This remains a shoreline
+distance colour proxy, not surveyed water depth.
+
 `YardmanCoastline.instantiate_tile(tile, payload, terrain_tile_root, tile_size)`
 creates ocean and beach visuals below the terrain tile root, so unloading and
 origin rebasing follow the terrain exactly. The terrain tile root represents
 sea-level Y=0 before the render-origin offset. Do not also create a giant water
 plane. Canonical UVs keep animation stable across origin shifts. Water wave
-amplitude fades to zero at the mapped shore. Beaches render 3.5cm above the
+lighting uses continuous fragment normals and fades at the mapped shore; the
+mesh remains at canonical sea-level Y=0, eliminating cracks from differently
+tessellated vertex waves at near/far boundaries. Beaches render 3.5cm above the
 identical terrain plane to avoid coplanar flicker, without modifying collision.
+Sand variation is continuous and derivative-filtered, replacing conspicuous
+eight-metre square grain patches in the first coastal GL inspection.
 
 The source manifest records SHA256, OSM attribution, area, geometry counts,
 compiled terrain checksum, and limitations. Visual shoreline distance is a
@@ -79,3 +93,10 @@ terrain coverage.
 collision, off-land height rejection, canonical materials, far-sector exclusion,
 origin rebasing and unloading. Both headless tests passed. Visual shader QA and
 Android device performance remain separate checks.
+
+`coast_render_test.gd` is an optional actual-GL full-scene inspection. It uses
+interior points of sourced Turtle Beach (OSM way 59584393, St. Ann) and Seven
+Mile Beach (OSM way 578136135, Westmoreland), records overhead and shoreline
+views, and confirms that sea geometry retains its geographic position after
+an origin rebase. Set `YARDMAN_COAST_CAPTURE_DIR` to save all six PNGs. It must
+run on a GL display; these captures do not establish Android frame rate.

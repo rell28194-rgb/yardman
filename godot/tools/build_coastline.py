@@ -174,6 +174,10 @@ class ShoreDistances:
             for index in range(0,len(coordinates)-1,64):
                 sections.append(shapely.LineString(coordinates[index:index+65]))
         self.tree = STRtree(sections)
+        # A narrow, actual distance belt owns the coastal colour transition.
+        # Clamping samples on a 512m triangle would otherwise spread a 40m
+        # transition across that whole triangle, producing triangular shallows.
+        self.belt = land.buffer(40.0, quad_segs=8).difference(land)
 
     def values(self, points):
         if len(points) == 0:
@@ -184,10 +188,10 @@ class ShoreDistances:
         return result
 
 
-def water_geometry(land, extent, shore: ShoreDistances, ox,oz,grid_spacing=512.0):
-    geometry = extent.difference(land)
+def _water_grid_points(geometry, extent, grid_spacing):
+    """Clip one independent flat ocean layer to a globally aligned grid."""
     if geometry.is_empty:
-        return np.empty((0,4),dtype="<f4")
+        return []
     shapely.prepare(geometry)
     minx,minz,maxx,maxz = extent.bounds
     xs = np.arange(math.floor(minx/grid_spacing),math.ceil(maxx/grid_spacing))*grid_spacing
@@ -203,6 +207,40 @@ def water_geometry(land, extent, shore: ShoreDistances, ox,oz,grid_spacing=512.0
         points.extend(((x0,z0),(x0,z1),(x1,z0),(x1,z0),(x0,z1),(x1,z1)))
     for index in np.flatnonzero(intersects & ~full):
         points.extend(point for triangle in _triangles(geometry.intersection(cells[index])) for point in triangle)
+    return points
+
+
+def _nearshore_grid_points(geometry, extent, grid_spacing, block_spacing=512.0):
+    """Build 16m coast patches in bounded blocks, including national overview.
+
+    Allocating a full island-sized 16m grid would create roughly 92 million
+    boxes. Only coastal 512m blocks prepare their own small fine-grid batch.
+    """
+    if geometry.is_empty:
+        return []
+    shapely.prepare(geometry)
+    minx,minz,maxx,maxz = extent.bounds
+    xs = np.arange(math.floor(minx/block_spacing),math.ceil(maxx/block_spacing))*block_spacing
+    zs = np.arange(math.floor(minz/block_spacing),math.ceil(maxz/block_spacing))*block_spacing
+    xx,zz = np.meshgrid(xs,zs)
+    blocks = shapely.box(np.maximum(xx.ravel(),minx),np.maximum(zz.ravel(),minz),
+                         np.minimum(xx.ravel()+block_spacing,maxx),np.minimum(zz.ravel()+block_spacing,maxz))
+    points = []
+    for index in np.flatnonzero(shapely.intersects(geometry, blocks)):
+        patch = geometry.intersection(blocks[index])
+        if not patch.is_empty:
+            points.extend(_water_grid_points(patch, blocks[index], grid_spacing))
+    return points
+
+
+def water_geometry(land, extent, shore: ShoreDistances, ox,oz,grid_spacing=512.0,coastal_spacing=16.0):
+    geometry = extent.difference(land)
+    if geometry.is_empty:
+        return np.empty((0,4),dtype="<f4")
+    coastal = geometry.intersection(shore.belt)
+    offshore = geometry.difference(shore.belt)
+    points = _water_grid_points(offshore, extent, grid_spacing)
+    points.extend(_nearshore_grid_points(coastal, extent, coastal_spacing))
     if not points:
         return np.empty((0,4),dtype="<f4")
     points = np.asarray(points,dtype=np.float64)
@@ -292,6 +330,7 @@ def compile_coastline(pbf: Path, terrain_root: Path, output: Path, geography=Non
                 "mask_encoding":"uint8 row-major (resolution-1)^2: 0 water, 1 full land, 2 partial land",
                 "land_encoding":"little-endian float32, triangle-list local XYZ metres",
                 "water_encoding":"little-endian float32, triangle-list local X, sea Y=0, Z, shore distance clamped to 40m",
+                "water_mesh":{"offshore_grid_m":512.0,"coastal_grid_m":16.0,"coastal_belt_m":40.0},
                 "beach_encoding":"same XYZ terrain planes; no invented beach belt",
                 "tiles":entries,"overview":overview_files,"stats":stats,
                 "limitations":["OSM coastline and beach completeness require geographic validation","Visual shore-distance colour is not measured bathymetry","Copernicus DSM heights may include canopy/structures at the coast"]}

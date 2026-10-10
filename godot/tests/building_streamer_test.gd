@@ -52,6 +52,11 @@ func _run() -> void:
     coordinates.configure(manifest)
     var streamer = BuildingScript.new()
     streamer.configure(root_path, coordinates)
+    var wall_source := StandardMaterial3D.new()
+    wall_source.albedo_color = Color(0.41, 0.52, 0.38)
+    var roof_source := StandardMaterial3D.new()
+    roof_source.albedo_color = Color(0.54, 0.36, 0.25)
+    streamer.set_surface_materials(wall_source, roof_source)
     root.add_child(streamer)
     streamer.update_world(10.0, 10.0, true)
     await _wait_idle(streamer)
@@ -60,6 +65,19 @@ func _run() -> void:
     if streamer._loaded.has("0:0"):
         var entry: Dictionary = streamer._loaded["0:0"]
         _check(entry.count == 1 and entry.root.get_node("Walls").mesh.get_surface_count() == 1 and entry.root.get_node("Roofs").mesh.get_surface_count() == 1, "Cell did not produce merged wall and roof meshes")
+        var walls := entry.root.get_node("Walls") as MeshInstance3D
+        var roofs := entry.root.get_node("Roofs") as MeshInstance3D
+        var wall_material := walls.mesh.surface_get_material(0) as StandardMaterial3D
+        var roof_material := roofs.mesh.surface_get_material(0) as StandardMaterial3D
+        _check(wall_material != null and wall_material != wall_source and wall_material.albedo_color == wall_source.albedo_color, "Imported wall material was not copied into the merged mesh")
+        _check(roof_material != null and roof_material != roof_source and roof_material.albedo_color == roof_source.albedo_color, "Imported roof material was not copied into the merged mesh")
+        var wall_geometry := walls.mesh.get_faces()
+        var roof_geometry := roofs.mesh.get_faces()
+        var node_count: int = entry.root.get_child_count()
+        streamer.set_surface_materials()
+        _check(walls.mesh.surface_get_material(0) is ShaderMaterial and roofs.mesh.surface_get_material(0) is ShaderMaterial, "Clearing imported overrides did not restore declared fallbacks")
+        _check(walls.mesh.get_faces() == wall_geometry and roofs.mesh.get_faces() == roof_geometry and entry.root.get_child_count() == node_count, "Changing art materials changed registered geometry or created per-building nodes")
+        streamer.set_surface_materials(wall_source, roof_source)
         _check(entry.body.collision_layer == 1, "Nearby building collision was not active")
         streamer.update_world(760.0, 10.0, true)
         await _wait_idle(streamer)
@@ -90,7 +108,11 @@ func _run() -> void:
     _check(BuildingScript._read_cell(root_path + "/broken.ymb", Vector2i.ZERO).has("error"), "Malformed pack index was accepted")
     streamer.quality = "Performance"
     _check(streamer.draw_distance == 450.0 and streamer.max_loaded_cells == 64, "Graphics quality did not bound building visibility/residency")
-    print("YARDMAN_BUILDING_STREAMER_TEST %s cells=1 meshes=1 collision=1 cancel=1 rebase=1 bounds=1 corruption=1" % ("PASS" if failures == 0 else "FAIL"))
+    if streamer._loaded.has("160:0"):
+        var walls := streamer._loaded["160:0"].root.get_node("Walls") as MeshInstance3D
+        _check(is_equal_approx(walls.visibility_range_end, streamer.draw_distance + streamer.cell_size), "Imported material bypassed live mesh visibility settings")
+        _check(walls.mesh.surface_get_material(0) is StandardMaterial3D, "Travel discarded the supplied imported wall material")
+    print("YARDMAN_BUILDING_STREAMER_TEST %s cells=1 meshes=1 collision=1 cancel=1 rebase=1 bounds=1 corruption=1 imported_materials=1 art_geometry_invariance=1" % ("PASS" if failures == 0 else "FAIL"))
     streamer.queue_free()
     await process_frame
     quit(0 if failures == 0 else 1)

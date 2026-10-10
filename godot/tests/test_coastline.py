@@ -64,6 +64,31 @@ class CoastlineTests(unittest.TestCase):
         _,_,empty = classify_grid(self.land,self.heights,0.,0.,64.,Polygon())
         self.assertEqual(len(empty),0)
 
+    def test_coastal_tint_cannot_spread_across_offshore_triangles(self):
+        land = box(-1024.,-1024.,0.,1024.)
+        water = water_geometry(land,box(0.,-256.,1024.,256.),ShoreDistances(land),0.,0.)
+        triangles = water.reshape(-1,3,4)
+        coastal = triangles[np.min(triangles[:,:,3],axis=1) < 39.999]
+        self.assertGreater(len(coastal),0)
+        self.assertLessEqual(float(np.max(coastal[:,:,0])),40.001)
+        # At this straight shore, interpolated distances remain real metres.
+        np.testing.assert_allclose(coastal[:,:,3],coastal[:,:,0],atol=0.001)
+        for triangle in coastal:
+            for index in range(3):
+                difference = triangle[index,[0,2]]-triangle[(index+1)%3,[0,2]]
+                self.assertLessEqual(float(np.linalg.norm(difference)),16.*2**.5+0.001)
+        expected = box(0.,-256.,1024.,256.)
+        self.assertLess(triangles_geometry(water[:,:3]).symmetric_difference(expected).area,0.002)
+
+    def test_coastal_grid_and_distance_match_neighboring_tile_edges(self):
+        land = box(-1024.,-1024.,64.,1024.)
+        shore = ShoreDistances(land)
+        left = water_geometry(land,box(0.,0.,128.,128.),shore,0.,0.)
+        right = water_geometry(land,box(0.,128.,128.,256.),shore,0.,128.)
+        a = {(round(float(p[0]),5),round(float(p[3]),5)) for p in left if p[2] == 128.}
+        b = {(round(float(p[0]),5),round(float(p[3]),5)) for p in right if p[2] == 0.}
+        self.assertEqual(a,b)
+
     def test_neighbouring_coast_edges_match_height(self):
         heights = np.asarray([[2,12,5,7,9],[9,28,4,8,10],[3,17,7,4,2]],dtype="<f4")
         land = Polygon([(0,0),(256,0),(256,38),(0,110)])

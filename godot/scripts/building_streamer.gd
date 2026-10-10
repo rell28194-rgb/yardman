@@ -34,8 +34,11 @@ var draw_distance := 800.0:
     set(value):
         draw_distance = clampf(value, 256.0, 1800.0)
         for material in [_wall_material, _roof_material]:
-            if material != null:
-                material.set_shader_parameter("visibility_distance", draw_distance)
+            _set_material_visibility(material)
+        for entry in _loaded.values():
+            for child in entry.root.get_children():
+                if child is MeshInstance3D:
+                    child.visibility_range_end = draw_distance + cell_size
         _last_cell = Vector2i(999999, 999999)
 var collision_distance := 180.0
 var max_loaded_cells := 96
@@ -56,8 +59,10 @@ var _build: Dictionary = {}
 var _last_cell := Vector2i(999999, 999999)
 var _world_position := Vector2.ZERO
 var _refresh_clock := 0.0
-var _wall_material: ShaderMaterial
-var _roof_material: ShaderMaterial
+var wall_material_override: Material
+var roof_material_override: Material
+var _wall_material: Material
+var _roof_material: Material
 
 func configure(root: String, world_coordinates, world_terrain = null) -> void:
     data_root = root
@@ -67,14 +72,41 @@ func configure(root: String, world_coordinates, world_terrain = null) -> void:
         _load_manifest()
 
 func _ready() -> void:
-    _wall_material = ShaderMaterial.new()
-    _wall_material.shader = BuildingShader
-    _wall_material.set_shader_parameter("visibility_distance", draw_distance)
-    _roof_material = ShaderMaterial.new()
-    _roof_material.shader = BuildingShader
-    _roof_material.set_shader_parameter("roof_surface", true)
-    _roof_material.set_shader_parameter("visibility_distance", draw_distance)
+    _wall_material = _resolve_material(wall_material_override, false)
+    _roof_material = _resolve_material(roof_material_override, true)
     _load_manifest()
+
+func _resolve_material(override_material: Material, roof: bool) -> Material:
+    if override_material != null:
+        # Copy only the material resource. Imported textures remain shared;
+        # cell streams do not duplicate texture memory or change source assets.
+        var copy := override_material.duplicate() as Material
+        _set_material_visibility(copy)
+        return copy
+    var material := ShaderMaterial.new()
+    material.shader = BuildingShader
+    material.set_shader_parameter("roof_surface", roof)
+    _set_material_visibility(material)
+    return material
+
+func _set_material_visibility(material: Material) -> void:
+    # Imported StandardMaterial3D and unrelated shaders are valid inputs.
+    # Do not invent uniform names on an imported material.
+    if material is ShaderMaterial and material.shader == BuildingShader:
+        material.set_shader_parameter("visibility_distance", draw_distance)
+
+func set_surface_materials(walls: Material = null, roofs: Material = null) -> void:
+    wall_material_override = walls
+    roof_material_override = roofs
+    if not is_node_ready():
+        return
+    _wall_material = _resolve_material(walls, false)
+    _roof_material = _resolve_material(roofs, true)
+    for entry in _loaded.values():
+        for pair in [["Walls", _wall_material], ["Roofs", _roof_material]]:
+            var instance := entry.root.get_node_or_null(str(pair[0])) as MeshInstance3D
+            if instance != null and instance.mesh.get_surface_count() > 0:
+                instance.mesh.surface_set_material(0, pair[1])
 
 func _load_manifest() -> void:
     if coordinates == null:
@@ -340,7 +372,7 @@ func _append_building(record: Variant) -> bool:
         _build.roof_indices.append(roof_offset + index)
     return true
 
-func _make_mesh(kind: String, material: ShaderMaterial) -> ArrayMesh:
+func _make_mesh(kind: String, material: Material) -> ArrayMesh:
     var mesh := ArrayMesh.new()
     var indices: PackedInt32Array = _build[kind + "_indices"]
     if indices.is_empty():

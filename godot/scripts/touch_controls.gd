@@ -17,19 +17,33 @@ const DEFAULT_SETTINGS := {
 
 var driving := true:
     set(value):
-        if driving != value:
-            clear_input()
-            reverse_selected = false
+        if driving == value:
+            return
         driving = value
+        clear_input()
+        reverse_selected = false
         queue_redraw()
 var input_enabled := true:
     set(value):
+        if input_enabled == value:
+            return
         input_enabled = value
         if not value:
             clear_input()
         queue_redraw()
-var interaction_enabled := true
-var layout_editing := false
+var interaction_enabled := true:
+    set(value):
+        if interaction_enabled == value:
+            return
+        interaction_enabled = value
+        queue_redraw()
+var layout_editing := false:
+    set(value):
+        if layout_editing == value:
+            return
+        layout_editing = value
+        clear_input()
+        queue_redraw()
 var reverse_selected := false
 var fingers: Dictionary = {}
 var look_delta := Vector2.ZERO
@@ -37,16 +51,19 @@ var settings: Dictionary = DEFAULT_SETTINGS.duplicate(true)
 var _stick_origin := Vector2.ZERO
 var _stick_position := Vector2.ZERO
 var _stick_owner := -999
-var _touch_seen := false
+var _touch_seen := false:
+    set(value):
+        if _touch_seen == value:
+            return
+        _touch_seen = value
+        queue_redraw()
 var _mouse_look := false
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     _touch_seen = DisplayServer.is_touchscreen_available()
-
-func _process(_delta: float) -> void:
-    queue_redraw()
+    get_viewport().size_changed.connect(queue_redraw)
 
 func is_touch_mode() -> bool:
     return _touch_seen or layout_editing
@@ -74,6 +91,7 @@ func clear_input() -> void:
     _stick_position = Vector2.ZERO
     _mouse_look = false
     look_delta = Vector2.ZERO
+    queue_redraw()
 
 func _notification(what: int) -> void:
     if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
@@ -109,6 +127,7 @@ func _press(index: int, point: Vector2) -> void:
         _stick_position = point
     fingers[index] = {"zone": zone, "position": point}
     if layout_editing:
+        queue_redraw()
         return
     if zone == "interact" and interaction_enabled:
         interaction_requested.emit()
@@ -132,8 +151,7 @@ func _drag(index: int, point: Vector2, relative: Vector2) -> void:
     if layout_editing and zone != "look":
         var slot := "stick" if zone == "move" else zone
         var dimensions := get_viewport_rect().size
-        var radius := _radius(slot)
-        var safe := Vector2(clampf(point.x, radius + 16.0, dimensions.x - radius - 16.0), clampf(point.y, radius + 80.0, dimensions.y - radius - 16.0))
+        var safe := _clamped_center(point, slot)
         settings.positions[slot] = [safe.x / dimensions.x, safe.y / dimensions.y]
         if zone == "move":
             _stick_origin = safe
@@ -145,6 +163,8 @@ func _drag(index: int, point: Vector2, relative: Vector2) -> void:
         look_delta += relative * float(settings.look_sensitivity) * Vector2(1.0, -1.0 if bool(settings.invert_y) else 1.0)
     record.position = point
     fingers[index] = record
+    if zone == "move" or layout_editing:
+        queue_redraw()
 
 func held(zone: String) -> bool:
     for record in fingers.values():
@@ -216,22 +236,38 @@ func _zone_at(point: Vector2) -> String:
 
 func _center(zone: String) -> Vector2:
     var dimensions := get_viewport_rect().size
+    var pedal_radius := _radius("gas")
+    var action_radius := _radius("reverse")
+    var pedal_y := dimensions.y - pedal_radius - 67.0
+    var gas_x := dimensions.x - pedal_radius - 25.0
+    var brake_x := gas_x - pedal_radius * 2.0 - 26.0
+    var action_y := pedal_y - pedal_radius - action_radius - 43.0
     var positions := {
-        "stick": Vector2(132.0, dimensions.y - 118.0),
-        "left": Vector2(75.0, dimensions.y - 110.0),
-        "right": Vector2(190.0, dimensions.y - 110.0),
-        "gas": Vector2(dimensions.x - 70.0, dimensions.y - 112.0),
-        "brake": Vector2(dimensions.x - 186.0, dimensions.y - 112.0),
-        "handbrake": Vector2(dimensions.x - 166.0, dimensions.y - 232.0),
-        "reverse": Vector2(dimensions.x - 64.0, dimensions.y - 240.0),
-        "sprint": Vector2(dimensions.x - 70.0, dimensions.y - 112.0),
-        "interact": Vector2(dimensions.x - 72.0, dimensions.y - 334.0)
+        "stick": Vector2(_radius("stick") + 56.0, dimensions.y - _radius("stick") - 42.0),
+        "left": Vector2(action_radius + 43.0, pedal_y + 2.0),
+        "right": Vector2(action_radius * 3.0 + 94.0, pedal_y + 2.0),
+        "gas": Vector2(gas_x, pedal_y),
+        "brake": Vector2(brake_x, pedal_y),
+        "handbrake": Vector2(brake_x + 20.0, action_y),
+        "reverse": Vector2(gas_x + 6.0, action_y - 8.0),
+        "sprint": Vector2(gas_x, pedal_y),
+        "interact": Vector2(gas_x - 2.0, action_y - action_radius * 2.0 - 38.0)
     }
     var value: Vector2 = positions.get(zone, Vector2(100.0, dimensions.y - 100.0))
     var custom: Variant = settings.positions.get(zone, [])
     if custom is Array and custom.size() == 2:
         value = Vector2(float(custom[0]) * dimensions.x, float(custom[1]) * dimensions.y)
-    return value
+    return _clamped_center(value, zone)
+
+func _clamped_center(value: Vector2, zone: String) -> Vector2:
+    var dimensions := get_viewport_rect().size
+    var radius := _radius(zone)
+    # Leave room for a caption, the top HUD and the edge of a thumb's hit area.
+    return Vector2(clampf(value.x, radius + 16.0, dimensions.x - radius - 16.0),
+        clampf(value.y, radius + 84.0, dimensions.y - radius - 26.0))
+
+func _display_stick_center() -> Vector2:
+    return _clamped_center(_stick_origin, "stick") if _stick_owner != -999 else _center("stick")
 
 func _radius(zone: String) -> float:
     return (76.0 if zone == "stick" else (45.0 if zone in ["gas", "brake", "sprint"] else 32.0)) * float(settings.button_scale)
@@ -251,7 +287,7 @@ func _draw() -> void:
     if driving and str(settings.steering_mode) == "Buttons":
         zones.append_array(["left", "right"])
     else:
-        var center := _stick_origin if _stick_owner != -999 else _center("stick")
+        var center := _display_stick_center()
         var radius := _radius("stick")
         draw_circle(center, radius, Color(0.035, 0.055, 0.05, opacity * 0.55))
         draw_arc(center, radius, 0.0, TAU, 56, Color(CREAM, opacity * 0.45), 1.6, true)
@@ -260,6 +296,7 @@ func _draw() -> void:
         draw_circle(thumb, radius * 0.29, Color(GREEN if _stick_owner != -999 else CREAM, opacity * 0.65))
         if driving and str(settings.steering_mode) == "Wheel":
             draw_line(center, center + Vector2.UP.rotated(steering() * PI * 0.55) * radius * 0.70, CREAM, 4.0, true)
+        _caption("STEER" if driving else "MOVE", center + Vector2(0, radius + 17.0), opacity)
     for zone_value in zones:
         var zone := str(zone_value)
         var center := _center(zone)
@@ -267,23 +304,37 @@ func _draw() -> void:
         var active := held(zone) or (zone == "reverse" and reverse_selected)
         draw_circle(center, radius, Color(0.035, 0.05, 0.047, opacity * (0.85 if active else 0.65)))
         draw_arc(center, radius, 0.0, TAU, 48, Color(GOLD if active else CREAM, opacity * 0.75), 2.0 if active else 1.2, true)
-        _glyph(zone, center, radius * 0.43, Color(GOLD if active else CREAM, opacity))
+        var ink := Color(GOLD if active else CREAM, opacity)
+        if zone in ["gas", "brake"]:
+            _glyph(zone, center + Vector2(0, -9.0 * float(settings.button_scale)), radius * 0.30, ink)
+            _letter("GAS" if zone == "gas" else "BRAKE", center + Vector2(0, 21.0 * float(settings.button_scale)), int(16.0 * float(settings.button_scale)), ink)
+        else:
+            _glyph(zone, center, radius * 0.43, ink)
+            var captions := {"handbrake": "HANDBRAKE", "reverse": "REVERSE", "sprint": "SPRINT", "interact": "EXIT" if driving else "ENTER"}
+            if captions.has(zone):
+                _caption(str(captions[zone]), center + Vector2(0, radius + 17.0), opacity)
     if layout_editing:
         draw_string(ThemeDB.fallback_font, Vector2(24, 112), "Drag controls to reposition · open Menu when finished", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, CREAM)
 
 func _glyph(zone: String, center: Vector2, size: float, color: Color) -> void:
     var line := 2.5
     if zone == "gas":
-        draw_line(center + Vector2(-size * 0.55, size), center + Vector2(0.0, -size), color, line, true)
-        draw_line(center + Vector2(0.0, -size), center + Vector2(size * 0.55, size), color, line, true)
-        draw_line(center + Vector2(-size * 0.27, 0.0), center + Vector2(size * 0.27, 0.0), color, line, true)
+        draw_rect(Rect2(center - Vector2(size * 0.43, size), Vector2(size * 0.86, size * 2.0)), color, false, line)
+        for grip in range(4):
+            var y := center.y - size * 0.60 + float(grip) * size * 0.40
+            draw_line(Vector2(center.x - size * 0.30, y), Vector2(center.x + size * 0.30, y - size * 0.12), color, 1.4, true)
     elif zone == "brake":
-        draw_rect(Rect2(center - Vector2.ONE * size * 0.58, Vector2.ONE * size * 1.16), color, false, line)
+        draw_rect(Rect2(center - Vector2(size, size * 0.55), Vector2(size * 2.0, size * 1.10)), color, false, line)
+        for grip in range(4):
+            var x := center.x - size * 0.60 + float(grip) * size * 0.40
+            draw_line(Vector2(x, center.y + size * 0.35), Vector2(x + size * 0.15, center.y - size * 0.35), color, 1.4, true)
     elif zone == "handbrake":
         draw_arc(center, size, 0.0, TAU, 24, color, line, true)
         _letter("P", center, int(size * 1.45), color)
     elif zone == "reverse":
-        _letter("R" if reverse_selected else "D", center, int(size * 1.5), color)
+        _letter("R", center, int(size * 1.5), color)
+        if reverse_selected:
+            draw_circle(center + Vector2(size * 1.15, -size * 1.15), 3.0, GOLD)
     elif zone == "interact":
         draw_rect(Rect2(center + Vector2(-size * 0.5, -size), Vector2(size, size * 2.0)), color, false, line)
         var sign_value := -1.0 if driving else 1.0
@@ -304,3 +355,11 @@ func _letter(value: String, center: Vector2, font_size: int, color: Color) -> vo
     var font := ThemeDB.fallback_font
     var extent := font.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
     draw_string(font, center + Vector2(-extent.x * 0.5, font_size * 0.35), value, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
+
+func _caption(value: String, baseline_center: Vector2, opacity: float) -> void:
+    var font := ThemeDB.fallback_font
+    var font_size := int(roundf(11.0 * float(settings.button_scale)))
+    var extent := font.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+    var point := baseline_center - Vector2(extent.x * 0.5, 0.0)
+    draw_string(font, point + Vector2(1, 1), value, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(0.01, 0.02, 0.015, opacity * 0.85))
+    draw_string(font, point, value, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(CREAM, opacity))

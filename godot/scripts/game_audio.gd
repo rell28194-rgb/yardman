@@ -1,3 +1,4 @@
+@static_unload
 extends Node
 class_name YardmanGameAudio
 
@@ -7,6 +8,7 @@ const SAMPLE_RATE := 22050
 const SILENT_DB := -80.0
 static var _stream_cache: Dictionary = {}
 static var _cache_build_count := 0
+static var _active_instances := 0
 
 var engine: AudioStreamPlayer
 var road_roll: AudioStreamPlayer
@@ -34,7 +36,19 @@ func configure(profile: String = "Balanced", default_volume: float = 0.60) -> vo
         footsteps = _make_voice("Footsteps", _stream_cache.footsteps)
         wind = _make_voice("Wind", _stream_cache.wind)
         _configured = true
+        _active_instances += 1
     set_volume(default_volume)
+
+func _exit_tree() -> void:
+    _silence()
+    for player in _voices:
+        player.stream = null
+    if _configured:
+        _active_instances = maxi(0, _active_instances - 1)
+        _configured = false
+    if _active_instances == 0:
+        _stream_cache.clear()
+        _cache_build_count = 0
 
 func set_volume(value: float) -> void:
     volume = clampf(value, 0.0, 1.0) if is_finite(value) else 0.0

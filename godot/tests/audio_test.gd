@@ -76,8 +76,10 @@ func _run() -> void:
     state.speed_mps = INF
     second.update_state(1.0 / 60.0, state)
     _check(is_finite(second.engine.pitch_scale), "Invalid runtime telemetry corrupted audio pitch")
-    print("YARDMAN_AUDIO_TEST %s cached_pcm=1 loop_seams=1 voices=4 rpm_smoothing=1 grass=1 footsteps=1 menu_silence=1" % ("PASS" if failures == 0 else "FAIL"))
     audio.queue_free()
     second.queue_free()
     await process_frame
+    await process_frame
+    _check(AudioScript._stream_cache.is_empty(), "Cached PCM outlived all audio owners")
+    print("YARDMAN_AUDIO_TEST %s cached_pcm=1 loop_seams=1 voices=4 rpm_smoothing=1 grass=1 footsteps=1 menu_silence=1 cache_cleanup=1" % ("PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)

@@ -48,6 +48,9 @@ func _run() -> void:
     _drag(controls, 2, Vector2(736, 342), Vector2(36, 12))
     _check(controls.throttle() == 1.0 and controls.steering() < -0.99, "Gas and analog steering were not independent")
     _check(controls.consume_look().is_equal_approx(Vector2(36, 12)), "Third finger did not look independently")
+    controls.driving = true
+    _check(controls.throttle() == 1.0 and controls.steering() < -0.99, "Repeated frame state assignment cleared owned fingers")
+    _check(not controls.is_processing(), "Touch canvas redraws unconditionally on idle frames")
     _release(controls, 0)
     _check(controls.throttle() == 1.0 and controls.steering() == 0.0, "Releasing stick cleared the gas finger")
     _press(controls, 3, controls._center("brake"))
@@ -68,6 +71,11 @@ func _run() -> void:
     var movement: Vector2 = controls.movement_vector()
     _check(is_equal_approx(movement.length(), 1.0) and movement.x > 0.6 and movement.y < -0.6, "Walking analog diagonal magnitude is wrong")
     _check(controls.sprint_held() and controls.throttle() == 0.0, "Sprint/walk inputs leaked into driving")
+    controls.clear_input()
+    _press(controls, 0, Vector2(1, 719))
+    var displayed_center: Vector2 = controls._display_stick_center()
+    _check(controls.movement_vector() == Vector2.ZERO, "Clamping the visible walking stick introduced initial movement")
+    _check(displayed_center.x - controls._radius("stick") >= 15.0 and displayed_center.y + controls._radius("stick") <= 695.0, "Floating walking stick was clipped at the screen edge")
     controls._notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
     _check(controls.fingers.is_empty() and controls.movement_vector() == Vector2.ZERO, "Focus loss left stuck controls")
     controls.driving = true
@@ -110,10 +118,31 @@ func _run() -> void:
     controls.apply_settings({"look_sensitivity": 1.85})
     hud.set_menu_open(true)
     _check(is_equal_approx(hud._settings_widgets.look_sensitivity.value, 1.85), "Settings drawer did not reflect restored settings")
+    _check(hud._settings_value_labels.look_sensitivity.text == "1.85×", "Control settings omitted the actual sensitivity value")
     _press(controls, 1, controls._center("gas"))
     _check(controls.throttle() == 0.0, "Settings drawer leaked a pedal press")
     hud.set_menu_open(false)
     _check(controls.input_enabled, "Closing settings did not restore controls")
+    root.size = Vector2i(960, 540)
+    root.content_scale_size = Vector2i(960, 540)
+    controls.apply_settings({"button_scale": 1.4})
+    await process_frame
+    await process_frame
+    for zone in ["gas", "brake", "handbrake", "reverse", "interact", "stick"]:
+        var center: Vector2 = controls._center(zone)
+        var radius: float = controls._radius(zone)
+        _check(center.x - radius >= 15.0 and center.x + radius <= 945.0 and center.y - radius >= 83.0 and center.y + radius <= 514.0, "Large controls escaped their safe margin: " + zone)
+    for pair in [["gas", "brake"], ["gas", "reverse"], ["brake", "handbrake"], ["handbrake", "reverse"], ["reverse", "interact"]]:
+        var minimum: float = controls._radius(pair[0]) + controls._radius(pair[1]) + 20.0
+        _check(controls._center(pair[0]).distance_to(controls._center(pair[1])) >= minimum, "Large control hit areas overlap: %s / %s" % pair)
+    hud.set_menu_open(true)
+    await process_frame
+    await process_frame
+    _check(hud._drawer.get_global_rect().end.y <= 521.0 and hud._menu_scroll.get_v_scroll_bar().max_value > hud._menu_scroll.get_v_scroll_bar().page, "Compact phone menu overflow is not scrollable inside the viewport")
+    hud.set_menu_open(false)
+    root.size = Vector2i(1280, 720)
+    root.content_scale_size = Vector2i(1280, 720)
+    await process_frame
     var clipped: PackedVector2Array = hud._clip_circle(Vector2(-100, 0), Vector2(100, 0), 50.0)
     _check(clipped.size() == 2 and clipped[0].is_equal_approx(Vector2(-50, 0)) and clipped[1].is_equal_approx(Vector2(50, 0)), "Radar roads cross its circular boundary")
     var player = PlayerScript.new()

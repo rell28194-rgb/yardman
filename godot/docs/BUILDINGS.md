@@ -42,10 +42,13 @@ The compiler stages output and retains the previous compiled dataset if ingestio
 - `target`, `update_world(x, z, force=false)`, and `rebase_by(shift)`.
 - `quality`, `draw_distance`, `collision_distance`, `max_loaded_cells`.
 - `is_idle()` / `inflight_count()`; these include pending nearby collision preparation.
+- `set_surface_materials(walls, roofs)` accepts imported `StandardMaterial3D` or `ShaderMaterial` resources before startup or during streaming. The resources are copied once per layer; their textures remain shared. Changing materials updates existing merged cell surfaces without modifying the registered footprints, roof elevations, foundations or collision geometry. Passing `null` restores the declared fallback for that layer.
 
 It seeks and decompresses only nearby cell payloads using two capped IO threads. Stale work is discarded after travel, and cell roots unload outside the desired range. Main-thread geometry preparation is limited to 20 buildings or 1.8 ms per frame. Each cell merges its walls and roofs into two meshes; geometry is capped at 400,000 vertices per cell.
 
 Default visible distances and maximum residency are 450 m/64 cells (Performance), 800 m/96 (Balanced), 1100 m/144 (Quality) and 1450 m/192 (Ultra). Visibility, content residency and near collision are separate. Physics BVHs exist only near the actor, are prepared one per pass, and are discarded when distant while render meshes may remain visible. World collision layer 1 allows walking and driving to contact the structures.
+
+Imported materials do not need the fallback shader's `visibility_distance` uniform. Existing mesh visibility ranges change with the quality setting, so replacing a fallback with an imported material retains the same mobile residency and draw-distance controls. The material input is a connection point for authorized reference art; an input resource alone does not establish that the graphics target has been met. No reference-game materials were available locally when this connection was added.
 
 ## Verified national snapshot
 
@@ -68,6 +71,6 @@ python -m unittest discover -s godot/tests -p test_buildings.py -v
 godot --headless --path godot --script res://tests/building_streamer_test.gd
 ```
 
-The Python suite covers height precedence, courtyard-safe triangulation, exact terrain-triangle foundation conformance, whole-building seam ownership and deterministic independent cell packs. The runtime suite checks merged meshes, nearby collision, distant BVH release/recreation, far-load cancellation, origin rebasing, negative addressing, resource bounds and malformed pack rejection.
+The Python suite covers height precedence, courtyard-safe triangulation, exact terrain-triangle foundation conformance, whole-building seam ownership and deterministic independent cell packs. The runtime suite checks merged meshes, nearby collision, distant BVH release/recreation, far-load cancellation, origin rebasing, negative addressing, resource bounds and malformed pack rejection. It also verifies that imported materials survive travel, can be replaced without changing geometry or adding nodes, and preserve live mesh visibility bounds.
 
 Official implementation references: [Pyosmium geometry factory](https://docs.osmcode.org/pyosmium/latest/reference/Geometry-Functions/) and [Shapely constrained triangulation](https://shapely.readthedocs.io/en/2.1.2/reference/shapely.constrained_delaunay_triangles.html).
