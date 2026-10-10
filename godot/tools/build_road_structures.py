@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
-"""Build terrain-independent road structures after DEM road conformance.
+"""Build terrain-independent bridge decks and classified tunnel corridors.
 
-OSM bridge centre-lines are initially sampled against the DEM so their
-abutments register perfectly with ordinary roads. This pass keeps those
-abutment elevations but replaces the interior bridge deck with a continuous
-linear profile. The bridge ribbon is therefore no longer draped into the
-river/valley/road underneath it. Tunnels are counted but deliberately left
-untouched until a terrain-corridor/portal mesh is present; lowering them without
-carving terrain would make them less driveable, not more correct.
+Bridge abutments and tunnel portals stay registered to the DEM. Bridge decks
+and explicit negative-layer tunnel axes are rebuilt as continuous profiles
+between those endpoints instead of following terrain inside the structure.
+Layer-zero tunnel tags are intentionally left terrain-conformed because they can
+represent building passages or covered roads and need source classification
+before terrain is cut.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import math
+import shutil
 from pathlib import Path
 
-PROFILE_SOURCE = "DEM abutments + terrain-independent bridge deck"
+BRIDGE_PROFILE_SOURCE = "DEM abutments + terrain-independent bridge deck"
+TUNNEL_PROFILE_SOURCE = "DEM portals + terrain-independent negative-layer tunnel axis"
 
 
 def parse_args() -> argparse.Namespace:
@@ -46,6 +47,13 @@ def _load_edges(root: Path):
     return edges, owners
 
 
+def _layer(edge: dict) -> int:
+    try:
+        return int(str(edge.get("layer", "0")))
+    except ValueError:
+        return 0
+
+
 def _horizontal_stations(path):
     stations = [0.0]
     for a, b in zip(path, path[1:]):
@@ -53,14 +61,14 @@ def _horizontal_stations(path):
     return stations
 
 
-def _bridge_profile(edge: dict):
+def _linear_profile(edge: dict):
     path = edge.get("path") or []
     if len(path) < 2:
-        raise ValueError(f"Bridge edge {edge.get('id')} has no usable path")
+        raise ValueError(f"Structure edge {edge.get('id')} has no usable path")
     stations = _horizontal_stations(path)
     total = stations[-1]
     if total <= 1e-6:
-        raise ValueError(f"Bridge edge {edge.get('id')} has zero horizontal length")
+        raise ValueError(f"Structure edge {edge.get('id')} has zero horizontal length")
     start_y, end_y = float(path[0][1]), float(path[-1][1])
     original = [float(p[1]) for p in path]
     adjusted = []
@@ -95,101 +103,163 @@ def compile_structures(roads_root: Path) -> dict:
             prior_summary = json.loads(summary_path.read_text(encoding="utf-8"))
         except (ValueError, OSError):
             prior_summary = {}
+
     already_profiled = bool(edges) and all(
-        not edge.get("bridge") or edge.get("elevation_source") == PROFILE_SOURCE
+        (not edge.get("bridge") or edge.get("elevation_source") == BRIDGE_PROFILE_SOURCE)
+        and (not edge.get("tunnel") or _layer(edge) >= 0 or edge.get("elevation_source") == TUNNEL_PROFILE_SOURCE)
         for edge in edges.values()
     )
 
-    bridge_profiles = {}
+    profiles = {}
     original_endpoints = {}
-    bridge_length = 0.0
-    tunnel_length = 0.0
-    tunnel_edges = 0
-    max_vertical_correction = 0.0
-    by_class = {}
+    kinds = {}
+    bridge_length = tunnel_length = 0.0
+    bridge_max_correction = tunnel_max_correction = 0.0
+    bridge_by_class = {}
+    tunnel_by_class = {}
+    tunnel_total_edges = 0
+    tunnel_deferred = 0
 
     for edge_id, edge in edges.items():
         if edge.get("tunnel"):
-            tunnel_edges += 1
+            tunnel_total_edges += 1
+            if _layer(edge) >= 0:
+                tunnel_deferred += 1
+                continue
+            path = edge.get("path") or []
+            if len(path) < 2:
+                continue
+            original_endpoints[edge_id] = (float(path[0][1]), float(path[-1][1]))
+            profile, correction = _linear_profile(edge)
+            profiles[edge_id] = profile
+            kinds[edge_id] = "tunnel"
+            edge["path"] = profile
+            edge["elevation_source"] = TUNNEL_PROFILE_SOURCE
             tunnel_length += float(edge.get("length_m", 0.0) or 0.0)
+            tunnel_max_correction = max(tunnel_max_correction, correction)
+            klass = str(edge.get("class", "unknown"))
+            tunnel_by_class[klass] = tunnel_by_class.get(klass, 0) + 1
+            continue
         if not edge.get("bridge"):
             continue
         path = edge.get("path") or []
         if len(path) < 2:
             continue
         original_endpoints[edge_id] = (float(path[0][1]), float(path[-1][1]))
-        profile, correction = _bridge_profile(edge)
-        bridge_profiles[edge_id] = profile
+        profile, correction = _linear_profile(edge)
+        profiles[edge_id] = profile
+        kinds[edge_id] = "bridge"
         edge["path"] = profile
-        edge["elevation_source"] = PROFILE_SOURCE
+        edge["elevation_source"] = BRIDGE_PROFILE_SOURCE
         bridge_length += float(edge.get("length_m", 0.0) or 0.0)
-        max_vertical_correction = max(max_vertical_correction, correction)
+        bridge_max_correction = max(bridge_max_correction, correction)
         klass = str(edge.get("class", "unknown"))
-        by_class[klass] = by_class.get(klass, 0) + 1
+        bridge_by_class[klass] = bridge_by_class.get(klass, 0) + 1
 
-    # If this exact generated dataset has already passed once, preserve the
-    # measured amount of DEM drape removed. Geometry stays byte-stable on a
-    # second pass instead of rewriting the diagnostic as zero.
     if already_profiled:
-        previous = (prior_summary.get("bridge") or {}).get("maximum_removed_dem_drape_m")
-        if previous is not None:
-            max_vertical_correction = float(previous)
+        old_bridge = prior_summary.get("bridge") or {}
+        old_tunnel = prior_summary.get("tunnel") or {}
+        if old_bridge.get("maximum_removed_dem_drape_m") is not None:
+            bridge_max_correction = float(old_bridge["maximum_removed_dem_drape_m"])
+        if old_tunnel.get("maximum_removed_dem_drape_m") is not None:
+            tunnel_max_correction = float(old_tunnel["maximum_removed_dem_drape_m"])
 
-    changed_partitions = set(owners[eid] for eid in bridge_profiles)
+    changed_partitions = set(owners[eid] for eid in profiles)
     for path in changed_partitions:
         payload = json.loads(path.read_text(encoding="utf-8"))
         for edge_id in list(payload):
-            if edge_id in bridge_profiles:
+            if edge_id in profiles:
                 payload[edge_id] = edges[edge_id]
         path.write_text(json.dumps(payload, separators=(",", ":"), sort_keys=True), encoding="utf-8")
 
-    touched_tiles = set()
-    bridge_surface_records = 0
+    structure_dir = roads_root / "structures"
+    if structure_dir.exists():
+        shutil.rmtree(structure_dir)
+    structure_dir.mkdir(parents=True)
+    bridge_tiles = set()
+    tunnel_tiles = set()
+    bridge_surface_records = tunnel_surface_records = 0
+    tunnel_pieces_by_tile = {}
+
     for tile_entry in manifest.get("tiles", []):
+        tx, tz = int(tile_entry["x"]), int(tile_entry["z"])
         path = roads_root / str(tile_entry["file"])
         payload = json.loads(path.read_text(encoding="utf-8"))
         changed = False
+        compact_tunnels = {}
         for segment in payload.get("segments", []):
             if not isinstance(segment, list) or len(segment) < 18:
                 continue
             edge_id = str(segment[7])
-            profile = bridge_profiles.get(edge_id)
+            profile = profiles.get(edge_id)
             if profile is None:
                 continue
             start_y, end_y = original_endpoints[edge_id]
             start_station, end_station = float(segment[16]), float(segment[17])
             polygon, uv = segment[11], segment[12]
             if len(polygon) != len(uv):
-                raise ValueError(f"Bridge polygon/UV mismatch on {edge_id}")
+                raise ValueError(f"Structure polygon/UV mismatch on {edge_id}")
             for point, texcoord in zip(polygon, uv):
                 point[1] = round(_profile_y(start_y, end_y, start_station, end_station, float(texcoord[0])), 6)
             segment_index = int(segment[8])
             if 0 <= segment_index < len(profile) - 1:
                 segment[9] = profile[segment_index][1]
                 segment[10] = profile[segment_index + 1][1]
-            bridge_surface_records += 1
+            if kinds[edge_id] == "bridge":
+                bridge_surface_records += 1
+                bridge_tiles.add((tx, tz))
+            else:
+                tunnel_surface_records += 1
+                tunnel_tiles.add((tx, tz))
+                if 0 <= segment_index < len(profile) - 1:
+                    a, b = profile[segment_index], profile[segment_index + 1]
+                    compact_tunnels[(edge_id, segment_index)] = {
+                        "edge_id": edge_id,
+                        "segment_index": segment_index,
+                        "a": [a[0], a[1], a[2]],
+                        "b": [b[0], b[1], b[2]],
+                        "width_m": float(segment[4]),
+                        "layer": _layer(edges[edge_id]),
+                    }
             changed = True
         if changed:
             path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
-            touched_tiles.add((int(tile_entry["x"]), int(tile_entry["z"])))
+        if compact_tunnels:
+            filename = f"tile_{tx}_{tz}.json"
+            values = [compact_tunnels[key] for key in sorted(compact_tunnels)]
+            (structure_dir / filename).write_text(
+                json.dumps({"tile": [tx, tz], "tunnels": values}, separators=(",", ":")), encoding="utf-8")
+            tunnel_pieces_by_tile[(tx, tz)] = {"file": "structures/" + filename, "segments": len(values)}
 
+    structure_tiles = [
+        {"x": tx, "z": tz, **tunnel_pieces_by_tile[(tx, tz)]}
+        for tx, tz in sorted(tunnel_pieces_by_tile)
+    ]
     summary = {
-        "format": 1,
+        "format": 2,
         "bridge": {
-            "edges": len(bridge_profiles),
+            "edges": sum(1 for kind in kinds.values() if kind == "bridge"),
             "length_m": round(bridge_length, 3),
             "surface_records": bridge_surface_records,
-            "tiles": len(touched_tiles),
-            "maximum_removed_dem_drape_m": round(max_vertical_correction, 3),
+            "tiles": len(bridge_tiles),
+            "maximum_removed_dem_drape_m": round(bridge_max_correction, 3),
             "profile": "linear deck between DEM-registered abutments",
             "collision": "runtime bridge deck mesh",
-            "by_highway_type": dict(sorted(by_class.items())),
+            "by_highway_type": dict(sorted(bridge_by_class.items())),
         },
         "tunnel": {
-            "edges": tunnel_edges,
+            "source_edges": tunnel_total_edges,
+            "profiled_edges": sum(1 for kind in kinds.values() if kind == "tunnel"),
+            "deferred_nonnegative_layer_edges": tunnel_deferred,
             "length_m": round(tunnel_length, 3),
-            "status": "source-tagged; terrain corridor/portal pass required before vertical remapping",
+            "surface_records": tunnel_surface_records,
+            "tiles": len(tunnel_tiles),
+            "maximum_removed_dem_drape_m": round(tunnel_max_correction, 3),
+            "profile": "linear bore axis between DEM-registered portals",
+            "collision": "runtime tunnel deck and CSG terrain bore",
+            "by_highway_type": dict(sorted(tunnel_by_class.items())),
         },
+        "tunnel_tiles": structure_tiles,
     }
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
     manifest["structures"] = summary
