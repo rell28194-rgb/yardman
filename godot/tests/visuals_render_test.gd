@@ -64,11 +64,15 @@ func _run() -> void:
     car.build()
     car.position = Vector3(250.0, _height(250.0, 250.0), 250.0)
     var palm := MeshInstance3D.new()
-    palm.mesh = visuals._make_palm_mesh()
+    palm.mesh = visuals._reference_plant_mesh("road_palm.glb", 14.5)
+    if palm.mesh == null:
+        palm.mesh = visuals._make_palm_mesh()
     palm.position = Vector3(244.0, _height(244.0, 232.0), 232.0)
     stage.add_child(palm)
     var tree := MeshInstance3D.new()
-    tree.mesh = visuals._make_broadleaf_mesh()
+    tree.mesh = visuals._reference_plant_mesh("road_tree_near.glb", 8.2)
+    if tree.mesh == null:
+        tree.mesh = visuals._make_broadleaf_mesh()
     tree.position = Vector3(261.0, _height(261.0, 225.0), 225.0)
     stage.add_child(tree)
     var camera := Camera3D.new()

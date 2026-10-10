@@ -19,6 +19,7 @@ var quality := "Balanced"
 var custom: Dictionary = {}
 var _tree_mesh: ArrayMesh
 var _plant_meshes: Dictionary = {}
+var _reference_meshes: Dictionary = {}
 var _surface_noise: ImageTexture
 var _sky_material: ProceduralSkyMaterial
 var _sun: DirectionalLight3D
@@ -265,7 +266,7 @@ func apply_roadside_quality(tile_root: Node3D) -> void:
     for cell: MultiMeshInstance3D in roadside.get_children():
         var full_count := cell.multimesh.instance_count
         cell.multimesh.visible_instance_count = mini(full_count, maxi(1, int(ceil(float(full_count) * ratio))))
-        cell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if bool(settings().shadows) and not bool(cell.get_meta("grass", false)) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        cell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if bool(settings().shadows) and not bool(cell.get_meta("grass", false)) and not bool(cell.get_meta("distant", false)) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 func _unique_roads(segments: Array) -> Array[Dictionary]:
     var records: Array[Dictionary] = []
@@ -319,7 +320,9 @@ func _inside_tile(point: Vector2, tile: Vector2i, tile_size: float) -> bool:
 func _make_plant_cell(roadside: Node3D, group: Dictionary, tile_origin: Vector2) -> void:
     var species: String = group.species
     if not _plant_meshes.has(species):
-        _plant_meshes[species] = _make_palm_mesh() if species == "palm" else _make_broadleaf_mesh()
+        var asset_name := "road_palm.glb" if species == "palm" else "road_tree_near.glb"
+        var reference_mesh: ArrayMesh = _reference_plant_mesh(asset_name, 14.5 if species == "palm" else 8.2)
+        _plant_meshes[species] = reference_mesh if reference_mesh != null else (_make_palm_mesh() if species == "palm" else _make_broadleaf_mesh())
     var cell: Vector2i = group.cell
     var center := Vector3((float(cell.x) + 0.5) * CULL_CELL_M, 0.0, (float(cell.y) + 0.5) * CULL_CELL_M)
     var plants: Array = group.plants
@@ -347,6 +350,35 @@ func _make_plant_cell(roadside: Node3D, group: Dictionary, tile_origin: Vector2)
     instance.multimesh = multi
     instance.visibility_range_end = 1000.0 if species != "shrub" else 470.0
     roadside.add_child(instance)
+    # The source's crossed cards are suitable for distance, while actual trunk
+    # and leaf geometry remains in the player's immediate surroundings.
+    var distant_name := "road_palm_lod.glb" if species == "palm" else ("road_bush.glb" if species == "shrub" else "road_tree.glb")
+    var distant_mesh: ArrayMesh = _reference_plant_mesh(distant_name, 14.5 if species == "palm" else 8.2)
+    if multi.mesh.has_meta("reference_asset") and distant_mesh != null:
+        var boundary := 95.0 if species == "shrub" else 220.0
+        instance.visibility_range_end = boundary
+        var far_multi := MultiMesh.new()
+        far_multi.transform_format = MultiMesh.TRANSFORM_3D
+        far_multi.use_colors = true
+        far_multi.use_custom_data = true
+        far_multi.mesh = distant_mesh
+        far_multi.instance_count = plants.size()
+        for i in range(plants.size()):
+            var pose: Transform3D = plants[i].transform
+            pose.origin -= center
+            far_multi.set_instance_transform(i, pose)
+            far_multi.set_instance_color(i, Color.WHITE)
+            var seed_point := int(plants[i].seed)
+            far_multi.set_instance_custom_data(i, Color(float(seed_point % 997) / 997.0, float(seed_point % 421) / 421.0, 0.5, 1.0))
+        var distant := MultiMeshInstance3D.new()
+        distant.name = instance.name + "_Distant"
+        distant.position = center
+        distant.multimesh = far_multi
+        distant.visibility_range_begin = boundary
+        distant.visibility_range_end = 470.0 if species == "shrub" else 1000.0
+        distant.set_meta("distant", true)
+        distant.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        roadside.add_child(distant)
     # Small grass tufts at existing off-road plant anchors add a near ground
     # layer, with their own short cull distance and no alpha-blended planes.
     if not _plant_meshes.has("grass"):
@@ -371,6 +403,63 @@ func _make_plant_cell(roadside: Node3D, group: Dictionary, tile_origin: Vector2)
     grass.visibility_range_end = 150.0
     grass.set_meta("grass", true)
     roadside.add_child(grass)
+
+func _reference_plant_mesh(filename: String, height_m: float) -> ArrayMesh:
+    var cache_key := "%s:%.3f" % [filename, height_m]
+    if _reference_meshes.has(cache_key):
+        return _reference_meshes[cache_key] as ArrayMesh
+    var packed: PackedScene = References.scene(filename)
+    if packed == null:
+        return null
+    var source: Node = packed.instantiate()
+    var groups: Dictionary = {}
+    _collect_reference_surfaces(source, Transform3D.IDENTITY, groups)
+    var combined := ArrayMesh.new()
+    for group: Dictionary in groups.values():
+        var surface: SurfaceTool = group.surface
+        surface.index()
+        surface.commit(combined)
+        combined.surface_set_material(combined.get_surface_count() - 1, group.material)
+    source.free()
+    if combined.get_surface_count() == 0:
+        return null
+    var bounds: AABB = combined.get_aabb()
+    if bounds.size.y < 0.1:
+        return null
+    var scale_m := height_m / bounds.size.y
+    var center := bounds.position + bounds.size * 0.5
+    var correction := Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * scale_m),
+        Vector3(-center.x, -bounds.position.y, -center.z) * scale_m)
+    var baked := ArrayMesh.new()
+    for surface_index in range(combined.get_surface_count()):
+        var surface := SurfaceTool.new()
+        surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+        surface.append_from(combined, surface_index, correction)
+        surface.index()
+        surface.commit(baked)
+        baked.surface_set_material(surface_index, combined.surface_get_material(surface_index))
+    baked.set_meta("reference_asset", filename)
+    _reference_meshes[cache_key] = baked
+    return baked
+
+func _collect_reference_surfaces(node: Node, parent_pose: Transform3D, groups: Dictionary) -> void:
+    var pose := parent_pose
+    if node is Node3D:
+        pose = parent_pose * (node as Node3D).transform
+    if node is MeshInstance3D:
+        var instance := node as MeshInstance3D
+        if instance.mesh != null:
+            for surface_index in range(instance.mesh.get_surface_count()):
+                var material: Material = instance.get_active_material(surface_index)
+                var key := material.get_instance_id() if material != null else 0
+                if not groups.has(key):
+                    var surface := SurfaceTool.new()
+                    surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+                    groups[key] = {"surface": surface, "material": material}
+                var surface: SurfaceTool = groups[key].surface
+                surface.append_from(instance.mesh, surface_index, pose)
+    for child in node.get_children():
+        _collect_reference_surfaces(child, pose, groups)
 
 func _surface() -> SurfaceTool:
     var surface := SurfaceTool.new()

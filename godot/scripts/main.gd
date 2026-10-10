@@ -34,6 +34,7 @@ var camera_pitch := -0.20
 var camera_orbit := 0.0
 var world_ready := false
 var _settle_spawn := true
+var _spawn_ready_frames := 0
 var _message := ""
 var _message_time := 0.0
 var _save_clock := 0.0
@@ -156,6 +157,7 @@ func goto_parish(parish: String) -> void:
     player._set_occupied(true)
     player.position = car.position
     _settle_spawn = true
+    _spawn_ready_frames = 0
     world_ready = false
     _refresh_streamers()
     _select_parish()
@@ -266,18 +268,23 @@ func _physics_process(delta: float) -> void:
     var active: Node3D = car if player.in_vehicle else player
     var world: PackedFloat64Array = roads.local_to_world(active.position)
     var ready := _collision_ready(world[0], world[2])
-    var road_tile: Vector2i = roads.coordinates.tile_for(world[0], world[2])
-    ready = ready and (not roads.has_tile(road_tile) or roads.is_tile_ready(road_tile))
-    world_ready = ready
     if ready and _settle_spawn:
-        var height: float = terrain.height_at(world[0], world[2])
-        if not is_finite(height):
+        # Tile signals add the deck collider during processing. Allow a physics
+        # frame to register it before either actor resumes collision movement.
+        _spawn_ready_frames += 1
+        if _spawn_ready_frames < 2:
+            ready = false
+        elif not _settle_actor_spawn(active):
             _notify("The saved location is offshore; recovering to a road")
             goto_parish(current_parish)
             return
-        active.position.y = height + 0.35
-        _settle_spawn = false
-    if ready and active.position.y < -5.0:
+        else:
+            _settle_spawn = false
+            _spawn_ready_frames = 0
+    elif _settle_spawn:
+        _spawn_ready_frames = 0
+    world_ready = ready
+    if ready and world[1] < -5.0 and not bool(_spawn_support(world[0], world[2], world[1]).structural):
         goto_parish(current_parish)
         _notify("Recovered to shore")
         return
@@ -341,7 +348,74 @@ func _collision_ready(x: float, z: float) -> bool:
         for dz in [-5.0, 0.0, 5.0]:
             if not terrain.is_world_position_ready(x + dx, z + dz):
                 return false
+            var road_tile: Vector2i = roads.coordinates.tile_for(x + dx, z + dz)
+            if roads.has_tile(road_tile) and not roads.is_tile_ready(road_tile):
+                return false
     return true
+
+func _settle_actor_spawn(actor: Node3D) -> bool:
+    var world: PackedFloat64Array = roads.local_to_world(actor.position)
+    var support := _spawn_support(world[0], world[2], world[1])
+    var height := float(support.height)
+    if not is_finite(height):
+        return false
+    # Height is canonical metres, not the render origin's local Y coordinate.
+    actor.position.y = roads.world_to_local(world[0], world[2], height + 0.35).y
+    return true
+
+func _spawn_support(x: float, z: float, saved_elevation: float) -> Dictionary:
+    var ground: float = terrain.height_at(x, z)
+    var result := {"height": ground, "structural": false}
+    if not is_finite(x) or not is_finite(z) or not is_finite(saved_elevation):
+        return result
+    var local: Vector3 = roads.world_to_local(x, z, saved_elevation)
+    var tile: Vector2i = roads.coordinates.tile_for(x, z)
+    var nearest := absf(saved_elevation - ground) if is_finite(ground) else INF
+    # The surface query index deliberately omits elevations. Query only nearby
+    # resident driving-deck triangles instead, retaining the streamed profile
+    # and distinguishing a tunnel, bridge and ground at the same horizontal XY.
+    for dz in range(-1, 2):
+        for dx in range(-1, 2):
+            var key := "%d:%d" % [tile.x + dx, tile.y + dz]
+            var tile_root = roads._loaded.get(key)
+            if not tile_root is Node3D:
+                continue
+            var collider := tile_root.get_node_or_null("RoadStructureDeckCollision/RoadStructureDeckCollisionShape") as CollisionShape3D
+            if collider == null or not collider.shape is ConcavePolygonShape3D:
+                continue
+            var transform: Transform3D = roads.global_transform.affine_inverse() * collider.global_transform
+            var faces := (collider.shape as ConcavePolygonShape3D).get_faces()
+            for index in range(0, faces.size() - 2, 3):
+                var a: Vector3 = transform * faces[index]
+                var b: Vector3 = transform * faces[index + 1]
+                var c: Vector3 = transform * faces[index + 2]
+                var height := _triangle_height(Vector2(local.x, local.z), a, b, c)
+                if not is_finite(height):
+                    continue
+                height = roads.local_to_world(Vector3(local.x, height, local.z))[1]
+                var distance := absf(saved_elevation - height)
+                # A saved grounded actor is close to its supporting surface.
+                # Do not pull somebody on ground up onto a crossing bridge.
+                if distance > 2.0 or distance > nearest + 0.00001:
+                    continue
+                if absf(distance - nearest) < 0.00001 and bool(result.structural) and height >= float(result.height):
+                    continue
+                nearest = distance
+                result = {"height": height, "structural": true}
+    return result
+
+static func _triangle_height(point: Vector2, a: Vector3, b: Vector3, c: Vector3) -> float:
+    var edge_b := Vector2(b.x - a.x, b.z - a.z)
+    var edge_c := Vector2(c.x - a.x, c.z - a.z)
+    var offset := point - Vector2(a.x, a.z)
+    var determinant := edge_b.cross(edge_c)
+    if absf(determinant) < 0.000001:
+        return NAN
+    var weight_b := offset.cross(edge_c) / determinant
+    var weight_c := edge_b.cross(offset) / determinant
+    if weight_b < -0.00001 or weight_c < -0.00001 or weight_b + weight_c > 1.00001:
+        return NAN
+    return a.y + weight_b * (b.y - a.y) + weight_c * (c.y - a.y)
 
 func _update_camera(delta: float) -> void:
     var subject: Node3D = car if player.in_vehicle else player
@@ -393,6 +467,7 @@ func restore_snapshot(snapshot: Dictionary) -> void:
     set_quality(str(snapshot.get("quality", "Balanced")), custom if custom is Dictionary else {})
     _select_parish()
     _settle_spawn = true
+    _spawn_ready_frames = 0
     world_ready = false
     camera.position = (car.position if player.in_vehicle else player.position) + Vector3(0, 4, 8)
     camera_yaw = car.rotation.y if player.in_vehicle else player.rotation.y
