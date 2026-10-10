@@ -38,6 +38,16 @@ jobs:
             godot/data/roads/manifest.json godot/data/terrain --acquire
           python godot/tools/build_jamaica_roads.py \
             /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096 --terrain godot/data/terrain
+
+          # Map correctness gate: rendering a road is not enough. The packaged
+          # OSM graph must also form a connected national network for every
+          # parish anchor. Near-miss endpoints are diagnosed, never auto-snapped.
+          python godot/tools/validate_road_topology.py \
+            godot/data/roads \
+            --output godot/data/roads/topology_report.json \
+            --near-miss-metres 2.5 \
+            --require-anchor-component
+
           python godot/tools/build_coastline.py \
             /tmp/jamaica.osm.pbf godot/data/terrain godot/data/coast
           python godot/tools/build_buildings.py \
@@ -53,10 +63,15 @@ jobs:
           assert s['segments'] >= 10000, s
           assert s['tiles'] >= 100, s
           assert len(s['parish_anchor_distance_m']) == 14, s
+          topology = json.loads(Path('godot/data/roads/topology_report.json').read_text())
+          assert topology['parish_anchors']['component_count'] == 1, topology['parish_anchors']
           print('Jamaica map QA passed:', s['road_features'], 'roads,', s['segments'], 'segments,', s['tiles'], 'tiles')
+          print('Road topology:', topology['components']['count'], 'components;',
+                'largest edge ratio', topology['components']['largest_edge_ratio'],
+                'near-miss candidates', topology['suspect_near_miss_count'])
           PY
           du -sh godot/data/roads
-          ls -lh godot/data/roads/manifest.json
+          ls -lh godot/data/roads/manifest.json godot/data/roads/topology_report.json
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -220,6 +235,7 @@ jobs:
             godot/build/Yardman-Beta.apk
             godot/build/Yardman-Beta.apk.sha256
             godot/data/roads/manifest.json
+            godot/data/roads/topology_report.json
             godot/data/terrain/manifest.json
             godot/data/coast/manifest.json
             godot/data/buildings/manifest.json
@@ -237,6 +253,7 @@ jobs:
           path: |
             godot/build/*.log
             godot/data/roads/manifest.json
+            godot/data/roads/topology_report.json
             godot/data/terrain/manifest.json
             godot/data/coast/manifest.json
             godot/data/buildings/manifest.json
