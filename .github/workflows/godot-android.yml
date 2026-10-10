@@ -39,6 +39,10 @@ jobs:
           python godot/tools/build_jamaica_roads.py \
             /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096 --terrain godot/data/terrain
 
+          # Bridges keep their DEM-registered abutments, but the deck itself is
+          # independent of terrain below. Runtime builds matching collision decks.
+          python godot/tools/build_road_structures.py godot/data/roads
+
           # Map correctness gate: rendering a road is not enough. The packaged
           # OSM graph must also form a connected national network for every
           # parish anchor. Near-miss endpoints are diagnosed, never auto-snapped.
@@ -64,14 +68,19 @@ jobs:
           assert s['tiles'] >= 100, s
           assert len(s['parish_anchor_distance_m']) == 14, s
           topology = json.loads(Path('godot/data/roads/topology_report.json').read_text())
+          structures = json.loads(Path('godot/data/roads/structures.json').read_text())
           assert topology['parish_anchors']['component_count'] == 1, topology['parish_anchors']
+          assert structures['bridge']['edges'] > 0, structures
           print('Jamaica map QA passed:', s['road_features'], 'roads,', s['segments'], 'segments,', s['tiles'], 'tiles')
           print('Road topology:', topology['components']['count'], 'components;',
                 'largest edge ratio', topology['components']['largest_edge_ratio'],
                 'near-miss candidates', topology['suspect_near_miss_count'])
+          print('Bridge structures:', structures['bridge']['edges'], 'edges /',
+                structures['bridge']['surface_records'], 'surface records /',
+                structures['bridge']['tiles'], 'tiles')
           PY
           du -sh godot/data/roads
-          ls -lh godot/data/roads/manifest.json godot/data/roads/topology_report.json
+          ls -lh godot/data/roads/manifest.json godot/data/roads/topology_report.json godot/data/roads/structures.json
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -236,6 +245,7 @@ jobs:
             godot/build/Yardman-Beta.apk.sha256
             godot/data/roads/manifest.json
             godot/data/roads/topology_report.json
+            godot/data/roads/structures.json
             godot/data/terrain/manifest.json
             godot/data/coast/manifest.json
             godot/data/buildings/manifest.json
@@ -254,6 +264,7 @@ jobs:
             godot/build/*.log
             godot/data/roads/manifest.json
             godot/data/roads/topology_report.json
+            godot/data/roads/structures.json
             godot/data/terrain/manifest.json
             godot/data/coast/manifest.json
             godot/data/buildings/manifest.json
