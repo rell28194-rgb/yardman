@@ -106,6 +106,7 @@ func _run() -> void:
     invalid.car.easting = NAN
     _check(SaveScript.save_file(path, invalid) == ERR_INVALID_DATA, "Non-finite world coordinates were saved")
     var controls = scene.touch
+    controls.apply_settings({"steering_mode": "Buttons"})
     for item in [[0, "gas"], [1, "left"]]:
         var event := InputEventScreenTouch.new()
         event.index = item[0]

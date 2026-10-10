@@ -7,22 +7,25 @@ const PlayerScript = preload("res://scripts/player_controller.gd")
 const TouchScript = preload("res://scripts/touch_controls.gd")
 const SaveScript = preload("res://scripts/save_game.gd")
 const VisualScript = preload("res://scripts/world_visuals.gd")
+const HUDScript = preload("res://scripts/hud.gd")
+const BuildingScript = preload("res://scripts/building_streamer.gd")
+const AudioScript = preload("res://scripts/game_audio.gd")
 const SAVE_PATH := "user://yardman/save.json"
+const SETTINGS_PATH := "user://yardman/settings.json"
 
 var car: CharacterBody3D
 var vehicle = VehicleScript.new()
 var player
 var roads
 var terrain
+var buildings
+var game_audio
 var visuals = VisualScript.new()
 var touch
 var camera: Camera3D
 var sun: DirectionalLight3D
 var environment: Environment
-var ocean: MeshInstance3D
-var hud_label: Label
-var status_label: Label
-var interact_button: Button
+var hud
 var parish_menu: OptionButton
 var quality_menu: OptionButton
 var current_parish := "St. Mary"
@@ -36,6 +39,11 @@ var _message_time := 0.0
 var _save_clock := 0.0
 var day_hour := 9.0
 var _car_world := PackedFloat64Array()
+var _decoration_records: Dictionary = {}
+var _radar_clock := 0.0
+var _surface_clock := 0.0
+var _preferences_loaded := false
+var _app_active := true
 
 func _ready() -> void:
     _make_environment()
@@ -49,66 +57,49 @@ func _ready() -> void:
     roads.name = "JamaicaRoadStreamer"
     roads.target = car
     roads.tile_content_ready.connect(_decorate_tile)
+    roads.tile_removed.connect(func(tile: Vector2i) -> void: _decoration_records.erase(tile))
     add_child(roads)
     terrain = TerrainScript.new()
     terrain.name = "JamaicaTerrainStreamer"
     terrain.data_root = "res://data/terrain"
     terrain.coordinates = roads.coordinates
     terrain.target = car
+    terrain.visuals = visuals
+    terrain.tile_ready.connect(_decorate_ready_terrain)
     add_child(terrain)
+    buildings = BuildingScript.new()
+    buildings.name = "JamaicaBuildingStreamer"
+    buildings.configure("res://data/buildings", roads.coordinates, terrain)
+    buildings.target = car
+    add_child(buildings)
     camera = Camera3D.new()
     camera.name = "FollowCamera"
     camera.far = 45000.0
-    camera.near = 0.15
+    camera.near = 0.5
+    camera.fov = 78.0
     camera.current = true
     add_child(camera)
     _make_hud()
+    game_audio = AudioScript.new()
+    game_audio.name = "GameAudio"
+    add_child(game_audio)
     set_quality("Balanced")
     var snapshot: Dictionary = SaveScript.load_file(SAVE_PATH)
     if snapshot.is_empty():
         goto_parish(current_parish)
     else:
         restore_snapshot(snapshot)
+    _load_preferences()
 
 func _make_environment() -> void:
     environment = Environment.new()
-    environment.background_mode = Environment.BG_SKY
-    var sky := Sky.new()
-    var sky_material := ProceduralSkyMaterial.new()
-    sky_material.sky_top_color = Color(0.12, 0.36, 0.63)
-    sky_material.sky_horizon_color = Color(0.67, 0.80, 0.86)
-    sky_material.ground_horizon_color = Color(0.64, 0.75, 0.78)
-    sky_material.ground_bottom_color = Color(0.17, 0.24, 0.20)
-    sky.sky_material = sky_material
-    environment.sky = sky
-    environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-    environment.ambient_light_color = Color(0.75, 0.83, 0.91)
-    environment.ambient_light_energy = 0.55
-    environment.fog_enabled = true
-    environment.fog_density = 0.000035
-    environment.fog_light_color = Color(0.65, 0.78, 0.83)
-    environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
     var world_env := WorldEnvironment.new()
     world_env.environment = environment
     add_child(world_env)
     sun = DirectionalLight3D.new()
-    sun.rotation_degrees = Vector3(-45, -35, 0)
-    sun.light_energy = 1.4
-    sun.directional_shadow_max_distance = 160.0
     add_child(sun)
-    # Water is a render plane at canonical sea level; it never replaces terrain.
-    ocean = MeshInstance3D.new()
-    ocean.name = "SeaLevel"
-    var plane := PlaneMesh.new()
-    plane.size = Vector2(600000.0, 600000.0)
-    ocean.mesh = plane
-    var water := StandardMaterial3D.new()
-    water.albedo_color = Color(0.04, 0.29, 0.39)
-    water.metallic = 0.18
-    water.roughness = 0.24
-    ocean.material_override = water
-    ocean.position.y = -0.15
-    add_child(ocean)
+    visuals.configure_environment(environment, sun)
+    # Water is compiled from the actual coastline in each streamed terrain tile.
 
 func _make_car() -> void:
     car = CharacterBody3D.new()
@@ -121,86 +112,34 @@ func _make_car() -> void:
     collider.shape = shape
     collider.position.y = 0.65
     car.add_child(collider)
-    visuals.make_vehicle(car)
     add_child(car)
 
 func _make_hud() -> void:
     var layer := CanvasLayer.new()
     layer.name = "YardmanHUD"
     add_child(layer)
-    var root_control := Control.new()
-    root_control.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    root_control.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    layer.add_child(root_control)
-    var panel := Panel.new()
-    panel.position = Vector2(16, 16)
-    panel.size = Vector2(400, 112)
-    panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    var style := StyleBoxFlat.new()
-    style.bg_color = Color(0.025, 0.045, 0.055, 0.78)
-    style.set_corner_radius_all(12)
-    panel.add_theme_stylebox_override("panel", style)
-    root_control.add_child(panel)
-    hud_label = Label.new()
-    hud_label.position = Vector2(30, 24)
-    hud_label.add_theme_font_size_override("font_size", 24)
-    root_control.add_child(hud_label)
-    status_label = Label.new()
-    status_label.position = Vector2(30, 134)
-    status_label.add_theme_font_size_override("font_size", 20)
-    status_label.add_theme_color_override("font_shadow_color", Color.BLACK)
-    status_label.add_theme_constant_override("shadow_offset_x", 2)
-    status_label.add_theme_constant_override("shadow_offset_y", 2)
-    root_control.add_child(status_label)
-    parish_menu = OptionButton.new()
-    parish_menu.position = Vector2(430, 22)
-    parish_menu.size = Vector2(224, 54)
-    parish_menu.focus_mode = Control.FOCUS_NONE
-    for parish in roads.manifest.get("parish_anchors", {}).keys():
-        parish_menu.add_item(str(parish))
-    parish_menu.item_selected.connect(func(index: int) -> void: goto_parish(parish_menu.get_item_text(index)))
-    root_control.add_child(parish_menu)
-    quality_menu = OptionButton.new()
-    quality_menu.position = Vector2(668, 22)
-    quality_menu.size = Vector2(180, 54)
-    quality_menu.focus_mode = Control.FOCUS_NONE
-    for quality in VisualScript.PROFILES.keys():
-        quality_menu.add_item(str(quality))
-    quality_menu.item_selected.connect(func(index: int) -> void:
-        var quality := quality_menu.get_item_text(index)
+    touch = TouchScript.new()
+    touch.name = "TouchControls"
+    layer.add_child(touch)
+    hud = HUDScript.new()
+    hud.name = "GameHUD"
+    hud.configure(roads.manifest.get("parish_anchors", {}).keys(), VisualScript.PROFILES.keys())
+    layer.add_child(hud)
+    hud.attach_controls(touch)
+    parish_menu = hud.parish_menu
+    quality_menu = hud.quality_menu
+    hud.travel_requested.connect(goto_parish)
+    hud.quality_requested.connect(func(quality: String) -> void:
         if quality == "Custom":
             _show_custom_settings()
         else:
-            set_quality(quality))
-    root_control.add_child(quality_menu)
-    interact_button = _button("EXIT", Vector2(-184, 22), Vector2(160, 58), 1.0)
-    interact_button.pressed.connect(toggle_vehicle)
-    root_control.add_child(interact_button)
-    var save_button := _button("SAVE", Vector2(-184, 92), Vector2(160, 54), 1.0)
-    save_button.pressed.connect(save_game)
-    root_control.add_child(save_button)
-    var reset_button := _button("RECOVER", Vector2(-184, 158), Vector2(160, 54), 1.0)
-    reset_button.pressed.connect(func() -> void: goto_parish(current_parish))
-    root_control.add_child(reset_button)
-    var credits_button := _button("DATA / CREDITS", Vector2(-214, 224), Vector2(190, 50), 1.0)
-    credits_button.pressed.connect(_show_credits)
-    root_control.add_child(credits_button)
-    touch = TouchScript.new()
-    touch.name = "TouchControls"
-    root_control.add_child(touch)
-
-func _button(text_value: String, offset: Vector2, dimensions: Vector2, anchor_x: float = 0.0) -> Button:
-    var button := Button.new()
-    button.text = text_value
-    button.anchor_left = anchor_x
-    button.anchor_right = anchor_x
-    button.offset_left = offset.x
-    button.offset_top = offset.y
-    button.offset_right = offset.x + dimensions.x
-    button.offset_bottom = offset.y + dimensions.y
-    button.focus_mode = Control.FOCUS_NONE
-    button.add_theme_font_size_override("font_size", 20)
-    return button
+            set_quality(quality)
+            _save_preferences())
+    hud.save_requested.connect(save_game)
+    hud.recover_requested.connect(func() -> void: goto_parish(current_parish))
+    hud.interaction_requested.connect(toggle_vehicle)
+    hud.credits_requested.connect(_show_credits)
+    touch.settings_changed.connect(func(_settings: Dictionary) -> void: _save_preferences())
 
 func goto_parish(parish: String) -> void:
     var anchor: Dictionary = roads.manifest.get("parish_anchors", {}).get(parish, {})
@@ -222,14 +161,12 @@ func goto_parish(parish: String) -> void:
     _select_parish()
     camera.position = car.position + Vector3(0, 4.0, 8.0).rotated(Vector3.UP, car.rotation.y)
     camera_orbit = 0.0
+    camera_yaw = car.rotation.y
+    touch.clear_input()
 
 func _select_parish() -> void:
-    if parish_menu == null:
-        return
-    for index in range(parish_menu.item_count):
-        if parish_menu.get_item_text(index) == current_parish:
-            parish_menu.select(index)
-            return
+    if hud != null:
+        hud.select_parish(current_parish)
 
 func set_quality(quality: String, custom: Dictionary = {}) -> void:
     if not VisualScript.PROFILES.has(quality):
@@ -244,24 +181,45 @@ func set_quality(quality: String, custom: Dictionary = {}) -> void:
     sun.shadow_enabled = bool(profile.shadows)
     get_viewport().scaling_3d_scale = clampf(float(profile.get("resolution", 0.75 if quality == "Performance" else 1.0)), 0.5, 1.25)
     for tile_root in roads._loaded.values():
-        var vegetation := tile_root.get_node_or_null("RoadsideProxy") as MultiMeshInstance3D
-        if vegetation != null:
-            vegetation.multimesh.visible_instance_count = mini(int(profile.trees), vegetation.multimesh.instance_count)
+        visuals.apply_roadside_quality(tile_root)
+    roads.surface_visibility_distance = 1800.0 if quality == "Performance" else 2600.0
+    buildings.quality = quality
+    if quality == "Custom":
+        buildings.draw_distance = float(profile.get("building_distance", 800.0))
     _refresh_streamers()
-    if quality_menu != null:
-        for index in range(quality_menu.item_count):
-            if quality_menu.get_item_text(index) == quality:
-                quality_menu.select(index)
+    if hud != null:
+        hud.select_quality(quality)
 
 func _decorate_tile(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
-    visuals.make_roadside(tile_root, segments, tile, roads.tile_size)
+    # Retain centreline fields, not repeated DEM-clipped polygon vertices.
+    var records: Array = []
+    var seen: Dictionary = {}
+    for segment in segments:
+        if not segment is Array or segment.size() < 11:
+            continue
+        var identifier := "%s:%s:%s:%s:%s:%s" % [str(segment[7]), str(segment[8]), str(segment[0]), str(segment[1]), str(segment[2]), str(segment[3])]
+        if seen.has(identifier):
+            continue
+        seen[identifier] = true
+        records.append(segment.slice(0, 11))
+    _decoration_records[tile] = records
+    if terrain != null and terrain.is_tile_ready(tile):
+        visuals.make_roadside(tile_root, records, tile, roads.tile_size, terrain.height_at)
+
+func _decorate_ready_terrain(tile: Vector2i) -> void:
+    var tile_root = roads._loaded.get(roads._tile_key(tile.x, tile.y))
+    if tile_root != null and _decoration_records.has(tile):
+        visuals.make_roadside(tile_root, _decoration_records[tile], tile, roads.tile_size, terrain.height_at)
 
 func _refresh_streamers() -> void:
     var active: Node3D = car if player.in_vehicle else player
     roads.target = active
     terrain.target = active
+    buildings.target = active
     roads._refresh_tiles(true)
     terrain._refresh_tiles(true)
+    var world: PackedFloat64Array = roads.local_to_world(active.position)
+    buildings.update_world(world[0], world[2], true)
 
 func _rebase(x: float, z: float) -> void:
     # A parked car can outlive its collision tile. Preserve its double-precision
@@ -271,23 +229,29 @@ func _rebase(x: float, z: float) -> void:
     var shift: Vector3 = roads.rebase_origin(x, z)
     if terrain != null:
         terrain.rebase_by(shift)
+    if buildings != null:
+        buildings.rebase_by(shift)
     car.position = roads.world_to_local(car_world[0], car_world[2], car_world[1])
     player.position = roads.world_to_local(player_world[0], player_world[2], player_world[1])
     if camera != null:
         camera.position += shift
 
 func toggle_vehicle() -> void:
-    if not world_ready:
+    if not world_ready or hud.menu_open or touch.layout_editing:
         return
     var changed: bool = player.try_exit_vehicle() if player.in_vehicle else player.try_enter_vehicle()
     if not changed:
         _notify("Stop beside the car to enter or exit")
         return
     camera_orbit = 0.0
+    camera_yaw = car.rotation.y
+    touch.driving = player.in_vehicle
     _refresh_streamers()
 
 func _unhandled_key_input(event: InputEvent) -> void:
     if not event is InputEventKey or not event.pressed or event.echo:
+        return
+    if hud != null and (hud.menu_open or touch.layout_editing):
         return
     if event.physical_keycode == KEY_E:
         toggle_vehicle()
@@ -307,45 +271,69 @@ func _physics_process(delta: float) -> void:
     world_ready = ready
     if ready and _settle_spawn:
         var height: float = terrain.height_at(world[0], world[2])
+        if not is_finite(height):
+            _notify("The saved location is offshore; recovering to a road")
+            goto_parish(current_parish)
+            return
         active.position.y = height + 0.35
         _settle_spawn = false
+    if ready and active.position.y < -5.0:
+        goto_parish(current_parish)
+        _notify("Recovered to shore")
+        return
     if absf(active.position.x) > 6144.0 or absf(active.position.z) > 6144.0:
         _rebase(world[0], world[2])
-    var throttle: float = Input.get_axis("ui_down", "ui_up") + touch.throttle()
-    var turn: float = Input.get_axis("ui_left", "ui_right") + touch.steering()
-    throttle += float(int(Input.is_physical_key_pressed(KEY_W)) - int(Input.is_physical_key_pressed(KEY_S)))
-    turn += float(int(Input.is_physical_key_pressed(KEY_D)) - int(Input.is_physical_key_pressed(KEY_A)))
-    throttle = clampf(throttle, -1.0, 1.0)
-    turn = clampf(turn, -1.0, 1.0)
-    var look: Vector2 = touch.consume_look()
+    var blocked: bool = hud.menu_open or touch.layout_editing or not _app_active
+    touch.driving = player.in_vehicle
+    var keyboard_forward := Input.get_axis("ui_down", "ui_up")
+    var keyboard_turn := Input.get_axis("ui_left", "ui_right")
+    keyboard_forward += float(int(Input.is_physical_key_pressed(KEY_W)) - int(Input.is_physical_key_pressed(KEY_S)))
+    keyboard_turn += float(int(Input.is_physical_key_pressed(KEY_D)) - int(Input.is_physical_key_pressed(KEY_A)))
+    var throttle := clampf(keyboard_forward + touch.throttle(), -1.0, 1.0) if not blocked else 0.0
+    var turn := clampf(keyboard_turn + touch.steering(), -1.0, 1.0) if not blocked else 0.0
+    var look: Vector2 = touch.consume_look() if not blocked else Vector2.ZERO
     camera_orbit -= look.x * 0.004
-    camera_pitch = clampf(camera_pitch - look.y * 0.002, -0.75, 0.15)
+    camera_pitch = clampf(camera_pitch - look.y * 0.002, -0.75, 0.20)
     camera_yaw = car.rotation.y + camera_orbit if player.in_vehicle else camera_yaw - look.x * 0.004
-    player.movement = Vector2(turn, -throttle)
+    player.movement = (Vector2(keyboard_turn, -keyboard_forward) + touch.movement_vector()).limit_length(1.0) if not blocked else Vector2.ZERO
     player.camera_yaw = camera_yaw
-    player.sprinting = Input.is_physical_key_pressed(KEY_SHIFT)
+    player.sprinting = not blocked and (Input.is_physical_key_pressed(KEY_SHIFT) or touch.sprint_held())
+    player.reduced_motion = bool(touch.settings.reduced_motion)
+    vehicle.brake_input = touch.brake() if not blocked else 0.0
+    vehicle.handbrake = not blocked and (touch.handbrake_held() or Input.is_physical_key_pressed(KEY_SPACE))
     var car_world: PackedFloat64Array = roads.local_to_world(car.position)
     var car_ready := _collision_ready(car_world[0], car_world[2])
-    # On foot, readiness belongs to the player. Never simulate a parked car
-    # against an unloaded distant collision surface.
-    vehicle.step(delta, throttle, turn, ready and car_ready if player.in_vehicle else car_ready)
+    _surface_clock += delta
+    if _surface_clock >= 0.2:
+        _surface_clock = 0.0
+        var surface: Dictionary = roads.road_surface_at(car_world[0], car_world[2])
+        vehicle.on_road = bool(surface.get("found", false)) and str(surface.get("surface", "")) == "paved"
+    # A menu pauses actors; streaming continues so changing graphics cannot
+    # strand the player. An unloaded parked car keeps its canonical position.
+    vehicle.step(delta, throttle, turn, not blocked and (ready and car_ready if player.in_vehicle else car_ready))
     if car_ready:
         _car_world = roads.local_to_world(car.position)
-    player.step(delta, ready)
-    touch.driving = player.in_vehicle
+    player.step(delta, ready and not blocked)
     _update_camera(delta)
     _save_clock += delta
     if ready and _save_clock > 30.0:
         save_game()
     _message_time = maxf(0.0, _message_time - delta)
-    day_hour = fmod(day_hour + delta / 120.0, 24.0)
-    sun.rotation_degrees.x = 90.0 - day_hour * 15.0
-    sun.light_energy = clampf(sin((day_hour - 6.0) * PI / 12.0), 0.08, 1.0) * 1.4
-    hud_label.text = "YARDMAN\n%s • %s   %.0f km/h\nElevation %.0f m  •  %.0f FPS" % [current_parish,
-        "DRIVE" if player.in_vehicle else "WALK", absf(vehicle.speed_mps) * 3.6 if player.in_vehicle else player.velocity.length() * 3.6,
-        world[1], Engine.get_frames_per_second()]
-    status_label.text = "Loading local terrain and roads…" if not ready else (_message if _message_time > 0.0 else "Drag to look • E: enter/exit • F5: save")
-    interact_button.text = "EXIT" if player.in_vehicle else "ENTER"
+    if not blocked:
+        day_hour = fmod(day_hour + delta / 120.0, 24.0)
+    visuals.update_daylight(day_hour, environment)
+    var can_interact: bool = player.can_exit_vehicle() if player.in_vehicle else player.can_enter_vehicle()
+    var speed: float = absf(vehicle.speed_mps) * 3.6 if player.in_vehicle else Vector2(player.velocity.x, player.velocity.z).length() * 3.6
+    hud.set_status({"parish": current_parish, "speed_kmh": speed, "driving": player.in_vehicle,
+        "ready": ready, "can_interact": can_interact, "message": _message if _message_time > 0.0 else "",
+        "heading": camera_yaw, "gear": vehicle.gear_label(), "time_hour": day_hour})
+    game_audio.update_state(delta, {"driving": player.in_vehicle, "speed_mps": vehicle.speed_mps,
+        "rpm": vehicle.engine_rpm, "on_road": vehicle.on_road, "walk_speed": speed / 3.6,
+        "ready": ready, "menu_open": blocked, "throttle": throttle})
+    _radar_clock += delta
+    if _radar_clock >= 0.5:
+        _radar_clock = 0.0
+        hud.set_radar_paths(roads.nearby_paths(world[0], world[2]), Vector2(world[0], world[2]), camera_yaw)
 
 func _collision_ready(x: float, z: float) -> bool:
     # Freeze traversal until the footprint's neighboring colliders are resident.
@@ -358,7 +346,10 @@ func _collision_ready(x: float, z: float) -> bool:
 func _update_camera(delta: float) -> void:
     var subject: Node3D = car if player.in_vehicle else player
     var pivot := subject.position + Vector3.UP * (1.5 if player.in_vehicle else 1.4)
-    var distance := 8.0 if player.in_vehicle else 5.0
+    var reduced_motion := bool(touch.settings.reduced_motion)
+    var desired_fov := (78.0 if reduced_motion else lerpf(78.0, 85.0, clampf(absf(vehicle.speed_mps) / 42.0, 0.0, 1.0))) if player.in_vehicle else 75.0
+    camera.fov = lerpf(camera.fov, desired_fov, clampf(delta * 3.0, 0.0, 1.0))
+    var distance := 7.8 if player.in_vehicle else 4.6
     var offset := Vector3(0.0, -sin(camera_pitch) * distance + 1.4, cos(camera_pitch) * distance).rotated(Vector3.UP, camera_yaw)
     var desired := pivot + offset
     var query := PhysicsRayQueryParameters3D.create(pivot, desired, 1)
@@ -404,6 +395,9 @@ func restore_snapshot(snapshot: Dictionary) -> void:
     _settle_spawn = true
     world_ready = false
     camera.position = (car.position if player.in_vehicle else player.position) + Vector3(0, 4, 8)
+    camera_yaw = car.rotation.y if player.in_vehicle else player.rotation.y
+    camera_orbit = 0.0
+    touch.clear_input()
     _refresh_streamers()
 
 func save_game() -> void:
@@ -435,9 +429,10 @@ func _show_custom_settings() -> void:
     dialog.add_child(rows)
     var inputs: Dictionary = {}
     var profile: Dictionary = visuals.settings()
-    for setting in [["trees", "Trees per road tile", 40.0, 400.0, 10.0, 160.0],
+    for setting in [["trees", "Trees per road tile", 40.0, 1800.0, 20.0, 500.0],
             ["road_radius", "Road tile radius", 1.0, 3.0, 1.0, 2.0],
             ["terrain_radius", "Terrain tile radius", 1.0, 2.0, 1.0, 1.0],
+            ["building_distance", "Building draw distance (metres)", 256.0, 1800.0, 64.0, 800.0],
             ["resolution", "3D resolution scale", 0.5, 1.25, 0.05, 1.0]]:
         var label := Label.new()
         label.text = str(setting[1])
@@ -458,12 +453,47 @@ func _show_custom_settings() -> void:
         for key in inputs:
             custom[key] = inputs[key].value
         set_quality("Custom", custom)
+        _save_preferences()
         dialog.queue_free())
     dialog.canceled.connect(dialog.queue_free)
     dialog.min_size = Vector2i(440, 450)
     add_child(dialog)
     dialog.popup_centered()
 
+func _load_preferences() -> void:
+    if FileAccess.file_exists(SETTINGS_PATH):
+        var settings = JSON.parse_string(FileAccess.get_file_as_string(SETTINGS_PATH))
+        if settings is Dictionary:
+            var controls = settings.get("controls", {})
+            touch.apply_settings(controls if controls is Dictionary else {})
+            var custom = settings.get("custom_quality", {})
+            set_quality(str(settings.get("quality", visuals.quality)), custom if custom is Dictionary else {})
+            game_audio.set_volume(float(settings.get("audio_volume", 0.6)))
+    _preferences_loaded = true
+
+func _save_preferences() -> void:
+    if not _preferences_loaded or touch == null:
+        return
+    DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SETTINGS_PATH.get_base_dir()))
+    var file := FileAccess.open(SETTINGS_PATH + ".tmp", FileAccess.WRITE)
+    if file == null:
+        _notify("Could not save control settings")
+        return
+    file.store_string(JSON.stringify({"schema": 1, "controls": touch.get_settings(),
+        "quality": visuals.quality, "custom_quality": visuals.custom,
+        "audio_volume": game_audio.volume}, "", true, true))
+    file.flush()
+    file.close()
+    if DirAccess.rename_absolute(SETTINGS_PATH + ".tmp", SETTINGS_PATH) != OK:
+        _notify("Could not save control settings")
+
 func _notification(what: int) -> void:
-    if what == NOTIFICATION_APPLICATION_PAUSED and world_ready:
-        save_game()
+    if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
+        _app_active = false
+        if game_audio != null:
+            game_audio.update_state(0.016, {"ready": false})
+        if world_ready:
+            save_game()
+            _save_preferences()
+    elif what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_APPLICATION_RESUMED:
+        _app_active = true

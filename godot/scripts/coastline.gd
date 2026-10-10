@@ -34,7 +34,9 @@ func append_water(payload: Dictionary, parent_node: Node3D, world_x: float, worl
         uvs.append(Vector2((world_x + float(vertices[index].x)) * 0.025,
             (world_z + float(vertices[index].z)) * 0.025))
         colors.append(Color(clampf(distances[index] / 40.0, 0.0, 1.0), 0.0, 0.0, 1.0))
-    return _instance("RegisteredOcean", vertices, normals, uvs, colors, water_material, parent_node)
+    var instance := _instance("RegisteredOcean", vertices, normals, uvs, colors, water_material, parent_node)
+    instance.extra_cull_margin = 0.15
+    return instance
 
 func append_beach(payload: Dictionary, parent_node: Node3D, world_x: float, world_z: float) -> MeshInstance3D:
     var source: PackedVector3Array = payload.get("beach", PackedVector3Array())
@@ -44,7 +46,10 @@ func append_beach(payload: Dictionary, parent_node: Node3D, world_x: float, worl
     var normals := PackedVector3Array()
     var uvs := PackedVector2Array()
     for index in range(0, source.size(), 3):
-        var normal := (source[index + 1] - source[index]).cross(source[index + 2] - source[index]).normalized()
+        var cross := (source[index + 1] - source[index]).cross(source[index + 2] - source[index])
+        if cross.length_squared() < 0.000000000001:
+            continue
+        var normal := cross.normalized()
         if normal.y < 0.0:
             normal = -normal
         for offset in range(3):

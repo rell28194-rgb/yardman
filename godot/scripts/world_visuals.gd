@@ -124,8 +124,10 @@ func _make_surface_noise() -> ImageTexture:
 func _regional_dryness(position_world: Vector2) -> float:
     # A visual proxy, not surveyed land cover: the western/southern envelope
     # is generally warmer and drier than the eastern mountain/north coast.
-    var south := smoothstep(27000.0, 70000.0, position_world.y)
-    var west := 1.0 - smoothstep(105000.0, 195000.0, position_world.x)
+    # The compiled national coordinate frame is anchored at Kingston:
+    # west is negative X and the northern coast is negative Z.
+    var south := smoothstep(-18000.0, 18000.0, position_world.y)
+    var west := 1.0 - smoothstep(-90000.0, 15000.0, position_world.x)
     return clampf(0.12 + south * 0.30 + west * south * 0.18, 0.1, 0.6)
 
 func configure_environment(environment: Environment, sun: DirectionalLight3D) -> void:

@@ -29,8 +29,8 @@ void fragment() {
     float macro = texture(surface_noise, p.xz / 512.0).r;
     float slope = 1.0 - clamp(ground_normal.y, 0.0, 1.0);
     float highland = smoothstep(350.0, 1650.0, p.y);
-    float south = smoothstep(27000.0, 70000.0, national_position.y);
-    float west = 1.0 - smoothstep(105000.0, 195000.0, national_position.x);
+    float south = smoothstep(-18000.0, 18000.0, national_position.y);
+    float west = 1.0 - smoothstep(-90000.0, 15000.0, national_position.x);
     float regional_dryness = 0.12 + south * 0.30 + west * south * 0.18;
     float dry = clamp(regional_dryness + (patch.g - 0.5) * 0.43 - highland * 0.17, 0.0, 0.8);
     vec3 wet_grass = vec3(0.24, 0.34, 0.105);

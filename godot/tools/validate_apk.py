@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Fail if an Android export omitted national data or shipped the wrong ABI."""
 import argparse
+import hashlib
 import json
 import struct
 import zipfile
 from pathlib import Path
 
 
-def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = None) -> dict:
+def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = None,
+             coast_manifest: Path | None = None, buildings_manifest: Path | None = None) -> dict:
     source = json.loads(source_manifest.read_text())
     with zipfile.ZipFile(apk) as archive:
         corrupt = archive.testzip()
@@ -43,6 +45,53 @@ def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = N
             edge_files = [n for n in names if n.startswith("assets/data/roads/graph/edges_")]
             if len(node_files) != 256 or len(edge_files) != 256:
                 raise ValueError("National graph partitions were omitted from the APK")
+        if coast_manifest is not None:
+            coast = json.loads(archive.read("assets/data/coast/manifest.json"))
+            if coast != json.loads(coast_manifest.read_text()):
+                raise ValueError("Packaged coastline differs from the tested data")
+            if coast["crs"] != manifest["crs"] or coast["source_sha256"] != manifest["source_sha256"]:
+                raise ValueError("Road and coastline source registration differ")
+            if terrain_manifest is not None:
+                if coast["terrain_manifest_sha256"] != hashlib.sha256(archive.read("assets/data/terrain/manifest.json")).hexdigest():
+                    raise ValueError("Coastline was compiled against different elevation data")
+                if {(t["x"], t["z"]) for t in coast["tiles"]} != {(t["x"], t["z"]) for t in terrain["tiles"]}:
+                    raise ValueError("Coastline coverage omits a terrain tile")
+            for tile in coast["tiles"]:
+                for layer, stride in (("mask", 1), ("land", 36), ("water", 48), ("beach", 36)):
+                    name = "assets/data/coast/" + tile[layer]
+                    expected = (terrain["resolution"] - 1) ** 2 if layer == "mask" else tile[layer + "_triangles"] * stride
+                    if name not in names or archive.getinfo(name).file_size != expected:
+                        raise ValueError("Coast payload omitted or truncated: " + name)
+                    if layer == "mask" and set(archive.read(name)) - {0, 1, 2}:
+                        raise ValueError("Invalid shoreline mask: " + name)
+            overview = coast["overview"]
+            for layer, stride in (("mask", 1), ("land", 36), ("water", 48)):
+                name = "assets/data/coast/" + overview[layer]
+                size = archive.getinfo(name).file_size
+                if layer == "mask" and size != (overview["width"] - 1) * (overview["depth"] - 1):
+                    raise ValueError("Coast overview mask is truncated")
+                if layer != "mask" and size % stride:
+                    raise ValueError("Coast overview geometry is truncated")
+        if buildings_manifest is not None:
+            buildings = json.loads(archive.read("assets/data/buildings/manifest.json"))
+            if buildings != json.loads(buildings_manifest.read_text()):
+                raise ValueError("Packaged building footprints differ from compiled data")
+            if buildings["crs"] != manifest["crs"] or buildings["source_sha256"] != manifest["source_sha256"]:
+                raise ValueError("Building source registration differs from roads")
+            for tile in buildings["tiles"]:
+                name = "assets/data/buildings/" + tile["file"]
+                payload = archive.read(name)
+                if len(payload) < 8 or payload[:4] != b"YMB1":
+                    raise ValueError("Building tile header missing: " + name)
+                count = struct.unpack_from("<I", payload, 4)[0]
+                if count > 256 or len(payload) < 8 + count * 12:
+                    raise ValueError("Building tile cell index is truncated: " + name)
+                seen = set()
+                for index in range(count):
+                    x, z, offset, size = struct.unpack_from("<HHII", payload, 8 + index * 12)
+                    if x >= 16 or z >= 16 or (x, z) in seen or offset < 8 + count * 12 or offset + size > len(payload):
+                        raise ValueError("Invalid building cell address/range: " + name)
+                    seen.add((x, z))
         abis = {n.split("/")[1] for n in names if n.startswith("lib/") and n.endswith(".so")}
         if abis != {"arm64-v8a"}:
             raise ValueError("Unexpected Android architectures: " + repr(abis))
@@ -51,6 +100,8 @@ def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = N
             if header[:4] != b"\x7fELF" or struct.unpack_from("<H", header, 18)[0] != 183:
                 raise ValueError("Native library is not AArch64: " + native)
     return {"apk_bytes": apk.stat().st_size, "road_tiles": len(source["tiles"]),
+            "coast_tiles": len(coast["tiles"]) if coast_manifest else 0,
+            "building_tiles": len(buildings["tiles"]) if buildings_manifest else 0,
             "graph_edges": source["stats"].get("graph_edges", 0), "abis": sorted(abis)}
 
 
@@ -59,5 +110,8 @@ if __name__ == "__main__":
     parser.add_argument("apk", type=Path)
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--terrain-manifest", type=Path)
+    parser.add_argument("--coast-manifest", type=Path)
+    parser.add_argument("--buildings-manifest", type=Path)
     arguments = parser.parse_args()
-    print("YARDMAN_APK_VALIDATION_PASS", json.dumps(validate(arguments.apk, arguments.manifest, arguments.terrain_manifest)))
+    print("YARDMAN_APK_VALIDATION_PASS", json.dumps(validate(arguments.apk, arguments.manifest, arguments.terrain_manifest,
+                                                           arguments.coast_manifest, arguments.buildings_manifest)))
