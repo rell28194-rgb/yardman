@@ -21,14 +21,16 @@ ORIGIN_LON = -76.7936
 DEFAULT_TILE_SIZE = 4096.0
 
 ROAD_WIDTHS = {
-    "motorway": 14.0, "motorway_link": 8.0,
-    "trunk": 12.0, "trunk_link": 7.5,
-    "primary": 10.0, "primary_link": 7.0,
-    "secondary": 9.0, "secondary_link": 6.5,
-    "tertiary": 8.0, "tertiary_link": 6.0,
-    "unclassified": 6.5, "residential": 6.0,
-    "living_street": 5.0, "service": 5.0,
-    "road": 6.0, "track": 4.0, "raceway": 9.0,
+    # These are individual carriageways, not an entire divided highway.
+    # OSM width/lanes tags take precedence over these documented estimates.
+    "motorway": 8.4, "motorway_link": 4.6,
+    "trunk": 8.0, "trunk_link": 4.3,
+    "primary": 7.2, "primary_link": 4.0,
+    "secondary": 6.8, "secondary_link": 3.8,
+    "tertiary": 6.4, "tertiary_link": 3.6,
+    "unclassified": 5.8, "residential": 5.5,
+    "living_street": 4.5, "service": 3.5,
+    "road": 5.8, "track": 3.0, "raceway": 8.0,
 }
 ROAD_CLASSES = {name: i for i, name in enumerate(ROAD_WIDTHS)}
 
@@ -136,7 +138,7 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
             (staging / "graph" / f"{kind}_{partition}.json").write_text(
                 json.dumps(values, separators=(",", ":")), encoding="utf-8")
     manifest = {
-        "format": 2, "source": "OpenStreetMap / Geofabrik Jamaica extract",
+        "format": 3, "source": "OpenStreetMap / Geofabrik Jamaica extract",
         "source_sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
         "attribution": "© OpenStreetMap contributors — https://www.openstreetmap.org/copyright (ODbL)",
         "crs": CRS_TARGET, "origin": {"lat": ORIGIN_LAT, "lon": ORIGIN_LON,
@@ -144,6 +146,10 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
         "axis": "X=east, Y=elevation, Z=south, metres",
         "tile_size": tile_size, "bounds": [round(v, 3) for v in bounds],
         "road_classes": ROAD_CLASSES, "road_widths": ROAD_WIDTHS,
+        "road_geometry": {"join": "shared bounded miter, complete source way before tile clipping",
+                          "width": "source width, then source lanes, then carriageway-class estimate",
+                          "uv": "continuous source-way station metres and signed lateral metres",
+                          "markings": "inferred presentation, not surveyed road-paint positions"},
         "graph": {"format": 1, "partition": "sha1(id)[0:2]", "directory": "graph",
                   "nodes": stats["graph_nodes"], "edges": stats["graph_edges"]},
         "elevation_source": "DEM" if height_sampler else "unmeasured-flat",

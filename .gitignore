@@ -33,3 +33,11 @@ godot/data/roads/
 godot/data/roads.staging/
 godot/data/terrain/
 godot/data/terrain.staging/
+
+godot/data/buildings/
+
+godot/data/buildings.staging/
+
+godot/data/coast/
+
+godot/data/coast.staging/

@@ -47,5 +47,18 @@ class TerrainTests(unittest.TestCase):
             center = tuple(sum(p[axis] for p in surface)/len(surface) for axis in range(3))
             self.assertAlmostEqual(center[1],self.sampler(center[0],center[2]),places=5)
 
+    def test_terrain_clip_preserves_continuous_road_uv(self):
+        # Both attributes are affine across this test ribbon. Repeated clipping
+        # must preserve them while replacing Y with exact terrain-plane height.
+        polygon = [(20., 0., 20., 2., -4.), (150., 0., 20., 15., -4.),
+                   (150., 0., 100., 15., 4.), (20., 0., 100., 2., 4.)]
+        surfaces = list(self.sampler.conform_polygon(polygon))
+        self.assertGreater(len(surfaces), 4)
+        for surface in surfaces:
+            for x, y, z, station, lateral in surface:
+                self.assertAlmostEqual(station, x * 0.1, places=5)
+                self.assertAlmostEqual(lateral, (z - 60.) * 0.1, places=5)
+                self.assertAlmostEqual(y, self.sampler(x, z), places=5)
+
 if __name__ == '__main__':
     unittest.main()

@@ -3,6 +3,8 @@ class_name JamaicaRoadStreamer
 
 const CoordinatesScript = preload("res://scripts/world_coordinates.gd")
 const GraphScript = preload("res://scripts/road_graph.gd")
+const RoadShader = preload("res://shaders/road_surface.gdshader")
+const SURFACE_CELL_SIZE := 128.0
 signal tile_ready(tile: Vector2i)
 signal tile_removed(tile: Vector2i)
 signal tile_content_ready(tile: Vector2i, tile_root: Node3D, segments: Array)
@@ -29,8 +31,15 @@ var _queue: Array[String] = []
 var _jobs: Dictionary = {}
 var _building: Dictionary = {}
 var _failed: Dictionary = {}
-var _asphalt_material: StandardMaterial3D
-var _dirt_material: StandardMaterial3D
+var _asphalt_material: ShaderMaterial
+var _dirt_material: ShaderMaterial
+var _surface_indices: Dictionary = {}
+var surface_visibility_distance := 2600.0:
+    set(value):
+        surface_visibility_distance = clampf(value, 600.0, 3800.0)
+        for material in [_asphalt_material, _dirt_material]:
+            if material != null:
+                material.set_shader_parameter("visibility_distance", surface_visibility_distance)
 
 func _ready() -> void:
     _make_materials()
@@ -57,14 +66,13 @@ func _exit_tree() -> void:
         _building.clear()
 
 func _make_materials() -> void:
-    _asphalt_material = StandardMaterial3D.new()
-    _asphalt_material.albedo_color = Color(0.10, 0.105, 0.11)
-    _asphalt_material.roughness = 0.92
-    _asphalt_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-    _dirt_material = StandardMaterial3D.new()
-    _dirt_material.albedo_color = Color(0.34, 0.27, 0.18)
-    _dirt_material.roughness = 1.0
-    _dirt_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+    _asphalt_material = ShaderMaterial.new()
+    _asphalt_material.shader = RoadShader
+    _asphalt_material.set_shader_parameter("visibility_distance", surface_visibility_distance)
+    _dirt_material = ShaderMaterial.new()
+    _dirt_material.shader = RoadShader
+    _dirt_material.set_shader_parameter("unpaved", true)
+    _dirt_material.set_shader_parameter("visibility_distance", surface_visibility_distance)
 
 func _load_manifest() -> void:
     var path := "%s/manifest.json" % data_root
@@ -127,6 +135,7 @@ func _refresh_tiles(force: bool) -> void:
         if maxi(absi(tile.x - current.x), absi(tile.y - current.y)) > load_radius + 1:
             _loaded[key].queue_free()
             _loaded.erase(key)
+            _surface_indices.erase(key)
             tile_removed.emit(tile)
     if not _building.is_empty() and not _wanted.has(_building.key):
         _building.root.free()
@@ -178,7 +187,11 @@ func _poll_jobs() -> void:
         _building = {"key": key, "tile": tile, "root": tile_root,
             "segments": payload.segments, "cursor": 0, "batch": 0,
             "paved_vertices": PackedVector3Array(), "paved_indices": PackedInt32Array(),
-            "dirt_vertices": PackedVector3Array(), "dirt_indices": PackedInt32Array()}
+            "paved_normals": PackedVector3Array(), "paved_uv": PackedVector2Array(),
+            "paved_uv2": PackedVector2Array(), "paved_colors": PackedColorArray(),
+            "dirt_vertices": PackedVector3Array(), "dirt_indices": PackedInt32Array(),
+            "dirt_normals": PackedVector3Array(), "dirt_uv": PackedVector2Array(),
+            "dirt_uv2": PackedVector2Array(), "dirt_colors": PackedColorArray(), "surface_index": {}}
 
 func _prepare_geometry() -> void:
     if _building.is_empty():
@@ -193,7 +206,12 @@ func _prepare_geometry() -> void:
         if segment is Array and segment.size() >= 7:
             var dirt := (int(segment[6]) & 8) != 0
             _append_segment(_building.dirt_vertices if dirt else _building.paved_vertices,
-                _building.dirt_indices if dirt else _building.paved_indices, segment, _building.tile)
+                _building.dirt_indices if dirt else _building.paved_indices,
+                _building.dirt_normals if dirt else _building.paved_normals,
+                _building.dirt_uv if dirt else _building.paved_uv,
+                _building.dirt_uv2 if dirt else _building.paved_uv2,
+                _building.dirt_colors if dirt else _building.paved_colors, segment, _building.tile)
+            _index_surface_segment(_building.surface_index, segment)
         if _building.cursor % 2048 == 0:
             _flush_mesh_batch()
         if Time.get_ticks_usec() - start >= geometry_budget_us:
@@ -205,11 +223,14 @@ func _prepare_geometry() -> void:
         var tile: Vector2i = _building.tile
         add_child(tile_root)
         _loaded[key] = tile_root
+        _surface_indices[key] = _building.surface_index
         _building.clear()
         tile_ready.emit(tile)
         tile_content_ready.emit(tile, tile_root, segments)
 
-func _append_segment(vertices: PackedVector3Array, indices: PackedInt32Array, segment: Array, tile: Vector2i) -> void:
+func _append_segment(vertices: PackedVector3Array, indices: PackedInt32Array,
+        normals: PackedVector3Array, uvs: PackedVector2Array, uv2s: PackedVector2Array,
+        colors: PackedColorArray, segment: Array, tile: Vector2i) -> void:
     var origin_x := float(tile.x) * tile_size
     var origin_z := float(tile.y) * tile_size
     var polygon: Array = []
@@ -224,34 +245,72 @@ func _append_segment(vertices: PackedVector3Array, indices: PackedInt32Array, se
             [float(segment[0]) - n.x, 0.0, float(segment[1]) - n.y],
             [float(segment[2]) - n.x, 0.0, float(segment[3]) - n.y],
             [float(segment[2]) + n.x, 0.0, float(segment[3]) + n.y]]
+    if polygon.size() < 3:
+        return
     var base := vertices.size()
-    for p in polygon:
-        vertices.append(Vector3(float(p[0]) - origin_x, float(p[1]) + 0.08, float(p[2]) - origin_z))
+    var a := Vector3(float(polygon[0][0]), float(polygon[0][1]), float(polygon[0][2]))
+    var normal := Vector3.UP
+    for i in range(1, polygon.size() - 1):
+        var b := Vector3(float(polygon[i][0]), float(polygon[i][1]), float(polygon[i][2]))
+        var c := Vector3(float(polygon[i + 1][0]), float(polygon[i + 1][1]), float(polygon[i + 1][2]))
+        var candidate := (c - a).cross(b - a)
+        if candidate.length_squared() > 0.000001:
+            normal = candidate.normalized()
+            if normal.y < 0.0:
+                normal = -normal
+            break
+    var width := maxf(float(segment[4]), 1.0)
+    var paint := int(segment[13]) if segment.size() > 13 else 0
+    var lanes := int(segment[14]) if segment.size() > 14 else 2
+    var start_station := float(segment[16]) if segment.size() > 16 else 0.0
+    var end_station := float(segment[17]) if segment.size() > 17 else 1000000.0
+    var tangent := Vector2(float(segment[2]) - float(segment[0]), float(segment[3]) - float(segment[1])).normalized()
+    for vertex_index in range(polygon.size()):
+        var p: Array = polygon[vertex_index]
+        # A local decimetre overlay plus a near camera plane and bounded draw
+        # distance avoids precision fighting the 45 km overview depth range.
+        vertices.append(Vector3(float(p[0]) - origin_x, float(p[1]) + 0.14, float(p[2]) - origin_z))
+        normals.append(normal)
+        var uv := Vector2.ZERO
+        if segment.size() > 12 and segment[12].size() == polygon.size():
+            uv = Vector2(float(segment[12][vertex_index][0]), float(segment[12][vertex_index][1]))
+        else:
+            var relative := Vector2(float(p[0]) - float(segment[0]), float(p[2]) - float(segment[1]))
+            uv = Vector2(relative.dot(tangent), relative.dot(Vector2(-tangent.y, tangent.x)))
+        uvs.append(uv)
+        uv2s.append(Vector2(maxf(0.0, uv.x - start_station), maxf(0.0, end_station - uv.x)))
+        colors.append(Color(width / 32.0, float(paint) / 2.0, float(lanes) / 8.0, 1.0))
     for i in range(1, polygon.size() - 1):
         # Ribbons are counterclockwise in X/Z. Reverse for Godot's upward
         # facing front side rather than relying on double-sided backfaces.
         indices.append_array(PackedInt32Array([base, base + i + 1, base + i]))
 
 func _flush_mesh_batch() -> void:
-    _add_surface_mesh(_building.root, _building.paved_vertices, _building.paved_indices, _asphalt_material, "Paved")
-    _add_surface_mesh(_building.root, _building.dirt_vertices, _building.dirt_indices, _dirt_material, "Unpaved")
-    _building.paved_vertices = PackedVector3Array()
-    _building.paved_indices = PackedInt32Array()
-    _building.dirt_vertices = PackedVector3Array()
-    _building.dirt_indices = PackedInt32Array()
+    for prefix in ["paved", "dirt"]:
+        _add_surface_mesh(_building.root, _building[prefix + "_vertices"], _building[prefix + "_indices"],
+            _building[prefix + "_normals"], _building[prefix + "_uv"], _building[prefix + "_uv2"],
+            _building[prefix + "_colors"], _asphalt_material if prefix == "paved" else _dirt_material, prefix)
+        _building[prefix + "_vertices"] = PackedVector3Array()
+        _building[prefix + "_indices"] = PackedInt32Array()
+        _building[prefix + "_normals"] = PackedVector3Array()
+        _building[prefix + "_uv"] = PackedVector2Array()
+        _building[prefix + "_uv2"] = PackedVector2Array()
+        _building[prefix + "_colors"] = PackedColorArray()
     _building.batch += 1
 
-func _add_surface_mesh(parent: Node3D, vertices: PackedVector3Array, indices: PackedInt32Array, material: Material, label: String) -> void:
+func _add_surface_mesh(parent: Node3D, vertices: PackedVector3Array, indices: PackedInt32Array,
+        normals: PackedVector3Array, uvs: PackedVector2Array, uv2s: PackedVector2Array,
+        colors: PackedColorArray, material: Material, label: String) -> void:
     if vertices.is_empty():
         return
-    var normals := PackedVector3Array()
-    normals.resize(vertices.size())
-    normals.fill(Vector3.UP)
     var arrays: Array = []
     arrays.resize(Mesh.ARRAY_MAX)
     arrays[Mesh.ARRAY_VERTEX] = vertices
     arrays[Mesh.ARRAY_NORMAL] = normals
     arrays[Mesh.ARRAY_INDEX] = indices
+    arrays[Mesh.ARRAY_TEX_UV] = uvs
+    arrays[Mesh.ARRAY_TEX_UV2] = uv2s
+    arrays[Mesh.ARRAY_COLOR] = colors
     var mesh := ArrayMesh.new()
     mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
     mesh.surface_set_material(0, material)
@@ -260,6 +319,91 @@ func _add_surface_mesh(parent: Node3D, vertices: PackedVector3Array, indices: Pa
     instance.mesh = mesh
     instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     parent.add_child(instance)
+
+func _index_surface_segment(index: Dictionary, segment: Array) -> void:
+    if segment.size() < 12 or segment[11].is_empty():
+        return
+    var identifier := "%s:%d" % [str(segment[7]), int(segment[8])]
+    var minimum := Vector2(INF, INF)
+    var maximum := Vector2(-INF, -INF)
+    for point in segment[11]:
+        minimum.x = minf(minimum.x, float(point[0]))
+        minimum.y = minf(minimum.y, float(point[2]))
+        maximum.x = maxf(maximum.x, float(point[0]))
+        maximum.y = maxf(maximum.y, float(point[2]))
+    var first := Vector2i(floori(minimum.x / SURFACE_CELL_SIZE), floori(minimum.y / SURFACE_CELL_SIZE))
+    var last := Vector2i(floori((maximum.x - 0.00001) / SURFACE_CELL_SIZE), floori((maximum.y - 0.00001) / SURFACE_CELL_SIZE))
+    for z in range(first.y, last.y + 1):
+        for x in range(first.x, last.x + 1):
+            var cell := Vector2i(x, z)
+            if not index.has(cell):
+                index[cell] = {}
+            if not index[cell].has(identifier):
+                # Do not retain the many terrain-triangle polygon records.
+                # One logical segment record per occupied 128 m cell is enough.
+                index[cell][identifier] = {"a": Vector2(float(segment[0]), float(segment[1])),
+                    "b": Vector2(float(segment[2]), float(segment[3])), "width_m": float(segment[4]),
+                    "class_id": int(segment[5]), "flags": int(segment[6]), "edge_id": str(segment[7]),
+                    "speed_limit_mps": segment[15] if segment.size() > 15 else null}
+
+func _nearby_surface_segments(x: float, z: float, radius: float) -> Dictionary:
+    var result: Dictionary = {}
+    if not is_finite(x) or not is_finite(z):
+        return result
+    var reach := clampf(radius, 1.0, 512.0)
+    var first := Vector2i(floori((x - reach) / SURFACE_CELL_SIZE), floori((z - reach) / SURFACE_CELL_SIZE))
+    var last := Vector2i(floori((x + reach) / SURFACE_CELL_SIZE), floori((z + reach) / SURFACE_CELL_SIZE))
+    for cz in range(first.y, last.y + 1):
+        for cx in range(first.x, last.x + 1):
+            var cell := Vector2i(cx, cz)
+            var tile := coordinates.tile_for((float(cx) + 0.5) * SURFACE_CELL_SIZE, (float(cz) + 0.5) * SURFACE_CELL_SIZE)
+            var tile_index: Dictionary = _surface_indices.get(_tile_key(tile.x, tile.y), {})
+            var records: Dictionary = tile_index.get(cell, {})
+            for identifier in records:
+                result[identifier] = records[identifier]
+    return result
+
+static func _segment_distance_squared(point: Vector2, a: Vector2, b: Vector2) -> float:
+    var direction := b - a
+    var length_squared := direction.length_squared()
+    if length_squared < 0.000001:
+        return point.distance_squared_to(a)
+    var fraction := clampf((point - a).dot(direction) / length_squared, 0.0, 1.0)
+    return point.distance_squared_to(a + direction * fraction)
+
+func road_surface_at(x: float, z: float) -> Dictionary:
+    var nearest: Dictionary = {"found": false, "surface": "offroad", "distance_m": INF}
+    var point := Vector2(x, z)
+    var nearest_squared := INF
+    var records := _nearby_surface_segments(x, z, 32.0)
+    for record: Dictionary in records.values():
+        var distance_squared := _segment_distance_squared(point, record.a, record.b)
+        if distance_squared >= nearest_squared:
+            continue
+        nearest_squared = distance_squared
+        var on_surface := distance_squared <= pow(float(record.width_m) * 0.5 + 0.15, 2.0)
+        var tangent: Vector2 = record.b - record.a
+        nearest = record.duplicate()
+        nearest["found"] = on_surface
+        nearest["distance_m"] = sqrt(distance_squared)
+        nearest["surface"] = ("unpaved" if (int(record.flags) & 8) != 0 else "paved") if on_surface else "offroad"
+        nearest["heading"] = atan2(-tangent.x, -tangent.y)
+    return nearest
+
+func nearby_paths(x: float, z: float, radius: float = 220.0) -> Array[PackedVector2Array]:
+    var paths: Array[PackedVector2Array] = []
+    var reach := clampf(radius, 1.0, 512.0)
+    var point := Vector2(x, z)
+    var records := _nearby_surface_segments(x, z, reach)
+    var identifiers: Array = records.keys()
+    identifiers.sort()
+    for identifier in identifiers:
+        var record: Dictionary = records[identifier]
+        if _segment_distance_squared(point, record.a, record.b) <= reach * reach:
+            paths.append(PackedVector2Array([record.a, record.b]))
+            if paths.size() >= 384:
+                break
+    return paths
 
 func is_tile_ready(tile: Vector2i) -> bool:
     return _loaded.has(_tile_key(tile.x, tile.y))

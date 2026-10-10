@@ -174,13 +174,14 @@ class TerrainSampler:
                 current_in = after <= 0 if lower else after >= 0
                 if previous_in != current_in:
                     t = before / (before - after)
-                    result.append(tuple(previous[i] + t * (current[i] - previous[i]) for i in range(3)))
+                    result.append(tuple(previous[i] + t * (current[i] - previous[i]) for i in range(len(previous))))
                 if current_in:
                     result.append(current)
                 previous, before, previous_in = current, after, current_in
             clean = []
             for point in result:
-                point = (round(point[0], 6), round(self(point[0], point[2]), 6), round(point[2], 6))
+                point = (round(point[0], 6), round(self(point[0], point[2]), 6), round(point[2], 6),
+                         *(round(attribute, 6) for attribute in point[3:]))
                 if not clean or point != clean[-1]:
                     clean.append(point)
             if len(clean) > 1 and clean[0] == clean[-1]:
