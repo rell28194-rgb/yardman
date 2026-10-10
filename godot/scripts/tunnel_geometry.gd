@@ -105,11 +105,14 @@ func _prepare_portals(tile: Vector2i, portals: Array) -> Array:
     return result
 
 func _inside_portal(point: Vector2, portal: Dictionary) -> bool:
-    var offset: Vector2 = point - Vector2(portal.origin)
-    var along := offset.dot(Vector2(portal.direction))
+    var portal_origin: Vector2 = portal["origin"]
+    var portal_direction: Vector2 = portal["direction"]
+    var portal_right: Vector2 = portal["right"]
+    var offset: Vector2 = point - portal_origin
+    var along := offset.dot(portal_direction)
     if along < -PORTAL_OUTSET_M or along > PORTAL_INSET_M:
         return false
-    return absf(offset.dot(Vector2(portal.right))) <= float(portal.half_width)
+    return absf(offset.dot(portal_right)) <= float(portal["half_width"])
 
 func _apply_portal_mask(tile_root: Node3D, portals: Array) -> void:
     var land := tile_root.get_node_or_null("RegisteredLand") as MeshInstance3D
@@ -122,7 +125,7 @@ func _apply_portal_mask(tile_root: Node3D, portals: Array) -> void:
     image.fill(Color(0, 0, 0, 1))
     var metres_per_pixel := float(terrain.tile_size) / float(MASK_RESOLUTION)
     for portal in portals:
-        var bounds: Rect2 = portal.bounds
+        var bounds: Rect2 = portal["bounds"]
         var x0 := clampi(int(floor(bounds.position.x / metres_per_pixel)), 0, MASK_RESOLUTION - 1)
         var y0 := clampi(int(floor(bounds.position.y / metres_per_pixel)), 0, MASK_RESOLUTION - 1)
         var x1 := clampi(int(ceil(bounds.end.x / metres_per_pixel)), 0, MASK_RESOLUTION - 1)
@@ -164,7 +167,8 @@ func _triangle_bounds(a: Vector3, b: Vector3, c: Vector3) -> Rect2:
 func _could_touch_portal(a: Vector3, b: Vector3, c: Vector3, portals: Array) -> bool:
     var bounds := _triangle_bounds(a, b, c)
     for portal in portals:
-        if bounds.intersects(Rect2(portal.bounds), true):
+        var portal_bounds: Rect2 = portal["bounds"]
+        if bounds.intersects(portal_bounds, true):
             return true
     return false
 
@@ -257,6 +261,7 @@ func _add_box(body: StaticBody3D, dimensions: Vector3, center: Vector3) -> void:
 func _build_tunnel_shell(tile: Vector2i, tile_root: Node3D, tunnels: Array) -> void:
     var old := tile_root.get_node_or_null("TunnelShell")
     if old != null:
+        tile_root.remove_child(old)
         old.queue_free()
     var shell := Node3D.new()
     shell.name = "TunnelShell"
