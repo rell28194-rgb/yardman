@@ -11,7 +11,7 @@ const GOLD := Color(0.91, 0.71, 0.36)
 const DEFAULT_SETTINGS := {
     "steering_mode": "Stick", "stick_deadzone": 0.12,
     "look_sensitivity": 1.0, "invert_y": false,
-    "button_scale": 1.0, "button_opacity": 0.58,
+    "button_scale": 1.0, "button_opacity": 0.8,
     "reduced_motion": false, "positions": {}
 }
 

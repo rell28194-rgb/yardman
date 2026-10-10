@@ -41,7 +41,12 @@ func _run() -> void:
     for cell: MultiMeshInstance3D in roadside.get_children():
         _check(cell.name != "RoadsideProxy", "Vegetation is still one island-sized culling batch")
         _check(cell.multimesh.mesh.get_surface_count() >= 1, "Vegetation has no mesh")
+        _check(cell.multimesh.use_colors, "Compatibility vegetation is missing explicit instance colors")
         for i in range(cell.multimesh.instance_count):
+            # The dummy headless renderer does not expose color-buffer reads.
+            # The real GL fixture checks their rendered result instead.
+            if DisplayServer.get_name() != "headless":
+                _check(cell.multimesh.get_instance_color(i) == Color.WHITE, "MultiMesh instance colors darken vegetation")
             var position := cell.position + cell.multimesh.get_instance_transform(i).origin
             _check(absf(position.y - 31.0) < 0.01, "Vegetation ignored terrain height")
             _check(not visuals._inside_road(Vector2(position.x, position.z), buckets, records, 2.5), "Vegetation intersects a neighbouring carriageway")

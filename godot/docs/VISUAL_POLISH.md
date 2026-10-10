@@ -31,4 +31,12 @@ performance measurement.
 Validation: `godot --headless --path godot --script res://tests/visuals_test.gd`.
 This checks canonical material coordinates, shared textures, daylight, terrain
 placement, crossing-road exclusion, culling groups, custom quality and missing
-terrain. A render is still required to assess actual appearance.
+terrain. Compatibility rendering requires explicit white MultiMesh instance
+colors; the test also checks that regression because uninitialized instance
+color produced completely black foliage during GL inspection.
+
+The isolated `visuals_render_test.gd` fixture was rendered and inspected under
+Godot 4.7.2 Compatibility, OpenGL 4.5 Mesa llvmpipe. All three shaders compiled
+and the captured ground, palm and broadleaf geometry appeared correctly.
+This fixture does not represent an actual Jamaican location or Android
+performance. The complete streamed game also requires a rendered inspection.

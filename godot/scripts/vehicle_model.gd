@@ -28,6 +28,11 @@ func build() -> void:
     _make_cabin()
     _make_details()
     _make_wheels()
+    # Detail is authored as small parts for maintainability, then baked by
+    # material into a few draws. Wheel pivots remain independent for animation.
+    _batch_meshes(shell)
+    for wheel in wheels:
+        _batch_meshes(wheel)
 
 func update_motion(delta: float, speed: float, steering: float, braking: float, reversing: bool, running: bool, pitch: float, roll: float) -> void:
     if shell == null:
@@ -246,11 +251,37 @@ func _triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, outward
     # Godot front-face winding is clockwise, opposite the mathematical cross.
     for point in [a, c, b]:
         surface.set_normal(normal)
+        surface.set_uv(Vector2.ZERO)
         surface.add_vertex(point)
 
 func _finish(surface: SurfaceTool, parent: Node3D, material: Material, part_name: String) -> void:
     var instance := MeshInstance3D.new()
     instance.name = part_name
+    # append_from retains index buffers. Mixing an unindexed authored mesh
+    # with indexed BoxMesh/CylinderMesh otherwise leaves the authored vertices
+    # outside the final batch's index buffer, making the shell disappear.
+    surface.index()
     instance.mesh = surface.commit()
     instance.material_override = material
     parent.add_child(instance)
+
+func _batch_meshes(parent: Node3D) -> void:
+    var batches: Dictionary = {}
+    for child in parent.get_children():
+        var instance := child as MeshInstance3D
+        if instance == null or instance.mesh == null or instance.material_override == null:
+            continue
+        var material_id := instance.material_override.get_instance_id()
+        if not batches.has(material_id):
+            var surface := SurfaceTool.new()
+            surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+            batches[material_id] = {"material": instance.material_override, "surface": surface}
+        var batch: Dictionary = batches[material_id]
+        var builder: SurfaceTool = batch.surface
+        for mesh_surface in range(instance.mesh.get_surface_count()):
+            builder.append_from(instance.mesh, mesh_surface, instance.transform)
+        parent.remove_child(instance)
+        instance.queue_free()
+    for material_id in batches:
+        var batch: Dictionary = batches[material_id]
+        _finish(batch.surface, parent, batch.material, "MaterialBatch")

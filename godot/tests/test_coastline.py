@@ -133,6 +133,14 @@ class CoastlineTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"not closed"):
                 read_geography(path,{"easting":700000.,"northing":650000.})
 
+    def test_corrupt_coastal_dem_rejected_before_packaging(self):
+        bad = self.heights.copy()
+        bad[1,1] = np.nan
+        with self.assertRaisesRegex(ValueError,"Invalid coastal DEM"):
+            classify_grid(self.land,bad,0.,0.,64.)
+        with self.assertRaisesRegex(ValueError,"Invalid coastal grid"):
+            classify_grid(self.land,self.heights,0.,0.,0.)
+
 
 if __name__ == "__main__":
     unittest.main()

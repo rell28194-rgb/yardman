@@ -69,6 +69,9 @@ static func read_overview(root: String, width: int, depth: int) -> Dictionary:
     var mask := FileAccess.get_file_as_bytes(mask_path)
     if mask.size() != (width - 1) * (depth - 1):
         return {"error": "Invalid overview coastline mask size"}
+    for value in mask:
+        if value > 2:
+            return {"error": "Unknown overview coastline cell classification"}
     var land := _read_geometry(root + "/overview_land.bin", 3)
     var water := _read_geometry(root + "/overview_water.bin", 4)
     if land.has("error"):

@@ -54,7 +54,7 @@ func step(delta: float, ready: bool) -> void:
     velocity.y = -1.5 if is_on_floor() else maxf(velocity.y - 22.0 * delta, -45.0)
     move_and_slide()
     if direction.length_squared() > 0.001:
-        _visual.rotation.y = lerp_angle(_visual.rotation.y, atan2(-direction.x, -direction.z), clampf(delta * 11.0, 0.0, 1.0))
+        _visual.global_rotation.y = lerp_angle(_visual.global_rotation.y, atan2(-direction.x, -direction.z), clampf(delta * 11.0, 0.0, 1.0))
     _animate(delta, Vector2(velocity.x, velocity.z).length())
 
 func can_enter_vehicle() -> bool:
@@ -90,7 +90,7 @@ func try_exit_vehicle() -> bool:
             continue
         global_position = candidate
         velocity = Vector3.ZERO
-        _visual.rotation.y = car.rotation.y
+        _visual.global_rotation.y = car.global_rotation.y
         _set_occupied(false)
         return true
     return false

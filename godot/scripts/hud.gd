@@ -60,8 +60,10 @@ func attach_controls(controls) -> void:
         _make_controls_settings()
 
 func set_status(value: Dictionary) -> void:
+    var previous_parish := str(_status.parish)
     _status.merge(value, true)
-    select_parish(str(_status.parish))
+    if str(_status.parish) != previous_parish:
+        select_parish(str(_status.parish))
     var can_interact := bool(_status.ready) and bool(_status.can_interact)
     if _controls != null:
         _controls.interaction_enabled = can_interact
@@ -110,6 +112,8 @@ func set_menu_open(value: bool) -> void:
         _controls.input_enabled = not value
         _controls.clear_input()
         _make_controls_settings()
+    if value:
+        select_parish(str(_status.parish))
     if _interact_button != null:
         _interact_button.visible = not value and bool(_status.can_interact) and (_controls == null or not _controls.is_touch_mode())
     menu_toggled.emit(value)
@@ -215,7 +219,17 @@ func _make_menu() -> void:
         credits_requested.emit()))
 
 func _make_controls_settings() -> void:
-    if _control_rows == null or _controls == null or _controls_built:
+    if _control_rows == null or _controls == null:
+        return
+    if _controls_built:
+        for key in _settings_widgets:
+            var widget: Control = _settings_widgets[key]
+            if widget is OptionButton:
+                _select(widget, str(_controls.settings[key]))
+            elif widget is Range:
+                widget.set_value_no_signal(float(_controls.settings[key]))
+            elif widget is BaseButton:
+                widget.set_pressed_no_signal(bool(_controls.settings[key]))
         return
     _controls_built = true
     var mode := OptionButton.new()
@@ -321,7 +335,8 @@ func _draw() -> void:
     _text("%02d:%02d" % [hour, minute], Vector2(26, 221), 14, MUTED)
     var compass_center := Vector2(dimensions.x * 0.5, 38.0)
     draw_line(compass_center + Vector2(-128, 0), compass_center + Vector2(128, 0), Color(CREAM, 0.25), 1.0, true)
-    var heading := float(_status.heading)
+    # Godot yaw is positive west from local -Z (geographic north).
+    var heading := -float(_status.heading)
     for tick in range(8):
         var angle := tick * PI / 4.0
         var offset := wrapf(angle - heading, -PI, PI) * 135.0
@@ -364,13 +379,13 @@ func _draw_radar(center: Vector2, radius: float) -> void:
         for index in range(1, path.size()):
             var before := _radar_point(path[index - 1])
             var after := _radar_point(path[index])
-            var a := ((before - _radar_center) * (radius / extent)).rotated(-_radar_heading)
-            var b := ((after - _radar_center) * (radius / extent)).rotated(-_radar_heading)
+            var a := ((before - _radar_center) * (radius / extent)).rotated(_radar_heading)
+            var b := ((after - _radar_center) * (radius / extent)).rotated(_radar_heading)
             var clipped := _clip_circle(a, b, radius - 4.0)
             if clipped.size() == 2:
                 draw_line(center + clipped[0], center + clipped[1], Color(0.75, 0.79, 0.66, 0.82), 2.4, true)
     draw_colored_polygon(PackedVector2Array([center + Vector2(0, -8), center + Vector2(-5, 5), center + Vector2(0, 2), center + Vector2(5, 5)]), GOLD)
-    var north := center + Vector2.UP.rotated(-_radar_heading) * (radius - 9.0)
+    var north := center + Vector2.UP.rotated(_radar_heading) * (radius - 9.0)
     draw_circle(north, 2.0, GREEN)
 
 func _radar_point(value: Variant) -> Vector2:

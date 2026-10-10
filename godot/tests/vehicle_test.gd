@@ -55,6 +55,24 @@ func _run() -> void:
     _check(car.is_on_floor(), "Vehicle did not settle on the collision floor")
     _check(car.get_node("VisualRig") == controller.visual and controller.visual != blockout, "Model did not replace the old blockout")
     _check(controller.visual.get("wheels").size() == 4 and controller.visual.get("front_pivots").size() == 2, "Four independent wheels/front steering are missing")
+    var paint_vertices_used := 0
+    for child in controller.visual.get("shell").get_children():
+        var mesh_instance := child as MeshInstance3D
+        if mesh_instance == null:
+            continue
+        var arrays: Array = mesh_instance.mesh.surface_get_arrays(0)
+        var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+        _check(not indices.is_empty(), "Material batching lost authored nonindexed panels")
+        if mesh_instance.material_override.albedo_color.is_equal_approx(Color(0.14, 0.31, 0.37)):
+            var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+            var referenced: Dictionary = {}
+            for index in indices:
+                referenced[index] = true
+            for index in range(vertices.size()):
+                if vertices[index].z < -1.8 and vertices[index].y > 0.70 and referenced.has(index):
+                    paint_vertices_used += 1
+            _check(referenced.size() == vertices.size(), "Paint batch contains orphaned invisible geometry")
+    _check(paint_vertices_used > 3, "Bonnet vertices are absent from the rendered paint index buffer")
     await _step_frames(420, 1.0)
     var acceleration_speed: float = controller.speed_mps
     _check(acceleration_speed > 27.8 and acceleration_speed < 42.01, "Seven seconds of road acceleration did not reach 100 km/h within its cap")

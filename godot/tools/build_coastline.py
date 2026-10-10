@@ -7,6 +7,7 @@ extent, and clipped vertices use the same two height triangles as the terrain.
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import math
@@ -16,7 +17,7 @@ from pathlib import Path
 import numpy as np
 import shapely
 from shapely.geometry import MultiLineString, Polygon, box
-from shapely.ops import polygonize_full, transform
+from shapely.ops import polygonize_full
 from shapely.strtree import STRtree
 from pyproj import Transformer
 
@@ -56,12 +57,16 @@ def read_geography(pbf: Path, origin: dict):
             if area.tags.get("natural") != "beach":
                 return
             geographic = shapely.from_wkb(self.factory.create_multipolygon(area))
-            geometry = shapely.make_valid(transform(project_geometry, geographic))
+            geometry = shapely.make_valid(shapely.transform(geographic, project_geometry, interleaved=False))
             self.beaches.append(geometry)
             self.beach_ids.append(int(area.orig_id()))
 
     reader = Reader()
-    reader.apply_file(str(pbf), locations=True)
+    if pbf.suffix == ".gz":
+        with gzip.open(pbf, "rb") as source:
+            reader.apply_buffer(source.read(), "pbf", locations=True)
+    else:
+        reader.apply_file(str(pbf), locations=True)
     if not reader.lines:
         raise ValueError("Source contains no coastline")
     lines = MultiLineString(reader.lines)
@@ -122,6 +127,10 @@ def classify_grid(land, heights, ox: float, oz: float, step: float, beaches=None
     sourced beach triangles. Cells are classified in vectorized GEOS calls;
     only boundary cells perform scalar clipping.
     """
+    if heights.ndim != 2 or min(heights.shape) < 2 or not np.isfinite(heights).all():
+        raise ValueError("Invalid coastal DEM grid")
+    if not math.isfinite(step) or step <= 0 or not all(map(math.isfinite,(ox,oz))):
+        raise ValueError("Invalid coastal grid coordinates")
     depth, width = heights.shape
     tile_box = box(ox,oz,ox+(width-1)*step,oz+(depth-1)*step)
     mask = np.zeros((depth-1,width-1), dtype=np.uint8)
@@ -268,11 +277,16 @@ def compile_coastline(pbf: Path, terrain_root: Path, output: Path, geography=Non
             (staging/filename).write_bytes(values.tobytes())
             overview_files[key] = filename
         overview_files.update({k:overview[k] for k in ("origin_x","origin_z","width","depth","spacing")})
+    source_hash = hashlib.sha256()
+    source_open = gzip.open if pbf.suffix == ".gz" else open
+    with source_open(pbf,"rb") as source:
+        while chunk := source.read(1024*1024):
+            source_hash.update(chunk)
     manifest = {"format":1,"crs":"EPSG:3448","origin":terrain["origin"],"tile_size":size,
                 "resolution":res,"sample_spacing_m":float(terrain["sample_spacing_m"]),
                 "axis":"X east, Y elevation, Z south; real metres","sea_level_m":0.0,
                 "source":"OpenStreetMap natural=coastline and natural=beach",
-                "source_sha256":hashlib.sha256(pbf.read_bytes()).hexdigest(),"attribution":ATTRIBUTION,
+                "source_sha256":source_hash.hexdigest(),"attribution":ATTRIBUTION,
                 "land_area_km2":land.area/1e6,"land_bounds":list(land.bounds),"source_stats":source_stats,
                 "terrain_manifest_sha256":hashlib.sha256((terrain_root/"manifest.json").read_bytes()).hexdigest(),
                 "mask_encoding":"uint8 row-major (resolution-1)^2: 0 water, 1 full land, 2 partial land",

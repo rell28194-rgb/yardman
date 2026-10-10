@@ -106,8 +106,8 @@ func _make_surface_noise() -> ImageTexture:
     var image := Image.create(256, 256, false, Image.FORMAT_RGB8)
     for y in range(256):
         for x in range(256):
-            # Sample a periodic torus projection with a small crossfade at
-            # each texture edge. This prevents a dark seam on repeated land.
+            # Crossfade rolled noise samples at each edge. This prevents a
+            # dark seam on repeated land without importing a bitmap asset.
             var values := Vector3.ZERO
             for channel in range(3):
                 var nx := float(x)
@@ -146,12 +146,14 @@ func configure_environment(environment: Environment, sun: DirectionalLight3D) ->
     environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
     environment.ambient_light_color = Color(0.86, 0.89, 0.93)
     environment.ambient_light_energy = 0.72
+    environment.ambient_light_sky_contribution = 0.22
     environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR
     environment.tonemap_exposure = 1.05
     environment.fog_enabled = true
     environment.fog_density = 0.000020
     environment.fog_light_color = Color(0.78, 0.85, 0.86)
     environment.fog_light_energy = 0.7
+    environment.fog_sky_affect = 0.14
     sun.light_color = Color(1.0, 0.96, 0.85)
     sun.light_energy = 1.2
     sun.directional_shadow_max_distance = 100.0
@@ -314,6 +316,7 @@ func _make_plant_cell(roadside: Node3D, group: Dictionary, tile_origin: Vector2)
     center.y = average_height / float(plants.size())
     var multi := MultiMesh.new()
     multi.transform_format = MultiMesh.TRANSFORM_3D
+    multi.use_colors = true
     multi.use_custom_data = true
     multi.mesh = _plant_meshes[species]
     multi.instance_count = plants.size()
@@ -321,8 +324,10 @@ func _make_plant_cell(roadside: Node3D, group: Dictionary, tile_origin: Vector2)
         var transform: Transform3D = plants[i].transform
         transform.origin -= center
         multi.set_instance_transform(i, transform)
+        multi.set_instance_color(i, Color.WHITE)
         var seed_point := int(plants[i].seed)
-        multi.set_instance_custom_data(i, Color(float(seed_point % 997) / 997.0, float(seed_point % 421) / 421.0, 0.0, 0.0))
+        var canonical_point := Vector2(plants[i].transform.origin.x + tile_origin.x, plants[i].transform.origin.z + tile_origin.y)
+        multi.set_instance_custom_data(i, Color(float(seed_point % 997) / 997.0, float(seed_point % 421) / 421.0, _regional_dryness(canonical_point), 1.0))
     var instance := MultiMeshInstance3D.new()
     instance.name = "Plants_%d_%d_%s" % [cell.x, cell.y, species]
     instance.position = center
@@ -335,6 +340,7 @@ func _make_plant_cell(roadside: Node3D, group: Dictionary, tile_origin: Vector2)
         _plant_meshes.grass = _make_grass_mesh()
     var grass_multi := MultiMesh.new()
     grass_multi.transform_format = MultiMesh.TRANSFORM_3D
+    grass_multi.use_colors = true
     grass_multi.use_custom_data = true
     grass_multi.mesh = _plant_meshes.grass
     grass_multi.instance_count = plants.size()
@@ -343,6 +349,7 @@ func _make_plant_cell(roadside: Node3D, group: Dictionary, tile_origin: Vector2)
         transform.basis = transform.basis.scaled(Vector3.ONE * 1.2)
         transform.origin -= center
         grass_multi.set_instance_transform(i, transform)
+        grass_multi.set_instance_color(i, Color.WHITE)
         grass_multi.set_instance_custom_data(i, multi.get_instance_custom_data(i))
     var grass := MultiMeshInstance3D.new()
     grass.name = instance.name + "_Grass"
@@ -419,7 +426,7 @@ func _make_palm_mesh() -> ArrayMesh:
                 _triangle(leaves, leaf_root, fold, leaf_tip, color)
                 _triangle(leaves, leaf_root, leaf_tip, spine + outward * 0.12, Color(color.r * 0.85, color.g * 0.88, color.b * 0.87, t))
             previous = spine
-    return _join_surfaces(bark, leaves, Color(0.39, 0.48, 0.14), 0.16)
+    return _join_surfaces(bark, leaves, Color(0.32, 0.46, 0.14), 0.16)
 
 func _ellipsoid(surface: SurfaceTool, center: Vector3, radii: Vector3, seed_value: int) -> void:
     for row in range(7):
@@ -434,8 +441,27 @@ func _ellipsoid(surface: SurfaceTool, center: Vector3, radii: Vector3, seed_valu
             var d := center + Vector3(cos(angle_b) * cos(lat_b), sin(lat_b), sin(angle_b) * cos(lat_b)) * radii
             var variation := 0.75 + float(posmod(seed_value + row * 19 + column * 7, 27)) / 70.0
             var color := Color(variation, variation, variation * 0.87, 0.25)
+            # Slightly irregular crown lobes, rather than an unchanged sphere
+            # repeated eight times, keep broadleaf silhouettes organic.
+            a = center + (a - center) * (0.91 + float(posmod(seed_value + row * 11 + column * 13, 19)) / 95.0)
+            b = center + (b - center) * (0.91 + float(posmod(seed_value + row * 11 + (column + 1) * 13, 19)) / 95.0)
+            c = center + (c - center) * (0.91 + float(posmod(seed_value + (row + 1) * 11 + column * 13, 19)) / 95.0)
+            d = center + (d - center) * (0.91 + float(posmod(seed_value + (row + 1) * 11 + (column + 1) * 13, 19)) / 95.0)
             _triangle(surface, a, c, b, color)
             _triangle(surface, b, c, d, color)
+    for leaf in range(34):
+        var angle := float(leaf) * 2.399963
+        var altitude := -0.62 + float(leaf % 13) / 12.0 * 1.4
+        var direction := Vector3(cos(angle) * cos(altitude), sin(altitude), sin(angle) * cos(altitude))
+        var root := center + direction * radii * 0.93
+        var out := direction * 0.33
+        var side := direction.cross(Vector3.UP).normalized() * 0.12
+        var fold := root + out * 0.53 + Vector3.UP * 0.025
+        var color := Color(0.83 + float(leaf % 5) * 0.036, 0.95, 0.74, 0.45)
+        _triangle(surface, root, root + out * 0.44 + side, fold, color)
+        _triangle(surface, root + out * 0.44 + side, root + out, fold, color)
+        _triangle(surface, root, fold, root + out * 0.44 - side, Color(color.r * 0.89, color.g * 0.91, color.b * 0.90, 0.45))
+        _triangle(surface, root + out * 0.44 - side, fold, root + out, color)
 
 func _make_broadleaf_mesh() -> ArrayMesh:
     var bark := _surface()
@@ -447,7 +473,7 @@ func _make_broadleaf_mesh() -> ArrayMesh:
         _tube(bark, Vector3(0.1, 3.1 + float(branch % 2) * 0.5, 0), center, 0.10, 0.028, Color(0.35, 0.29, 0.22, 0.0), 6)
         _ellipsoid(leaves, center, Vector3(1.65, 1.4, 1.55), branch * 73)
     _ellipsoid(leaves, Vector3(0.15, 6.4, -0.1), Vector3(1.8, 1.6, 1.8), 997)
-    return _join_surfaces(bark, leaves, Color(0.31, 0.41, 0.13), 0.12)
+    return _join_surfaces(bark, leaves, Color(0.25, 0.38, 0.13), 0.12)
 
 func _make_grass_mesh() -> ArrayMesh:
     var surface := _surface()

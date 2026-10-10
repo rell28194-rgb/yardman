@@ -284,7 +284,7 @@ func _append_segment(vertices: PackedVector3Array, indices: PackedInt32Array,
             uv = Vector2(relative.dot(tangent), relative.dot(Vector2(-tangent.y, tangent.x)))
         uvs.append(uv)
         uv2s.append(Vector2(maxf(0.0, uv.x - start_station), maxf(0.0, end_station - uv.x)))
-        colors.append(Color(width / 32.0, float(paint) / 2.0, float(lanes) / 8.0, 1.0))
+        colors.append(Color(width / 64.0, float(paint) / 2.0, float(lanes) / 8.0, 1.0))
     for i in range(1, polygon.size() - 1):
         # Ribbons are counterclockwise in X/Z. Reverse for Godot's upward
         # facing front side rather than relying on double-sided backfaces.

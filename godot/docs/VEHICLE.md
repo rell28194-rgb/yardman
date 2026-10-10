@@ -5,7 +5,12 @@ profiled bonnet/trunk, crowned roof, inclined tinted windows, framed pillars,
 real tyre-arch cutouts, door seams/handles, mirrors, grille, rubber bumpers,
 rubber tyres, five-spoke rims and an exhaust. Front wheels visibly steer and
 all wheels spin with signed road speed. Brake and reverse lamps follow input.
-The model replaces the old VisualRig when the controller is configured.
+The model replaces the old VisualRig when the controller is configured. Small
+authored parts are baked into material batches, while four wheel pivots remain
+independent; the detail does not require a separate draw for each grille slat.
+Authored surfaces are indexed before merging with indexed primitives; tests
+verify every paint vertex remains referenced so the shell cannot disappear
+when the batch acquires an index buffer.
 
 The CharacterBody3D footprint and canonical parked-coordinate ownership are
 preserved. This is a kinematic vehicle, not a complete rigid-body tyre solver.

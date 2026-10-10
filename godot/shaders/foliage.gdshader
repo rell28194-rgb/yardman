@@ -12,6 +12,7 @@ void vertex() {
     VERTEX.x += motion * wind_strength * COLOR.a;
     VERTEX.z += cos(TIME * 1.13 + phase + VERTEX.y) * wind_strength * COLOR.a * 0.4;
     leaf_color = COLOR.rgb * mix(vec3(0.91, 0.92, 0.81), vec3(1.12, 1.08, 1.03), INSTANCE_CUSTOM.y);
+    leaf_color *= mix(vec3(1.0), vec3(1.23, 1.08, 0.79), clamp(INSTANCE_CUSTOM.z, 0.0, 1.0));
 }
 
 void fragment() {
