@@ -64,6 +64,18 @@ class TunnelPortalTests(unittest.TestCase):
             self.assertEqual(end["position"], [70.0, 16.0, 5.0])
             self.assertEqual(end["toward"], [30.0, 18.0, 5.0])
 
+    def test_national_manifest_names_every_portal_payload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._dataset(root)
+            result = compile_portals(root)
+            registry = json.loads((root / "manifest.json").read_text())["tunnel_portals"]
+            self.assertEqual(registry["portals"], result["portals"])
+            self.assertEqual(registry["profiled_tunnel_source_ways"], 1)
+            self.assertTrue((root / registry["manifest_file"]).is_file())
+            self.assertEqual(sum(tile["portals"] for tile in registry["tiles"]), 2)
+            self.assertTrue(all((root / tile["file"]).is_file() for tile in registry["tiles"]))
+
 
 if __name__ == "__main__":
     unittest.main()

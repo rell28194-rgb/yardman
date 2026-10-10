@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import shapely
-from shapely.geometry import Polygon, box
+from shapely.geometry import Point, Polygon, box
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from build_coastline import classify_grid, water_geometry, ShoreDistances, compile_coastline, read_geography
 
@@ -88,6 +88,27 @@ class CoastlineTests(unittest.TestCase):
         a = {(round(float(p[0]),5),round(float(p[3]),5)) for p in left if p[2] == 128.}
         b = {(round(float(p[0]),5),round(float(p[3]),5)) for p in right if p[2] == 0.}
         self.assertEqual(a,b)
+
+    def test_curved_buffer_join_cannot_tint_a_coarse_offshore_triangle(self):
+        island = Point(0., 0.).buffer(100., quad_segs=4)
+        extent = box(-512., -512., 512., 512.)
+        water = water_geometry(island, extent, ShoreDistances(island), 0., 0.)
+        coastal = water.reshape(-1,3,4)
+        coastal = coastal[np.min(coastal[:,:,3],axis=1) < 39.999]
+        self.assertGreater(len(coastal), 0)
+        distances = shapely.distance(shapely.points(coastal[:,:,[0,2]].reshape(-1,2)),
+                                     shapely.boundary(island))
+        self.assertLessEqual(float(np.max(distances)), 40.001)
+
+    def test_distant_coast_grid_retains_exact_source_boundary_and_extent(self):
+        extent = box(0., 0., 128., 128.)
+        shore = ShoreDistances(self.land)
+        near = water_geometry(self.land, extent, shore, 0., 0., coastal_spacing=16.)
+        far = water_geometry(self.land, extent, shore, 0., 0., coastal_spacing=64.)
+        self.assertLess(len(far), len(near))
+        expected = extent.difference(self.land)
+        self.assertLess(triangles_geometry(far[:,:3]).symmetric_difference(expected).area, 0.002)
+        self.assertLess(triangles_geometry(far[:,:3]).intersection(self.land).area, 0.0001)
 
     def test_neighbouring_coast_edges_match_height(self):
         heights = np.asarray([[2,12,5,7,9],[9,28,4,8,10],[3,17,7,4,2]],dtype="<f4")

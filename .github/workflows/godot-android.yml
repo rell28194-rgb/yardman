@@ -42,6 +42,10 @@ jobs:
           # Bridges keep their DEM-registered abutments, but the deck itself is
           # independent of terrain below. Runtime builds matching collision decks.
           python godot/tools/build_road_structures.py godot/data/roads
+          # True outer portals are a separate graph compiler. Without this
+          # invocation a green build silently has no terrain openings.
+          python godot/tools/build_tunnel_portals.py godot/data/roads
+          python godot/tools/validate_road_structures.py godot/data/roads
 
           # Map correctness gate: rendering a road is not enough. The packaged
           # OSM graph must also form a connected national network for every
@@ -69,8 +73,12 @@ jobs:
           assert len(s['parish_anchor_distance_m']) == 14, s
           topology = json.loads(Path('godot/data/roads/topology_report.json').read_text())
           structures = json.loads(Path('godot/data/roads/structures.json').read_text())
+          portals = json.loads(Path('godot/data/roads/tunnel_portals/manifest.json').read_text())
           assert topology['parish_anchors']['component_count'] == 1, topology['parish_anchors']
           assert structures['bridge']['edges'] > 0, structures
+          assert structures['tunnel']['profiled_edges'] > 0, structures
+          assert portals['profiled_tunnel_source_ways'] > 0 and portals['portals'] > 0, portals
+          assert not portals['anomalies'], portals['anomalies']
           print('Jamaica map QA passed:', s['road_features'], 'roads,', s['segments'], 'segments,', s['tiles'], 'tiles')
           print('Road topology:', topology['components']['count'], 'components;',
                 'largest edge ratio', topology['components']['largest_edge_ratio'],
@@ -78,6 +86,8 @@ jobs:
           print('Bridge structures:', structures['bridge']['edges'], 'edges /',
                 structures['bridge']['surface_records'], 'surface records /',
                 structures['bridge']['tiles'], 'tiles')
+          print('Tunnel portals:', portals['portals'], 'outer portals /',
+                portals['profiled_tunnel_source_ways'], 'source ways')
           PY
           du -sh godot/data/roads
           ls -lh godot/data/roads/manifest.json godot/data/roads/topology_report.json godot/data/roads/structures.json
@@ -192,7 +202,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in road_surface coastline terrain_coast controls_hud vehicle visuals audio building_streamer polish_integration; do
+          for TEST in road_surface road_structure_data coastline terrain_coast controls_hud vehicle visuals audio building_streamer polish_integration; do
             timeout 300 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"
@@ -246,6 +256,7 @@ jobs:
             godot/data/roads/manifest.json
             godot/data/roads/topology_report.json
             godot/data/roads/structures.json
+            godot/data/roads/tunnel_portals/manifest.json
             godot/data/terrain/manifest.json
             godot/data/coast/manifest.json
             godot/data/buildings/manifest.json
@@ -265,6 +276,7 @@ jobs:
             godot/data/roads/manifest.json
             godot/data/roads/topology_report.json
             godot/data/roads/structures.json
+            godot/data/roads/tunnel_portals/manifest.json
             godot/data/terrain/manifest.json
             godot/data/coast/manifest.json
             godot/data/buildings/manifest.json

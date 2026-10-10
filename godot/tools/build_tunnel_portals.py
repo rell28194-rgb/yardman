@@ -119,6 +119,15 @@ def compile_portals(roads_root: Path) -> dict:
         "source_way_counts": source_way_counts,
     }
     (output / "manifest.json").write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
+    manifest["tunnel_portals"] = {
+        "format": 1,
+        "manifest_file": "tunnel_portals/manifest.json",
+        "profiled_tunnel_source_ways": len(by_way),
+        "portals": total_portals,
+        "tiles": [{**tile, "file": "tunnel_portals/" + tile["file"]} for tile in tile_records],
+    }
+    (roads_root / "manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
     return result
 
 

@@ -47,8 +47,10 @@ after a rebase. Sector meshes can be culled independently by the renderer.
 
 Ocean colour now uses a geometric band within 40m of the mapped coastline.
 That narrow band is tessellated on a global 16m grid; offshore water retains
-its 512m grid. Fine preparation occurs in bounded coastal 512m blocks, including
-the island overview, rather than allocating a national 16m grid. Previously,
+its 512m grid. Fine preparation occurs in bounded coastal 512m blocks rather
+than allocating a national 16m grid. The distant overview uses a 64m coastal
+grid with the same exact source boundary and forty-metre band; streamed near
+tiles retain 16m. Previously,
 clamping distance samples to 40m at 512m triangle corners stretched coastal
 colour hundreds of metres offshore and produced triangular shallow patches.
 The new regression test bounds the transition to the actual coast band and

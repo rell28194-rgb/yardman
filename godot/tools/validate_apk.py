@@ -6,6 +6,7 @@ import json
 import struct
 import zipfile
 from pathlib import Path
+from validate_road_structures import validate_payloads
 
 
 def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = None,
@@ -26,6 +27,20 @@ def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = N
         for tile in manifest["tiles"]:
             if "assets/data/roads/" + tile["file"] not in names:
                 raise ValueError("A road tile was omitted from the APK")
+        structure_proof = {}
+        if manifest.get("structures"):
+            def read_structure(relative):
+                if Path(relative).is_absolute() or ".." in Path(relative).parts:
+                    raise ValueError("Invalid packaged road structure path")
+                name = "assets/data/roads/" + relative
+                if name not in names:
+                    raise ValueError("Missing APK road structure resource: " + relative)
+                actual = json.loads(archive.read(name))
+                expected_path = source_manifest.parent / relative
+                if not expected_path.is_file() or actual != json.loads(expected_path.read_text()):
+                    raise ValueError("Packaged road structure differs from validated source: " + relative)
+                return actual
+            structure_proof = validate_payloads(manifest, read_structure)
         if terrain_manifest is not None:
             expected_terrain = json.loads(terrain_manifest.read_text())
             terrain = json.loads(archive.read("assets/data/terrain/manifest.json"))
@@ -102,7 +117,8 @@ def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = N
     return {"apk_bytes": apk.stat().st_size, "road_tiles": len(source["tiles"]),
             "coast_tiles": len(coast["tiles"]) if coast_manifest else 0,
             "building_tiles": len(buildings["tiles"]) if buildings_manifest else 0,
-            "graph_edges": source["stats"].get("graph_edges", 0), "abis": sorted(abis)}
+            "graph_edges": source["stats"].get("graph_edges", 0), "abis": sorted(abis),
+            **structure_proof}
 
 
 if __name__ == "__main__":

@@ -211,7 +211,7 @@ def _water_grid_points(geometry, extent, grid_spacing):
 
 
 def _nearshore_grid_points(geometry, extent, grid_spacing, block_spacing=512.0):
-    """Build 16m coast patches in bounded blocks, including national overview.
+    """Prepare a caller-selected coast grid in bounded blocks.
 
     Allocating a full island-sized 16m grid would create roughly 92 million
     boxes. Only coastal 512m blocks prepare their own small fine-grid batch.
@@ -240,11 +240,18 @@ def water_geometry(land, extent, shore: ShoreDistances, ox,oz,grid_spacing=512.0
     coastal = geometry.intersection(shore.belt)
     offshore = geometry.difference(shore.belt)
     points = _water_grid_points(offshore, extent, grid_spacing)
+    offshore_vertex_count = len(points)
     points.extend(_nearshore_grid_points(coastal, extent, coastal_spacing))
     if not points:
         return np.empty((0,4),dtype="<f4")
     points = np.asarray(points,dtype=np.float64)
     distances = shore.values(points)
+    # Polygon buffers approximate round joins with chords. A chord vertex can
+    # lie a fraction of a metre inside the true forty-metre distance, but its
+    # offshore triangle may span hundreds of metres. The offshore layer owns
+    # only deep colour; do not let that tiny buffer error stretch a coastal tint
+    # through a coarse offshore triangle.
+    distances[:offshore_vertex_count] = 40.0
     # Concave bays can have three shore vertices but deep water inside. Add an
     # interior sample there instead of colouring the whole bay as shoreline.
     triangles = points.reshape(-1,3,2)
@@ -309,7 +316,8 @@ def compile_coastline(pbf: Path, terrain_root: Path, output: Path, geography=Non
         heights = np.fromfile(terrain_root/overview["file"],dtype="<f4").reshape(overview["depth"],overview["width"])
         ox,oz,step = float(overview["origin_x"]),float(overview["origin_z"]),float(overview["spacing"])
         mask,partial,_ = classify_grid(land,heights,ox,oz,step)
-        water = water_geometry(land,box(ox,oz,ox+(heights.shape[1]-1)*step,oz+(heights.shape[0]-1)*step),shore,ox,oz)
+        water = water_geometry(land,box(ox,oz,ox+(heights.shape[1]-1)*step,oz+(heights.shape[0]-1)*step),shore,ox,oz,
+                               coastal_spacing=64.0)
         for key,values in (("mask",mask),("land",partial),("water",water)):
             filename = "overview_"+key+".bin"
             (staging/filename).write_bytes(values.tobytes())
@@ -330,7 +338,8 @@ def compile_coastline(pbf: Path, terrain_root: Path, output: Path, geography=Non
                 "mask_encoding":"uint8 row-major (resolution-1)^2: 0 water, 1 full land, 2 partial land",
                 "land_encoding":"little-endian float32, triangle-list local XYZ metres",
                 "water_encoding":"little-endian float32, triangle-list local X, sea Y=0, Z, shore distance clamped to 40m",
-                "water_mesh":{"offshore_grid_m":512.0,"coastal_grid_m":16.0,"coastal_belt_m":40.0},
+                "water_mesh":{"offshore_grid_m":512.0,"coastal_grid_m":16.0,
+                              "overview_coastal_grid_m":64.0,"coastal_belt_m":40.0},
                 "beach_encoding":"same XYZ terrain planes; no invented beach belt",
                 "tiles":entries,"overview":overview_files,"stats":stats,
                 "limitations":["OSM coastline and beach completeness require geographic validation","Visual shore-distance colour is not measured bathymetry","Copernicus DSM heights may include canopy/structures at the coast"]}

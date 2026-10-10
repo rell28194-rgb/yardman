@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from build_road_structures import compile_structures
+from build_road_structures import compile_structures, _clip_axis_to_tile
 
 
 def write_dataset(root: Path):
@@ -63,6 +63,7 @@ def write_dataset(root: Path):
     (root / "tile_0_0.json").write_text(json.dumps(tile))
     manifest = {
         "format": 3,
+        "tile_size": 128.0,
         "graph": {"nodes": 6, "edges": 3},
         "tiles": [{"x": 0, "z": 0, "file": "tile_0_0.json", "segments": 5}],
     }
@@ -71,6 +72,32 @@ def write_dataset(root: Path):
 
 
 class RoadStructureTests(unittest.TestCase):
+    def test_cross_tile_tunnel_axis_keeps_exact_seam_elevation(self):
+        a, b = [4000.0, 30.0, 100.0], [4200.0, 50.0, 100.0]
+        left = _clip_axis_to_tile(a, b, 0, 0, 4096.0)
+        right = _clip_axis_to_tile(a, b, 1, 0, 4096.0)
+        self.assertEqual(left[1], right[0])
+        self.assertEqual(left[1], [4096.0, 39.6, 100.0])
+        self.assertLess(left[0][0], left[1][0])
+        self.assertLess(right[0][0], right[1][0])
+        self.assertNotEqual(left, right)
+
+    def test_ribbon_overlap_does_not_duplicate_outside_centerline(self):
+        self.assertIsNone(_clip_axis_to_tile(
+            [10.0, 4.0, 4098.0], [60.0, 8.0, 4098.0], 0, 0, 4096.0))
+
+    def test_axis_exactly_on_tile_boundary_has_one_owner(self):
+        a, b = [10.0, 4.0, 4096.0], [60.0, 8.0, 4096.0]
+        self.assertIsNone(_clip_axis_to_tile(a, b, 0, 0, 4096.0))
+        self.assertEqual(_clip_axis_to_tile(a, b, 0, 1, 4096.0), (a, b))
+
+    def test_negative_tile_and_diagonal_axis_clipping(self):
+        a, b = [-10.0, 4.0, -10.0], [10.0, 8.0, 10.0]
+        negative = _clip_axis_to_tile(a, b, -1, -1, 4096.0)
+        positive = _clip_axis_to_tile(a, b, 0, 0, 4096.0)
+        self.assertEqual(negative[1], [0.0, 6.0, 0.0])
+        self.assertEqual(negative[1], positive[0])
+
     def test_bridge_deck_removes_interior_dem_drape_and_keeps_abutments(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

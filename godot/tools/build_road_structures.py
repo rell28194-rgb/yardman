@@ -89,11 +89,41 @@ def _profile_y(start_y: float, end_y: float, start_station: float, end_station: 
     return start_y + (end_y - start_y) * t
 
 
+def _clip_axis_to_tile(a, b, tx: int, tz: int, tile_size: float):
+    """Keep one shell's centerline inside its owning tile, including seam Y.
+
+    A rendered ribbon fragment can occur in both neighboring tiles. Retaining
+    the full source axis in both duplicates walls/ceiling across the seam.
+    Interpolate XYZ on the same global segment so both clipped pieces agree.
+    """
+    t0, t1 = 0.0, 1.0
+    for coordinate, minimum in ((0, tx * tile_size), (2, tz * tile_size)):
+        maximum = minimum + tile_size
+        start, delta = float(a[coordinate]), float(b[coordinate]) - float(a[coordinate])
+        if abs(delta) < 1e-12:
+            if start < minimum - 1e-9 or start >= maximum - 1e-9:
+                return None
+            continue
+        first, last = (minimum - start) / delta, (maximum - start) / delta
+        if first > last:
+            first, last = last, first
+        t0, t1 = max(t0, first), min(t1, last)
+        if t1 - t0 <= 1e-9:
+            return None
+    return tuple([
+        round(float(a[index]) + (float(b[index]) - float(a[index])) * t, 6)
+        for index in range(3)
+    ] for t in (t0, t1))
+
+
 def compile_structures(roads_root: Path) -> dict:
     manifest_path = roads_root / "manifest.json"
     if not manifest_path.is_file():
         raise ValueError(f"Missing roads manifest: {manifest_path}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    tile_size = float(manifest["tile_size"])
+    if not math.isfinite(tile_size) or tile_size <= 0:
+        raise ValueError("Invalid structure tile size")
     edges, owners = _load_edges(roads_root)
 
     prior_summary = {}
@@ -213,14 +243,15 @@ def compile_structures(roads_root: Path) -> dict:
                 tunnel_tiles.add((tx, tz))
                 if 0 <= segment_index < len(profile) - 1:
                     a, b = profile[segment_index], profile[segment_index + 1]
-                    compact_tunnels[(edge_id, segment_index)] = {
-                        "edge_id": edge_id,
-                        "segment_index": segment_index,
-                        "a": [a[0], a[1], a[2]],
-                        "b": [b[0], b[1], b[2]],
-                        "width_m": float(segment[4]),
-                        "layer": _layer(edges[edge_id]),
-                    }
+                    clipped = _clip_axis_to_tile(a, b, tx, tz, tile_size)
+                    if clipped is not None:
+                        compact_tunnels[(edge_id, segment_index)] = {
+                            "edge_id": edge_id,
+                            "segment_index": segment_index,
+                            "a": clipped[0], "b": clipped[1],
+                            "width_m": float(segment[4]),
+                            "layer": _layer(edges[edge_id]),
+                        }
             changed = True
         if changed:
             path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
