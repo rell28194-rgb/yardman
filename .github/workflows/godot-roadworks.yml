@@ -1,0 +1,48 @@
+name: Yardman Jamaica roadworks metadata
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - 'godot/tools/build_roadworks.py'
+      - 'godot/tests/test_roadworks.py'
+      - '.github/workflows/godot-roadworks.yml'
+  workflow_dispatch:
+
+jobs:
+  compile-roadworks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install geodata dependencies
+        run: python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4' 'osmium>=4,<5'
+      - name: Test visual-only roadwork compiler
+        run: python -m unittest godot/tests/test_roadworks.py -v
+      - name: Compile current Jamaica OSM roadwork metadata
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p godot/build
+          wget -q https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf -O /tmp/jamaica.osm.pbf
+          python godot/tools/build_roadworks.py /tmp/jamaica.osm.pbf godot/build/roadworks --tile-size 4096 | tee godot/build/roadworks.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('godot/build/roadworks/manifest.json')
+          m = json.loads(p.read_text())
+          s = m['stats']
+          assert s['features'] >= 0 and s['source_segments'] >= 0 and s['tile_pieces'] >= 0
+          assert m['purpose'] == 'visual-only OSM-tagged roadworks; never navigation authority'
+          print('ROADWORK_COUNTS', json.dumps(s, sort_keys=True))
+          PY
+      - name: Retain roadwork evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Jamaica-Roadworks-Metadata
+          path: |
+            godot/build/roadworks/
+            godot/build/roadworks.log
+          if-no-files-found: error
+          retention-days: 14
