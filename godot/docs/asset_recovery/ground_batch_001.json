@@ -1,0 +1,37 @@
+{
+  "format_version": 1,
+  "library": "beta1",
+  "batch": "ground-001-source-brightness",
+  "source_parent": "d16c3b5ec64abfb696a10240d7c036e142725ab7",
+  "change": "Remove extra 1.30 grass gain; source textures, regional blend, metre UV mapping, normals and geography unchanged",
+  "source_files_sha256": {
+    "godot/shaders/terrain_surface.gdshader": "fa5116adee2c884cca61a3658cd4e89ff8688bc2c4364aaa62a5b4451ae5d467",
+    "godot/tests/terrain_reference_render_test.gd": "6fffb9c8577d87e44ffe4aa13cd13de2284e3dff114dc415d942464d0732b98a"
+  },
+  "render": {
+    "engine": "Godot 4.7.2 GL Compatibility Mesa llvmpipe",
+    "lighting": "Actual WorldVisuals daylight10; same source grass for wet/dry isolation and StandardMaterial control",
+    "samples_per_plane": 625,
+    "baseline_brightness_ratio": 1.2927,
+    "corrected_brightness_ratio": 1.0044,
+    "allowed_ratio": [
+      0.7,
+      1.18
+    ],
+    "baseline": "FAIL expected: extra gain",
+    "corrected": "PASS",
+    "captures": [
+      {
+        "name": "terrain-before",
+        "bytes": 557752,
+        "sha256": "43f07b823873ef0e70a297ed71a87e6ece202d5f1111bb68f3adf998feaa4714"
+      },
+      {
+        "name": "terrain-after",
+        "bytes": 551332,
+        "sha256": "639e38fe137ebe6507d5625188388f4426adec183408ee7c83aadc6e3cae0c58"
+      }
+    ]
+  },
+  "scope": "Specific grass brightness translation repaired. Broader material, coastline and near-view terrain acceptance remains open; software GL is not Android performance proof."
+}

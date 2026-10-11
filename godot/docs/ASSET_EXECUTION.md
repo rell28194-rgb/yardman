@@ -33,6 +33,13 @@ plant against neutral ground; neighboring foliage cannot hide a brown crown.
 That accepts the specific atlas/alpha regression; close-view photographic
 leaf cards, broader family recovery and geographic placement remain open.
 
+The recovered grass brightness translation now has a paired actual-render gate:
+`terrain_reference_render_test.gd` compares the production shader against the
+same source texture under identical runtime lighting. Removing the extra 1.30
+gain changes the measured brightness ratio from 1.2927 (expected failure) to
+1.0044 (pass). `asset_recovery/ground_batch_001.json` identifies the batch and
+capture hashes. Broader terrain/material/coast acceptance remains open.
+
 ## Evidence ledger
 
 `asset_recovery/ledger.json` records sources, category coverage, family decisions,

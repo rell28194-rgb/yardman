@@ -63,7 +63,9 @@ void fragment() {
         vec3 dry_texture = texture(reference_dry_grass, p.yz / 8.0).rgb * blend.x
             + texture(reference_dry_grass, p.xz / 8.0).rgb * blend.y
             + texture(reference_dry_grass, p.xy / 8.0).rgb * blend.z;
-        grass = mix(wet, dry_texture, dry) * 1.30;
+        // Preserve recovered texture brightness. Extra gain here washed out
+        // ground colors under the runtime sun/ambient lighting.
+        grass = mix(wet, dry_texture, dry);
     }
     grass *= mix(0.73, 1.29, patch.r) * mix(0.84, 1.14, macro);
     vec3 soil = mix(vec3(0.30, 0.22, 0.12), vec3(0.53, 0.38, 0.24), patch.b);
