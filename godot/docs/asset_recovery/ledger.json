@@ -145,9 +145,12 @@
             "beta/carx-highway-mod_1.75.9-an1.com.7z.020",
             "beta/carx-highway-mod_1.75.9-an1.com.7z.021"
           ],
-          "state": "pending",
-          "note": "nested_7z_inventory_pending",
-          "evidence": {},
+          "state": "inventoried",
+          "note": "Complete all-type APK static inventory and FMOD bank index; decoding/classification/useful integration remain open",
+          "evidence": {
+            "inventory": "Private inventory v6:1284 APK members CRC/SHA checked,162374 objects/74 types,zero parse/metadata/hash errors;44FMOD banks/40FSB containers/417samples indexed. One four-byte engine class semantically unresolved. Bounded architecture20-object snapshot preserved, notacceptednearart.",
+            "hashes": "APK746147491bytes SHA2568e35189a162c6d6679d76a07a052e9cd7dce99705f52e5ae5ff9fcedd1877f31; full nested split/member/object hashes retained privately."
+          },
           "classification": {}
         },
         {
@@ -540,10 +543,10 @@
     "android_runtime": ""
   },
   "android_health": {
-    "source_commit": "d16c3b5ec64abfb696a10240d7c036e142725ab7",
-    "workflow_run": 38111712301,
+    "source_commit": "af4ae5b98aca05de7b68d2f0eaeebc590b7c1db9",
+    "workflow_run": 38129434933,
     "conclusion": "success",
     "scope": "public asset-absent fallback; internal testing; private quality and device performance not accepted",
-    "artifact_id": 11692273904
+    "artifact_id": 11698014313
   }
 }

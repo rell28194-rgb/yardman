@@ -45,6 +45,16 @@ gain changes the measured brightness ratio from 1.2927 (expected failure) to
 1.0044 (pass). `asset_recovery/ground_batch_001.json` identifies the batch and
 capture hashes. Broader terrain/material/coast acceptance remains open.
 
+The Highway APK full static pass enumerates 162,374 objects across 74 types;
+all 1,284 ZIP members were CRC/SHA checked. FMOD banks and 417 samples are
+indexed; decoding/listening and category/family acceptance remain open.
+The tested water shader adaptation is recorded in
+`asset_recovery/water_batch_001.json`: actual River source channels are
+inspected, repetitive highlights reduced, and clipped sea level/UV/rebase
+registration preserved. Real before/after national coast captures and a
+frozen-clock seam/rebase/source-detail test pass. Full water/material and
+Android performance acceptance remain open.
+
 ## Evidence ledger
 
 `asset_recovery/ledger.json` records sources, category coverage, family decisions,

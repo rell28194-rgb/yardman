@@ -1,0 +1,338 @@
+{
+  "format_version": 1,
+  "batch": "water_batch_001",
+  "library": "beta1",
+  "source_revision": "d16c3b5ec64abfb696a10240d7c036e142725ab7",
+  "state": "tested_shader_adaptation; full_water_and_material_acceptance_pending",
+  "source_analysis": {
+    "container_sha256": "3d378329f4583d90b706fb530f3995ede434de5e17515c39313d2428d2566aa6",
+    "objects": [
+      {
+        "path_id": 17,
+        "type": "Material",
+        "name": "Jap_River",
+        "object_sha256": "3be582861b407f099a01237d3ca8bd7c5810ef3448ec302f6056c7dffff052ae"
+      },
+      {
+        "path_id": 18,
+        "type": "Material",
+        "name": "Jap_RiverCreek",
+        "object_sha256": "0369860d332986b7420d110a54904b36be3c8bd591c1164b025935ea6c70afb5"
+      },
+      {
+        "path_id": 38,
+        "type": "Texture2D",
+        "name": "Jap_RiverCreek",
+        "object_sha256": "4bbda825241cc5a9b118707f45b8c36ec53945358b065030845b0b2c0e7a54e6",
+        "mode": "RGBA",
+        "extrema": [
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ],
+          [
+            255,
+            255
+          ]
+        ]
+      },
+      {
+        "path_id": 55,
+        "type": "Texture2D",
+        "name": "Jap_WaterFoam",
+        "object_sha256": "8a97646f2711e391ae322962241ec13f9bc469f99522142b5e6c910f7ca4136c",
+        "mode": "RGBA",
+        "extrema": [
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ],
+          [
+            255,
+            255
+          ]
+        ]
+      },
+      {
+        "path_id": 69,
+        "type": "Texture2D",
+        "name": "Jap_WaterPlain",
+        "object_sha256": "abdaac513373fdb3540ba8443fea13c2fdcb617600a0d1ae3de3b6eb1d68cc8e",
+        "mode": "RGBA",
+        "extrema": [
+          [
+            0,
+            170
+          ],
+          [
+            0,
+            179
+          ],
+          [
+            0,
+            165
+          ],
+          [
+            255,
+            255
+          ]
+        ]
+      },
+      {
+        "path_id": 3106,
+        "type": "Shader",
+        "name": "",
+        "object_sha256": "b41ad426cc3906a8f476e00899073e01c49afbe22be32be8986fd4668075da93"
+      }
+    ],
+    "shader_semantics": {
+      "name": "Next/Environment/River",
+      "source": "actual compiled GLES variant and material bytes; UnityPy shader export is not a valid shader file",
+      "main_rgb": "MainRGB + FoamRGB * vertexB",
+      "alpha": "vertexG + FoamR",
+      "darken": "litRGB * (1-vertexR)",
+      "flow": "UV + vec2(0,WaterTime/FoamTime)*ST.xy + ST.zw",
+      "ST_note": "Compiled source ST scales the animated time term; it does not multiply base UV",
+      "texture_alpha": "All five inspected Jap_WaterPlain, Jap_WaterFoam, Jap_RiverCreek, waterPlain, waterFoam decode A255; colour detail/foam, not normal maps"
+    },
+    "adaptation": {
+      "channels": "Yardman COLOR.r is shore distance /40 metres; G/B=0. Keep opaque clipped sea geometry and distance-driven surf; source vertex semantics would darken all offshore water and discard meaningful opacity",
+      "bindings": "Canonical water_surface.png and water_foam.png decoded pixels exactly match sharedassets17 texture64/108",
+      "procedural": "Analytic irregular height gradients perturb normals only, with derivative filtering; source colour texture contributes luminance, foam red contributes surf strength",
+      "limits": [
+        "This is a Godot ocean adaptation, not pixel-identical reproduction of authored river vertex paint",
+        "RiverCreek texture is baked rocky ground; not a caustic map",
+        "Broader water family inventory and full material/visual acceptance remain open",
+        "Mesa software renderer only; no phone runtime/performance evidence"
+      ]
+    }
+  },
+  "changed_source": [
+    {
+      "filename": "water.gdshader",
+      "bytes": 4909,
+      "sha256": "786209faaf75007def6bfe970216962be2ebc0660ec26f64e70035eef7576e82"
+    },
+    {
+      "filename": "water_material_test.gd",
+      "bytes": 6159,
+      "sha256": "cee9b5365006c3cad8c2ee742bc44ec0acebb2ebd10da9457aaaf0701262d885"
+    }
+  ],
+  "geometry_unchanged": [
+    "canonical sea elevation",
+    "compiled clipped shoreline",
+    "national EPSG:3448 registration",
+    "world UVs",
+    "origin rebase",
+    "near/far streamed topology"
+  ],
+  "validation": {
+    "engine": "4.7.2.stable.official.ed1daf0bf",
+    "renderer": "OpenGL 4.5 Compatibility; Mesa llvmpipe LLVM20.1.2",
+    "python_coastline": {
+      "tests": 13,
+      "result": "PASS"
+    },
+    "godot_coastline": "PASS sea level, winding, registered UV, coastline attributes, no imaginary land",
+    "actual_national_coast_render": {
+      "result": "PASS",
+      "before_frames": 6,
+      "after_frames": 6,
+      "clock": "Private coast test clone compiles TIME literals to 0.0 in both shader variants; six additional animated baseline/candidate frames were also captured before final coefficient refinement",
+      "test_script": {
+        "filename": "coast_render_test.gd",
+        "bytes": 5793,
+        "sha256": "9db4a842ee520054be144219ac24e30b3cfc605233c8a84269864367a17e241f"
+      },
+      "locations": [
+        "Turtle Beach OSM59584393 at(-33049.639,-48530.022)",
+        "Seven Mile Beach OSM578136135 at(-163378.545,-37689.869)"
+      ],
+      "origin_rebase_m": [
+        768,
+        -512
+      ]
+    },
+    "actual_water_material_test": {
+      "result": "PASS",
+      "frames": 3,
+      "clock": "Test compiles shader clone with TIME=0.0 for stable rebase comparison",
+      "seam_uv_and_shore_channels": true,
+      "sea_elevation_m": 0,
+      "rebase_mean_rgb_difference": 2.191e-05,
+      "bound_source_detail_mean_rgb_difference": 0.00052184,
+      "fallback_rendered": true,
+      "reference_required": true,
+      "source_bound": true,
+      "scope": "private_source_and_fallback",
+      "robustness": "Absent/empty frame returns null and callers stop before pixel access; YARDMAN_REQUIRE_REFERENCE=1 requires bound source water surface"
+    },
+    "banding_descriptive_measurement": {
+      "metric": "Fraction of detrended luminance variance explained by horizontal row mean within offshore-only Seven Mile Beach ROI. Descriptive banding evidence, not a universal visual acceptance threshold. Quadratic screen-space luminance trend removed.",
+      "results": {
+        "before-fixed": {
+          "detrended_luma_std": 0.031297532704588835,
+          "horizontal_coherence": 0.06476741880515466,
+          "region": [
+            80,
+            344,
+            1180,
+            403
+          ]
+        },
+        "after-fixed": {
+          "detrended_luma_std": 0.011297461948985718,
+          "horizontal_coherence": 0.05608342255329337,
+          "region": [
+            80,
+            344,
+            1180,
+            403
+          ]
+        }
+      }
+    },
+    "captures": [
+      {
+        "filename": "seven-mile-beach-overview.png",
+        "bytes": 1002483,
+        "sha256": "9b6801c32a0ff1b1ba463fa692ddc33f736d2f92a92a1aee671834d4de363d03",
+        "variant": "before-fixed"
+      },
+      {
+        "filename": "seven-mile-beach-rebased.png",
+        "bytes": 555081,
+        "sha256": "d9841b02236d12bca001d4be7b68592809fad727b4ed5011354a4b915c0d55be",
+        "variant": "before-fixed"
+      },
+      {
+        "filename": "seven-mile-beach-shore.png",
+        "bytes": 554597,
+        "sha256": "8a0eb3f58df99843a6fa7de60d983fcd391a66bdb4af7783744cd7bc8bbe3001",
+        "variant": "before-fixed"
+      },
+      {
+        "filename": "turtle-beach-overview.png",
+        "bytes": 1475196,
+        "sha256": "b6575c64f6b85fd937bd918d30d35f047e596bacbe2519b2aa21a8e629252740",
+        "variant": "before-fixed"
+      },
+      {
+        "filename": "turtle-beach-rebased.png",
+        "bytes": 622844,
+        "sha256": "6a0259eb789295dbd7b4aa740e6906036ccfcc03682c6d4287a07cb5f8415f86",
+        "variant": "before-fixed"
+      },
+      {
+        "filename": "turtle-beach-shore.png",
+        "bytes": 622014,
+        "sha256": "fd16230255648ce83964ee2f9d127bfbc817f7afff43fa2e30f6f19b542457de",
+        "variant": "before-fixed"
+      },
+      {
+        "filename": "seven-mile-beach-overview.png",
+        "bytes": 1059619,
+        "sha256": "ffdbb33df0b21cb9b40d9e8364eb868a955a08165f1ab3f38bf6fb98139dbbdd",
+        "variant": "after-fixed"
+      },
+      {
+        "filename": "seven-mile-beach-rebased.png",
+        "bytes": 573273,
+        "sha256": "d653e3afccdadbf686a54bc157a12a221eb762bd4ab26aaf085b520541b92d6d",
+        "variant": "after-fixed"
+      },
+      {
+        "filename": "seven-mile-beach-shore.png",
+        "bytes": 572025,
+        "sha256": "6838bf6f58d6df6ecf568fab378ee3821d14ba98bd57bf51674b6baf396aaa8e",
+        "variant": "after-fixed"
+      },
+      {
+        "filename": "turtle-beach-overview.png",
+        "bytes": 1515571,
+        "sha256": "9cfa4c7ee9d9fd862f25b6fbf574211250d1f0eb8eb3e9de4e8f2d6c945afa5c",
+        "variant": "after-fixed"
+      },
+      {
+        "filename": "turtle-beach-rebased.png",
+        "bytes": 625158,
+        "sha256": "9b2774672e701b970695c3ae6ac79cb3d06b5208b5a83261a7d78d89301efc9d",
+        "variant": "after-fixed"
+      },
+      {
+        "filename": "turtle-beach-shore.png",
+        "bytes": 624009,
+        "sha256": "3cab87abbc956ed5b0797be54bdb0f1f4dd60c7ac117e7ee3cf26ece0d34bf57",
+        "variant": "after-fixed"
+      },
+      {
+        "filename": "water-after-rebase.png",
+        "bytes": 40472,
+        "sha256": "2778d253973ce00f311c47634a7545933c966668ebf26ff5f8acdde3de98924e",
+        "variant": "invariants"
+      },
+      {
+        "filename": "water-before-rebase.png",
+        "bytes": 40608,
+        "sha256": "2d4c321d02624461757d29c1022c1dcfcaad85d1b29e449ffd2d649510eb89c1",
+        "variant": "invariants"
+      },
+      {
+        "filename": "water-fallback.png",
+        "bytes": 32045,
+        "sha256": "31f6e82b866789821e5675dc24d210be8245809eada29d974e55f25e202dbc39",
+        "variant": "invariants"
+      }
+    ],
+    "logs": [
+      {
+        "filename": "before-fixed.log",
+        "bytes": 1179,
+        "sha256": "fa139faffe7805f807f28dd06bbc672a59e021b9a2783d67f362388c1c474e7f"
+      },
+      {
+        "filename": "after-fixed.log",
+        "bytes": 1179,
+        "sha256": "fa139faffe7805f807f28dd06bbc672a59e021b9a2783d67f362388c1c474e7f"
+      },
+      {
+        "filename": "invariants.log",
+        "bytes": 646,
+        "sha256": "8a31dc608fb4f42edadd9f3998c30e1603bfba3fcb7e23b0ff94e91455817751"
+      },
+      {
+        "filename": "coastline.log",
+        "bytes": 221,
+        "sha256": "8c9d18242d5f2228a1df82e4f2dfe601b7ba8b01b61c15530c30e12a18ce6577"
+      },
+      {
+        "filename": "python-coastline.log",
+        "bytes": 112,
+        "sha256": "7e0b548acd1fc1edc5febc82e5ad424d3606a77f851ebbb330e5081bcd2af075"
+      }
+    ]
+  },
+  "remaining": [
+    "Some directional long-wave structure remains as intentional wind wave motion; final water visual acceptance is not declared",
+    "Complete water-family category classification/recovery remains open",
+    "This isolated water pass does not accept bright terrain/beach/sedan materials visible in the scene",
+    "No physical Android device or mobile performance validation"
+  ]
+}
