@@ -7,6 +7,8 @@ import json
 import math
 import shutil
 import hashlib
+import subprocess
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict, Iterator, List, Sequence, Tuple
@@ -172,6 +174,14 @@ def main() -> int:
         from build_terrain import TerrainSampler
         sampler = TerrainSampler(args.terrain)
     manifest = compile_dataset(args.input_geojson, args.output_dir, args.tile_size, height_sampler=sampler)
+    # Work-zone geometry is visual metadata only. Build it beside the registered
+    # road graph so recovered cones/barriers can follow real OSM construction
+    # tags without making an under-construction way navigable.
+    roadwork_tool = Path(__file__).with_name("build_roadworks.py")
+    subprocess.run([
+        sys.executable, str(roadwork_tool), str(args.input_geojson),
+        str(args.output_dir / "roadworks"), "--tile-size", str(args.tile_size),
+    ], check=True)
     print(json.dumps(manifest["stats"], indent=2, sort_keys=True))
     print(f"Bounds (m): {manifest['bounds']}")
     print(f"Wrote {len(manifest['tiles'])} road tiles and persistent topology to {args.output_dir}")
