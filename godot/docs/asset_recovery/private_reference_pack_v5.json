@@ -3,8 +3,8 @@
   "checkpoint": "private-reference-pack-v5",
   "library_filename": "Yardman-Personal-Reference-Assets-001.zip",
   "library_id": "libfile_0b1b810f72988191851cebde3757c9d5",
-  "zip_bytes": 23477131,
-  "zip_sha256": "cdb16d4415fa29b467e183ca807d712fb3d2df0139c9dc354c963a92dd742c8f",
+  "zip_bytes": 23477362,
+  "zip_sha256": "db8506fa4cb72e5cdc24cc751302d52a3032437f4f279976f2ac6d2d06c28b27",
   "manifest": {
     "hashed_files": 97,
     "models": 18,
@@ -26,6 +26,9 @@
       "bones": 60,
       "materials": 1,
       "embedded_images": 1,
+      "source_root_translation_m": [0.0, -0.2784655506214231, 0.0],
+      "runtime_fit_offset_m": [0.91, 0.21, -0.187],
+      "runtime_transform_rule": "preserve recovered GLB root transform and add the measured fit offset",
       "runtime_role": "optional static seated occupant in the recovered right-hand-drive sedan"
     }
   },
