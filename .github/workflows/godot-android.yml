@@ -211,7 +211,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in road_surface road_structure_data coastline terrain_coast structural_spawn controls_hud vehicle visuals audio building_streamer reference_assets polish_integration; do
+          for TEST in road_surface road_structure_data coastline terrain_coast structural_spawn controls_hud vehicle visuals audio building_streamer reference_assets reference_foliage polish_integration; do
             timeout 300 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"
@@ -231,7 +231,7 @@ jobs:
           timeout 600 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --audio-driver Dummy --script res://tests/game_capture_test.gd 2>&1 | tee godot/build/captures.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/captures.log; then exit 1; fi
           grep -q 'YARDMAN_CAPTURE_TEST PASS' godot/build/captures.log
-          for TEST in controls_render coast_render; do
+          for TEST in controls_render coast_render reference_foliage_render; do
             timeout 600 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --audio-driver Dummy --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"

@@ -305,22 +305,28 @@
           "id": "carx_palms",
           "source_id": "carx_drift",
           "state": "validation_pending",
-          "note": "road_palm, palm_lod, palm_short, palm_curved; missing source alpha mask correction in progress",
-          "evidence": {}
+          "note": "Separate-alpha and neutral foliage tint corrected/imported/rendered in foliage_batch_001; close-view quality and broader family/placement acceptance remain open",
+          "evidence": {
+            "alpha_batch": "foliage_batch_001.json"
+          }
         },
         {
           "id": "carx_trees",
           "source_id": "carx_drift",
           "state": "validation_pending",
-          "note": "road_tree_near plus distant road_tree; atlas alpha and near-view quality acceptance open",
-          "evidence": {}
+          "note": "Separate-alpha and neutral foliage tint corrected/imported/rendered in foliage_batch_001; close-view quality and broader family/placement acceptance remain open",
+          "evidence": {
+            "alpha_batch": "foliage_batch_001.json"
+          }
         },
         {
           "id": "carx_bush_distant",
           "source_id": "carx_drift",
           "state": "validation_pending",
-          "note": "road_bush: source eight-vertex crossed cards, suitable only for distant LOD",
-          "evidence": {}
+          "note": "Separate-alpha and neutral foliage tint corrected/imported/rendered in foliage_batch_001; close-view quality and broader family/placement acceptance remain open",
+          "evidence": {
+            "alpha_batch": "foliage_batch_001.json"
+          }
         },
         {
           "id": "carx_bush_near_rejection",
@@ -486,8 +492,12 @@
     },
     {
       "id": "foliage_atlas_alpha",
-      "state": "pending",
-      "evidence": {},
+      "state": "resolved",
+      "evidence": {
+        "test": "reference_foliage_test.gd: all seven imported/baked GLBs; mixed opaque/transparent red-channel masks, depth scissor, source ST/UV0, unlit foliage, solid trunk winding; old v2 baseline failed 36 assertions",
+        "render_or_runtime": "Root canonical-path GL Compatibility capture: isolated palm 2064/tree 18654 green samples (>250), neutral ground, no other plants/car; six actual frames; runtime MultiMesh bake",
+        "batch": "foliage_batch_001.json exact model/source-test/capture SHA256; private Converter-Fix checkpoint"
+      },
       "library": "beta1"
     },
     {

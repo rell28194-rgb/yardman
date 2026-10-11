@@ -25,8 +25,13 @@ The private pack currently has 13 decoded GLBs plus surface media/audio. That
 count includes distant LODs and staged props, not 13 accepted gameplay systems.
 The bush is an eight-vertex crossed-card asset suitable for distant LOD; the
 same geometry cannot count as a detailed nearby shrub. Source foliage has a
-separate red-channel opacity mask which the initial exporter omitted. Its
-correction needs actual rendered acceptance, beyond import success.
+separate red-channel opacity mask which the initial exporter omitted. The
+seven-model correction now passes imported alpha/material/bake checks and six
+actual Compatibility captures. The close-up green checks isolate their target
+plant against neutral ground; neighboring foliage cannot hide a brown crown.
+`asset_recovery/foliage_batch_001.json` preserves the exact hashes and scope.
+That accepts the specific atlas/alpha regression; close-view photographic
+leaf cards, broader family recovery and geographic placement remain open.
 
 ## Evidence ledger
 

@@ -6,6 +6,7 @@ var car: CharacterBody3D
 var controller = VehicleScript.new()
 var reference_triangles := 0
 var reference_textured_surfaces := 0
+var reference_transparent_lens_surfaces := 0
 
 func _initialize() -> void:
     call_deferred("_run")
@@ -39,6 +40,9 @@ func _inspect_reference_meshes(node: Node) -> void:
             var material := instance.get_active_material(surface_index) as StandardMaterial3D
             if material != null and material.albedo_texture != null:
                 reference_textured_surfaces += 1
+            if material != null and material.resource_name.to_lower().contains("glass"):
+                reference_transparent_lens_surfaces += 1
+                _check(material.transparency in [BaseMaterial3D.TRANSPARENCY_ALPHA, BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS], "Reference glass/lens material became opaque or alpha-clipped")
     for child in node.get_children():
         _inspect_reference_meshes(child)
 
@@ -46,6 +50,7 @@ func _check_reference_model(scene: Node3D, collision: CollisionShape3D) -> void:
     _inspect_reference_meshes(controller.visual)
     _check(reference_triangles > 15000, "Reference sedan has been reduced to proxy geometry")
     _check(reference_textured_surfaces >= 4, "Source body/interior/tyre textures are not bound")
+    _check(reference_transparent_lens_surfaces >= 2, "Source window and headlamp lens surfaces are missing")
     var bounds: AABB = controller.visual.get("geometry_bounds")
     _check(bounds.size.x > 1.7 and bounds.size.x < 2.4 and bounds.size.z > 4.4 and bounds.size.z < 5.3, "Reference vehicle has incorrect metre-scale dimensions")
     _check(absf(controller.wheelbase_m - 2.673) < 0.08, "Driving wheelbase does not match the actual wheel pivots")

@@ -1,0 +1,166 @@
+{
+  "format_version": 1,
+  "library": "beta1",
+  "batch": "foliage-001-separate-alpha-neutral-tint",
+  "source_parent": "837d5f4b6e3f853b8ed9ef9aea6ea41284b7eb6f",
+  "source_files_sha256": {
+    "godot/tests/reference_foliage_test.gd": "bbadafdb3c7f1773b34359f312fc50d92dcdc8ebf87a81a39f7a488b6efab8e6",
+    "godot/tests/reference_foliage_render_test.gd": "bd70f2c2ef0436f40a1029268deb91b3482ddaa94218811e0a9f325c0deda3b4",
+    "godot/tests/vehicle_test.gd": "44034df26a579fb56d26e544d0a1f6cfc065c719360bd5e9a285372c58949496"
+  },
+  "private_proof": "Yardman-Beta1-Foliage-Converter-Fix.zip; libfile_3f8424f175e08191a237effe65d129c5; latest guarded save",
+  "changes": [
+    "Compose _AlphaTex red channel into RGBA for _SEPARATEALPHAMODE_R",
+    "Retain opaque/backface-culled trunk material and source _ColorMode",
+    "Preserve MainTex ST in UV0, preserve UV1 as a separate channel",
+    "Preserve source unlit foliage shader through KHR_materials_unlit",
+    "Retain source map placement removal, metre dimensions and base-at-zero normalization",
+    "Explicit foliage-only removal of the LA desert palette multiplier; source RGB, ST, red opacity mask and geometry unchanged; original _Color retained in material metadata"
+  ],
+  "models": [
+    {
+      "filename": "road_bush.glb",
+      "bytes": 443712,
+      "sha256": "a741bfd4b6cb21d5d18d95690b04e89e04190a6c7d153ab8c8b85a7ee02c1510",
+      "vertices": 8,
+      "triangles": 4,
+      "dimensions_m": [
+        1.372459112608628,
+        1.601360206188497,
+        1.5989458495365745
+      ],
+      "source": "bush03"
+    },
+    {
+      "filename": "road_palm.glb",
+      "bytes": 837196,
+      "sha256": "ce520ae58f498f00104e7dbd7ce1a41d1ff968ad8ea26713f979459d33fd0e9a",
+      "vertices": 283,
+      "triangles": 199,
+      "dimensions_m": [
+        4.192876100540161,
+        17.5751309104285,
+        4.351491781491238
+      ],
+      "source": "palmDarkLong"
+    },
+    {
+      "filename": "road_palm_curved.glb",
+      "bytes": 834624,
+      "sha256": "04e2726ea916b9a5775e7fd9a89c2c7a148eb8a274869204f89f74adea711393",
+      "vertices": 219,
+      "triangles": 171,
+      "dimensions_m": [
+        4.026536703109741,
+        7.1705454981456285,
+        4.814599663377715
+      ],
+      "source": "palmBrightShortCurve"
+    },
+    {
+      "filename": "road_palm_lod.glb",
+      "bytes": 448428,
+      "sha256": "d003baf34d0a286e88d5e5fc832e9620a9d2af47b468f12431a588dc87d71987",
+      "vertices": 124,
+      "triangles": 80,
+      "dimensions_m": [
+        4.192876100540161,
+        17.56770001547877,
+        4.351491900700507
+      ],
+      "source": "palmDarkLong"
+    },
+    {
+      "filename": "road_palm_short.glb",
+      "bytes": 831424,
+      "sha256": "4716885ad43a1a14ea32969dc8b4c51a3e93509bcd8d2924f20b71fb26bbc8e7",
+      "vertices": 158,
+      "triangles": 108,
+      "dimensions_m": [
+        4.026536703109741,
+        9.23737649437554,
+        4.394812415033617
+      ],
+      "source": "palmBrightShort"
+    },
+    {
+      "filename": "road_tree.glb",
+      "bytes": 446792,
+      "sha256": "49681feb4e967356faf7c333b71f20c12f5739f508f0a5e49c2194ac42f1323d",
+      "vertices": 88,
+      "triangles": 44,
+      "dimensions_m": [
+        3.587920665740967,
+        6.772591517758724,
+        5.604075938959323
+      ],
+      "source": "treeFirst"
+    },
+    {
+      "filename": "road_tree_near.glb",
+      "bytes": 834132,
+      "sha256": "b6b272440a6c6e570107bb599c14287eaf1ccc04fd6eda423a6f4958da7e87e4",
+      "vertices": 218,
+      "triangles": 136,
+      "dimensions_m": [
+        3.587920665740967,
+        6.772591517758724,
+        5.604075938959323
+      ],
+      "source": "treeFirst"
+    }
+  ],
+  "root_validation": {
+    "editor_import": "PASS; zero parser/script errors",
+    "reference_assets": "PASS; 70 exact-hash files, 31 mipmapped textures, active material bindings",
+    "reference_foliage": "PASS; all 7 models imported/baked, 14 leaf surfaces, 8 solid bark surfaces, 7 alpha images, 839 checked clockwise trunk triangles",
+    "vehicle": "PASS; 32067 triangles, 27 textured surfaces; transparent lenses; 126 km/h measured acceleration, brake/reverse/steer/grass/collision-residency freeze",
+    "renderer": "Godot 4.7.2 GL Compatibility / Mesa llvmpipe; actual frames, not an Android benchmark",
+    "isolated_green_samples": {
+      "road_palm_short.glb": 2064,
+      "road_tree_near.glb": 18654,
+      "threshold": 250,
+      "ground": "neutral grey",
+      "non_target_plants_and_vehicle": "hidden"
+    },
+    "captures": [
+      {
+        "name": "foliage-wide.png",
+        "sha256": "cea38822f5482fab9258bc3d4c63a12c2e6ede28285847c4767d14b639f7cc24",
+        "bytes": 78945
+      },
+      {
+        "name": "palm-alpha-detail.png",
+        "sha256": "d040db4361d282151eac90181a3be52fe6eae38fbb5e7d7416c38dac7ff8b80a",
+        "bytes": 86254
+      },
+      {
+        "name": "sedan-front.png",
+        "sha256": "882595f195b0e561a87bb0680705555a68c445e03817c9e6e53ed86435ea523e",
+        "bytes": 260079
+      },
+      {
+        "name": "sedan-rear.png",
+        "sha256": "845dd8e59f3edc10e14f2b2ae8e7657e85c881dcf8f96eeca3a511b0ffe40f9d",
+        "bytes": 126762
+      },
+      {
+        "name": "sedan-side.png",
+        "sha256": "57bf13411c7427d91f01acc55722d9ef43b9446c64151ce68269bd6b9916fdeb",
+        "bytes": 113637
+      },
+      {
+        "name": "tree-alpha-detail.png",
+        "sha256": "f29038c8de4d6e89541e15baee0da9dd7eb945c4f8d0a04795164ed2f618ae42",
+        "bytes": 281480
+      }
+    ]
+  },
+  "limits": [
+    "Source leaf-card geometry remains low fidelity at close range; category/near-art acceptance open",
+    "Four-triangle bush is distant LOD, rejected as detailed nearby replacement",
+    "Sedan fine dashed panel seams still under source shader investigation",
+    "Canonical private pack durable version 2 has not yet been replaced at this source checkpoint",
+    "No Android device launch or sustained performance evidence"
+  ]
+}
