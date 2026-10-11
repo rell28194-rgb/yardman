@@ -12,6 +12,7 @@ from validate_road_structures import validate_payloads
 def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = None,
              coast_manifest: Path | None = None, buildings_manifest: Path | None = None) -> dict:
     source = json.loads(source_manifest.read_text())
+    roadwork_proof = {"roadwork_features": 0, "roadwork_tiles": 0}
     with zipfile.ZipFile(apk) as archive:
         corrupt = archive.testzip()
         if corrupt:
@@ -27,6 +28,27 @@ def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = N
         for tile in manifest["tiles"]:
             if "assets/data/roads/" + tile["file"] not in names:
                 raise ValueError("A road tile was omitted from the APK")
+        roadwork_source_path = source_manifest.parent / "roadworks" / "manifest.json"
+        if roadwork_source_path.is_file():
+            roadwork_name = "assets/data/roads/roadworks/manifest.json"
+            if roadwork_name not in names:
+                raise ValueError("Packaged Jamaica roadwork metadata is missing")
+            expected_roadworks = json.loads(roadwork_source_path.read_text())
+            roadworks = json.loads(archive.read(roadwork_name))
+            if roadworks != expected_roadworks:
+                raise ValueError("Packaged roadwork metadata differs from compiled Jamaica source")
+            if roadworks.get("crs") != manifest.get("crs") or roadworks.get("source_sha256") != manifest.get("source_sha256"):
+                raise ValueError("Roadwork metadata source registration differs from roads")
+            if roadworks.get("purpose") != "visual-only OSM-tagged roadworks; never navigation authority":
+                raise ValueError("Roadwork metadata lost its visual-only authority boundary")
+            for tile in roadworks.get("tiles", []):
+                name = "assets/data/roads/roadworks/" + str(tile.get("file", ""))
+                if name not in names:
+                    raise ValueError("A Jamaica roadwork tile was omitted from the APK: " + name)
+            roadwork_proof = {
+                "roadwork_features": int(roadworks.get("stats", {}).get("features", 0)),
+                "roadwork_tiles": len(roadworks.get("tiles", [])),
+            }
         structure_proof = {}
         if manifest.get("structures"):
             def read_structure(relative):
@@ -118,7 +140,7 @@ def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = N
             "coast_tiles": len(coast["tiles"]) if coast_manifest else 0,
             "building_tiles": len(buildings["tiles"]) if buildings_manifest else 0,
             "graph_edges": source["stats"].get("graph_edges", 0), "abis": sorted(abis),
-            **structure_proof}
+            **roadwork_proof, **structure_proof}
 
 
 if __name__ == "__main__":
