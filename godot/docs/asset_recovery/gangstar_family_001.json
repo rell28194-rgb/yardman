@@ -1,0 +1,384 @@
+{
+  "format_version": 1,
+  "source_id": "gangstar4",
+  "owner_categories": [
+    "vehicles",
+    "vehicle_parts",
+    "road_surfaces",
+    "road_markings",
+    "barriers",
+    "signage",
+    "buildings",
+    "storefronts",
+    "street_furniture",
+    "vegetation",
+    "terrain_coastal",
+    "water",
+    "props",
+    "textures_materials",
+    "characters",
+    "animations",
+    "hud_ui",
+    "audio",
+    "vfx",
+    "shaders",
+    "reference_systems"
+  ],
+  "index_sha256": "4140d2c7a3b05d72491965107f94c181926fff2915fc69db991aac06502c3b0d",
+  "original_resource_records": 24305,
+  "provisional_name_groups": 19767,
+  "resource_formats": {
+    "Voxarch": 36,
+    "Localization_string_table": 221,
+    "unresolved_We l": 2,
+    "unresolved_\r\u0000\u0007\u0000": 1,
+    "KTX1": 11626,
+    "Gameloft_BRES": 3562,
+    "Havok_hkt": 303,
+    "SWF": 78,
+    "ZIP": 37,
+    "unresolved_MIhS": 11,
+    "Musepack_SV8": 6682,
+    "RIFF": 404,
+    "Vox_vehicle_audio": 88,
+    "Vox_audio": 62,
+    "unresolved_`id=": 435,
+    "JSON": 32,
+    "XML_or_markup_text": 21,
+    "unresolved_\u0001\u0000\u0000\u0000": 70,
+    "unresolved_\"<?x": 1,
+    "unresolved_": 64,
+    "TrueType": 6,
+    "unresolved_Prod": 2,
+    "unresolved_a": 1,
+    "TrueTypeCollection": 1,
+    "unresolved_loca": 1,
+    "unresolved_6211c063": 1,
+    "unresolved_b1000000": 1,
+    "Ogg": 1,
+    "unresolved_`!na": 1,
+    "unresolved_CcnK": 1,
+    "unresolved_voxa": 1,
+    "unresolved_20\r\n": 1,
+    "unresolved_\u0000\u0000\u0002\u0000": 8,
+    "unresolved_eyJh": 1,
+    "unresolved_8.6.": 1,
+    "text_or_nonstandard_json": 1,
+    "Gameloft_GLML_graph": 469,
+    "unresolved_grap": 1,
+    "unresolved_\u0002\u0000\u0000\u0000": 37,
+    "unresolved_\u0003\u0000\u0000\u0000": 17,
+    "unresolved_\t\u0000\u0000\u0000": 2,
+    "unresolved_\u0004\u0000\u0000\u0000": 5,
+    "unresolved_\u0011\u0000\u0000\u0000": 1,
+    "unresolved_+\u0000\u0000\u0000": 1,
+    "unresolved_\u0007\u0000\u0000\u0000": 3,
+    "unresolved_\u0005\u0000\u0000\u0000": 1,
+    "unresolved_\u000e\u0000\u0000\u0000": 1,
+    "unresolved_0\u0000\u0000\u0000": 1,
+    "unresolved_q\u0001\u0000\u0000": 1
+  },
+  "roles": {
+    "container_requires_member_dispositions": 73,
+    "media_requires_decode_and_suitability_validation": 19169,
+    "unresolved_format_or_support_resource": 729,
+    "model_or_animation_requires_semantic_parse": 3562,
+    "reference_system_not_direct_godot_resource": 772
+  },
+  "uncategorized_records": 2690,
+  "nested_zip_resources": 37,
+  "nested_zip_verified": 37,
+  "nested_zip_blocked": 0,
+  "nested_member_records": 1442,
+  "nested_format_counts": {
+    "unresolved": 150,
+    "KTX1": 2,
+    "GLSL_source": 560,
+    "text_resource": 38,
+    "Gameloft_BRES": 29,
+    "COLLADA_XML": 3,
+    "ZIP": 3,
+    "Havok_packfile_signature": 657
+  },
+  "nested_payload_sha256": "7f834d719fcd52739868cf1de5905b99d08f64f6ea75a90a60134cf869ad4bc9",
+  "categories": {
+    "vehicles": {
+      "candidate_records": 2710,
+      "candidate_name_groups": 2132,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "vehicle_parts": {
+      "candidate_records": 125,
+      "candidate_name_groups": 118,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "road_surfaces": {
+      "candidate_records": 77,
+      "candidate_name_groups": 53,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "road_markings": {
+      "candidate_records": 2,
+      "candidate_name_groups": 1,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "barriers": {
+      "candidate_records": 25,
+      "candidate_name_groups": 18,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "signage": {
+      "candidate_records": 42,
+      "candidate_name_groups": 34,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "buildings": {
+      "candidate_records": 911,
+      "candidate_name_groups": 439,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "storefronts": {
+      "candidate_records": 622,
+      "candidate_name_groups": 365,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "street_furniture": {
+      "candidate_records": 11,
+      "candidate_name_groups": 11,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "vegetation": {
+      "candidate_records": 155,
+      "candidate_name_groups": 135,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "terrain_coastal": {
+      "candidate_records": 312,
+      "candidate_name_groups": 283,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "water": {
+      "candidate_records": 209,
+      "candidate_name_groups": 185,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "props": {
+      "candidate_records": 1256,
+      "candidate_name_groups": 800,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "textures_materials": {
+      "candidate_records": 11731,
+      "candidate_name_groups": 7885,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "characters": {
+      "candidate_records": 2174,
+      "candidate_name_groups": 2059,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "animations": {
+      "candidate_records": 1042,
+      "candidate_name_groups": 948,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "hud_ui": {
+      "candidate_records": 4571,
+      "candidate_name_groups": 2269,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "audio": {
+      "candidate_records": 7304,
+      "candidate_name_groups": 7297,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "vfx": {
+      "candidate_records": 492,
+      "candidate_name_groups": 404,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "shaders": {
+      "candidate_records": 569,
+      "candidate_name_groups": 149,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    },
+    "reference_systems": {
+      "candidate_records": 1561,
+      "candidate_name_groups": 1089,
+      "extracted_families": 0,
+      "technical_validation": "pending per-family dependencies and payload semantics",
+      "visual_audio_validation": "pending",
+      "integration_status": "pending",
+      "review_complete": false,
+      "category_absence_proven": false,
+      "remaining_blockers": [
+        "Name/format classification is candidate evidence; parent/dependency closure and suitability remain open."
+      ]
+    }
+  },
+  "family_semantics_complete": false,
+  "accepted_families": 0,
+  "beta1_complete": false,
+  "beta2_allowed": false,
+  "acceptance_boundary": "Complete record accounting and exact nested CRC/SHA evidence are inventory only. Unknown objects remain explicit; no name match accepts/rejects an asset or proves a category absent."
+}

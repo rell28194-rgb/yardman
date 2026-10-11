@@ -10,7 +10,7 @@ import unittest
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from inspect_gangstar_resources import OWNER_CATEGORIES, audit, classify, decode_range, inspect_zip
+from inspect_gangstar_resources import OWNER_CATEGORIES, audit, classify, decode_range, format_of, inspect_zip
 
 
 def archive(members):
@@ -47,6 +47,12 @@ class GangstarResourceTests(unittest.TestCase):
         self.assertEqual(r["role"], "container_requires_member_dispositions")
         self.assertIn("buildings", r["candidate_categories"])
         self.assertEqual(len(OWNER_CATEGORIES), 21)
+
+    def test_nested_shader_and_collada_formats_keep_reference_role(self):
+        self.assertEqual(format_of(b"#version 100 es\nvoid main()", "Water_FS.glsl"), "GLSL_source")
+        self.assertEqual(format_of(b"<?xml version='1.0'?><COLLADA xmlns='url'>", "source.dae"), "COLLADA_XML")
+        self.assertEqual(classify("Water_FS.glsl", "GLSL_source")["role"], "reference_system_not_direct_godot_resource")
+        self.assertEqual(format_of(b"\xff\xff", "shader.glsl"), "unresolved")
 
     def test_olya_ranges_and_exact_sizes(self):
         body = b"BRESexample"

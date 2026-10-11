@@ -59,22 +59,35 @@ FORMAT_CATEGORIES = {
     "SWF": ["hud_ui"], "TrueType": ["hud_ui"], "TrueTypeCollection": ["hud_ui"],
     "Localization_string_table": ["hud_ui"],
     "Havok_hkt": ["reference_systems"], "Gameloft_GLML_graph": ["reference_systems"],
+    "Havok_packfile_signature": ["reference_systems"],
+    "GLSL_source": ["shaders"], "COLLADA_XML": ["reference_systems"],
 }
 MAX_MEMBER = 256 * 1024 * 1024
 MAX_ZIP_TOTAL = 2 * 1024 * 1024 * 1024
 MAX_ZIP_ENTRIES = 100000
 
 
-def format_of(head):
-    for magic, name in (
+def format_of(head, name=""):
+    for magic, format_name in (
         (b"BRES", "Gameloft_BRES"), (b"\xabKTX 11\xbb\r\n\x1a\n", "KTX1"),
         (b"PK\x03\x04", "ZIP"), (b"Voxarch", "Voxarch"),
         (b"MPCK", "Musepack_SV8"), (b"RIFF", "RIFF"), (b"OggS", "Ogg"),
         (b"Vxvs", "Vox_vehicle_audio"), (b"VoxN", "Vox_audio"),
         (b"\x1e\x0d\xb0\xca", "Havok_hkt"), (b"FWS", "SWF"),
+        (b"\x57\xe0\xe0\x57\x10\xc0\xc0\x10", "Havok_packfile_signature"),
     ):
         if head.startswith(magic):
-            return name
+            return format_name
+    if head.lstrip().startswith(b"<?xml") or head.lstrip().startswith(b"<COLLADA"):
+        return "COLLADA_XML" if b"COLLADA" in head else "XML_or_markup_text"
+    try:
+        head.decode("utf8")
+    except UnicodeDecodeError:
+        return "unresolved"
+    if name.lower().endswith(".glsl") and head.strip():
+        return "GLSL_source"
+    if name.lower().endswith((".txt", ".nfo")) and b"\0" not in head:
+        return "text_resource"
     return "unresolved"
 
 
@@ -94,7 +107,7 @@ def classify(name, fmt, container=""):
         role = "container_requires_member_dispositions"
     elif fmt == "Gameloft_BRES":
         role = "model_or_animation_requires_semantic_parse"
-    elif fmt in {"Havok_hkt", "Gameloft_GLML_graph"}:
+    elif fmt in {"Havok_hkt", "Gameloft_GLML_graph", "Havok_packfile_signature", "GLSL_source", "COLLADA_XML"}:
         role = "reference_system_not_direct_godot_resource"
     elif fmt in FORMAT_CATEGORIES:
         role = "media_requires_decode_and_suitability_validation"
@@ -192,7 +205,7 @@ def inspect_zip(data, parent, depth=0):
                             nested.write(blob)
                 if count != info.file_size:
                     raise ValueError("ZIP exact member size mismatch")
-                fmt = format_of(prefix)
+                fmt = format_of(prefix, info.filename)
                 row.update(state="crc_sha_verified", sha256=digest.hexdigest(), format=fmt,
                            first_64_bytes_hex=prefix.hex(), **classify(info.filename, fmt, parent))
                 if fmt == "ZIP":

@@ -1,0 +1,2255 @@
+{
+  "format_version": 1,
+  "ruleset_version": "unity-family-worklist-1",
+  "classifier": {
+    "path": "godot/tools/classify_unity_families.py",
+    "sha256": "a6d6f74b20801969bd3c8f2768d07f535a58258b85ce7e6ac34ebf53bae2e01d"
+  },
+  "scope": "Car Mechanic 21 and CarX Drift complete saved-object disposition pass; Beta 1 remains open",
+  "method": "Typed payload-role accounting plus provisional token clusters; no hierarchy or dependency assertions from names.",
+  "acceptance": "No recovered family accepted/rejected as content. No visual, audio, runtime or device acceptance is claimed.",
+  "owner_categories": [
+    "vehicles",
+    "vehicle_parts",
+    "road_surfaces",
+    "road_markings",
+    "barriers",
+    "signage",
+    "buildings",
+    "storefronts",
+    "street_furniture",
+    "vegetation",
+    "terrain_coastal",
+    "water",
+    "props",
+    "textures_materials",
+    "characters",
+    "animations",
+    "hud_ui",
+    "audio",
+    "vfx",
+    "shaders",
+    "reference_systems"
+  ],
+  "ledger_categories": [
+    "vehicles",
+    "vehicle_parts",
+    "road_surfaces",
+    "road_markings_barriers_signage",
+    "buildings",
+    "storefronts",
+    "street_furniture",
+    "vegetation",
+    "terrain_coastal",
+    "water",
+    "props",
+    "textures_materials",
+    "characters_animations",
+    "hud_ui",
+    "audio",
+    "vfx",
+    "shaders",
+    "reference_systems"
+  ],
+  "owner_to_ledger_category_map": {
+    "vehicles": "vehicles",
+    "vehicle_parts": "vehicle_parts",
+    "road_surfaces": "road_surfaces",
+    "road_markings": "road_markings_barriers_signage",
+    "barriers": "road_markings_barriers_signage",
+    "signage": "road_markings_barriers_signage",
+    "buildings": "buildings",
+    "storefronts": "storefronts",
+    "street_furniture": "street_furniture",
+    "vegetation": "vegetation",
+    "terrain_coastal": "terrain_coastal",
+    "water": "water",
+    "props": "props",
+    "textures_materials": "textures_materials",
+    "characters": "characters_animations",
+    "animations": "characters_animations",
+    "hud_ui": "hud_ui",
+    "audio": "audio",
+    "vfx": "vfx",
+    "shaders": "shaders",
+    "reference_systems": "reference_systems"
+  },
+  "sources": [
+    {
+      "format_version": 1,
+      "ruleset_version": "unity-family-worklist-1",
+      "source_id": "car_mechanic21",
+      "input_inventory_sha256": "f66e68cba768286085ec7c5a73142c3b2743fcf97bb7f4f8fdbd8ad093ac7349",
+      "input_summary_sha256": "000955cd3f4f0dcf60e43e0de168452e925ca1562b4d27a237362550076a3d20",
+      "classification_coverage": {
+        "input_records": 95834,
+        "records_dispositioned": 95834,
+        "unique_identities": 95834,
+        "all_static_records_dispositioned": true,
+        "type_accounting_reconciled": true,
+        "family_membership_reconciled": true,
+        "unassigned_records": 0,
+        "linked_family_classification_complete": false,
+        "integration_accepted": false
+      },
+      "payload_role_counts": {
+        "container_dependency_reference": 8,
+        "engine_builtin_reference": 157,
+        "engine_or_platform_system_reference": 19,
+        "material_translation_candidate": 335,
+        "recoverable_media_candidate": 3229,
+        "rig_or_controller_dependency": 9,
+        "runtime_generated_texture_reference": 2,
+        "scene_hierarchy_reference": 43454,
+        "script_or_data_reference": 18306,
+        "shader_reimplementation_reference": 139,
+        "source_environment_reference": 37,
+        "unlinked_animation_support": 25,
+        "unlinked_audio_support": 24,
+        "unlinked_physics_support": 4449,
+        "unlinked_renderer_support": 19015,
+        "unlinked_ui_support": 6518,
+        "unresolved_serialized_type": 1,
+        "vfx_reimplementation_reference": 107
+      },
+      "disposition_counts": {
+        "candidate_requires_dependencies_and_validation": 3141,
+        "support_or_reference_only": 25351,
+        "unlinked_hierarchy_or_component": 66918,
+        "unresolved_semantic_media": 423,
+        "unresolved_type_requires_parser_inspection": 1
+      },
+      "serialized_type_accounting": {
+        "AnimationClip": {
+          "input_objects": 13,
+          "classified_objects": 13,
+          "payload_role": "recoverable_media_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Animator": {
+          "input_objects": 25,
+          "classified_objects": 25,
+          "payload_role": "unlinked_animation_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "AnimatorController": {
+          "input_objects": 5,
+          "classified_objects": 5,
+          "payload_role": "rig_or_controller_dependency",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "AudioClip": {
+          "input_objects": 107,
+          "classified_objects": 107,
+          "payload_role": "recoverable_media_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "AudioListener": {
+          "input_objects": 9,
+          "classified_objects": 9,
+          "payload_role": "unlinked_audio_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "AudioManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "AudioMixerController": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "unlinked_audio_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "AudioMixerGroupController": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "unlinked_audio_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "AudioMixerSnapshotController": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "unlinked_audio_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "AudioSource": {
+          "input_objects": 12,
+          "classified_objects": 12,
+          "payload_role": "unlinked_audio_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Avatar": {
+          "input_objects": 4,
+          "classified_objects": 4,
+          "payload_role": "rig_or_controller_dependency",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "BoxCollider": {
+          "input_objects": 3740,
+          "classified_objects": 3740,
+          "payload_role": "unlinked_physics_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "BoxCollider2D": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "unlinked_physics_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "BuildSettings": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Camera": {
+          "input_objects": 22,
+          "classified_objects": 22,
+          "payload_role": "unlinked_renderer_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Canvas": {
+          "input_objects": 22,
+          "classified_objects": 22,
+          "payload_role": "unlinked_ui_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "CanvasGroup": {
+          "input_objects": 131,
+          "classified_objects": 131,
+          "payload_role": "unlinked_ui_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "CanvasRenderer": {
+          "input_objects": 6364,
+          "classified_objects": 6364,
+          "payload_role": "unlinked_ui_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "CapsuleCollider": {
+          "input_objects": 232,
+          "classified_objects": 232,
+          "payload_role": "unlinked_physics_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "ComputeShader": {
+          "input_objects": 11,
+          "classified_objects": 11,
+          "payload_role": "shader_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "ConfigurableJoint": {
+          "input_objects": 2,
+          "classified_objects": 2,
+          "payload_role": "unlinked_physics_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Cubemap": {
+          "input_objects": 7,
+          "classified_objects": 7,
+          "payload_role": "recoverable_media_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "DelayedCallManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Flare": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "vfx_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "FlareLayer": {
+          "input_objects": 3,
+          "classified_objects": 3,
+          "payload_role": "vfx_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Font": {
+          "input_objects": 8,
+          "classified_objects": 8,
+          "payload_role": "recoverable_media_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "GameObject": {
+          "input_objects": 21727,
+          "classified_objects": 21727,
+          "payload_role": "scene_hierarchy_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "GraphicsSettings": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "InputManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "LODGroup": {
+          "input_objects": 2,
+          "classified_objects": 2,
+          "payload_role": "unlinked_renderer_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "LensFlare": {
+          "input_objects": 5,
+          "classified_objects": 5,
+          "payload_role": "vfx_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Light": {
+          "input_objects": 257,
+          "classified_objects": 257,
+          "payload_role": "unlinked_renderer_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "LightProbes": {
+          "input_objects": 6,
+          "classified_objects": 6,
+          "payload_role": "source_environment_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "LightingSettings": {
+          "input_objects": 7,
+          "classified_objects": 7,
+          "payload_role": "source_environment_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "LightmapSettings": {
+          "input_objects": 7,
+          "classified_objects": 7,
+          "payload_role": "source_environment_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Material": {
+          "input_objects": 333,
+          "classified_objects": 333,
+          "payload_role": "material_translation_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Mesh": {
+          "input_objects": 836,
+          "classified_objects": 836,
+          "payload_role": "recoverable_media_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "MeshCollider": {
+          "input_objects": 393,
+          "classified_objects": 393,
+          "payload_role": "unlinked_physics_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "MeshFilter": {
+          "input_objects": 9763,
+          "classified_objects": 9763,
+          "payload_role": "unlinked_renderer_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "MeshRenderer": {
+          "input_objects": 8957,
+          "classified_objects": 8957,
+          "payload_role": "unlinked_renderer_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "MonoBehaviour": {
+          "input_objects": 15601,
+          "classified_objects": 15601,
+          "payload_role": "script_or_data_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "MonoManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "MonoScript": {
+          "input_objects": 2714,
+          "classified_objects": 2714,
+          "payload_role": "script_or_data_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "NavMeshProjectSettings": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "NavMeshSettings": {
+          "input_objects": 7,
+          "classified_objects": 7,
+          "payload_role": "source_environment_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "OcclusionCullingData": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "source_environment_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "OcclusionCullingSettings": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "source_environment_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "ParticleSystem": {
+          "input_objects": 48,
+          "classified_objects": 48,
+          "payload_role": "vfx_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "ParticleSystemRenderer": {
+          "input_objects": 48,
+          "classified_objects": 48,
+          "payload_role": "vfx_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "PhysicMaterial": {
+          "input_objects": 4,
+          "classified_objects": 4,
+          "payload_role": "material_translation_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Physics2DSettings": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "PhysicsManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "PlayerSettings": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "PreloadData": {
+          "input_objects": 8,
+          "classified_objects": 8,
+          "payload_role": "container_dependency_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Projector": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "vfx_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "QualitySettings": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "RectTransform": {
+          "input_objects": 7301,
+          "classified_objects": 7301,
+          "payload_role": "scene_hierarchy_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "ReflectionProbe": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "source_environment_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "RenderSettings": {
+          "input_objects": 7,
+          "classified_objects": 7,
+          "payload_role": "source_environment_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "RenderTexture": {
+          "input_objects": 2,
+          "classified_objects": 2,
+          "payload_role": "runtime_generated_texture_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "ResourceManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Rigidbody": {
+          "input_objects": 21,
+          "classified_objects": 21,
+          "payload_role": "unlinked_physics_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "RuntimeInitializeOnLoadManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "ScriptMapper": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Shader": {
+          "input_objects": 201,
+          "classified_objects": 201,
+          "payload_role": "shader_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "SkinnedMeshRenderer": {
+          "input_objects": 3,
+          "classified_objects": 3,
+          "payload_role": "unlinked_renderer_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Sprite": {
+          "input_objects": 1018,
+          "classified_objects": 1018,
+          "payload_role": "recoverable_media_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "SpriteRenderer": {
+          "input_objects": 10,
+          "classified_objects": 10,
+          "payload_role": "unlinked_renderer_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "StreamingManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "TagManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "TextAsset": {
+          "input_objects": 22,
+          "classified_objects": 22,
+          "payload_role": "script_or_data_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "TextMesh": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "unlinked_ui_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Texture2D": {
+          "input_objects": 1291,
+          "classified_objects": 1291,
+          "payload_role": "recoverable_media_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "TimeManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "TrailRenderer": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "vfx_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Transform": {
+          "input_objects": 14426,
+          "classified_objects": 14426,
+          "payload_role": "scene_hierarchy_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "UnityConnectSettings": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Unknown (655991488)": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "unresolved_serialized_type",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "VFXManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "VideoPlayer": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "unlinked_renderer_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "WheelCollider": {
+          "input_objects": 60,
+          "classified_objects": 60,
+          "payload_role": "unlinked_physics_support",
+          "note": "Builtin container identities override this type's role per record."
+        }
+      },
+      "semantic_cluster_count": 9544,
+      "candidate_media_cluster_count": 3242,
+      "semantic_group_counts": {
+        "ambience_footsteps_audio": 3,
+        "animations": 40,
+        "audio": 23,
+        "audio_purpose_unresolved": 8,
+        "barrier_fence_cone_components": 29,
+        "bench_bin_lamp_utility_candidates": 169,
+        "body_glass_interior_lights": 74,
+        "building_module_candidates": 110,
+        "character_or_crowd_candidates": 451,
+        "engine_builtin_reference": 13,
+        "engine_powertrain_components": 708,
+        "fasteners_generic_mechanical": 224,
+        "foliage_candidate_species_unverified": 1111,
+        "hud_ui": 6518,
+        "interface_actions_audio": 3,
+        "neutral_prop_candidates": 134,
+        "paint_line_arrow_components": 58,
+        "particle_effect_candidates": 101,
+        "possible_soundtrack_requires_listening_disposition": 2,
+        "recoverable_media_candidate": 423,
+        "reference_systems": 17744,
+        "road_paving_kerb_components": 154,
+        "rock_ground_sand_candidates": 6,
+        "scene_hierarchy_reference": 36845,
+        "shaders": 210,
+        "shop_garage_entrance_candidates": 40,
+        "sign_traffic_signal_candidates": 517,
+        "surface_contact_collision_audio": 7,
+        "suspension_brakes_steering": 544,
+        "textures_materials": 613,
+        "ui_icons_layout": 2891,
+        "ui_sprite_or_font_media": 1026,
+        "unlinked_physics_support": 4449,
+        "unlinked_renderer_support": 19015,
+        "unresolved_serialized_type": 1,
+        "vehicle_engine_mechanical_audio": 58,
+        "vehicle_roots_or_complete_meshes": 806,
+        "vfx": 107,
+        "water_surface_effect_candidates": 15,
+        "wheels_tyres_rims": 382,
+        "workshop_actions_audio": 26,
+        "workshop_grinder_polisher": 46,
+        "workshop_tools_lifts": 102,
+        "workshop_tyre_machines": 28
+      },
+      "candidate_media_semantic_group_counts": {
+        "ambience_footsteps_audio": 3,
+        "animations": 12,
+        "audio_purpose_unresolved": 8,
+        "barrier_fence_cone_components": 12,
+        "bench_bin_lamp_utility_candidates": 16,
+        "body_glass_interior_lights": 24,
+        "building_module_candidates": 40,
+        "character_or_crowd_candidates": 10,
+        "engine_powertrain_components": 259,
+        "fasteners_generic_mechanical": 35,
+        "foliage_candidate_species_unverified": 70,
+        "interface_actions_audio": 3,
+        "neutral_prop_candidates": 21,
+        "paint_line_arrow_components": 17,
+        "particle_effect_candidates": 17,
+        "possible_soundtrack_requires_listening_disposition": 2,
+        "recoverable_media_candidate": 423,
+        "road_paving_kerb_components": 32,
+        "rock_ground_sand_candidates": 3,
+        "shop_garage_entrance_candidates": 6,
+        "sign_traffic_signal_candidates": 11,
+        "surface_contact_collision_audio": 7,
+        "suspension_brakes_steering": 99,
+        "textures_materials": 593,
+        "ui_icons_layout": 333,
+        "ui_sprite_or_font_media": 1025,
+        "vehicle_engine_mechanical_audio": 58,
+        "vehicle_roots_or_complete_meshes": 209,
+        "water_surface_effect_candidates": 1,
+        "wheels_tyres_rims": 137,
+        "workshop_actions_audio": 26,
+        "workshop_grinder_polisher": 16,
+        "workshop_tools_lifts": 24,
+        "workshop_tyre_machines": 12
+      },
+      "metadata_screen_flag_counts": {
+        "height_nonpositive": 9,
+        "vertices_nonpositive": 305,
+        "width_nonpositive": 9
+      },
+      "world_context_flag_counts": {
+        "named_foreign_track_or_city_context": 9,
+        "scene_specific_environment_payload": 37,
+        "source_baked_lighting_or_minimap": 18,
+        "source_scene_combined_mesh": 13
+      },
+      "owner_category_matrix": {
+        "vehicles": {
+          "ledger_category": "vehicles",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 909,
+          "recoverable_media_candidates": 140,
+          "material_translation_candidates": 97,
+          "hierarchy_component_reference_objects": 582,
+          "other_reference_objects": 90,
+          "candidate_semantic_clusters": 213,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "vehicle_parts": {
+          "ledger_category": "vehicle_parts",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 2032,
+          "recoverable_media_candidates": 534,
+          "material_translation_candidates": 45,
+          "hierarchy_component_reference_objects": 1389,
+          "other_reference_objects": 64,
+          "candidate_semantic_clusters": 542,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "road_surfaces": {
+          "ledger_category": "road_surfaces",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 284,
+          "recoverable_media_candidates": 48,
+          "material_translation_candidates": 5,
+          "hierarchy_component_reference_objects": 193,
+          "other_reference_objects": 38,
+          "candidate_semantic_clusters": 52,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "road_markings": {
+          "ledger_category": "road_markings_barriers_signage",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 58,
+          "recoverable_media_candidates": 14,
+          "material_translation_candidates": 3,
+          "hierarchy_component_reference_objects": 39,
+          "other_reference_objects": 2,
+          "candidate_semantic_clusters": 17,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "barriers": {
+          "ledger_category": "road_markings_barriers_signage",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 32,
+          "recoverable_media_candidates": 9,
+          "material_translation_candidates": 4,
+          "hierarchy_component_reference_objects": 19,
+          "other_reference_objects": 0,
+          "candidate_semantic_clusters": 12,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "signage": {
+          "ledger_category": "road_markings_barriers_signage",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 518,
+          "recoverable_media_candidates": 11,
+          "material_translation_candidates": 0,
+          "hierarchy_component_reference_objects": 474,
+          "other_reference_objects": 33,
+          "candidate_semantic_clusters": 9,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "buildings": {
+          "ledger_category": "buildings",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 143,
+          "recoverable_media_candidates": 38,
+          "material_translation_candidates": 6,
+          "hierarchy_component_reference_objects": 46,
+          "other_reference_objects": 53,
+          "candidate_semantic_clusters": 44,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "storefronts": {
+          "ledger_category": "storefronts",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 62,
+          "recoverable_media_candidates": 10,
+          "material_translation_candidates": 1,
+          "hierarchy_component_reference_objects": 24,
+          "other_reference_objects": 27,
+          "candidate_semantic_clusters": 10,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "street_furniture": {
+          "ledger_category": "street_furniture",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 169,
+          "recoverable_media_candidates": 14,
+          "material_translation_candidates": 2,
+          "hierarchy_component_reference_objects": 153,
+          "other_reference_objects": 0,
+          "candidate_semantic_clusters": 13,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "vegetation": {
+          "ledger_category": "vegetation",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 1114,
+          "recoverable_media_candidates": 62,
+          "material_translation_candidates": 9,
+          "hierarchy_component_reference_objects": 1039,
+          "other_reference_objects": 4,
+          "candidate_semantic_clusters": 67,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "terrain_coastal": {
+          "ledger_category": "terrain_coastal",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 14,
+          "recoverable_media_candidates": 1,
+          "material_translation_candidates": 4,
+          "hierarchy_component_reference_objects": 6,
+          "other_reference_objects": 3,
+          "candidate_semantic_clusters": 5,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "water": {
+          "ledger_category": "water",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 15,
+          "recoverable_media_candidates": 0,
+          "material_translation_candidates": 1,
+          "hierarchy_component_reference_objects": 5,
+          "other_reference_objects": 9,
+          "candidate_semantic_clusters": 1,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "props": {
+          "ledger_category": "props",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 364,
+          "recoverable_media_candidates": 57,
+          "material_translation_candidates": 22,
+          "hierarchy_component_reference_objects": 210,
+          "other_reference_objects": 75,
+          "candidate_semantic_clusters": 79,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "textures_materials": {
+          "ledger_category": "textures_materials",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 1598,
+          "recoverable_media_candidates": 1261,
+          "material_translation_candidates": 335,
+          "hierarchy_component_reference_objects": 0,
+          "other_reference_objects": 2,
+          "candidate_semantic_clusters": 1488,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "characters": {
+          "ledger_category": "characters_animations",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 466,
+          "recoverable_media_candidates": 10,
+          "material_translation_candidates": 0,
+          "hierarchy_component_reference_objects": 438,
+          "other_reference_objects": 18,
+          "candidate_semantic_clusters": 10,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "animations": {
+          "ledger_category": "characters_animations",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 47,
+          "recoverable_media_candidates": 13,
+          "material_translation_candidates": 0,
+          "hierarchy_component_reference_objects": 25,
+          "other_reference_objects": 9,
+          "candidate_semantic_clusters": 9,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "hud_ui": {
+          "ledger_category": "hud_ui",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 10435,
+          "recoverable_media_candidates": 1347,
+          "material_translation_candidates": 11,
+          "hierarchy_component_reference_objects": 8702,
+          "other_reference_objects": 375,
+          "candidate_semantic_clusters": 1270,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "audio": {
+          "ledger_category": "audio",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 131,
+          "recoverable_media_candidates": 107,
+          "material_translation_candidates": 0,
+          "hierarchy_component_reference_objects": 24,
+          "other_reference_objects": 0,
+          "candidate_semantic_clusters": 107,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "vfx": {
+          "ledger_category": "vfx",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 222,
+          "recoverable_media_candidates": 16,
+          "material_translation_candidates": 9,
+          "hierarchy_component_reference_objects": 86,
+          "other_reference_objects": 111,
+          "candidate_semantic_clusters": 25,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "shaders": {
+          "ledger_category": "shaders",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 139,
+          "recoverable_media_candidates": 0,
+          "material_translation_candidates": 0,
+          "hierarchy_component_reference_objects": 0,
+          "other_reference_objects": 139,
+          "candidate_semantic_clusters": 0,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "reference_systems": {
+          "ledger_category": "reference_systems",
+          "inventory_records_evaluated": 95834,
+          "objects_with_type_or_name_hints": 18526,
+          "recoverable_media_candidates": 0,
+          "material_translation_candidates": 0,
+          "hierarchy_component_reference_objects": 0,
+          "other_reference_objects": 18526,
+          "candidate_semantic_clusters": 0,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        }
+      },
+      "owner_to_ledger_category_map": {
+        "vehicles": "vehicles",
+        "vehicle_parts": "vehicle_parts",
+        "road_surfaces": "road_surfaces",
+        "road_markings": "road_markings_barriers_signage",
+        "barriers": "road_markings_barriers_signage",
+        "signage": "road_markings_barriers_signage",
+        "buildings": "buildings",
+        "storefronts": "storefronts",
+        "street_furniture": "street_furniture",
+        "vegetation": "vegetation",
+        "terrain_coastal": "terrain_coastal",
+        "water": "water",
+        "props": "props",
+        "textures_materials": "textures_materials",
+        "characters": "characters_animations",
+        "animations": "characters_animations",
+        "hud_ui": "hud_ui",
+        "audio": "audio",
+        "vfx": "vfx",
+        "shaders": "shaders",
+        "reference_systems": "reference_systems"
+      },
+      "same_serialized_record_hash_groups": 590,
+      "duplicate_rejections": 0,
+      "recovered_families": 0,
+      "accepted_families": 0,
+      "content_rejections": [],
+      "policy_dispositions": [
+        {
+          "scope": "source scene/root/lighting/map layout payloads",
+          "decision": "hold for reference and component inspection",
+          "reason": "Owner requires registered Jamaica world data. Source layouts cannot substitute for Jamaica geography.",
+          "content_rejection_claim": false
+        },
+        {
+          "scope": "MonoBehaviour, MonoScript, TextAsset, engine/runtime objects",
+          "decision": "reference_only",
+          "reason": "Serialized Unity scripts/system data are not direct Godot media; asset pointers must be resolved independently.",
+          "content_rejection_claim": false
+        }
+      ],
+      "remaining_blockers": [
+        "Saved inventories omit GameObject component pointers, Transform parents/children and prefab roots.",
+        "Saved inventories omit mesh/material bindings, texture/stream pointers and external file IDs.",
+        "Serialized object SHA-256 covers its record bytes, not referenced texture/audio resource payload bytes.",
+        "Scalar vertex/index metadata does not validate topology, bounds, metre scale, orientation or normals.",
+        "Names only create worklist hints; neutrality, species, branding and location require content inspection.",
+        "No conversion, Compatibility capture, listening, runtime integration or Android-device test occurs in this pass."
+      ],
+      "raw_source_requirements": [
+        {
+          "path": "car-mechanic-21-mod_3.3.4-an1.com.apk",
+          "bytes": 398820998
+        }
+      ],
+      "private_artifacts": {
+        "classified_objects": {
+          "name": "classified-objects.ndjson.gz",
+          "sha256": "f2c82a630252087dcb0165e4241b597fc1c9e44d607c745b2946d787dac82d97"
+        },
+        "families": {
+          "name": "families.ndjson.gz",
+          "sha256": "be54d97bedeef0ee187f7b994b0fb11be18505ab13259751df79bdfd5d3ffd48"
+        },
+        "same_record_hash_groups": {
+          "name": "same-record-hash-groups.json",
+          "sha256": "239c18a1d2dfc35bcd4c240913100ad620c8b66034f5ff9bf32e3be2f4750f3b"
+        }
+      }
+    },
+    {
+      "format_version": 1,
+      "ruleset_version": "unity-family-worklist-1",
+      "source_id": "carx_drift_full",
+      "input_inventory_sha256": "55cf408a5d562fde876f1d758ddb5d18b586ef55d860f6f8be5692093828089d",
+      "input_summary_sha256": "2edd8e88adb23610cdf0a88eef069fa5bff8201b8416dda2713dc674320072e5",
+      "classification_coverage": {
+        "input_records": 247863,
+        "records_dispositioned": 247863,
+        "unique_identities": 247863,
+        "all_static_records_dispositioned": true,
+        "type_accounting_reconciled": true,
+        "family_membership_reconciled": true,
+        "unassigned_records": 0,
+        "linked_family_classification_complete": false,
+        "integration_accepted": false
+      },
+      "payload_role_counts": {
+        "container_dependency_reference": 32,
+        "engine_builtin_reference": 98,
+        "engine_or_platform_system_reference": 22,
+        "material_translation_candidate": 1708,
+        "recoverable_media_candidate": 12506,
+        "rig_or_controller_dependency": 14,
+        "scene_hierarchy_reference": 119970,
+        "script_or_data_reference": 32572,
+        "shader_reimplementation_reference": 84,
+        "source_environment_reference": 57,
+        "unlinked_animation_support": 477,
+        "unlinked_audio_support": 128,
+        "unlinked_physics_support": 21020,
+        "unlinked_renderer_support": 58702,
+        "unlinked_ui_support": 130,
+        "vfx_reimplementation_reference": 343
+      },
+      "disposition_counts": {
+        "candidate_requires_dependencies_and_validation": 9778,
+        "support_or_reference_only": 33957,
+        "unlinked_hierarchy_or_component": 199692,
+        "unresolved_semantic_media": 4413,
+        "unresolved_unnamed_media": 23
+      },
+      "serialized_type_accounting": {
+        "AnimationClip": {
+          "input_objects": 18,
+          "classified_objects": 18,
+          "payload_role": "recoverable_media_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Animator": {
+          "input_objects": 477,
+          "classified_objects": 477,
+          "payload_role": "unlinked_animation_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "AnimatorController": {
+          "input_objects": 12,
+          "classified_objects": 12,
+          "payload_role": "rig_or_controller_dependency",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "AssetBundle": {
+          "input_objects": 11,
+          "classified_objects": 11,
+          "payload_role": "container_dependency_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "AssetBundleManifest": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "container_dependency_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "AudioClip": {
+          "input_objects": 218,
+          "classified_objects": 218,
+          "payload_role": "recoverable_media_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "AudioListener": {
+          "input_objects": 2,
+          "classified_objects": 2,
+          "payload_role": "unlinked_audio_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "AudioManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "AudioSource": {
+          "input_objects": 126,
+          "classified_objects": 126,
+          "payload_role": "unlinked_audio_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Avatar": {
+          "input_objects": 2,
+          "classified_objects": 2,
+          "payload_role": "rig_or_controller_dependency",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "BoxCollider": {
+          "input_objects": 12689,
+          "classified_objects": 12689,
+          "payload_role": "unlinked_physics_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "BuildSettings": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "CGProgram": {
+          "input_objects": 2,
+          "classified_objects": 2,
+          "payload_role": "shader_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Camera": {
+          "input_objects": 30,
+          "classified_objects": 30,
+          "payload_role": "unlinked_renderer_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Canvas": {
+          "input_objects": 2,
+          "classified_objects": 2,
+          "payload_role": "unlinked_ui_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "CanvasRenderer": {
+          "input_objects": 127,
+          "classified_objects": 127,
+          "payload_role": "unlinked_ui_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "CapsuleCollider": {
+          "input_objects": 6976,
+          "classified_objects": 6976,
+          "payload_role": "unlinked_physics_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "CloudWebServicesManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "ComputeShader": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "shader_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "ConfigurableJoint": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "unlinked_physics_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "CrashReportManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Cubemap": {
+          "input_objects": 24,
+          "classified_objects": 24,
+          "payload_role": "recoverable_media_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "DelayedCallManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "FlareLayer": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "vfx_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Font": {
+          "input_objects": 5,
+          "classified_objects": 5,
+          "payload_role": "recoverable_media_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "GUIText": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "unlinked_ui_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "GameObject": {
+          "input_objects": 59985,
+          "classified_objects": 59985,
+          "payload_role": "scene_hierarchy_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "GraphicsSettings": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "InputManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "LODGroup": {
+          "input_objects": 7036,
+          "classified_objects": 7036,
+          "payload_role": "unlinked_renderer_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Light": {
+          "input_objects": 1232,
+          "classified_objects": 1232,
+          "payload_role": "unlinked_renderer_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "LightProbes": {
+          "input_objects": 14,
+          "classified_objects": 14,
+          "payload_role": "source_environment_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "LightmapSettings": {
+          "input_objects": 19,
+          "classified_objects": 19,
+          "payload_role": "source_environment_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "LineRenderer": {
+          "input_objects": 3,
+          "classified_objects": 3,
+          "payload_role": "vfx_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Material": {
+          "input_objects": 1689,
+          "classified_objects": 1689,
+          "payload_role": "material_translation_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Mesh": {
+          "input_objects": 9744,
+          "classified_objects": 9744,
+          "payload_role": "recoverable_media_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "MeshCollider": {
+          "input_objects": 462,
+          "classified_objects": 462,
+          "payload_role": "unlinked_physics_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "MeshFilter": {
+          "input_objects": 25204,
+          "classified_objects": 25204,
+          "payload_role": "unlinked_renderer_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "MeshRenderer": {
+          "input_objects": 25199,
+          "classified_objects": 25199,
+          "payload_role": "unlinked_renderer_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "MonoBehaviour": {
+          "input_objects": 29368,
+          "classified_objects": 29368,
+          "payload_role": "script_or_data_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "MonoManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "MonoScript": {
+          "input_objects": 2698,
+          "classified_objects": 2698,
+          "payload_role": "script_or_data_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "NavMeshProjectSettings": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "OcclusionArea": {
+          "input_objects": 5,
+          "classified_objects": 5,
+          "payload_role": "source_environment_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "ParticleSystem": {
+          "input_objects": 167,
+          "classified_objects": 167,
+          "payload_role": "vfx_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "ParticleSystemRenderer": {
+          "input_objects": 167,
+          "classified_objects": 167,
+          "payload_role": "vfx_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "PerformanceReportingManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "PhysicMaterial": {
+          "input_objects": 21,
+          "classified_objects": 21,
+          "payload_role": "material_translation_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Physics2DSettings": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "PhysicsManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "PlayerSettings": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "PreloadData": {
+          "input_objects": 20,
+          "classified_objects": 20,
+          "payload_role": "container_dependency_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Projector": {
+          "input_objects": 5,
+          "classified_objects": 5,
+          "payload_role": "vfx_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "QualitySettings": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "RectTransform": {
+          "input_objects": 163,
+          "classified_objects": 163,
+          "payload_role": "scene_hierarchy_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "RenderSettings": {
+          "input_objects": 19,
+          "classified_objects": 19,
+          "payload_role": "source_environment_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "ResourceManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Rigidbody": {
+          "input_objects": 847,
+          "classified_objects": 847,
+          "payload_role": "unlinked_physics_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "RuntimeInitializeOnLoadManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "ScriptMapper": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Shader": {
+          "input_objects": 115,
+          "classified_objects": 115,
+          "payload_role": "shader_reimplementation_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "SkinnedMeshRenderer": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "unlinked_renderer_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "SphereCollider": {
+          "input_objects": 45,
+          "classified_objects": 45,
+          "payload_role": "unlinked_physics_support",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Sprite": {
+          "input_objects": 7,
+          "classified_objects": 7,
+          "payload_role": "recoverable_media_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "StreamingManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "TagManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "TextAsset": {
+          "input_objects": 513,
+          "classified_objects": 513,
+          "payload_role": "script_or_data_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Texture2D": {
+          "input_objects": 2545,
+          "classified_objects": 2545,
+          "payload_role": "recoverable_media_candidate",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "TimeManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "Transform": {
+          "input_objects": 59822,
+          "classified_objects": 59822,
+          "payload_role": "scene_hierarchy_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "UnityAnalyticsManager": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        },
+        "UnityConnectSettings": {
+          "input_objects": 1,
+          "classified_objects": 1,
+          "payload_role": "engine_or_platform_system_reference",
+          "note": "Builtin container identities override this type's role per record."
+        }
+      },
+      "semantic_cluster_count": 42509,
+      "candidate_media_cluster_count": 13291,
+      "semantic_group_counts": {
+        "animations": 500,
+        "audio": 128,
+        "audio_purpose_unresolved": 30,
+        "barrier_fence_cone_components": 5453,
+        "bench_bin_lamp_utility_candidates": 3041,
+        "body_glass_interior_lights": 3182,
+        "building_module_candidates": 727,
+        "character_or_crowd_candidates": 1062,
+        "engine_builtin_reference": 13,
+        "engine_powertrain_components": 313,
+        "foliage_candidate_species_unverified": 9548,
+        "hud_ui": 130,
+        "interface_actions_audio": 13,
+        "neutral_prop_candidates": 2523,
+        "paint_line_arrow_components": 16,
+        "particle_effect_candidates": 145,
+        "possible_soundtrack_requires_listening_disposition": 3,
+        "recoverable_media_candidate": 4436,
+        "reference_systems": 31601,
+        "road_paving_kerb_components": 685,
+        "rock_ground_sand_candidates": 137,
+        "scene_hierarchy_reference": 87462,
+        "shaders": 118,
+        "shop_garage_entrance_candidates": 31,
+        "sign_traffic_signal_candidates": 1965,
+        "surface_contact_collision_audio": 38,
+        "suspension_brakes_steering": 651,
+        "textures_materials": 1383,
+        "ui_icons_layout": 4975,
+        "ui_sprite_or_font_media": 12,
+        "unlinked_physics_support": 21020,
+        "unlinked_renderer_support": 58702,
+        "vehicle_engine_mechanical_audio": 134,
+        "vehicle_roots_or_complete_meshes": 2900,
+        "vfx": 343,
+        "water_surface_effect_candidates": 46,
+        "wheels_tyres_rims": 4386,
+        "workshop_tools_lifts": 11
+      },
+      "candidate_media_semantic_group_counts": {
+        "animations": 18,
+        "audio_purpose_unresolved": 30,
+        "barrier_fence_cone_components": 175,
+        "bench_bin_lamp_utility_candidates": 35,
+        "body_glass_interior_lights": 1258,
+        "building_module_candidates": 210,
+        "character_or_crowd_candidates": 397,
+        "engine_powertrain_components": 8,
+        "foliage_candidate_species_unverified": 3074,
+        "interface_actions_audio": 13,
+        "neutral_prop_candidates": 78,
+        "paint_line_arrow_components": 13,
+        "particle_effect_candidates": 26,
+        "possible_soundtrack_requires_listening_disposition": 3,
+        "recoverable_media_candidate": 4436,
+        "road_paving_kerb_components": 240,
+        "rock_ground_sand_candidates": 74,
+        "shop_garage_entrance_candidates": 9,
+        "sign_traffic_signal_candidates": 101,
+        "surface_contact_collision_audio": 38,
+        "suspension_brakes_steering": 119,
+        "textures_materials": 1363,
+        "ui_icons_layout": 136,
+        "ui_sprite_or_font_media": 10,
+        "vehicle_engine_mechanical_audio": 134,
+        "vehicle_roots_or_complete_meshes": 863,
+        "water_surface_effect_candidates": 25,
+        "wheels_tyres_rims": 1324,
+        "workshop_tools_lifts": 4
+      },
+      "metadata_screen_flag_counts": {
+        "height_nonpositive": 5,
+        "width_nonpositive": 5
+      },
+      "world_context_flag_counts": {
+        "named_foreign_track_or_city_context": 709,
+        "scene_specific_environment_payload": 57,
+        "source_baked_lighting_or_minimap": 128,
+        "source_scene_combined_mesh": 19
+      },
+      "owner_category_matrix": {
+        "vehicles": {
+          "ledger_category": "vehicles",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 3723,
+          "recoverable_media_candidates": 674,
+          "material_translation_candidates": 817,
+          "hierarchy_component_reference_objects": 1737,
+          "other_reference_objects": 495,
+          "candidate_semantic_clusters": 1491,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "vehicle_parts": {
+          "ledger_category": "vehicle_parts",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 8564,
+          "recoverable_media_candidates": 1944,
+          "material_translation_candidates": 770,
+          "hierarchy_component_reference_objects": 5704,
+          "other_reference_objects": 146,
+          "candidate_semantic_clusters": 2695,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "road_surfaces": {
+          "ledger_category": "road_surfaces",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 740,
+          "recoverable_media_candidates": 216,
+          "material_translation_candidates": 44,
+          "hierarchy_component_reference_objects": 432,
+          "other_reference_objects": 48,
+          "candidate_semantic_clusters": 227,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "road_markings": {
+          "ledger_category": "road_markings_barriers_signage",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 16,
+          "recoverable_media_candidates": 8,
+          "material_translation_candidates": 5,
+          "hierarchy_component_reference_objects": 3,
+          "other_reference_objects": 0,
+          "candidate_semantic_clusters": 13,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "barriers": {
+          "ledger_category": "road_markings_barriers_signage",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 5453,
+          "recoverable_media_candidates": 158,
+          "material_translation_candidates": 17,
+          "hierarchy_component_reference_objects": 5278,
+          "other_reference_objects": 0,
+          "candidate_semantic_clusters": 128,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "signage": {
+          "ledger_category": "road_markings_barriers_signage",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 1974,
+          "recoverable_media_candidates": 92,
+          "material_translation_candidates": 9,
+          "hierarchy_component_reference_objects": 1852,
+          "other_reference_objects": 21,
+          "candidate_semantic_clusters": 66,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "buildings": {
+          "ledger_category": "buildings",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 755,
+          "recoverable_media_candidates": 180,
+          "material_translation_candidates": 40,
+          "hierarchy_component_reference_objects": 526,
+          "other_reference_objects": 9,
+          "candidate_semantic_clusters": 190,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "storefronts": {
+          "ledger_category": "storefronts",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 65,
+          "recoverable_media_candidates": 8,
+          "material_translation_candidates": 3,
+          "hierarchy_component_reference_objects": 31,
+          "other_reference_objects": 23,
+          "candidate_semantic_clusters": 11,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "street_furniture": {
+          "ledger_category": "street_furniture",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 3045,
+          "recoverable_media_candidates": 35,
+          "material_translation_candidates": 0,
+          "hierarchy_component_reference_objects": 3010,
+          "other_reference_objects": 0,
+          "candidate_semantic_clusters": 33,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "vegetation": {
+          "ledger_category": "vegetation",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 9566,
+          "recoverable_media_candidates": 3058,
+          "material_translation_candidates": 23,
+          "hierarchy_component_reference_objects": 6453,
+          "other_reference_objects": 32,
+          "candidate_semantic_clusters": 2826,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "terrain_coastal": {
+          "ledger_category": "terrain_coastal",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 174,
+          "recoverable_media_candidates": 66,
+          "material_translation_candidates": 30,
+          "hierarchy_component_reference_objects": 59,
+          "other_reference_objects": 19,
+          "candidate_semantic_clusters": 91,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "water": {
+          "ledger_category": "water",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 51,
+          "recoverable_media_candidates": 22,
+          "material_translation_candidates": 4,
+          "hierarchy_component_reference_objects": 24,
+          "other_reference_objects": 1,
+          "candidate_semantic_clusters": 26,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "props": {
+          "ledger_category": "props",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 4244,
+          "recoverable_media_candidates": 90,
+          "material_translation_candidates": 16,
+          "hierarchy_component_reference_objects": 4104,
+          "other_reference_objects": 34,
+          "candidate_semantic_clusters": 73,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "textures_materials": {
+          "ledger_category": "textures_materials",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 4237,
+          "recoverable_media_candidates": 2529,
+          "material_translation_candidates": 1708,
+          "hierarchy_component_reference_objects": 0,
+          "other_reference_objects": 0,
+          "candidate_semantic_clusters": 4216,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "characters": {
+          "ledger_category": "characters_animations",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 1223,
+          "recoverable_media_candidates": 453,
+          "material_translation_candidates": 9,
+          "hierarchy_component_reference_objects": 746,
+          "other_reference_objects": 15,
+          "candidate_semantic_clusters": 403,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "animations": {
+          "ledger_category": "characters_animations",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 509,
+          "recoverable_media_candidates": 18,
+          "material_translation_candidates": 0,
+          "hierarchy_component_reference_objects": 477,
+          "other_reference_objects": 14,
+          "candidate_semantic_clusters": 18,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "hud_ui": {
+          "ledger_category": "hud_ui",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 5117,
+          "recoverable_media_candidates": 123,
+          "material_translation_candidates": 23,
+          "hierarchy_component_reference_objects": 4589,
+          "other_reference_objects": 382,
+          "candidate_semantic_clusters": 146,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "audio": {
+          "ledger_category": "audio",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 346,
+          "recoverable_media_candidates": 218,
+          "material_translation_candidates": 0,
+          "hierarchy_component_reference_objects": 128,
+          "other_reference_objects": 0,
+          "candidate_semantic_clusters": 218,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "vfx": {
+          "ledger_category": "vfx",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 700,
+          "recoverable_media_candidates": 24,
+          "material_translation_candidates": 10,
+          "hierarchy_component_reference_objects": 306,
+          "other_reference_objects": 360,
+          "candidate_semantic_clusters": 34,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "shaders": {
+          "ledger_category": "shaders",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 84,
+          "recoverable_media_candidates": 0,
+          "material_translation_candidates": 0,
+          "hierarchy_component_reference_objects": 0,
+          "other_reference_objects": 84,
+          "candidate_semantic_clusters": 0,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        },
+        "reference_systems": {
+          "ledger_category": "reference_systems",
+          "inventory_records_evaluated": 247863,
+          "objects_with_type_or_name_hints": 32779,
+          "recoverable_media_candidates": 0,
+          "material_translation_candidates": 0,
+          "hierarchy_component_reference_objects": 0,
+          "other_reference_objects": 32779,
+          "candidate_semantic_clusters": 0,
+          "extracted_families": 0,
+          "technically_validated_families": 0,
+          "render_or_listening_validated_families": 0,
+          "integrated_families": 0,
+          "explicit_content_rejections": 0,
+          "disposition": "candidate_worklist_open",
+          "absence_confirmed": false,
+          "blockers": [
+            "Recover graph/stream dependencies from source containers; inspect content and complete applicable acceptance checks."
+          ]
+        }
+      },
+      "owner_to_ledger_category_map": {
+        "vehicles": "vehicles",
+        "vehicle_parts": "vehicle_parts",
+        "road_surfaces": "road_surfaces",
+        "road_markings": "road_markings_barriers_signage",
+        "barriers": "road_markings_barriers_signage",
+        "signage": "road_markings_barriers_signage",
+        "buildings": "buildings",
+        "storefronts": "storefronts",
+        "street_furniture": "street_furniture",
+        "vegetation": "vegetation",
+        "terrain_coastal": "terrain_coastal",
+        "water": "water",
+        "props": "props",
+        "textures_materials": "textures_materials",
+        "characters": "characters_animations",
+        "animations": "characters_animations",
+        "hud_ui": "hud_ui",
+        "audio": "audio",
+        "vfx": "vfx",
+        "shaders": "shaders",
+        "reference_systems": "reference_systems"
+      },
+      "same_serialized_record_hash_groups": 4839,
+      "duplicate_rejections": 0,
+      "recovered_families": 0,
+      "accepted_families": 0,
+      "content_rejections": [],
+      "policy_dispositions": [
+        {
+          "scope": "source scene/root/lighting/map layout payloads",
+          "decision": "hold for reference and component inspection",
+          "reason": "Owner requires registered Jamaica world data. Source layouts cannot substitute for Jamaica geography.",
+          "content_rejection_claim": false
+        },
+        {
+          "scope": "MonoBehaviour, MonoScript, TextAsset, engine/runtime objects",
+          "decision": "reference_only",
+          "reason": "Serialized Unity scripts/system data are not direct Godot media; asset pointers must be resolved independently.",
+          "content_rejection_claim": false
+        }
+      ],
+      "remaining_blockers": [
+        "Saved inventories omit GameObject component pointers, Transform parents/children and prefab roots.",
+        "Saved inventories omit mesh/material bindings, texture/stream pointers and external file IDs.",
+        "Serialized object SHA-256 covers its record bytes, not referenced texture/audio resource payload bytes.",
+        "Scalar vertex/index metadata does not validate topology, bounds, metre scale, orientation or normals.",
+        "Names only create worklist hints; neutrality, species, branding and location require content inspection.",
+        "No conversion, Compatibility capture, listening, runtime integration or Android-device test occurs in this pass."
+      ],
+      "raw_source_requirements": [
+        {
+          "path": "carx-drift-racing-mod_1.16.2-an1.com.apk",
+          "bytes": 34362197
+        },
+        {
+          "path": "main.279.com.CarXTech.CarXDriftRacingFull.obb",
+          "bytes": 514879734
+        }
+      ],
+      "private_artifacts": {
+        "classified_objects": {
+          "name": "classified-objects.ndjson.gz",
+          "sha256": "75cee48eb10f6e717c44c283d6f9d0b2c07ca33ce23a642132299e7519955443"
+        },
+        "families": {
+          "name": "families.ndjson.gz",
+          "sha256": "5e4e71516af5f894ecf7df0c9cd4b0f0a7dc346058fd316a52b595bf7be8ac14"
+        },
+        "same_record_hash_groups": {
+          "name": "same-record-hash-groups.json",
+          "sha256": "a7a5607c01bc34cb6cd0759a445b4c48a7ad112c92bd17dacb61674700bfc505"
+        }
+      }
+    }
+  ]
+}
