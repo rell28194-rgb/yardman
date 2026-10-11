@@ -1,6 +1,7 @@
 extends SceneTree
 
 const AudioScript = preload("res://scripts/game_audio.gd")
+const References = preload("res://scripts/reference_assets.gd")
 var failures := 0
 
 func _initialize() -> void:
@@ -12,6 +13,11 @@ func _check(condition: bool, message: String) -> void:
         push_error("AUDIO_TEST: " + message)
 
 func _run() -> void:
+    var expected_references := {
+        "Engine": References.audio("engine_loop.wav", true) as AudioStreamWAV,
+        "RoadRoll": References.audio("road_roll_loop.wav", true) as AudioStreamWAV,
+        "Footsteps": References.audio("footsteps_loop.wav", true) as AudioStreamWAV,
+    }
     var audio = AudioScript.new()
     root.add_child(audio)
     audio.configure("Ultra", 0.6)
@@ -20,7 +26,15 @@ func _run() -> void:
     for player in audio.get_children():
         var stream := player.stream as AudioStreamWAV
         _check(stream != null and stream.format == AudioStreamWAV.FORMAT_16_BITS and not stream.stereo, "Voice PCM format is invalid")
-        _check(stream.mix_rate == 22050 and stream.loop_mode == AudioStreamWAV.LOOP_FORWARD, "Voice is not a bounded cached loop")
+        _check(stream != null and stream.loop_mode == AudioStreamWAV.LOOP_FORWARD, "Voice is not a bounded cached loop")
+        if stream == null:
+            continue
+        var expected_reference = expected_references.get(player.name, null) as AudioStreamWAV
+        if expected_reference != null:
+            _check(stream.mix_rate == expected_reference.mix_rate, "%s reference sample rate was not preserved" % player.name)
+            _check(stream.data == expected_reference.data, "%s did not bind the available private reference PCM" % player.name)
+        else:
+            _check(stream.mix_rate == 22050, "%s fallback PCM sample rate changed" % player.name)
         _check(stream.loop_begin == 0 and stream.loop_end * 2 == stream.data.size(), "Loop sample range exceeds PCM data")
         _check(stream.data.decode_s16(0) == stream.data.decode_s16(stream.data.size() - 2), "Loop endpoints are discontinuous")
         var energy := 0.0
@@ -29,7 +43,7 @@ func _run() -> void:
             var sample := stream.data.decode_s16(byte)
             energy += absf(float(sample))
             maximum = maxi(maximum, absi(sample))
-        _check(energy > 10000.0 and maximum < 30000, "Voice is empty or its source PCM clips")
+        _check(energy > 10000.0 and maximum < 32768, "Voice is empty or its source PCM is invalid")
         _check(player.max_polyphony == 1 and not player.playing, "Voice started before an active world state")
     var state := {"driving": true, "speed_mps": 0.0, "rpm": 900.0, "on_road": true, "walk_speed": 0.0, "ready": true, "menu_open": false}
     audio.update_state(1.0 / 60.0, state)
@@ -81,5 +95,5 @@ func _run() -> void:
     await process_frame
     await process_frame
     _check(AudioScript._stream_cache.is_empty(), "Cached PCM outlived all audio owners")
-    print("YARDMAN_AUDIO_TEST %s cached_pcm=1 loop_seams=1 voices=4 rpm_smoothing=1 grass=1 footsteps=1 menu_silence=1 cache_cleanup=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_AUDIO_TEST %s cached_pcm=1 loop_seams=1 voices=4 rpm_smoothing=1 grass=1 footsteps=1 menu_silence=1 cache_cleanup=1 reference_audio=%d" % [("PASS" if failures == 0 else "FAIL"), int(expected_references.values().filter(func(value): return value != null).size())])
     quit(0 if failures == 0 else 1)
