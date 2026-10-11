@@ -110,6 +110,29 @@ class AssetMilestoneTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Beta 2 started before Beta 1"):
             validate(ledger)
 
+    def test_beta2_regression_blocks_its_acceptance_without_reopening_beta1(self):
+        ledger = finished_ledger()
+        ledger["libraries"]["beta2"]["started"] = True
+        ledger["regressions"].append({"id": "beta2_vehicle_normals", "library": "beta2", "state": "pending", "evidence": {}})
+        report = validate(ledger)
+        self.assertTrue(report["beta1_complete"])
+        self.assertTrue(report["beta2_allowed"])
+        self.assertFalse(report["beta2_complete"])
+        self.assertFalse(report["final_packaging_allowed"])
+        self.assertIn("regression/beta2_vehicle_normals: acceptance pending", report["beta2_blockers"])
+
+    def test_required_beta1_regression_cannot_be_reassigned_to_beta2(self):
+        ledger = finished_ledger()
+        next(r for r in ledger["regressions"] if r["id"] == "foliage_atlas_alpha")["library"] = "beta2"
+        with self.assertRaisesRegex(ValueError, "Required regression coverage"):
+            validate(ledger)
+
+    def test_unknown_regression_library_cannot_hide_unfinished_work(self):
+        ledger = finished_ledger()
+        ledger["regressions"].append({"id": "new_material", "library": "untracked", "state": "pending"})
+        with self.assertRaisesRegex(ValueError, "unknown library"):
+            validate(ledger)
+
     def test_beta2_is_an_independent_quality_pass_and_final_polish_is_required(self):
         ledger = finished_ledger()
         ledger["libraries"]["beta2"]["families"][0]["evidence"].pop("quality_comparison")

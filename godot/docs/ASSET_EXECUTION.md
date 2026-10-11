@@ -11,8 +11,12 @@ The complete Beta 1 outer header contains 42 entries and 40 independent streams,
 in 151 volumes totalling 3,793,615,057 bytes. Its libraries include Gangstar 4,
 Car Mechanic 21, CarX Drift, CarX Highway and a GTA 5 map archive. An empty
 Gangstar split-file entry is recorded separately. The nested CarX split archive
-is a duplicate candidate until its contents are compared. The old CarX model
-catalog covers only a subset of one source; it cannot certify Beta 1 completion.
+has been compared: its decoded APK matches the direct APK byte count and SHA-256,
+so the redundant copy is deliberately rejected. The full CarX APK/OBB static
+inventory now covers 247,863 objects across 72 serialized types, with zero
+parse, metadata or hash errors. Its eighteen-category family classification
+and useful-family recovery remain open. The old model-only catalog cannot
+certify Beta 1 completion.
 `asset_recovery/beta1_archive_index.json` records every outer member without
 committing any reference-game media. Inner inventories and useful-family
 recovery remain open. Beta 2 contents have not been inspected.
@@ -29,6 +33,11 @@ correction needs actual rendered acceptance, beyond import success.
 `asset_recovery/ledger.json` records sources, category coverage, family decisions,
 regressions and validation references. Do not manually set a completion flag;
 `tools/validate_asset_milestone.py` derives completion from those records.
+
+Regression records have a `library` scope, defaulting to `beta1` for older
+records. The seven original acceptance areas must stay in Beta 1. A regression
+introduced during the later Beta 2 pass blocks Beta 2 acceptance and terminal
+packaging without retroactively invalidating an already accepted transition.
 
 For each source, finish the inner container inventory across all object/resource
 types, retain source hashes and count every category. Give every category a

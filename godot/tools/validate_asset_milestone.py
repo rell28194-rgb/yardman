@@ -134,19 +134,24 @@ def validate(ledger):
         raise ValueError("Both libraries must be recorded")
     first = library_blockers(libraries["beta1"], "beta1")
     regressions = unique_by_id(ledger.get("regressions"), "regressions")
-    if not REGRESSIONS.issubset(regressions):
+    if not REGRESSIONS.issubset(regressions) or any(
+        regressions[key].get("library", "beta1") != "beta1" for key in REGRESSIONS
+    ):
         raise ValueError("Required regression coverage is missing")
-    unresolved = []
+    unresolved = {"beta1": [], "beta2": []}
     for regression_id, regression in regressions.items():
+        library = regression.get("library", "beta1")
+        if library not in unresolved:
+            raise ValueError(f"regression/{regression_id}: unknown library {library!r}")
         proof = regression.get("evidence", {})
         if regression.get("state") != "resolved" or any(
             not evidence(proof.get(key)) for key in ("test", "render_or_runtime", "batch")
         ):
-            unresolved.append(f"regression/{regression_id}: acceptance pending")
-    first += unresolved
+            unresolved[library].append(f"regression/{regression_id}: acceptance pending")
+    first += unresolved["beta1"]
     if libraries["beta2"].get("started") is True and first:
         raise ValueError("Beta 2 started before Beta 1 completion and regression acceptance")
-    second = library_blockers(libraries["beta2"], "beta2")
+    second = library_blockers(libraries["beta2"], "beta2") + unresolved["beta2"]
     polish = ledger.get("polish_acceptance", {})
     final = first + second
     if polish.get("complete") is not True or any(not evidence(polish.get(key)) for key in (

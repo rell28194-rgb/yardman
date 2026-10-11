@@ -95,9 +95,12 @@
             "beta/carx-drift-racing-mod_1.16.2-an1.com.apk",
             "beta/carx-drift-racing-obb_1.16.2-an1.com.zip"
           ],
-          "state": "pending",
-          "note": "all_type_inventory_pending",
-          "evidence": {},
+          "state": "inventoried",
+          "note": "Complete all-type APK/OBB object inventory; 18-category family classification and recovery remain open",
+          "evidence": {
+            "inventory": "Private Yardman-Beta1-Exhaustive-Inventory.zip v2: carx_drift_full-unity-summary.json and carx_drift_full-objects.ndjson.gz; 247863 objects, 72 types, zero parse/metadata/hash errors",
+            "hashes": "APK SHA256 854f523a867a625bb5459bd8e6ff0b8a447af85f457d3ff9376b5fb3999b5e4c; OBB SHA256 e7fbb1ad41464a8df96d041dd9a23780d3fc26cb266e8feb3ab0b106cf6201b3; per-object/container identity hashes retained privately"
+          },
           "classification": {}
         },
         {
@@ -106,9 +109,12 @@
             "beta/carx-drift-racing-mod_1.16.2-an1.com.7z.001",
             "beta/carx-drift-racing-mod_1.16.2-an1.com.7z.002"
           ],
-          "state": "pending",
+          "state": "rejected",
           "note": "deliberately_rejected_exact_duplicate",
-          "evidence": {},
+          "evidence": {
+            "inspection": "Private inventory v2 carx_drift-duplicate-verification.json: decoded direct and nested APK are both 34362197 bytes, SHA256 854f523a867a625bb5459bd8e6ff0b8a447af85f457d3ff9376b5fb3999b5e4c",
+            "reason": "Exact duplicate payload of the inventoried direct CarX APK; reject redundant archive copy, retain direct source and verified content comparison"
+          },
           "classification": {}
         },
         {
@@ -469,37 +475,44 @@
     {
       "id": "coast_placement",
       "state": "pending",
-      "evidence": {}
+      "evidence": {},
+      "library": "beta1"
     },
     {
       "id": "collision",
       "state": "pending",
-      "evidence": {}
+      "evidence": {},
+      "library": "beta1"
     },
     {
       "id": "foliage_atlas_alpha",
       "state": "pending",
-      "evidence": {}
+      "evidence": {},
+      "library": "beta1"
     },
     {
       "id": "material_translation",
       "state": "pending",
-      "evidence": {}
+      "evidence": {},
+      "library": "beta1"
     },
     {
       "id": "road_geometry",
       "state": "pending",
-      "evidence": {}
+      "evidence": {},
+      "library": "beta1"
     },
     {
       "id": "scale_orientation",
       "state": "pending",
-      "evidence": {}
+      "evidence": {},
+      "library": "beta1"
     },
     {
       "id": "sedan_triangles_lighting",
       "state": "pending",
-      "evidence": {}
+      "evidence": {},
+      "library": "beta1"
     }
   ],
   "polish_acceptance": {
@@ -510,9 +523,10 @@
     "android_runtime": ""
   },
   "android_health": {
-    "source_commit": "65637f1c4ac6fc5c6a3f5636cf69ca8faeafcda1",
-    "workflow_run": 38082474061,
+    "source_commit": "66425c8e77d0c16510529781a4250a39ef9aeebf",
+    "workflow_run": 38102749516,
     "conclusion": "success",
-    "scope": "public asset-absent fallback; internal testing; private quality and device performance not accepted"
+    "scope": "public asset-absent fallback; internal testing; private quality and device performance not accepted",
+    "artifact_id": 11688189395
   }
 }
