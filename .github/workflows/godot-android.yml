@@ -1,5 +1,9 @@
 name: Yardman Godot Android
 
+# Internal Android health and regression testing only. A successful export or
+# retained APK artifact does not complete asset recovery or authorize final
+# delivery; validate_asset_milestone.py records those separate acceptance gates.
+
 on:
   push:
     branches:
@@ -26,6 +30,11 @@ jobs:
           set -euxo pipefail
           python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4' 'osmium>=4,<5' 'numpy>=2,<3' 'rasterio>=1.4,<2' 'shapely>=2.1,<3'
           python -m unittest discover -s godot/tests -p 'test_*.py' -v
+
+          # Check ledger integrity and report pending recovery/acceptance work.
+          # No --require here: incomplete milestones still allow internal builds.
+          python godot/tools/validate_asset_milestone.py \
+            --output godot/build/asset_milestone_report.json
 
           wget -q \
             https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf \
@@ -228,7 +237,7 @@ jobs:
             grep -q 'PASS' "godot/build/${TEST}.log"
           done
 
-      - name: Export Yardman debug APK
+      - name: Export internal Yardman Android smoke APK
         shell: bash
         run: |
           set -euxo pipefail
@@ -246,13 +255,15 @@ jobs:
           python godot/tools/validate_apk.py godot/build/Yardman-Beta.apk godot/data/roads/manifest.json --terrain-manifest godot/data/terrain/manifest.json --coast-manifest godot/data/coast/manifest.json --buildings-manifest godot/data/buildings/manifest.json
           "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose godot/build/Yardman-Beta.apk
 
-      - name: Upload map QA and Yardman APK
+      - name: Retain internal map QA and Android test APK
         uses: actions/upload-artifact@v4
         with:
-          name: Yardman-Beta-Android
+          # This is a diagnostic/test package, not terminal APK delivery.
+          name: Yardman-Internal-Android
           path: |
             godot/build/Yardman-Beta.apk
             godot/build/Yardman-Beta.apk.sha256
+            godot/build/asset_milestone_report.json
             godot/data/roads/manifest.json
             godot/data/roads/topology_report.json
             godot/data/roads/structures.json
@@ -273,6 +284,7 @@ jobs:
           name: Yardman-Build-Diagnostics
           path: |
             godot/build/*.log
+            godot/build/asset_milestone_report.json
             godot/data/roads/manifest.json
             godot/data/roads/topology_report.json
             godot/data/roads/structures.json

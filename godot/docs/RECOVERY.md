@@ -1,5 +1,10 @@
 # Yardman execution checkpoints
 
+The latest owner directive is recorded in `AGENTS.md` and
+`godot/docs/ASSET_EXECUTION.md`. Exhaust and validate Beta 1 before opening
+Beta 2; then finish Beta 2 quality replacements and game polish before terminal
+APK packaging. Internal Android builds remain useful health checks throughout.
+
 The canonical continuation branch is `codex/godot-polish-002` in
 `rell28194-rgb/yardman`. The local scratch workspace has twice reverted to an
 older snapshot. A local commit or a completed agent badge is not a durable save
@@ -38,8 +43,11 @@ Import the private project once with Godot, run
 `python godot/tools/prepare_reference_assets.py`, and import again. This enables
 actual mipmaps on surface textures and keeps WAV loops as exact 16-bit PCM;
 Godot's defaults do not satisfy these requirements. Then run the headless and
-rendered regressions, export the personal APK with the saved recipe, inspect the
-package/resources/signature and save the result.
+rendered regressions and save the stable batch. Use the saved exporter recipe
+for internal Android validation when needed. Before terminal packaging, run
+`python godot/tools/validate_asset_milestone.py --require final_packaging`;
+an unfinished recovery ledger blocks final delivery. Inspect and preserve the
+package/resources/signature and test evidence for any internal export.
 
 Public CI intentionally tests the asset-absent fallback. The personal export
 must separately require and validate the reference media and car. Neither

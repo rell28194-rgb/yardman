@@ -1,5 +1,11 @@
 # Android build
 
+The current workflow produces internal test artifacts named
+`Yardman-Internal-Android`. Its asset milestone report keeps incomplete recovery
+visible without blocking internal compatibility checks. Final APK delivery is
+deferred until Beta 1 and Beta 2 recovery, integration and game polish pass the
+completion gates in `ASSET_EXECUTION.md`.
+
 The active workflow is `.github/workflows/godot-android.yml`, on `codex/godot-beta-001` and the current polish branch `codex/godot-polish-002`. Godot 4.7.2 stable / GL Compatibility exports a signed development APK for arm64-v8a, package `com.rell.yardman`. App-store publication is not a milestone.
 
 CI installs Python geodata dependencies, tests the compiler, obtains the national OSM PBF and public DEM, builds geographic tiles/graph, imports Godot, boots the main scene, runs streaming and gameplay tests, exports, validates packaged geographic resources and verifies signing. Script/import/export errors fail the job. APK, checksum, source manifests and diagnostic logs are retained as Actions artifacts.

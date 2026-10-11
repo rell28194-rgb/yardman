@@ -1,0 +1,518 @@
+{
+  "format_version": 1,
+  "authority": "Owner execution doctrine, 2026-10-11 UTC",
+  "libraries": {
+    "beta1": {
+      "started": true,
+      "outer_inventory_complete": true,
+      "inventory_evidence": "beta1_archive_index.json; full private 151-volume grounding and exact header checkpoint",
+      "archive_members": [
+        "beta",
+        "beta/Gangstar-4-OFFLINE-v8.6.1a-mod-apkvision.7z.001",
+        "beta/Gangstar-4-OFFLINE-v8.6.1a-mod-apkvision.apk",
+        "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.001",
+        "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.002",
+        "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.003",
+        "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.004",
+        "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.005",
+        "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.006",
+        "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.007",
+        "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.008",
+        "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.009",
+        "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.010",
+        "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.011",
+        "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.012",
+        "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.013",
+        "beta/carx-drift-racing-mod_1.16.2-an1.com.7z.001",
+        "beta/carx-drift-racing-mod_1.16.2-an1.com.7z.002",
+        "beta/carx-drift-racing-mod_1.16.2-an1.com.apk",
+        "beta/carx-drift-racing-obb_1.16.2-an1.com.zip",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.001",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.002",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.003",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.004",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.005",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.006",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.007",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.008",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.009",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.010",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.011",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.012",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.013",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.014",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.015",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.016",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.017",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.018",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.019",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.020",
+        "beta/carx-highway-mod_1.75.9-an1.com.7z.021",
+        "beta/map-gta-5.zip"
+      ],
+      "ignored_archive_members": [
+        {
+          "path": "beta",
+          "reason": "Outer wrapper directory, contains no media"
+        }
+      ],
+      "sources": [
+        {
+          "id": "gangstar4",
+          "members": [
+            "beta/Gangstar-4-OFFLINE-v8.6.1a-mod-apkvision.apk"
+          ],
+          "state": "pending",
+          "note": "inner_container_inventory_pending",
+          "evidence": {},
+          "classification": {}
+        },
+        {
+          "id": "car_mechanic21",
+          "members": [
+            "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.001",
+            "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.002",
+            "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.003",
+            "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.004",
+            "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.005",
+            "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.006",
+            "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.007",
+            "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.008",
+            "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.009",
+            "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.010",
+            "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.011",
+            "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.012",
+            "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.013"
+          ],
+          "state": "pending",
+          "note": "nested_7z_inventory_pending",
+          "evidence": {},
+          "classification": {}
+        },
+        {
+          "id": "carx_drift",
+          "members": [
+            "beta/carx-drift-racing-mod_1.16.2-an1.com.apk",
+            "beta/carx-drift-racing-obb_1.16.2-an1.com.zip"
+          ],
+          "state": "pending",
+          "note": "all_type_inventory_pending",
+          "evidence": {},
+          "classification": {}
+        },
+        {
+          "id": "carx_drift_nested_duplicate_candidate",
+          "members": [
+            "beta/carx-drift-racing-mod_1.16.2-an1.com.7z.001",
+            "beta/carx-drift-racing-mod_1.16.2-an1.com.7z.002"
+          ],
+          "state": "pending",
+          "note": "deliberately_rejected_exact_duplicate",
+          "evidence": {},
+          "classification": {}
+        },
+        {
+          "id": "carx_highway",
+          "members": [
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.001",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.002",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.003",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.004",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.005",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.006",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.007",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.008",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.009",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.010",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.011",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.012",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.013",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.014",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.015",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.016",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.017",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.018",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.019",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.020",
+            "beta/carx-highway-mod_1.75.9-an1.com.7z.021"
+          ],
+          "state": "pending",
+          "note": "nested_7z_inventory_pending",
+          "evidence": {},
+          "classification": {}
+        },
+        {
+          "id": "map_gta5",
+          "members": [
+            "beta/map-gta-5.zip"
+          ],
+          "state": "pending",
+          "note": "inner_container_inventory_pending",
+          "evidence": {},
+          "classification": {}
+        },
+        {
+          "id": "empty_gangstar_split",
+          "members": [
+            "beta/Gangstar-4-OFFLINE-v8.6.1a-mod-apkvision.7z.001"
+          ],
+          "state": "rejected",
+          "evidence": {
+            "inspection": "beta1_archive_index.json: source entry has zero uncompressed bytes and no packed stream",
+            "reason": "An empty split entry contains no recoverable assets. The actual Gangstar APK remains pending."
+          },
+          "classification": {}
+        }
+      ],
+      "categories": {
+        "vehicles": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": [
+            "carx_sedan"
+          ]
+        },
+        "vehicle_parts": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": [
+            "carx_sedan"
+          ]
+        },
+        "road_surfaces": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": [
+            "carx_surface_media"
+          ]
+        },
+        "road_markings_barriers_signage": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": [
+            "carx_road_props"
+          ]
+        },
+        "buildings": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": [
+            "carx_surface_media",
+            "carx_house_candidates"
+          ]
+        },
+        "storefronts": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": [
+            "carx_house_candidates"
+          ]
+        },
+        "street_furniture": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": [
+            "carx_street_furniture"
+          ]
+        },
+        "vegetation": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": [
+            "carx_palms",
+            "carx_trees",
+            "carx_bush_distant",
+            "carx_bush_near_rejection"
+          ]
+        },
+        "terrain_coastal": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": [
+            "carx_surface_media"
+          ]
+        },
+        "water": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": [
+            "carx_surface_media"
+          ]
+        },
+        "props": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": [
+            "carx_road_props",
+            "carx_street_furniture"
+          ]
+        },
+        "textures_materials": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": [
+            "carx_surface_media"
+          ]
+        },
+        "characters_animations": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "hud_ui": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "audio": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": [
+            "carx_audio"
+          ]
+        },
+        "vfx": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "shaders": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "reference_systems": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        }
+      },
+      "families": [
+        {
+          "id": "carx_sedan",
+          "source_id": "carx_drift",
+          "state": "validation_pending",
+          "note": "road_car.glb: actual 32,067-triangle Toyota family; lighting/triangle acceptance open",
+          "evidence": {}
+        },
+        {
+          "id": "carx_palms",
+          "source_id": "carx_drift",
+          "state": "validation_pending",
+          "note": "road_palm, palm_lod, palm_short, palm_curved; missing source alpha mask correction in progress",
+          "evidence": {}
+        },
+        {
+          "id": "carx_trees",
+          "source_id": "carx_drift",
+          "state": "validation_pending",
+          "note": "road_tree_near plus distant road_tree; atlas alpha and near-view quality acceptance open",
+          "evidence": {}
+        },
+        {
+          "id": "carx_bush_distant",
+          "source_id": "carx_drift",
+          "state": "validation_pending",
+          "note": "road_bush: source eight-vertex crossed cards, suitable only for distant LOD",
+          "evidence": {}
+        },
+        {
+          "id": "carx_bush_near_rejection",
+          "source_id": "carx_drift",
+          "state": "rejected",
+          "note": "Near shrub replacement is the same crossed-card source geometry",
+          "evidence": {
+            "inspection": "road_bush_near_provenance.json and source bush03: 8 vertices, 4 triangles; same crossed cards as distant bush",
+            "reason": "Reject as a detailed nearby shrub replacement; keep the separate distant-LOD recovery candidate."
+          }
+        },
+        {
+          "id": "carx_road_props",
+          "source_id": "carx_drift",
+          "state": "validation_pending",
+          "note": "concrete barrier and portable fence decoded; geographic placement and collision not accepted",
+          "evidence": {}
+        },
+        {
+          "id": "carx_street_furniture",
+          "source_id": "carx_drift",
+          "state": "validation_pending",
+          "note": "waste bin, metal cabinet and fire hydrant decoded; staged, not all active",
+          "evidence": {}
+        },
+        {
+          "id": "carx_surface_media",
+          "source_id": "carx_drift",
+          "state": "validation_pending",
+          "note": "Decoded surface textures are bound to shaders; coast/terrain quality acceptance remains open",
+          "evidence": {}
+        },
+        {
+          "id": "carx_audio",
+          "source_id": "carx_drift",
+          "state": "validation_pending",
+          "note": "Only selected runtime loops are active; other recovered samples are staged, listening/transition acceptance pending",
+          "evidence": {}
+        },
+        {
+          "id": "carx_house_candidates",
+          "source_id": "carx_drift",
+          "state": "pending",
+          "note": "Name inventory finds 102 candidate architectural families; hierarchy/material recovery and classification pending",
+          "evidence": {}
+        }
+      ]
+    },
+    "beta2": {
+      "started": false,
+      "outer_inventory_complete": false,
+      "inventory_evidence": "",
+      "archive_members": [],
+      "ignored_archive_members": [],
+      "sources": [],
+      "categories": {
+        "vehicles": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "vehicle_parts": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "road_surfaces": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "road_markings_barriers_signage": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "buildings": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "storefronts": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "street_furniture": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "vegetation": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "terrain_coastal": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "water": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "props": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "textures_materials": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "characters_animations": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "hud_ui": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "audio": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "vfx": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "shaders": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        },
+        "reference_systems": {
+          "reviewed": false,
+          "evidence": "",
+          "family_ids": []
+        }
+      },
+      "families": []
+    }
+  },
+  "regressions": [
+    {
+      "id": "coast_placement",
+      "state": "pending",
+      "evidence": {}
+    },
+    {
+      "id": "collision",
+      "state": "pending",
+      "evidence": {}
+    },
+    {
+      "id": "foliage_atlas_alpha",
+      "state": "pending",
+      "evidence": {}
+    },
+    {
+      "id": "material_translation",
+      "state": "pending",
+      "evidence": {}
+    },
+    {
+      "id": "road_geometry",
+      "state": "pending",
+      "evidence": {}
+    },
+    {
+      "id": "scale_orientation",
+      "state": "pending",
+      "evidence": {}
+    },
+    {
+      "id": "sedan_triangles_lighting",
+      "state": "pending",
+      "evidence": {}
+    }
+  ],
+  "polish_acceptance": {
+    "complete": false,
+    "game_render": "",
+    "controls_driving": "",
+    "world_coast_roads": "",
+    "android_runtime": ""
+  },
+  "android_health": {
+    "source_commit": "65637f1c4ac6fc5c6a3f5636cf69ca8faeafcda1",
+    "workflow_run": 38082474061,
+    "conclusion": "success",
+    "scope": "public asset-absent fallback; internal testing; private quality and device performance not accepted"
+  }
+}

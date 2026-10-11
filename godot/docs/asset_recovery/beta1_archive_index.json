@@ -1,0 +1,263 @@
+{
+  "format_version": 1,
+  "source_library": "Beta 1",
+  "archive_bytes": 3793615057,
+  "archive_file_count": 42,
+  "packed_stream_count": 40,
+  "archive_solid": false,
+  "inventory_checkpoint": "Yardman-Beta1-Exhaustive-Inventory.zip",
+  "entries": [
+    {
+      "path": "beta",
+      "bytes": 0,
+      "crc32": null,
+      "is_directory": true
+    },
+    {
+      "path": "beta/Gangstar-4-OFFLINE-v8.6.1a-mod-apkvision.7z.001",
+      "bytes": 0,
+      "crc32": null,
+      "is_directory": false
+    },
+    {
+      "path": "beta/Gangstar-4-OFFLINE-v8.6.1a-mod-apkvision.apk",
+      "bytes": 2940706434,
+      "crc32": 46581119,
+      "is_directory": false
+    },
+    {
+      "path": "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.001",
+      "bytes": 25165824,
+      "crc32": 3309538726,
+      "is_directory": false
+    },
+    {
+      "path": "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.002",
+      "bytes": 25165824,
+      "crc32": 1566409776,
+      "is_directory": false
+    },
+    {
+      "path": "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.003",
+      "bytes": 25165824,
+      "crc32": 2532026320,
+      "is_directory": false
+    },
+    {
+      "path": "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.004",
+      "bytes": 25165824,
+      "crc32": 4069774989,
+      "is_directory": false
+    },
+    {
+      "path": "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.005",
+      "bytes": 25165824,
+      "crc32": 1995435688,
+      "is_directory": false
+    },
+    {
+      "path": "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.006",
+      "bytes": 25165824,
+      "crc32": 3208259385,
+      "is_directory": false
+    },
+    {
+      "path": "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.007",
+      "bytes": 25165824,
+      "crc32": 3505678232,
+      "is_directory": false
+    },
+    {
+      "path": "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.008",
+      "bytes": 25165824,
+      "crc32": 825821563,
+      "is_directory": false
+    },
+    {
+      "path": "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.009",
+      "bytes": 25165824,
+      "crc32": 390372191,
+      "is_directory": false
+    },
+    {
+      "path": "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.010",
+      "bytes": 25165824,
+      "crc32": 720364606,
+      "is_directory": false
+    },
+    {
+      "path": "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.011",
+      "bytes": 25165824,
+      "crc32": 2581669111,
+      "is_directory": false
+    },
+    {
+      "path": "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.012",
+      "bytes": 25165824,
+      "crc32": 4274312165,
+      "is_directory": false
+    },
+    {
+      "path": "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.013",
+      "bytes": 2005416,
+      "crc32": 347567795,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-drift-racing-mod_1.16.2-an1.com.7z.001",
+      "bytes": 25165824,
+      "crc32": 3755950870,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-drift-racing-mod_1.16.2-an1.com.7z.002",
+      "bytes": 7907816,
+      "crc32": 1553294461,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-drift-racing-mod_1.16.2-an1.com.apk",
+      "bytes": 34362197,
+      "crc32": 3309110187,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-drift-racing-obb_1.16.2-an1.com.zip",
+      "bytes": 508690534,
+      "crc32": 14286783,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.001",
+      "bytes": 25165824,
+      "crc32": 3388055569,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.002",
+      "bytes": 25165824,
+      "crc32": 1298714428,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.003",
+      "bytes": 25165824,
+      "crc32": 1831571562,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.004",
+      "bytes": 25165824,
+      "crc32": 2600551487,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.005",
+      "bytes": 25165824,
+      "crc32": 939667356,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.006",
+      "bytes": 25165824,
+      "crc32": 3316278471,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.007",
+      "bytes": 25165824,
+      "crc32": 1881720680,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.008",
+      "bytes": 25165824,
+      "crc32": 1289058466,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.009",
+      "bytes": 25165824,
+      "crc32": 3978353577,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.010",
+      "bytes": 25165824,
+      "crc32": 2452299898,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.011",
+      "bytes": 25165824,
+      "crc32": 1270332429,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.012",
+      "bytes": 25165824,
+      "crc32": 2706842390,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.013",
+      "bytes": 25165824,
+      "crc32": 686966960,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.014",
+      "bytes": 25165824,
+      "crc32": 1702703443,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.015",
+      "bytes": 25165824,
+      "crc32": 3355245936,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.016",
+      "bytes": 25165824,
+      "crc32": 180624231,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.017",
+      "bytes": 25165824,
+      "crc32": 826196212,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.018",
+      "bytes": 25165824,
+      "crc32": 99355564,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.019",
+      "bytes": 25165824,
+      "crc32": 1429058005,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.020",
+      "bytes": 25165824,
+      "crc32": 3358226084,
+      "is_directory": false
+    },
+    {
+      "path": "beta/carx-highway-mod_1.75.9-an1.com.7z.021",
+      "bytes": 10539501,
+      "crc32": 2111135710,
+      "is_directory": false
+    },
+    {
+      "path": "beta/map-gta-5.zip",
+      "bytes": 85463224,
+      "crc32": 1403750785,
+      "is_directory": false
+    }
+  ]
+}
