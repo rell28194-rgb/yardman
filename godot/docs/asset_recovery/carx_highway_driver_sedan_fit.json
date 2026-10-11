@@ -1,0 +1,69 @@
+{
+  "format_version": 1,
+  "checkpoint": "carx-highway-driver-sedan-fit-001",
+  "source_apk_sha256": "8e35189a162c6d6679d76a07a052e9cd7dce99705f52e5ae5ff9fcedd1877f31",
+  "private_checkpoint": "Yardman-Beta1-Highway-Driver-Sedan-Fit.zip",
+  "driver": {
+    "private_filename": "road_driver_seated.glb",
+    "sha256": "6a44cfc1abf2a3ef7a44467ba81015db5167f3f84211e2e1c0cb4d9381782574",
+    "vertices": 3986,
+    "triangles": 6066,
+    "bones": 60,
+    "source_pose": "original recovered seated bone hierarchy",
+    "isolated_godot_compatibility_validation": "passed in Highway driver-rig checkpoint"
+  },
+  "sedan": {
+    "private_filename": "road_car.glb",
+    "bounds_m": {
+      "min": [-0.97853601, 0.02514448, -2.39813829],
+      "max": [0.97853601, 1.36870004, 2.43325185]
+    },
+    "steering_wheel_bounds_m": {
+      "min": [0.2417, 0.6649, -0.6829],
+      "max": [0.6184, 1.0383, -0.4551]
+    },
+    "right_hand_drive": true
+  },
+  "fit": {
+    "translation_m": [0.91, 0.21, -0.187],
+    "rotation_y_rad": 0.0,
+    "scale": 1.0,
+    "mirrored": false,
+    "fitted_driver_bounds_m": {
+      "min": [0.202779803276062, 0.210000029802322, -1.04148181629181],
+      "max": [0.755886126160622, 1.27101262569427, 0.042367166757584]
+    },
+    "fitted_landmarks_m": {
+      "right_palm": [0.4419, 0.8173, -0.5631],
+      "left_palm": [0.3441, 0.8818, -0.5604],
+      "pelvis": [0.5393, 0.4459, -0.2153],
+      "head": [0.5064, 1.1372, -0.1421],
+      "left_foot": [0.4114, 0.2557, -0.8672],
+      "right_foot": [0.5907, 0.2574, -0.8493]
+    },
+    "checks": {
+      "both_palms_inside_steering_wheel_xyz_bounds": true,
+      "head_inside_cabin_horizontal_x": true,
+      "head_below_roof_max_y": true,
+      "driver_right_extent_not_beyond_interior_x": true,
+      "feet_above_vehicle_floor_min_y": true
+    }
+  },
+  "runtime": {
+    "script": "res://scripts/vehicle_driver_layer.gd",
+    "optional_private_asset": true,
+    "parent": "reference sedan BodyShell",
+    "visible_only_while_player_in_vehicle": true,
+    "collision_changes": false,
+    "physics_changes": false,
+    "navigation_changes": false,
+    "animation": "static recovered source-seated pose; no synthetic locomotion/steering animation"
+  },
+  "non_claims": [
+    "This is measured geometric-fit evidence, not combined private Godot render acceptance.",
+    "No recovered steering, walk or run animation is accepted by this checkpoint.",
+    "No on-foot player replacement is accepted.",
+    "No physical Android-device visual/performance acceptance is claimed.",
+    "This does not close the characters/animations category, Beta 1, or unlock Beta 2."
+  ]
+}
