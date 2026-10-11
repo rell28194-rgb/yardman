@@ -3,8 +3,8 @@
   "checkpoint": "private-reference-pack-v5",
   "library_filename": "Yardman-Personal-Reference-Assets-001.zip",
   "library_id": "libfile_0b1b810f72988191851cebde3757c9d5",
-  "zip_bytes": 23477362,
-  "zip_sha256": "db8506fa4cb72e5cdc24cc751302d52a3032437f4f279976f2ac6d2d06c28b27",
+  "zip_bytes": 23477391,
+  "zip_sha256": "c888d80c06444472a21ad5d538357daff02c1d0cf76388ef8c9a7d3319b8399e",
   "manifest": {
     "hashed_files": 97,
     "models": 18,
@@ -26,11 +26,20 @@
       "bones": 60,
       "materials": 1,
       "embedded_images": 1,
-      "source_root_translation_m": [0.0, -0.2784655506214231, 0.0],
-      "runtime_fit_offset_m": [0.91, 0.21, -0.187],
-      "runtime_transform_rule": "preserve recovered GLB root transform and add the measured fit offset",
+      "godot_import_root_position_m": [0.0, 0.0, 0.0],
+      "runtime_fit_position_m": [0.91, 0.21, -0.187],
+      "runtime_transform_rule": "Godot 4.7.2 imports the recovered scene root at identity; assign the measured sedan-space position while leaving imported rotation and scale unchanged.",
       "runtime_role": "optional static seated occupant in the recovered right-hand-drive sedan"
     }
+  },
+  "combined_driver_render_evidence": {
+    "filename": "Yardman-Beta1-Highway-Driver-Sedan-Combined-Render.zip",
+    "library_id": "libfile_64abb15b563081918571c504beff6b4f",
+    "bytes": 490178,
+    "sha256": "073ab09454bf94c642ae6b06355c23f9aea5e7a1debedce8eebd363e369f6105",
+    "godot": "4.7.2-stable official ed1daf0bf",
+    "renderer": "GL Compatibility / llvmpipe",
+    "result": "pass"
   },
   "validation": {
     "zip_crc": "pass",
@@ -38,13 +47,14 @@
     "cone_isolated_godot_compatibility_render": "pass",
     "driver_isolated_godot_compatibility_import_render_deformation": "pass",
     "driver_sedan_measured_geometric_fit": "pass",
-    "combined_private_runtime_render": "pending",
+    "combined_private_runtime_render": "pass",
     "physical_android_device": "pending"
   },
   "privacy": "Private recovered media remain outside public Git; this file records hashes/counts/status only.",
   "non_claims": [
     "Pack v5 is not Beta 1 completion.",
     "The characters/animations, road props and street-furniture categories remain open.",
+    "No physical Android-device acceptance is claimed.",
     "No Beta 2 unlock is claimed.",
     "No final APK delivery is claimed."
   ]
