@@ -31,7 +31,7 @@ func _process(_delta: float) -> void:
             _attempted = true
             _attach(shell)
     if _driver != null:
-        _driver.visible = _player != null and bool(_player.get("in_vehicle"))
+        _driver.visible = _player != null and _player.get("in_vehicle") == true
 
 func _attach(shell: Node3D) -> void:
     var packed := References.scene(DRIVER_FILE)
