@@ -1,0 +1,39 @@
+name: Yardman Godot Desktop Toolchain
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - '.github/workflows/godot-desktop-toolchain.yml'
+  workflow_dispatch:
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Fetch pinned Godot 4.7.2 Linux x86_64
+        shell: bash
+        run: |
+          set -euxo pipefail
+          URL='https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip'
+          EXPECTED='cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4'
+          wget -q "$URL" -O Godot_v4.7.2-stable_linux.x86_64.zip
+          echo "$EXPECTED  Godot_v4.7.2-stable_linux.x86_64.zip" | sha256sum -c -
+          mkdir -p extracted
+          unzip -q Godot_v4.7.2-stable_linux.x86_64.zip -d extracted
+          GODOT_BIN="$(find extracted -maxdepth 2 -type f -name 'Godot*' -print -quit)"
+          test -n "$GODOT_BIN"
+          chmod +x "$GODOT_BIN"
+          "$GODOT_BIN" --version
+
+      - name: Retain verified Godot desktop toolchain
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Godot-4.7.2-Linux-x86_64
+          path: |
+            Godot_v4.7.2-stable_linux.x86_64.zip
+            extracted/**
+          if-no-files-found: error
+          retention-days: 30
