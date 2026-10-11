@@ -281,7 +281,7 @@ func _append_segment(vertices: PackedVector3Array, indices: PackedInt32Array,
     # stable source-way bias prevents equal-depth asphalt from flickering,
     # while all graph pieces/tiles of the same way share one exact offset.
     var source_way := str(segment[7]).get_slice(":", 0) if segment.size() > 7 else "legacy"
-    var height_bias := 0.14 + float(source_way.hash() % 32) * 0.001
+    var height_bias := _source_way_height_bias(source_way)
     var tangent := Vector2(float(segment[2]) - float(segment[0]), float(segment[3]) - float(segment[1])).normalized()
     for vertex_index in range(polygon.size()):
         var p: Array = polygon[vertex_index]
@@ -302,6 +302,16 @@ func _append_segment(vertices: PackedVector3Array, indices: PackedInt32Array,
         # Ribbons are counterclockwise in X/Z. Reverse for Godot's upward
         # facing front side rather than relying on double-sided backfaces.
         indices.append_array(PackedInt32Array([base, base + i + 1, base + i]))
+
+func _source_way_height_bias(source_way: String) -> float:
+    # Avalanche adjacent OSM IDs before choosing a fine-grained offset. The
+    # previous 32 buckets gave unrelated intersecting ways identical depths.
+    # Keep the same overlay range and a shared offset for every piece of a way.
+    var mixed := source_way.hash() & 0xffffffff
+    mixed = ((mixed ^ (mixed >> 16)) * 0x7feb352d) & 0xffffffff
+    mixed = ((mixed ^ (mixed >> 15)) * 0x846ca68b) & 0xffffffff
+    mixed ^= mixed >> 16
+    return 0.14 + float(mixed & 0xffff) * (0.031 / 65535.0)
 
 func _flush_mesh_batch() -> void:
     for prefix in ["paved", "dirt"]:

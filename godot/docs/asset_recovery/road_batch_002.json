@@ -1,0 +1,151 @@
+{
+  "format_version": 1,
+  "library": "beta1",
+  "batch": "road-002-source-way-depth-ties",
+  "source_parent": "db85c953dc472a16ac38ab8d488c97f8217499c7",
+  "change": "Replace 32-bucket source-way height bias with stable 32-bit avalanche and 16-bit height selection in the same 0.14\u20130.171 metre overlay range",
+  "source_files_sha256": {
+    "godot/scripts/road_streamer.gd": "45ab2479c66bf572adea05ed41f2eba867e16312b7aac9107dab7a29fa05cc6a",
+    "godot/tests/road_height_bias_test.gd": "67169c72a0fbc3701633b0a7664134d457c88ff290f4ade3669aa11148edb57a"
+  },
+  "source_pbf_sha256": "f31130574377771532733ec91b8a29b066d83e2055bccdc00ab0413bd5a013f3",
+  "regression": {
+    "node": "osm:3192369425",
+    "position_metres": [
+      37.392,
+      12.779178,
+      124.595
+    ],
+    "source_ways": [
+      "w313324811",
+      "w313324820"
+    ],
+    "old_bucket": 6,
+    "new_offsets_metres": {
+      "w313324811": {
+        "old_bucket": 6,
+        "new_bias": 0.1542500190737774
+      },
+      "w313324820": {
+        "old_bucket": 6,
+        "new_bias": 0.1670379034103914
+      }
+    }
+  },
+  "headless": {
+    "road_height_bias": "PASS: regression pair separated, float32 conversion, overlay range, same-way/tile seams, canonical metreUV and terrain normals",
+    "road_surface": "PASS: bounded queries, deduplication, unload, bridge/tunnel independent collision"
+  },
+  "render": {
+    "result": "PASS",
+    "engine": "Godot 4.7.2 GL Compatibility Mesa llvmpipe",
+    "method": "Actual national production ribbon polygons with production cull_disabled; unshaded distinct way colors isolate depth ownership from asphalt texture. Identical camera sequence and interior world probes for old/corrected offsets.",
+    "fragments": 17,
+    "frames_per_variant": 26,
+    "interior_overlap_probes": 186,
+    "probe_margin_metres": 0.35,
+    "probe_spacing_metres": 0.15,
+    "baseline": {
+      "classified_samples": 4836,
+      "flips": 1297,
+      "frames": 26,
+      "per_frame_flips": [
+        0,
+        46,
+        114,
+        84,
+        113,
+        78,
+        76,
+        58,
+        5,
+        4,
+        72,
+        74,
+        76,
+        87,
+        120,
+        15,
+        0,
+        0,
+        0,
+        0,
+        0,
+        91,
+        90,
+        15,
+        16,
+        63
+      ],
+      "probe_count": 186
+    },
+    "corrected": {
+      "classified_samples": 4836,
+      "flips": 0,
+      "frames": 26,
+      "per_frame_flips": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "probe_count": 186
+    },
+    "national_polygon_and_metre_uv_match": "PASS: byte-identical to isolated exact-PBF production compiler output",
+    "captures": [
+      {
+        "name": "baseline-kingston.png",
+        "bytes": 9724,
+        "sha256": "617277b346b5644d991b7e7dc49a84c3fe6aecd5538f520aa7ace557c3cf5baf"
+      },
+      {
+        "name": "corrected-kingston.png",
+        "bytes": 9126,
+        "sha256": "f82f5e25f6c7b33d102e010999aa420258a053b8cb401652fba1d2faaad1d05e"
+      }
+    ]
+  },
+  "national_audit": {
+    "definition": "Every incident pair of distinct source ways at a shared graph node, same source layer, excluding bridge/tunnel edges. This is a render-offset audit, not a surveyed junction inventory.",
+    "counts": {
+      "at_grade_source_pairs": 83895,
+      "old_exact_bias_ties": 2574,
+      "new_exact_bias_ties": 0,
+      "old_float32_vertex_y_ties": 2574,
+      "new_float32_vertex_y_ties": 30
+    },
+    "remaining_float32_vertex_y_ties": 30
+  },
+  "preserved": [
+    "Graph identities and connectivity",
+    "Source geometry and horizontal metre registration",
+    "Canonical continuous source-way metre UVs",
+    "Terrain-derived normals",
+    "Same source-way bias for all logical pieces and tiles",
+    "Existing overlay range"
+  ],
+  "private_evidence": "Yardman-Beta1-Roads-Checkpoint.zip in project Codex Handoff; libfile_735cc48933708191a4d6c3c7bf8d0498",
+  "scope": "Only the demonstrated equal-depth intersection regression is mitigated. Fine offsets can still quantize to equal float32 vertex Y; 30 current national incident pairs remain. Does not accept all road irregularities, junction geometry, bridge/tunnel heights, source width accuracy, geographic correctness, full road visual quality, Beta1 completion or Android performance."
+}

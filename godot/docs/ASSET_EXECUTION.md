@@ -63,6 +63,13 @@ unload/reload and six actual renders, including unchanged distant fallback.
 These are modest-distance components; broader architectural quality and
 national placement/performance acceptance remain open.
 
+Road overlay hashing no longer assigns the same depth offset to the measured
+Kingston source-way pair. The real production ribbon fixture drops from 1,297
+ownership flips to zero across 26 moving Compatibility frames.
+`asset_recovery/road_batch_002.json` preserves the graph/UV/seam checks and
+national audit; 30 float32 depth ties remain. This fixes the demonstrated
+intersection flicker without accepting broader road geometry or placement.
+
 ## Evidence ledger
 
 `asset_recovery/ledger.json` records sources, category coverage, family decisions,
