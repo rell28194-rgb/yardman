@@ -112,7 +112,7 @@
   ],
   "root_validation": {
     "editor_import": "PASS; zero parser/script errors",
-    "reference_assets": "PASS; 70 exact-hash files, 31 mipmapped textures, active material bindings",
+    "reference_assets": "PASS canonical pack3; fresh required check verified84 files/45 mipmapped textures and active material bindings",
     "reference_foliage": "PASS; all 7 models imported/baked, 14 leaf surfaces, 8 solid bark surfaces, 7 alpha images, 839 checked clockwise trunk triangles",
     "vehicle": "PASS; 32067 triangles, 27 textured surfaces; transparent lenses; 126 km/h measured acceleration, brake/reverse/steer/grass/collision-residency freeze",
     "renderer": "Godot 4.7.2 GL Compatibility / Mesa llvmpipe; actual frames, not an Android benchmark",
@@ -160,7 +160,12 @@
     "Source leaf-card geometry remains low fidelity at close range; category/near-art acceptance open",
     "Four-triangle bush is distant LOD, rejected as detailed nearby replacement",
     "Sedan fine dashed panel seams still under source shader investigation",
-    "Canonical private pack durable version 2 has not yet been replaced at this source checkpoint",
     "No Android device launch or sustained performance evidence"
-  ]
+  ],
+  "canonical_pack_checkpoint": {
+    "version": 3,
+    "bytes": 21428634,
+    "sha256": "42aedd276798fdc0769f9a8587aec73ab20d3149c867ca8c73a6b339a1e25a5e",
+    "scope": "Seven exact corrected GLBs merged; 84 manifest files/45 textures include derivative material images, not new source families"
+  }
 }

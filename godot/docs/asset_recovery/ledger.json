@@ -84,9 +84,12 @@
             "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.012",
             "beta/car-mechanic-21-mod_3.3.4-an1.com.7z.013"
           ],
-          "state": "pending",
-          "note": "nested_7z_inventory_pending",
-          "evidence": {},
+          "state": "inventoried",
+          "note": "Complete all-type APK inventory; useful-family recovery, 18-category classification and integration remain open",
+          "evidence": {
+            "inventory": "Private Yardman-Beta1-Exhaustive-Inventory.zip v5: car_mechanic21-container.json, car_mechanic21-unity-summary.json and object NDJSON. All 2725 ZIP members CRC/SHA verified; 95834 objects/81 types; zero parse/metadata/hash errors. One four-byte engine class remains semantically unresolved.",
+            "hashes": "APK 398820998 bytes SHA256 834566ae61375b1a69d62de5008187a099364c5300538ed050cd9ee53c4b2252; individual member/object hashes retained privately."
+          },
           "classification": {}
         },
         {
@@ -152,9 +155,13 @@
           "members": [
             "beta/map-gta-5.zip"
           ],
-          "state": "pending",
-          "note": "inner_container_inventory_pending",
-          "evidence": {},
+          "state": "rejected",
+          "note": "All four archive payloads inspected; combined fictional map and baked UV-specific material rejected for Jamaica runtime substitution",
+          "evidence": {
+            "inspection": "Private inventory v5 map_gta5-container.json and map-source-inspection/model-inspection.json; all four payloads CRC/SHA verified, one combined mesh/material (218533 vertices,186287 triangles), two embedded images and three external image payloads inspected. No independent building/road/vehicle kit.",
+            "reason": "Normalized roughly 1.5m fictional whole-island relief has no Jamaica EPSG registration. Its baked whole-map imagery and UV-specific material channels cannot replace real Jamaica terrain or reusable near-view road/building assets. Retain analysis as visual reference only; no accepted runtime family.",
+            "hashes": "Archive 85463224 bytes SHA256 92c154966ee6243a218d58b0738598197f5f437c4f23c6a4364166e9fc89b4e2; GLB SHA256 ee364ff4d38892b1865bb6d42a0cc8bc6c1d7722e7ce26fade01baa5582dbfb1."
+          },
           "classification": {}
         },
         {
@@ -533,10 +540,10 @@
     "android_runtime": ""
   },
   "android_health": {
-    "source_commit": "66425c8e77d0c16510529781a4250a39ef9aeebf",
-    "workflow_run": 38102749516,
+    "source_commit": "d16c3b5ec64abfb696a10240d7c036e142725ab7",
+    "workflow_run": 38111712301,
     "conclusion": "success",
     "scope": "public asset-absent fallback; internal testing; private quality and device performance not accepted",
-    "artifact_id": 11688189395
+    "artifact_id": 11692273904
   }
 }

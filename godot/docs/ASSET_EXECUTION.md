@@ -19,7 +19,12 @@ and useful-family recovery remain open. The old model-only catalog cannot
 certify Beta 1 completion.
 `asset_recovery/beta1_archive_index.json` records every outer member without
 committing any reference-game media. Inner inventories and useful-family
-recovery remain open. Beta 2 contents have not been inspected.
+recovery remain open. Mechanic now has a complete static pass: all 2,725 APK
+members verified and 95,834 objects across 81 types enumerated. Its family
+classification/integration remains open. The four-member GTA map archive was
+fully inspected and rejected for runtime substitution: a combined fictional
+relief and UV-specific baked imagery cannot replace registered Jamaica terrain
+or independent road/building kits. Beta 2 contents have not been inspected.
 
 The private pack currently has 13 decoded GLBs plus surface media/audio. That
 count includes distant LODs and staged props, not 13 accepted gameplay systems.
