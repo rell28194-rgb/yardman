@@ -48,6 +48,12 @@ jobs:
           python godot/tools/build_jamaica_roads.py \
             /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096 --terrain godot/data/terrain
 
+          # Roadwork metadata is visual-only and derived from explicit OSM
+          # construction tags. Package it beside roads so the runtime autoload
+          # cannot silently ship inert while the isolated roadwork workflow passes.
+          python godot/tools/build_roadworks.py \
+            /tmp/jamaica.osm.pbf godot/data/roads/roadworks --tile-size 4096
+
           # Bridges keep their DEM-registered abutments, but the deck itself is
           # independent of terrain below. Runtime builds matching collision decks.
           python godot/tools/build_road_structures.py godot/data/roads
@@ -83,11 +89,16 @@ jobs:
           topology = json.loads(Path('godot/data/roads/topology_report.json').read_text())
           structures = json.loads(Path('godot/data/roads/structures.json').read_text())
           portals = json.loads(Path('godot/data/roads/tunnel_portals/manifest.json').read_text())
+          roadworks = json.loads(Path('godot/data/roads/roadworks/manifest.json').read_text())
           assert topology['parish_anchors']['component_count'] == 1, topology['parish_anchors']
           assert structures['bridge']['edges'] > 0, structures
           assert structures['tunnel']['profiled_edges'] > 0, structures
           assert portals['profiled_tunnel_source_ways'] > 0 and portals['portals'] > 0, portals
           assert not portals['anomalies'], portals['anomalies']
+          assert roadworks['purpose'] == 'visual-only OSM-tagged roadworks; never navigation authority', roadworks
+          assert roadworks['crs'] == m['crs'], (roadworks['crs'], m['crs'])
+          assert roadworks['source_sha256'] == m['source_sha256'], (roadworks['source_sha256'], m['source_sha256'])
+          assert roadworks['stats']['features'] >= 0 and roadworks['stats']['tiles'] >= 0, roadworks['stats']
           print('Jamaica map QA passed:', s['road_features'], 'roads,', s['segments'], 'segments,', s['tiles'], 'tiles')
           print('Road topology:', topology['components']['count'], 'components;',
                 'largest edge ratio', topology['components']['largest_edge_ratio'],
@@ -97,9 +108,12 @@ jobs:
                 structures['bridge']['tiles'], 'tiles')
           print('Tunnel portals:', portals['portals'], 'outer portals /',
                 portals['profiled_tunnel_source_ways'], 'source ways')
+          print('Roadwork visuals:', roadworks['stats']['features'], 'tagged features /',
+                roadworks['stats']['source_segments'], 'source segments /',
+                roadworks['stats']['tiles'], 'tiles')
           PY
           du -sh godot/data/roads
-          ls -lh godot/data/roads/manifest.json godot/data/roads/topology_report.json godot/data/roads/structures.json
+          ls -lh godot/data/roads/manifest.json godot/data/roads/topology_report.json godot/data/roads/structures.json godot/data/roads/roadworks/manifest.json
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -268,6 +282,7 @@ jobs:
             godot/data/roads/topology_report.json
             godot/data/roads/structures.json
             godot/data/roads/tunnel_portals/manifest.json
+            godot/data/roads/roadworks/manifest.json
             godot/data/terrain/manifest.json
             godot/data/coast/manifest.json
             godot/data/buildings/manifest.json
@@ -289,6 +304,7 @@ jobs:
             godot/data/roads/topology_report.json
             godot/data/roads/structures.json
             godot/data/roads/tunnel_portals/manifest.json
+            godot/data/roads/roadworks/manifest.json
             godot/data/terrain/manifest.json
             godot/data/coast/manifest.json
             godot/data/buildings/manifest.json
