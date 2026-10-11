@@ -22,6 +22,13 @@ func _run() -> void:
     visuals.configure_environment(environment, sun)
     visuals.update_daylight(12.0, environment)
     _check(sun.light_energy > 1.0 and environment.ambient_light_energy > 0.6, "Noon lighting is too dark")
+    _check(environment.tonemap_mode == Environment.TONE_MAPPER_FILMIC, "Tropical highlights are not filmic-mapped")
+    _check(visuals._sky_material.sky_cover != null, "Procedural sky has no cloud layer")
+    _check(environment.adjustment_enabled and environment.adjustment_saturation > 1.0, "Cinematic color grade is missing")
+    visuals.apply_environment_quality(environment, "Quality")
+    _check(environment.glow_enabled and environment.glow_intensity >= 0.2, "Quality profile lost highlight glow")
+    visuals.apply_environment_quality(environment, "Performance")
+    _check(not environment.glow_enabled, "Performance profile retained expensive glow")
     visuals.update_daylight(0.0, environment)
     _check(sun.light_energy < 0.15 and environment.ambient_light_energy < 0.25, "Daylight never transitions to night")
     var segments: Array = []
