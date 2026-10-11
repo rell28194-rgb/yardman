@@ -1,0 +1,44 @@
+{
+  "format_version": 1,
+  "checkpoint": "jamaica-roadworks-osm-probe-001",
+  "captured_utc": "2026-10-11T20:04:34Z",
+  "source": "Geofabrik jamaica-latest.osm.pbf / OpenStreetMap",
+  "source_sha256": "f31130574377771532733ec91b8a29b066d83e2055bccdc00ab0413bd5a013f3",
+  "crs": "EPSG:3448",
+  "tile_size_m": 4096.0,
+  "stats": {
+    "features": 50,
+    "source_segments": 998,
+    "tile_pieces": 1093,
+    "tiles": 92,
+    "by_effective_class": {
+      "motorway": 12,
+      "motorway_link": 4,
+      "primary": 7,
+      "residential": 2,
+      "road": 20,
+      "secondary": 4,
+      "tertiary": 1
+    }
+  },
+  "runtime_boundary": {
+    "navigation_authority": false,
+    "visual_metadata_only": true,
+    "cone_positions": "inferred bounded cues along explicitly construction-tagged OSM geometry; not surveyed cone positions",
+    "private_reference_asset": "road_repair_cone.glb",
+    "maximum_cones_per_loaded_tile": 32
+  },
+  "ci_evidence": {
+    "workflow": "Yardman Jamaica roadworks metadata",
+    "run_id": 38170646182,
+    "artifact_id": 11713582358,
+    "result": "success"
+  },
+  "non_claims": [
+    "OSM construction tags are not a survey of every active Jamaican roadwork site.",
+    "No exact cone/barrier position is claimed.",
+    "This layer does not modify the registered drivable road graph.",
+    "No physical Android-device visual/performance acceptance is claimed.",
+    "This does not close Beta 1 or unlock Beta 2."
+  ]
+}
