@@ -1,0 +1,48 @@
+{
+  "format_version": 1,
+  "checkpoint": "private-reference-pack-v5",
+  "library_filename": "Yardman-Personal-Reference-Assets-001.zip",
+  "library_id": "libfile_0b1b810f72988191851cebde3757c9d5",
+  "zip_bytes": 23477131,
+  "zip_sha256": "cdb16d4415fa29b467e183ca807d712fb3d2df0139c9dc354c963a92dd742c8f",
+  "manifest": {
+    "hashed_files": 97,
+    "models": 18,
+    "private_pack_revision": 5
+  },
+  "new_assets": {
+    "road_repair_cone.glb": {
+      "sha256": "cbed20d94a7aa11e6cda7fab0e86372eb5016024ddf35e73b6a9dab4a315a0fd",
+      "vertices": 94,
+      "triangles": 60,
+      "materials": 1,
+      "embedded_images": 1,
+      "runtime_role": "bounded visual cue on explicitly OSM construction-tagged Jamaica geometry"
+    },
+    "road_driver_seated.glb": {
+      "sha256": "6a44cfc1abf2a3ef7a44467ba81015db5167f3f84211e2e1c0cb4d9381782574",
+      "vertices": 3986,
+      "triangles": 6066,
+      "bones": 60,
+      "materials": 1,
+      "embedded_images": 1,
+      "runtime_role": "optional static seated occupant in the recovered right-hand-drive sedan"
+    }
+  },
+  "validation": {
+    "zip_crc": "pass",
+    "all_manifest_hashes": "pass",
+    "cone_isolated_godot_compatibility_render": "pass",
+    "driver_isolated_godot_compatibility_import_render_deformation": "pass",
+    "driver_sedan_measured_geometric_fit": "pass",
+    "combined_private_runtime_render": "pending",
+    "physical_android_device": "pending"
+  },
+  "privacy": "Private recovered media remain outside public Git; this file records hashes/counts/status only.",
+  "non_claims": [
+    "Pack v5 is not Beta 1 completion.",
+    "The characters/animations, road props and street-furniture categories remain open.",
+    "No Beta 2 unlock is claimed.",
+    "No final APK delivery is claimed."
+  ]
+}
