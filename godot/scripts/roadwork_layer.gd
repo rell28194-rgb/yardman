@@ -103,8 +103,10 @@ func placement_plan(records: Array, tile: Vector2i, tile_size: float) -> Array[D
         return result
     var origin := Vector2(float(tile.x) * tile_size, float(tile.y) * tile_size)
     for record in records:
-        if result.size() >= MAX_CONES_PER_TILE or not record is Dictionary:
+        if result.size() >= MAX_CONES_PER_TILE:
             break
+        if not record is Dictionary:
+            continue
         var start_raw = record.get("start", [])
         var end_raw = record.get("end", [])
         if not start_raw is Array or not end_raw is Array or start_raw.size() < 2 or end_raw.size() < 2:
