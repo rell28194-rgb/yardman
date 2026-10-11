@@ -1,0 +1,51 @@
+{
+  "format_version": 1,
+  "source_id": "carx_highway",
+  "checkpoint": "carx-highway-exhaustive-sfx-recovery-001",
+  "source_apk": {
+    "bytes": 746147491,
+    "sha256": "8e35189a162c6d6679d76a07a052e9cd7dce99705f52e5ae5ff9fcedd1877f31"
+  },
+  "technical_result": {
+    "banks": 44,
+    "fsb5_banks": 40,
+    "decoded_sfx_banks": 31,
+    "decoded_sfx_wavs": 408,
+    "decoded_wav_bytes": 92372000,
+    "silent_outputs": 0,
+    "metadata_mismatches": 0,
+    "rejected_soundtrack_banks": 9,
+    "metadata_only_banks": 4,
+    "category_counts": {
+      "vehicle_powertrain": 346,
+      "ui_feedback": 35,
+      "collision": 6,
+      "surface_tire": 19,
+      "nitro_whoosh": 3,
+      "siren": 1
+    }
+  },
+  "private_checkpoints": [
+    "Audio Recovery/Yardman-Beta1-CarX-Highway-Audio-Decode-Checkpoint.zip",
+    "Audio Recovery/Yardman-Beta1-CarX-Highway-Private-Audio-Candidates.zip",
+    "Audio Recovery/Yardman-Beta1-CarX-Highway-Exhaustive-SFX-Recovery.zip"
+  ],
+  "deliberate_rejection": {
+    "scope": "source-game soundtrack banks",
+    "count": 9,
+    "reason": "Unrelated source-game soundtrack/music is not accepted as Yardman world audio; preserve inventory evidence only."
+  },
+  "accepted_claims": [
+    "Every non-soundtrack FSB5/FADPCM bank selected for Yardman SFX recovery decoded to PCM16 WAV.",
+    "Decoded WAV headers match declared sample rate, channel count, and sample count.",
+    "No decoded SFX output is digitally silent.",
+    "Private engine and asphalt-roll candidates were boundary-prepared for the existing user_reference audio path without resampling."
+  ],
+  "non_claims": [
+    "No listening or creative-quality acceptance is claimed.",
+    "No final mix or loop-transition acceptance is claimed.",
+    "No geographic-authenticity acceptance is claimed.",
+    "No Android-device audio acceptance is claimed.",
+    "Recovered audio bytes remain private and are not committed to the public repository."
+  ]
+}
