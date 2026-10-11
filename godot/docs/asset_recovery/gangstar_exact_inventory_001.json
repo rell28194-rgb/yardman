@@ -1,0 +1,28 @@
+{
+  "format_version": 1,
+  "checkpoint": "gangstar4-exact-inventory-001",
+  "source": "beta/Gangstar-4-OFFLINE-v8.6.1a-mod-apkvision.apk",
+  "reconstructed_source": {
+    "bytes": 2940706434,
+    "crc32": "02c6c57f",
+    "sha256": "1a9328d048751aa250348607cdd1eaf09616aea6cfb02a902d88e647261412e0",
+    "complete": true,
+    "outer_volume_span": "1-93"
+  },
+  "apk_container": {
+    "member_count": 3538,
+    "zip_crc_validation": "pass"
+  },
+  "decoded_resources": {
+    "record_count": 24305,
+    "decode_errors": 0,
+    "raw_hash_validation": "pass",
+    "identity_metadata_validation": "pass",
+    "bres_records": 3562,
+    "ktx1_records": 11626,
+    "musepack_sv8_records": 6682,
+    "neutral_real_world_bres_candidates": 58
+  },
+  "acceptance_boundary": "Decoded identity and static classification are complete enough to close the inner-inventory blocker. BRES/BDAE mesh conversion compatibility, textures/material dependency closure, useful-family inspection, Godot integration and render/listening acceptance remain open.",
+  "next_gate": "Parse/render the neutral real-world BRES candidates with a verified-compatible decoder or deliberately reject incompatible records; connect matching KTX/audio dependencies where useful."
+}
