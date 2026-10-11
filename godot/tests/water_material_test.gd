@@ -59,7 +59,7 @@ func _run() -> void:
     var frozen := Shader.new()
     frozen.code = coast.water_material.shader.code.replace("TIME", "0.0")
     coast.water_material.shader = frozen
-    var source_bound := bool(coast.water_material.get_shader_parameter("has_reference_surface"))
+    var source_bound := coast.water_material.get_shader_parameter("has_reference_surface") == true
     var reference_required := OS.get_environment("YARDMAN_REQUIRE_REFERENCE") == "1"
     if reference_required:
         _check(source_bound, "Required private water surface was not bound")
