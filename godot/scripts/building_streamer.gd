@@ -5,9 +5,19 @@ signal cell_ready(cell: Vector2i, building_count: int)
 signal cell_removed(cell: Vector2i)
 const BuildingShader = preload("res://shaders/building_surface.gdshader")
 const ReferenceAssets = preload("res://scripts/reference_assets.gd")
+const FACADE_FILES := ["facade_source_lower_panel.glb", "facade_source_bay_panel.glb", "facade_source_upper_panel.glb"]
+const FACADE_MODULE_WIDTH := 3.2
+const FACADE_MODULE_HEIGHT := 3.15
+const NO_FACADE_MASK := Vector2(-1000.0, -1000.0)
+const MAX_FACADE_HOSTS_PER_CELL := 32
+const FACADE_DISTANCE := 100.0
 const MAX_CELL_BYTES := 32 * 1024 * 1024
 const PALETTE := [Color(0.78, 0.73, 0.59), Color(0.67, 0.72, 0.66), Color(0.72, 0.48, 0.38), Color(0.64, 0.72, 0.78), Color(0.87, 0.83, 0.71), Color(0.54, 0.64, 0.51)]
 
+# Optional small source components retain their baked metre dimensions. Whole
+# foreign buildings never substitute for the registered source footprint.
+var reference_facades_enabled := true
+var _facade_meshes: Array[ArrayMesh] = []
 var target: Node3D
 var coordinates
 var terrain
@@ -75,6 +85,7 @@ func configure(root: String, world_coordinates, world_terrain = null) -> void:
 func _ready() -> void:
     _wall_material = _resolve_material(wall_material_override, false)
     _roof_material = _resolve_material(roof_material_override, true)
+    _load_facade_meshes()
     _load_manifest()
 
 func _resolve_material(override_material: Material, roof: bool) -> Material:
@@ -296,7 +307,7 @@ func _poll_jobs() -> void:
         cell_root.name = "Buildings_%d_%d" % [cell.x, cell.y]
         cell_root.position = coordinates.world_to_local(float(cell.x) * cell_size, float(cell.y) * cell_size)
         _build = {"key": key, "cell": cell, "root": cell_root, "records": result.records, "cursor": 0,
-            "wall_vertices": PackedVector3Array(), "wall_normals": PackedVector3Array(), "wall_uvs": PackedVector2Array(), "wall_colors": PackedColorArray(), "wall_indices": PackedInt32Array(),
+            "wall_vertices": PackedVector3Array(), "wall_normals": PackedVector3Array(), "wall_uvs": PackedVector2Array(), "wall_colors": PackedColorArray(), "wall_uv2s": PackedVector2Array(), "facades": [], "wall_indices": PackedInt32Array(),
             "roof_vertices": PackedVector3Array(), "roof_normals": PackedVector3Array(), "roof_uvs": PackedVector2Array(), "roof_colors": PackedColorArray(), "roof_indices": PackedInt32Array()}
 
 func _prepare_geometry() -> void:
@@ -344,6 +355,9 @@ func _append_building(record: Variant) -> bool:
     var hip := _inferred_hip_roof(record)
     var wall_top: float = float(hip.get("eaves_y", roof_y))
     roof_color.a = 1.0 if not hip.is_empty() else 0.0
+    var facade := _plan_facade(record, wall_top)
+    if not facade.is_empty():
+        _build.facades.append(facade)
     var ring_index := 0
     for ring in record[5]:
         if not ring is Array or ring.size() < 3:
@@ -375,6 +389,11 @@ func _append_building(record: Variant) -> bool:
             for vertex in range(4):
                 _build.wall_normals.append(normal)
                 _build.wall_colors.append(color)
+            var mask := NO_FACADE_MASK
+            if not facade.is_empty() and ring_index == 0 and index == int(facade.edge):
+                mask = Vector2(float(facade.first_column), float(facade.row))
+            for vertex in range(4):
+                _build.wall_uv2s.append(mask)
             _build.wall_uvs.append_array(PackedVector2Array([Vector2(station, a.y - wall_top), Vector2(station, 0.0), Vector2(station + length, b.y - wall_top), Vector2(station + length, 0.0)]))
             _append_clockwise("wall", offset, offset + 1, offset + 2, normal)
             _append_clockwise("wall", offset + 2, offset + 1, offset + 3, normal)
@@ -498,6 +517,121 @@ func _append_hip_roof(hip: Dictionary, color: Color) -> void:
         if face.size() == 4:
             _append_clockwise("roof", offset, offset + 2, offset + 3, normal)
 
+func _load_facade_meshes() -> void:
+    _facade_meshes.clear()
+    if not reference_facades_enabled:
+        return
+    for filename: String in FACADE_FILES:
+        var packed: PackedScene = ReferenceAssets.scene(filename)
+        if packed == null:
+            _facade_meshes.clear()
+            return
+        var source := packed.instantiate()
+        var baked := ArrayMesh.new()
+        _bake_facade_surfaces(source, Transform3D.IDENTITY, baked)
+        source.free()
+        var bounds := baked.get_aabb()
+        # Reject unexpected geometry rather than resize it to fit a real host.
+        if baked.get_surface_count() != 1 or bounds.size.x < 0.2 or bounds.size.x > 3.0 or bounds.size.y < 0.2 or bounds.size.y > 2.8 or bounds.size.z > 0.65:
+            _facade_meshes.clear()
+            return
+        baked.set_meta("reference_asset", filename)
+        _facade_meshes.append(baked)
+
+func _bake_facade_surfaces(node: Node, parent_pose: Transform3D, mesh: ArrayMesh) -> void:
+    var pose := parent_pose
+    if node is Node3D:
+        pose = parent_pose * (node as Node3D).transform
+    if node is MeshInstance3D:
+        var instance := node as MeshInstance3D
+        if instance.mesh != null:
+            for index in range(instance.mesh.get_surface_count()):
+                var surface := SurfaceTool.new()
+                surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+                surface.append_from(instance.mesh, index, pose)
+                surface.index()
+                surface.commit(mesh)
+                mesh.surface_set_material(mesh.get_surface_count() - 1, instance.get_active_material(index))
+    for child in node.get_children():
+        _bake_facade_surfaces(child, pose, mesh)
+
+func _plan_facade(record: Array, wall_top: float) -> Dictionary:
+    if _facade_meshes.size() != 3 or record[5].is_empty() or _build.facades.size() >= MAX_FACADE_HOSTS_PER_CELL:
+        return {}
+    # One longest fitting external edge and three consecutive inferred modules.
+    # Source height/DSM foundation remain authoritative; inner rings stay plain.
+    var ring: Array = record[5][0]
+    var area := 0.0
+    for index in range(ring.size()):
+        var a: Array = ring[index]
+        var b: Array = ring[(index + 1) % ring.size()]
+        area += float(a[0]) * float(b[2]) - float(b[0]) * float(a[2])
+    var normal_sign := 1.0 if area > 0.0 else -1.0
+    var best: Dictionary = {}
+    var longest := 0.0
+    var station := 0.0
+    for index in range(ring.size()):
+        var p: Array = ring[index]
+        var q: Array = ring[(index + 1) % ring.size()]
+        var a := Vector3(float(p[0]), float(p[1]), float(p[2]))
+        var b := Vector3(float(q[0]), float(q[1]), float(q[2]))
+        var length := Vector2(b.x - a.x, b.z - a.z).length()
+        if length > longest and length >= 9.0:
+            var source_tangent := Vector3(b.x - a.x, 0.0, b.z - a.z).normalized()
+            var outward := Vector3(b.z - a.z, 0.0, a.x - b.x).normalized() * normal_sign
+            var tangent := Vector3.UP.cross(outward)
+            var basis := Basis(tangent, Vector3.UP, outward)
+            var middle_column := roundi((station + length * 0.5) / FACADE_MODULE_WIDTH - 0.495)
+            var first_column := middle_column - 1
+            var row := 1
+            var poses: Array[Transform3D] = []
+            for component in range(3):
+                var bounds := _facade_meshes[component].get_aabb()
+                var along := (float(first_column + component) + 0.495) * FACADE_MODULE_WIDTH - station
+                var position := a + source_tangent * along + outward * (-bounds.position.z + 0.01)
+                position.y = wall_top - FACADE_MODULE_HEIGHT * (float(row) + 0.455) - bounds.size.y * 0.5 - bounds.position.y
+                if along - bounds.size.x * 0.5 < 0.25 or along + bounds.size.x * 0.5 > length - 0.25 or position.y + bounds.position.y < maxf(a.y, b.y) + 0.3 or position.y + bounds.end.y > wall_top - 0.3:
+                    break
+                poses.append(Transform3D(basis, position))
+            if poses.size() == 3:
+                best = {"host": str(record[0]), "edge": index, "first_column": first_column, "row": row, "transforms": poses}
+                longest = length
+        station += length
+    return best
+
+func _attach_facades(cell_root: Node3D) -> StaticBody3D:
+    if _build.facades.is_empty():
+        return null
+    # Three draws per cell, sharing exactly three cached meshes across cells.
+    for component in range(3):
+        var multimesh := MultiMesh.new()
+        multimesh.transform_format = MultiMesh.TRANSFORM_3D
+        multimesh.mesh = _facade_meshes[component]
+        multimesh.instance_count = _build.facades.size()
+        for index in range(_build.facades.size()):
+            multimesh.set_instance_transform(index, _build.facades[index].transforms[component])
+        var instance := MultiMeshInstance3D.new()
+        instance.name = "ReferenceFacade%d" % component
+        instance.multimesh = multimesh
+        instance.visibility_range_end = FACADE_DISTANCE
+        instance.visibility_range_end_margin = 15.0
+        cell_root.add_child(instance)
+    var body := StaticBody3D.new()
+    body.name = "MeasuredFacadeBays"
+    body.collision_layer = 0
+    body.collision_mask = 0
+    var bounds := _facade_meshes[1].get_aabb()
+    var shape := BoxShape3D.new()
+    shape.size = bounds.size
+    for facade: Dictionary in _build.facades:
+        var pose: Transform3D = facade.transforms[1]
+        var collider := CollisionShape3D.new()
+        collider.shape = shape
+        collider.transform = Transform3D(pose.basis, pose * bounds.get_center())
+        body.add_child(collider)
+    cell_root.add_child(body)
+    return body
+
 func _make_mesh(kind: String, material: Material) -> ArrayMesh:
     var mesh := ArrayMesh.new()
     var indices: PackedInt32Array = _build[kind + "_indices"]
@@ -509,6 +643,8 @@ func _make_mesh(kind: String, material: Material) -> ArrayMesh:
     arrays[Mesh.ARRAY_NORMAL] = _build[kind + "_normals"]
     arrays[Mesh.ARRAY_TEX_UV] = _build[kind + "_uvs"]
     arrays[Mesh.ARRAY_COLOR] = _build[kind + "_colors"]
+    if kind == "wall":
+        arrays[Mesh.ARRAY_TEX_UV2] = _build.wall_uv2s
     arrays[Mesh.ARRAY_INDEX] = indices
     mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
     mesh.surface_set_material(0, material)
@@ -536,10 +672,11 @@ func _complete_cell() -> void:
     var collider := CollisionShape3D.new()
     body.add_child(collider)
     cell_root.add_child(body)
+    var facade_body := _attach_facades(cell_root)
     add_child(cell_root)
     var cell: Vector2i = _build.cell
     var count: int = _build.records.size()
-    _loaded[_build.key] = {"root": cell_root, "body": body, "collider": collider, "meshes": meshes, "count": count}
+    _loaded[_build.key] = {"root": cell_root, "body": body, "collider": collider, "meshes": meshes, "count": count, "facade_body": facade_body, "facades": _build.facades}
     _build.clear()
     _refresh_collision()
     cell_ready.emit(cell, count)
@@ -550,6 +687,9 @@ func _refresh_collision() -> void:
         var cell := _cell(str(key))
         var center := (Vector2(cell) + Vector2.ONE * 0.5) * cell_size
         var active := center.distance_to(_world_position) <= collision_distance + cell_size * 0.71
+        var facade_body: StaticBody3D = _loaded[key].facade_body
+        if facade_body != null:
+            facade_body.collision_layer = 1 if active else 0
         var body: StaticBody3D = _loaded[key].body
         var collider: CollisionShape3D = _loaded[key].collider
         if not active:

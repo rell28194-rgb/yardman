@@ -26,8 +26,8 @@ fully inspected and rejected for runtime substitution: a combined fictional
 relief and UV-specific baked imagery cannot replace registered Jamaica terrain
 or independent road/building kits. Beta 2 contents have not been inspected.
 
-The private pack currently has 13 decoded GLBs plus surface media/audio. That
-count includes distant LODs and staged props, not 13 accepted gameplay systems.
+The private pack currently has 16 decoded GLBs plus surface media/audio. That
+count includes distant LODs and staged props, not 16 accepted gameplay systems.
 The bush is an eight-vertex crossed-card asset suitable for distant LOD; the
 same geometry cannot count as a detailed nearby shrub. Source foliage has a
 separate red-channel opacity mask which the initial exporter omitted. The
@@ -54,6 +54,14 @@ inspected, repetitive highlights reduced, and clipped sea level/UV/rebase
 registration preserved. Real before/after national coast captures and a
 frozen-clock seam/rebase/source-detail test pass. Full water/material and
 Android performance acceptance remain open.
+
+Three recovered neutral window modules now bind to fitting registered external
+walls at original metre dimensions. Cell work is bounded to 32 hosts and three
+shared MultiMeshes; existing host geometry and collision remain intact.
+`asset_recovery/building_facade_batch_001.json` records near collision, rebase,
+unload/reload and six actual renders, including unchanged distant fallback.
+These are modest-distance components; broader architectural quality and
+national placement/performance acceptance remain open.
 
 ## Evidence ledger
 

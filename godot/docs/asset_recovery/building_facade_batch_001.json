@@ -1,0 +1,97 @@
+{
+  "format_version": 1,
+  "library": "beta1",
+  "source_family": "carx_drift_townhouse_neutral_window_components",
+  "scope": "Optional bounded source facade detail on registered host walls; broader building/storefront recovery remains open",
+  "private_checkpoint": "Yardman-Beta1-Building-Families-Checkpoint.zip saved version18; SHA2568a3c1fba2a1229f7e0d340e215be5ea184cb6c19261de76b221ea5ca7d2e9208",
+  "base_source_commit": "b05a483a8d618b8ee04cb1243f34d626c87bf711",
+  "source_files": [
+    {
+      "file": "scripts/building_streamer.gd",
+      "bytes": 34121,
+      "sha256": "758a832584ac2c0e77b189e1d022ef5973d04c10d92cca9d3a3116251d74df00"
+    },
+    {
+      "file": "shaders/building_surface.gdshader",
+      "bytes": 4084,
+      "sha256": "76c6fe12e5415507cc02b9520b610a683b3935bd9e715303d62dd2104f86aa69"
+    },
+    {
+      "file": "tests/reference_building_test.gd",
+      "bytes": 9343,
+      "sha256": "8482613dc28134d06fd80cb32c2e54249c35c2b266e54fb9f380e29d12568311"
+    },
+    {
+      "file": "tests/reference_building_render_test.gd",
+      "bytes": 6950,
+      "sha256": "bb59ba8461329a74a558e001113f8243d69cd42274e63cf43fed45423299b98d"
+    }
+  ],
+  "assets": [
+    {
+      "file": "facade_source_bay_panel.glb",
+      "bytes": 279220,
+      "sha256": "c27ee35b6fd73f77023a4ead749c43690f274699a84d7272cee19253a5dc45d2"
+    },
+    {
+      "file": "facade_source_lower_panel.glb",
+      "bytes": 279516,
+      "sha256": "55835ec8d965ed706d732c38fe29c71647d78196d1846cfa7beb1ec465e1ca90"
+    },
+    {
+      "file": "facade_source_upper_panel.glb",
+      "bytes": 279132,
+      "sha256": "40c34d4184a6895fcca59f82bbbd0845436521df0f03d85a96ba4f5270698eff"
+    }
+  ],
+  "normalization": {
+    "scaling": "No source rescale; imported hierarchy baked once; rigid unit basis on host wall",
+    "wall_host": "Retained exact EPSG:3448 OSM w375070825:0 cell1:0 wall4 14.870m height9.8m",
+    "bounds": "3 modules per eligible host; 32 hosts/cell; 3 cached ArrayMeshes; 3 MultiMeshes/cell; visibility100m",
+    "window_mask": "Face-constant UV2 first 3.2m column +3.15m row; sentinels(-1000,-1000) retain fallback elsewhere; 100m shader cutoff restores distant fallback",
+    "collision": "Original wall/roof mesh collider preserved; measured bay AABB box at rigid source pose, near-distance collision only"
+  },
+  "validation": {
+    "headless": "reference_building_test PASS required canonical media, cached UV/material, registered geometry unchanged, rigid fit, external wall, host+bay rays, near/distant collision, unload/reload, rebase, 32-host limit and unattached-host masks; building_streamer_test PASS",
+    "render": "reference_building_render_test PASS six Compatibility frames; actual MultiMesh transform match, canonical rebase/reload, unchanged source host geometry, byte-identical130m fallback raster",
+    "captures": [
+      {
+        "file": "production-host-baseline-10h.png",
+        "bytes": 470653,
+        "sha256": "663beac27072f9a043c58a4c23c19bd2eada69332be58c0bfb775906348ad54c"
+      },
+      {
+        "file": "production-host-far-baseline-10h.png",
+        "bytes": 320000,
+        "sha256": "e6790ec3db7e8e9cb8febbe369c1203b7a23d8a68c56c5ec7a582335b989f7f8"
+      },
+      {
+        "file": "production-host-attached-10h.png",
+        "bytes": 474745,
+        "sha256": "8a25b6acada909b5767fdddca1a30acd7a91544c7e691508cbd452c028b6a90f"
+      },
+      {
+        "file": "production-host-far-fallback-10h.png",
+        "bytes": 320000,
+        "sha256": "e6790ec3db7e8e9cb8febbe369c1203b7a23d8a68c56c5ec7a582335b989f7f8"
+      },
+      {
+        "file": "production-host-rebased-10h.png",
+        "bytes": 474690,
+        "sha256": "3850a648d9cca8462c52da0aee61f9d8d1084209d8a60cc58316d22a95a82caa"
+      },
+      {
+        "file": "production-host-reloaded-15h.png",
+        "bytes": 543302,
+        "sha256": "9ce169718e57d241e203e3a7bbdef324f9953896d24b66173cfd06b76e741118"
+      }
+    ],
+    "asset_absent": "Independent no-media project reference_building_test PASS source_media=false; no attachment nodes, all UV2 sentinels and unchanged registered wall/roof/UV"
+  },
+  "limitations": [
+    "One retained registered OSM host; broader national visual/performance acceptance open",
+    "Host height inferred from source levels and foundation from DSM",
+    "Source photographic window cards are modest-distance optional detail, not near-view architecture acceptance",
+    "No physical Android device runtime acceptance"
+  ]
+}
