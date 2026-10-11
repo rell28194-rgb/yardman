@@ -5,7 +5,9 @@ extends Node
 # vehicle physics, navigation, or the player's on-foot rig.
 const References = preload("res://scripts/reference_assets.gd")
 const DRIVER_FILE := "road_driver_seated.glb"
-const DRIVER_POSITION_M := Vector3(0.91, 0.21, -0.187)
+# Additional measured sedan-space translation. Preserve the GLB's recovered
+# source root transform; replacing it would lift the posed mesh by ~0.278 m.
+const DRIVER_FIT_OFFSET_M := Vector3(0.91, 0.21, -0.187)
 
 var _driver: Node3D
 var _player: Node
@@ -42,11 +44,11 @@ func _attach(shell: Node3D) -> void:
         push_warning("Yardman recovered driver could not instantiate; leaving sedan unoccupied visually")
         return
     instance.name = "RecoveredSeatedDriver"
-    instance.position = DRIVER_POSITION_M
-    instance.rotation = Vector3.ZERO
-    instance.scale = Vector3.ONE
+    instance.position += DRIVER_FIT_OFFSET_M
+    # Keep source rotation and scale exactly as recovered; the measured fit was
+    # calculated from the imported posed bounds in that native transform.
     instance.set_meta("source", "CarX Highway recovered seated rig")
-    instance.set_meta("fit", "measured RHD sedan steering/cabin landmarks; no mirror/rescale")
+    instance.set_meta("fit", "measured RHD sedan steering/cabin landmarks; source root transform preserved")
     instance.set_meta("animation_state", "static source seated pose; animation retarget pending")
     shell.add_child(instance)
     _driver = instance
@@ -57,5 +59,6 @@ func debug_state() -> Dictionary:
         "attached": _driver != null,
         "visible": _driver.visible if _driver != null else false,
         "driver_file": DRIVER_FILE,
-        "position_m": DRIVER_POSITION_M,
+        "fit_offset_m": DRIVER_FIT_OFFSET_M,
+        "source_root_transform_preserved": true,
     }
