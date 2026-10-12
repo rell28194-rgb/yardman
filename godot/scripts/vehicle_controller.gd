@@ -6,6 +6,7 @@ const MAX_FORWARD_MPS := 42.0
 const MAX_REVERSE_MPS := 7.0
 const GRASS_LIMIT_MPS := 18.0
 const WHEELBASE_M := 2.56
+const DRIFT_LATERAL_CAP_MPS := 9.5
 
 var body: CharacterBody3D
 var speed_mps := 0.0
@@ -131,9 +132,13 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
         if drift_mode:
             var slip_fraction := 0.34 if drift_assist else 0.26
             var slip_bonus := 2.0 if drift_assist else 0.8
-            var lateral_target := -_steer * minf(absf(speed_mps) * slip_fraction + slip_bonus, 9.5)
+            var lateral_target := -_steer * minf(absf(speed_mps) * slip_fraction + slip_bonus, DRIFT_LATERAL_CAP_MPS)
             var slip_response := 3.8 if drift_assist else 2.7
             lateral = lerpf(lateral, lateral_target, 1.0 - exp(-slip_response * dt))
+            # Yaw rotates the previous world velocity into the current body frame.
+            # Enforce the same hard lateral cap used by the slip target so a
+            # transient projection cannot exceed the controller's drift envelope.
+            lateral = clampf(lateral, -DRIFT_LATERAL_CAP_MPS, DRIFT_LATERAL_CAP_MPS)
         else:
             var lateral_response := 9.5 if on_road else 5.5
             lateral = lerpf(lateral, 0.0, 1.0 - exp(-lateral_response * dt))
