@@ -174,7 +174,7 @@ func _process(_delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
     if not event is InputEventKey or not event.pressed or event.echo:
         return
-    var key := event.physical_keycode
+    var key: int = int(event.physical_keycode)
     if key == KEY_ESCAPE or key == KEY_M:
         _set_open(not menu_open)
         get_viewport().set_input_as_handled()
