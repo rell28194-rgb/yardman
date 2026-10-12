@@ -13,6 +13,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 RoadworkLayer="*res://scripts/roadwork_layer.gd"
 FenceLayer="*res://scripts/fence_layer.gd"
 StreetLightLayer="*res://scripts/streetlight_layer.gd"
+GuardRailLayer="*res://scripts/guardrail_layer.gd"
 VehicleDriverLayer="*res://scripts/vehicle_driver_layer.gd"
 
 [display]
