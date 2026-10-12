@@ -158,7 +158,7 @@ func _run() -> void:
     controller.handbrake = true
     controller.drift_assist = true
     await _step_frames(55, 0.72, 0.85)
-    var peak_drift_angle := controller.drift_angle_deg
+    var peak_drift_angle: float = controller.drift_angle_deg
     _check(controller.drifting, "Handbrake + drift assist did not enter a controlled slide")
     _check(peak_drift_angle >= 4.0 and peak_drift_angle < 30.0, "Drift slip angle is inert or unbounded")
     _check(absf(controller._lateral_speed) > 1.0 and absf(controller._lateral_speed) < 10.0, "Drift has no measurable bounded lateral velocity")
