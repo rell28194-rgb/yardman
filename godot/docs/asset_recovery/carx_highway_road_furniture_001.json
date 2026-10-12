@@ -1,0 +1,94 @@
+{
+  "format_version": 1,
+  "checkpoint": "carx-highway-road-furniture-001",
+  "source_apk": {
+    "bytes": 746147491,
+    "crc32": "823605ef",
+    "sha256": "8e35189a162c6d6679d76a07a052e9cd7dce99705f52e5ae5ff9fcedd1877f31"
+  },
+  "godot_validation": {
+    "version": "4.7.2-stable official ed1daf0bf",
+    "rendering_method": "gl_compatibility",
+    "device": "llvmpipe (LLVM 19.1.7, 256 bits)",
+    "private_checkpoint": "Yardman-Beta1-CarX-Highway-Road-Furniture-Disposition.zip",
+    "private_checkpoint_sha256": "deb33457d1af9b4b74515457f3efefa0d2506eba5941979e510daa347fff8a01"
+  },
+  "families": {
+    "crash_barrier": {
+      "decision": "reject_direct_integration",
+      "gameobjects": 309,
+      "unique_meshes": 28,
+      "reason": "The distinct CrashBarrier meshes resolve to large source-world road-section assemblies rooted in desert, winter, fall, industrial and Australia route sections. Their baked route dimension spans approximately 24-210 metres; they are not modular Jamaica guardrails.",
+      "retained_use": "dependency and material reference only; Jamaica road/barrier placement remains authoritative"
+    },
+    "reference_sign": {
+      "decision": "reject_as_geometry",
+      "gameobjects": 100,
+      "unique_meshes": 0,
+      "reason": "refSign matches are source-world reference/placement transforms, not portable sign meshes or Jamaica placement authority."
+    },
+    "bus_stop": {
+      "decision": "reject_direct_integration",
+      "gameobjects": 6,
+      "unique_meshes": 1,
+      "mesh": {
+        "name": "210m_Town_Fence01_busstop",
+        "vertices": 676,
+        "triangles": 440,
+        "raw_extents_m": [31.976, 210.0, 2.589]
+      },
+      "reason": "The only recovered bus-stop mesh is a baked 210 metre town/fence/bus-stop road-section assembly, not a modular shelter."
+    },
+    "wired_fence": {
+      "decision": "validation_pending_midfar_candidate",
+      "material": "wired_fence",
+      "texture": {
+        "dimensions": [128, 128],
+        "decoded_png_sha256": "0f1fe58231c6b07a30f4aeca8836eb0e2ec17703815f0b658af186761be3ec31",
+        "alpha_present": true
+      },
+      "source_scale_preserved": true,
+      "meshes": [
+        {
+          "path_id": 8746,
+          "name": "wired_fence_0",
+          "vertices": 120,
+          "triangles": 90,
+          "extents_m": [64.6862640380859, 3.30989837646484, 1.17123794555664],
+          "render_png_sha256": "1177a59ad7c08dec5d76e033caf30aa2c0960d73706fc48bb4dee66d57d1bc9b"
+        },
+        {
+          "path_id": 8747,
+          "name": "wired_fence_1",
+          "vertices": 96,
+          "triangles": 72,
+          "extents_m": [52.0559234619141, 3.55439615249634, 1.15880393981934],
+          "render_png_sha256": "e0ab092c5b964ad26fb8f8ebe05b776ffed3497cde8e0b43a979def3480475e8"
+        },
+        {
+          "path_id": 8748,
+          "name": "wired_fence_2",
+          "vertices": 40,
+          "triangles": 30,
+          "extents_m": [21.6249980926514, 3.242431640625, 0.465715408325195],
+          "render_png_sha256": "eb6fd82cd22cac3e50658d6a03ad7122dad954cfa355236066e230ef3e78d7bf"
+        }
+      ],
+      "detail_render_png_sha256": "9612a238e950ef93548738863414f4c076c3d276920ee0c1b46ebc69780f71ed",
+      "visual_result": "PASS mid/far candidate: chain-link alpha, posts and upper-wire silhouette render coherently with no import, UV or alpha failure.",
+      "quality_limit": "The recovered source texture is only 128x128 and is not accepted for close-camera art.",
+      "placement_gate": "Use only where registered Jamaica fence/site-boundary data supports a fence; no arbitrary or source-map placement."
+    },
+    "barrel": {
+      "decision": "already_recovered_hold_context",
+      "note": "Standalone Highway barrel variants were recovered in the prior neutral-prop checkpoint; no duplicate promotion is made here."
+    }
+  },
+  "non_claims": [
+    "This does not close the road-markings/barriers/signage category.",
+    "This does not accept national fence placement or collision.",
+    "This does not establish Android-device visual or performance acceptance.",
+    "Private recovered source bytes and render captures remain outside public Git.",
+    "This does not close Beta 1, unlock Beta 2 or authorize final APK packaging."
+  ]
+}
