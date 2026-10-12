@@ -16,6 +16,9 @@ func _run() -> void:
         push_error("visuals_render_test requires an actual GL display, such as Xvfb")
         quit(1)
         return
+    var startup_menu := get_root().get_node_or_null("StartupMenu")
+    if startup_menu != null and startup_menu.has_method("_set_open"):
+        startup_menu.call("_set_open", false)
     stage = Node3D.new()
     get_root().add_child(stage)
     var visuals := Visuals.new()
