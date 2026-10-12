@@ -13,6 +13,7 @@ def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = N
              coast_manifest: Path | None = None, buildings_manifest: Path | None = None) -> dict:
     source = json.loads(source_manifest.read_text())
     roadwork_proof = {"roadwork_features": 0, "roadwork_tiles": 0}
+    fence_proof = {"fence_features": 0, "wire_fence_features": 0, "fence_tiles": 0}
     with zipfile.ZipFile(apk) as archive:
         corrupt = archive.testzip()
         if corrupt:
@@ -48,6 +49,31 @@ def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = N
             roadwork_proof = {
                 "roadwork_features": int(roadworks.get("stats", {}).get("features", 0)),
                 "roadwork_tiles": len(roadworks.get("tiles", [])),
+            }
+        fence_source_path = source_manifest.parent / "fences" / "manifest.json"
+        if fence_source_path.is_file():
+            fence_name = "assets/data/roads/fences/manifest.json"
+            if fence_name not in names:
+                raise ValueError("Packaged Jamaica fence metadata is missing")
+            expected_fences = json.loads(fence_source_path.read_text())
+            fences = json.loads(archive.read(fence_name))
+            if fences != expected_fences:
+                raise ValueError("Packaged fence metadata differs from compiled Jamaica source")
+            if fences.get("crs") != manifest.get("crs") or fences.get("source_sha256") != manifest.get("source_sha256"):
+                raise ValueError("Fence metadata source registration differs from roads")
+            if fences.get("purpose") != "visual-only OSM barrier=fence geometry; OSM remains geographic authority":
+                raise ValueError("Fence metadata lost its visual-only authority boundary")
+            expected_rule = "explicit chain-link/wire/metal/steel/barbed-wire tags only; untyped fences are not assigned recovered chain-link art"
+            if fences.get("wire_compatibility_rule") != expected_rule:
+                raise ValueError("Fence metadata lost its strict recovered-art compatibility rule")
+            for tile in fences.get("tiles", []):
+                name = "assets/data/roads/fences/" + str(tile.get("file", ""))
+                if name not in names:
+                    raise ValueError("A Jamaica fence tile was omitted from the APK: " + name)
+            fence_proof = {
+                "fence_features": int(fences.get("stats", {}).get("features", 0)),
+                "wire_fence_features": int(fences.get("stats", {}).get("wire_compatible_features", 0)),
+                "fence_tiles": len(fences.get("tiles", [])),
             }
         structure_proof = {}
         if manifest.get("structures"):
@@ -140,7 +166,7 @@ def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = N
             "coast_tiles": len(coast["tiles"]) if coast_manifest else 0,
             "building_tiles": len(buildings["tiles"]) if buildings_manifest else 0,
             "graph_edges": source["stats"].get("graph_edges", 0), "abis": sorted(abis),
-            **roadwork_proof, **structure_proof}
+            **roadwork_proof, **fence_proof, **structure_proof}
 
 
 if __name__ == "__main__":
