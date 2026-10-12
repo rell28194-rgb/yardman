@@ -20,6 +20,18 @@ func _ready_scene(scene) -> bool:
 func _run() -> void:
     var scene = load("res://main.tscn").instantiate()
     root.add_child(scene)
+    var streetlights = root.get_node_or_null("StreetLightLayer")
+    _check(streetlights != null, "Street-light runtime autoload missing")
+    if streetlights != null:
+        var lamp_records := [
+            {"source_node": "n1", "position": [-1320.18, -3025.769], "highway": "street_lamp"},
+            {"source_node": "n1", "position": [-1320.0, -3025.0], "highway": "street_lamp"},
+            {"source_node": "bad", "position": [-1400.0, -3000.0], "highway": "traffic_signals"},
+        ]
+        var lamp_plan: Array[Dictionary] = streetlights.placement_plan(lamp_records, Vector2i(-1, -1), 4096.0)
+        _check(lamp_plan.size() == 1 and str(lamp_plan[0].source_node) == "n1", "Street-light placement accepted duplicate or non-lamp geography")
+        var lamp_mesh: ArrayMesh = streetlights._get_fallback_mesh()
+        _check(lamp_mesh != null and lamp_mesh.get_aabb().size.y > 8.2 and lamp_mesh.get_aabb().size.x < 1.0, "Street-light neutral fallback escaped audited dimensions")
     scene.goto_parish("St. Mary")
     _check(await _ready_scene(scene), "Streamed spawn never became playable")
     _check(scene.get_node_or_null("SeaLevel") == null, "Infinite unregistered ocean still exists")
@@ -67,8 +79,7 @@ func _run() -> void:
     _check(absf(float(controls.settings.button_opacity) - 0.66) < 0.001, "Control settings did not persist")
     controls.apply_settings(original_settings)
     scene._save_preferences()
-    print("YARDMAN_POLISH_INTEGRATION_TEST %s joystick=1 menu_pause=1 source_road_grip=1 preferences=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_POLISH_INTEGRATION_TEST %s joystick=1 menu_pause=1 source_road_grip=1 preferences=1 streetlights=1" % ("PASS" if failures == 0 else "FAIL"))
     scene.queue_free()
     await process_frame
     quit(0 if failures == 0 else 1)
-
