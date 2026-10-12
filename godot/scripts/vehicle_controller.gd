@@ -13,6 +13,9 @@ var odometer_m := 0.0
 var occupied := true
 var brake_input := 0.0
 var handbrake := false
+var drift_assist := false
+var drift_angle_deg := 0.0
+var drifting := false
 var on_road := true
 var engine_rpm := 900.0
 var steering_angle := 0.0
@@ -23,6 +26,7 @@ var _ground_basis := Basis.IDENTITY
 var _last_acceleration := 0.0
 var _last_yaw_rate := 0.0
 var _last_throttle := 0.0
+var _lateral_speed := 0.0
 
 func configure(vehicle: CharacterBody3D) -> void:
     body = vehicle
@@ -30,7 +34,6 @@ func configure(vehicle: CharacterBody3D) -> void:
     body.floor_max_angle = deg_to_rad(52.0)
     body.floor_stop_on_slope = true
     body.floor_constant_speed = true
-    # Replace the old blockout here so every caller receives the same model.
     var old_visual := body.get_node_or_null("VisualRig")
     if old_visual != null:
         body.remove_child(old_visual)
@@ -50,7 +53,6 @@ func _fit_reference_collision() -> void:
         var collision := node as CollisionShape3D
         if collision == null or not collision.shape is BoxShape3D:
             continue
-        # Keep the shape local to this vehicle instead of mutating shared scene resources.
         var shape := collision.shape.duplicate() as BoxShape3D
         shape.size = Vector3(bounds.size.x * 0.97, maxf(bounds.end.y, 1.0), bounds.size.z * 0.97)
         collision.shape = shape
@@ -59,8 +61,6 @@ func _fit_reference_collision() -> void:
         break
 
 func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
-    # A parked car outside collision residency must not fall or change pose.
-    # Its canonical double-precision position belongs to the world state.
     if body == null or not ready or delta <= 0.0:
         return
     var dt := minf(delta, 0.1)
@@ -75,18 +75,18 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
     if not occupied:
         braking = 1.0
     if handbrake:
-        braking = maxf(braking, 0.85)
+        braking = maxf(braking, 0.42)
     var traction := body.is_on_floor()
     if braking > 0.01:
         var brake_deceleration := (10.8 if on_road else 6.6) * braking
+        if handbrake and absf(turn) > 0.10 and absf(speed_mps) > 7.0:
+            brake_deceleration *= 0.52
         if not traction:
             brake_deceleration *= 0.1
         speed_mps = move_toward(speed_mps, 0.0, brake_deceleration * dt)
     elif absf(throttle) > 0.02 and traction:
         var limit := MAX_REVERSE_MPS if throttle < 0.0 else (MAX_FORWARD_MPS if on_road else GRASS_LIMIT_MPS)
         var speed_fraction := clampf(absf(speed_mps) / MAX_FORWARD_MPS, 0.0, 1.0)
-        # Usable torque from standstill through the gears replaces a desired
-        # speed lerp. The service brake is independent of reverse selection.
         var acceleration := (6.7 - 2.2 * speed_fraction) * absf(throttle)
         if throttle < 0.0:
             acceleration *= 0.70
@@ -108,21 +108,43 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
     var steering_limit := lerpf(deg_to_rad(34.0), deg_to_rad(10.0), clampf(absf(speed_mps) / MAX_FORWARD_MPS, 0.0, 1.0))
     steering_angle = -_steer * steering_limit
     var yaw_rate := speed_mps * tan(steering_angle) / wheelbase_m
-    # Tyre grip bounds lateral acceleration at speed. Full-lock input cannot
-    # spin a 150 km/h car around its centre as the previous controller did.
+    var drift_mode := on_road and traction and absf(speed_mps) > 7.0 and absf(_steer) > 0.12 and (handbrake or drift_assist)
     var grip := 8.4 if on_road else 4.8
-    if handbrake:
+    if drift_mode:
+        grip = 11.8 if drift_assist else 10.2
+    elif handbrake:
         grip *= 0.68
-    var yaw_limit := minf(1.12, grip / maxf(absf(speed_mps), 1.0))
+    var yaw_cap := 1.35 if drift_mode else 1.12
+    var yaw_limit := minf(yaw_cap, grip / maxf(absf(speed_mps), 1.0))
     yaw_rate = clampf(yaw_rate, -yaw_limit, yaw_limit) if traction else 0.0
     body.rotate_y(yaw_rate * dt)
     _last_yaw_rate = yaw_rate
     var forward := -body.global_transform.basis.z
-    var desired_horizontal := Vector2(forward.x, forward.z).normalized() * speed_mps
+    var forward_2d := Vector2(forward.x, forward.z).normalized()
+    var right_2d := Vector2(-forward_2d.y, forward_2d.x)
     var horizontal := Vector2(body.velocity.x, body.velocity.z)
-    var response := (13.0 if on_road else 7.0) * (0.45 if handbrake else 1.0)
     if traction:
-        horizontal = horizontal.lerp(desired_horizontal, 1.0 - exp(-response * dt))
+        var longitudinal := horizontal.dot(forward_2d)
+        var lateral := horizontal.dot(right_2d)
+        var longitudinal_response := 13.0 if on_road else 7.0
+        longitudinal = lerpf(longitudinal, speed_mps, 1.0 - exp(-longitudinal_response * dt))
+        if drift_mode:
+            var slip_fraction := 0.34 if drift_assist else 0.26
+            var slip_bonus := 2.0 if drift_assist else 0.8
+            var lateral_target := -_steer * minf(absf(speed_mps) * slip_fraction + slip_bonus, 9.5)
+            var slip_response := 3.8 if drift_assist else 2.7
+            lateral = lerpf(lateral, lateral_target, 1.0 - exp(-slip_response * dt))
+        else:
+            var lateral_response := 9.5 if on_road else 5.5
+            lateral = lerpf(lateral, 0.0, 1.0 - exp(-lateral_response * dt))
+        _lateral_speed = lateral
+        drift_angle_deg = rad_to_deg(atan2(absf(lateral), maxf(absf(longitudinal), 0.1)))
+        drifting = drift_mode and drift_angle_deg >= 4.0
+        horizontal = forward_2d * longitudinal + right_2d * lateral
+    else:
+        drift_angle_deg = 0.0
+        drifting = false
+        _lateral_speed = 0.0
     body.velocity.x = horizontal.x
     body.velocity.z = horizontal.y
     body.velocity.y = -1.2 if traction else body.velocity.y - 23.0 * dt
@@ -150,6 +172,8 @@ func _update_visual(delta: float, forward: Vector3, braking: float) -> void:
     visual.basis = _ground_basis
     var body_pitch := clampf(_last_acceleration * 0.0038, -0.055, 0.035)
     var body_roll := clampf(-_last_yaw_rate * speed_mps * 0.0060, -0.07, 0.07)
+    if drifting:
+        body_roll = clampf(body_roll - signf(_lateral_speed) * 0.018, -0.085, 0.085)
     visual.call("update_motion", delta, speed_mps, steering_angle, braking, speed_mps < -0.15, occupied, body_pitch, body_roll)
 
 func _gear_index() -> int:
@@ -179,6 +203,10 @@ func reset_motion() -> void:
     steering_angle = 0.0
     brake_input = 0.0
     handbrake = false
+    drift_assist = false
+    drift_angle_deg = 0.0
+    drifting = false
+    _lateral_speed = 0.0
     _last_throttle = 0.0
     _last_acceleration = 0.0
     _last_yaw_rate = 0.0

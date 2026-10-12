@@ -151,6 +151,23 @@ func _run() -> void:
     _check(absf(car.rotation.y) < 0.035 and absf(car.rotation.y) > 0.0001, "High-speed full-lock steering is unbounded or inert")
     var front_pivot: Node3D = controller.visual.get("front_pivots")[0]
     _check(absf(front_pivot.rotation.y) > 0.01, "Front wheels did not visibly steer")
+
+    await _reset()
+    controller.speed_mps = 22.0
+    car.velocity = Vector3(0, -1.2, -22.0)
+    controller.handbrake = true
+    controller.drift_assist = true
+    await _step_frames(55, 0.72, 0.85)
+    var peak_drift_angle := controller.drift_angle_deg
+    _check(controller.drifting, "Handbrake + drift assist did not enter a controlled slide")
+    _check(peak_drift_angle >= 4.0 and peak_drift_angle < 30.0, "Drift slip angle is inert or unbounded")
+    _check(absf(controller._lateral_speed) > 1.0 and absf(controller._lateral_speed) < 10.0, "Drift has no measurable bounded lateral velocity")
+    _check(absf(car.rotation.y) < 0.75, "Drift yaw exceeded the bounded vehicle model")
+    controller.handbrake = false
+    controller.drift_assist = false
+    await _step_frames(120, 0.45, 0.0)
+    _check(not controller.drifting and controller.drift_angle_deg < 3.0, "Tyres did not regain grip after drift input was released")
+
     await _reset()
     controller.speed_mps = 35.0
     car.velocity = Vector3(0, -1.2, -35.0)
@@ -171,7 +188,7 @@ func _run() -> void:
     controller.occupied = false
     await _step_frames(30, 1.0, 1.0)
     _check(controller.speed_mps == 0.0 and controller.gear_label() == "P", "Empty vehicle accepted driving input")
-    print("YARDMAN_VEHICLE_TEST %s acceleration_kmh=%.1f braking=1 reverse=1 steering=1 grass=1 freeze=1 reference_model=%s triangles=%d textured_surfaces=%d" % ["PASS" if failures == 0 else "FAIL", acceleration_speed * 3.6, reference_model, reference_triangles, reference_textured_surfaces])
+    print("YARDMAN_VEHICLE_TEST %s acceleration_kmh=%.1f braking=1 reverse=1 steering=1 drift_angle=%.1f grass=1 freeze=1 reference_model=%s triangles=%d textured_surfaces=%d" % ["PASS" if failures == 0 else "FAIL", acceleration_speed * 3.6, peak_drift_angle, reference_model, reference_triangles, reference_textured_surfaces])
     scene.queue_free()
     await process_frame
     quit(0 if failures == 0 else 1)
