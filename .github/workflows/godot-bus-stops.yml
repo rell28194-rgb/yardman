@@ -1,0 +1,50 @@
+name: Jamaica bus-stop authority
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - 'godot/tools/build_bus_stops.py'
+      - 'godot/tests/test_build_bus_stops.py'
+      - '.github/workflows/godot-bus-stops.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile-bus-stops:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install map compiler dependencies
+        run: python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4' 'osmium>=4,<5'
+      - name: Test strict bus-stop compiler
+        run: python -m unittest godot/tests/test_build_bus_stops.py -v
+      - name: Compile current Jamaica explicit bus stops
+        shell: bash
+        run: |
+          set -euxo pipefail
+          wget -q https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf -O /tmp/jamaica.osm.pbf
+          python godot/tools/build_bus_stops.py \
+            /tmp/jamaica.osm.pbf godot/data/roads/bus_stops --tile-size 4096
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m = json.loads(Path('godot/data/roads/bus_stops/manifest.json').read_text())
+          assert m['purpose'] == 'visual-only explicit OSM bus-stop point authority; OSM remains geographic authority', m
+          assert m['placement_rule'] == 'explicit highway=bus_stop nodes or public_transport=platform nodes with bus=yes only; no inferred stops, shelters or benches', m
+          assert m['shelter_rule'] == 'shelter art requires source shelter=yes/true/1/designated; unspecified stops remain unsheltered', m
+          assert m['crs'] == 'EPSG:3448', m
+          assert m['stats']['features'] >= 0 and m['stats']['tiles'] >= 0, m['stats']
+          print('YARDMAN_JAMAICA_BUS_STOP_AUTHORITY', json.dumps(m['stats'], sort_keys=True))
+          PY
+      - name: Retain authority dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jamaica-Bus-Stop-Authority
+          path: godot/data/roads/bus_stops/**
+          if-no-files-found: error
+          retention-days: 30
