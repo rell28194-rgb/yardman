@@ -54,6 +54,12 @@ jobs:
           python godot/tools/build_roadworks.py \
             /tmp/jamaica.osm.pbf godot/data/roads/roadworks --tile-size 4096
 
+          # Recovered fence art is allowed only on explicit OSM wire/chain-link
+          # compatible fence records. Package the geographic metadata beside roads
+          # so the runtime fence layer cannot silently ship inert.
+          python godot/tools/build_fences.py \
+            /tmp/jamaica.osm.pbf godot/data/roads/fences --tile-size 4096
+
           # Bridges keep their DEM-registered abutments, but the deck itself is
           # independent of terrain below. Runtime builds matching collision decks.
           python godot/tools/build_road_structures.py godot/data/roads
@@ -90,6 +96,7 @@ jobs:
           structures = json.loads(Path('godot/data/roads/structures.json').read_text())
           portals = json.loads(Path('godot/data/roads/tunnel_portals/manifest.json').read_text())
           roadworks = json.loads(Path('godot/data/roads/roadworks/manifest.json').read_text())
+          fences = json.loads(Path('godot/data/roads/fences/manifest.json').read_text())
           assert topology['parish_anchors']['component_count'] == 1, topology['parish_anchors']
           assert structures['bridge']['edges'] > 0, structures
           assert structures['tunnel']['profiled_edges'] > 0, structures
@@ -99,6 +106,12 @@ jobs:
           assert roadworks['crs'] == m['crs'], (roadworks['crs'], m['crs'])
           assert roadworks['source_sha256'] == m['source_sha256'], (roadworks['source_sha256'], m['source_sha256'])
           assert roadworks['stats']['features'] >= 0 and roadworks['stats']['tiles'] >= 0, roadworks['stats']
+          assert fences['purpose'] == 'visual-only OSM barrier=fence geometry; OSM remains geographic authority', fences
+          assert fences['wire_compatibility_rule'] == 'explicit chain-link/wire/metal/steel/barbed-wire tags only; untyped fences are not assigned recovered chain-link art', fences
+          assert fences['crs'] == m['crs'], (fences['crs'], m['crs'])
+          assert fences['source_sha256'] == m['source_sha256'], (fences['source_sha256'], m['source_sha256'])
+          assert fences['stats']['features'] >= fences['stats']['wire_compatible_features'] >= 0, fences['stats']
+          assert fences['stats']['tiles'] >= 0, fences['stats']
           print('Jamaica map QA passed:', s['road_features'], 'roads,', s['segments'], 'segments,', s['tiles'], 'tiles')
           print('Road topology:', topology['components']['count'], 'components;',
                 'largest edge ratio', topology['components']['largest_edge_ratio'],
@@ -111,9 +124,12 @@ jobs:
           print('Roadwork visuals:', roadworks['stats']['features'], 'tagged features /',
                 roadworks['stats']['source_segments'], 'source segments /',
                 roadworks['stats']['tiles'], 'tiles')
+          print('Fence visuals:', fences['stats']['features'], 'tagged features /',
+                fences['stats']['wire_compatible_features'], 'wire-compatible /',
+                fences['stats']['tiles'], 'tiles')
           PY
           du -sh godot/data/roads
-          ls -lh godot/data/roads/manifest.json godot/data/roads/topology_report.json godot/data/roads/structures.json godot/data/roads/roadworks/manifest.json
+          ls -lh godot/data/roads/manifest.json godot/data/roads/topology_report.json godot/data/roads/structures.json godot/data/roads/roadworks/manifest.json godot/data/roads/fences/manifest.json
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -225,7 +241,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in road_surface road_height_bias road_structure_data roadwork_layer coastline terrain_coast structural_spawn controls_hud vehicle visuals audio building_streamer reference_building reference_assets reference_foliage polish_integration; do
+          for TEST in road_surface road_height_bias road_structure_data roadwork_layer fence_layer coastline terrain_coast structural_spawn controls_hud vehicle visuals audio building_streamer reference_building reference_assets reference_foliage polish_integration; do
             timeout 300 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"
@@ -283,6 +299,7 @@ jobs:
             godot/data/roads/structures.json
             godot/data/roads/tunnel_portals/manifest.json
             godot/data/roads/roadworks/manifest.json
+            godot/data/roads/fences/manifest.json
             godot/data/terrain/manifest.json
             godot/data/coast/manifest.json
             godot/data/buildings/manifest.json
@@ -305,6 +322,7 @@ jobs:
             godot/data/roads/structures.json
             godot/data/roads/tunnel_portals/manifest.json
             godot/data/roads/roadworks/manifest.json
+            godot/data/roads/fences/manifest.json
             godot/data/terrain/manifest.json
             godot/data/coast/manifest.json
             godot/data/buildings/manifest.json
