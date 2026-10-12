@@ -54,9 +54,9 @@ jobs:
           python godot/tools/build_roadworks.py \
             /tmp/jamaica.osm.pbf godot/data/roads/roadworks --tile-size 4096
 
-          # Recovered fence art is allowed only on explicit OSM wire/chain-link
-          # compatible fence records. Package the geographic metadata beside roads
-          # so the runtime fence layer cannot silently ship inert.
+          # Fence authority comes directly from barrier=fence ways, never from
+          # the road-only OSM reader. Only explicit wire-compatible tags authorize
+          # wire/chain-link styling in the runtime layer.
           python godot/tools/build_fences.py \
             /tmp/jamaica.osm.pbf godot/data/roads/fences --tile-size 4096
 
@@ -65,6 +65,11 @@ jobs:
           # committed probe files alone do not prove the Android package contains it.
           python godot/tools/build_streetlights.py \
             /tmp/jamaica.osm.pbf godot/data/roads/streetlights --tile-size 4096
+
+          # Guard rails are a distinct barrier family. Only explicit OSM
+          # barrier=guard_rail ways are compiled; highway edges are never inferred.
+          python godot/tools/build_guardrails.py \
+            /tmp/jamaica.osm.pbf godot/data/roads/guardrails --tile-size 4096
 
           # Bridges keep their DEM-registered abutments, but the deck itself is
           # independent of terrain below. Runtime builds matching collision decks.
@@ -104,6 +109,7 @@ jobs:
           roadworks = json.loads(Path('godot/data/roads/roadworks/manifest.json').read_text())
           fences = json.loads(Path('godot/data/roads/fences/manifest.json').read_text())
           streetlights = json.loads(Path('godot/data/roads/streetlights/manifest.json').read_text())
+          guardrails = json.loads(Path('godot/data/roads/guardrails/manifest.json').read_text())
           assert topology['parish_anchors']['component_count'] == 1, topology['parish_anchors']
           assert structures['bridge']['edges'] > 0, structures
           assert structures['tunnel']['profiled_edges'] > 0, structures
@@ -124,6 +130,11 @@ jobs:
           assert streetlights['crs'] == m['crs'], (streetlights['crs'], m['crs'])
           assert streetlights['source_sha256'] == m['source_sha256'], (streetlights['source_sha256'], m['source_sha256'])
           assert streetlights['stats']['features'] >= 0 and streetlights['stats']['tiles'] >= 0, streetlights['stats']
+          assert guardrails['purpose'] == 'visual-only explicit OSM barrier=guard_rail geometry; OSM remains geographic authority', guardrails
+          assert guardrails['placement_rule'] == 'explicit barrier=guard_rail ways only; no inferred highway-edge or recovered-art placement', guardrails
+          assert guardrails['crs'] == m['crs'], (guardrails['crs'], m['crs'])
+          assert guardrails['source_sha256'] == m['source_sha256'], (guardrails['source_sha256'], m['source_sha256'])
+          assert guardrails['stats']['features'] >= 0 and guardrails['stats']['tile_pieces'] >= 0 and guardrails['stats']['tiles'] >= 0, guardrails['stats']
           print('Jamaica map QA passed:', s['road_features'], 'roads,', s['segments'], 'segments,', s['tiles'], 'tiles')
           print('Road topology:', topology['components']['count'], 'components;',
                 'largest edge ratio', topology['components']['largest_edge_ratio'],
@@ -141,9 +152,11 @@ jobs:
                 fences['stats']['tiles'], 'tiles')
           print('Street-light authority:', streetlights['stats']['features'], 'explicit nodes /',
                 streetlights['stats']['tiles'], 'tiles')
+          print('Guard-rail authority:', guardrails['stats']['features'], 'explicit ways /',
+                guardrails['stats']['tile_pieces'], 'tile pieces /', guardrails['stats']['tiles'], 'tiles')
           PY
           du -sh godot/data/roads
-          ls -lh godot/data/roads/manifest.json godot/data/roads/topology_report.json godot/data/roads/structures.json godot/data/roads/roadworks/manifest.json godot/data/roads/fences/manifest.json godot/data/roads/streetlights/manifest.json
+          ls -lh godot/data/roads/manifest.json godot/data/roads/topology_report.json godot/data/roads/structures.json godot/data/roads/roadworks/manifest.json godot/data/roads/fences/manifest.json godot/data/roads/streetlights/manifest.json godot/data/roads/guardrails/manifest.json
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -255,7 +268,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in road_surface road_height_bias road_structure_data roadwork_layer fence_layer coastline terrain_coast structural_spawn controls_hud vehicle visuals audio building_streamer reference_building reference_assets reference_foliage polish_integration; do
+          for TEST in road_surface road_height_bias road_structure_data roadwork_layer fence_layer streetlight_layer guardrail_layer coastline terrain_coast structural_spawn controls_hud vehicle visuals audio building_streamer reference_building reference_assets reference_foliage polish_integration; do
             timeout 300 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"
@@ -298,6 +311,7 @@ jobs:
           sha256sum godot/build/Yardman-Beta.apk | tee godot/build/Yardman-Beta.apk.sha256
           python godot/tools/validate_apk.py godot/build/Yardman-Beta.apk godot/data/roads/manifest.json --terrain-manifest godot/data/terrain/manifest.json --coast-manifest godot/data/coast/manifest.json --buildings-manifest godot/data/buildings/manifest.json
           python godot/tools/validate_streetlight_apk.py godot/build/Yardman-Beta.apk godot/data/roads/streetlights/manifest.json
+          python godot/tools/validate_guardrail_apk.py godot/build/Yardman-Beta.apk godot/data/roads/guardrails/manifest.json
           "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose godot/build/Yardman-Beta.apk
 
       - name: Retain internal map QA and Android test APK
@@ -316,6 +330,7 @@ jobs:
             godot/data/roads/roadworks/manifest.json
             godot/data/roads/fences/manifest.json
             godot/data/roads/streetlights/**
+            godot/data/roads/guardrails/**
             godot/data/terrain/manifest.json
             godot/data/coast/manifest.json
             godot/data/buildings/manifest.json
@@ -340,6 +355,7 @@ jobs:
             godot/data/roads/roadworks/manifest.json
             godot/data/roads/fences/manifest.json
             godot/data/roads/streetlights/**
+            godot/data/roads/guardrails/**
             godot/data/terrain/manifest.json
             godot/data/coast/manifest.json
             godot/data/buildings/manifest.json
