@@ -75,6 +75,27 @@ func _run() -> void:
         tree.mesh = visuals._make_broadleaf_mesh()
     tree.position = Vector3(261.0, _height(261.0, 225.0), 225.0)
     stage.add_child(tree)
+
+    # Deterministic GL regression probe: exercise the same MultiMesh COLOR and
+    # INSTANCE_CUSTOM inputs used by streamed roadside foliage, but sample it
+    # at its actual projected screen position instead of a stale hard-coded
+    # camera rectangle. This still fails if Compatibility renders crowns black.
+    var foliage_probe_mesh := visuals._make_broadleaf_mesh()
+    var foliage_probe_multi := MultiMesh.new()
+    foliage_probe_multi.transform_format = MultiMesh.TRANSFORM_3D
+    foliage_probe_multi.use_colors = true
+    foliage_probe_multi.use_custom_data = true
+    foliage_probe_multi.mesh = foliage_probe_mesh
+    foliage_probe_multi.instance_count = 1
+    foliage_probe_multi.set_instance_transform(0, Transform3D.IDENTITY)
+    foliage_probe_multi.set_instance_color(0, Color.WHITE)
+    foliage_probe_multi.set_instance_custom_data(0, Color(0.23, 0.71, 0.18, 1.0))
+    var foliage_probe := MultiMeshInstance3D.new()
+    foliage_probe.name = "GLFoliageProbe"
+    foliage_probe.multimesh = foliage_probe_multi
+    foliage_probe.position = Vector3(246.0, _height(246.0, 239.0), 239.0)
+    stage.add_child(foliage_probe)
+
     var camera := Camera3D.new()
     stage.add_child(camera)
     camera.position = car.position + Vector3(6.0, 3.9, 7.0)
@@ -88,20 +109,30 @@ func _run() -> void:
     if target.is_empty():
         target = "user://visual-polish.png"
     var capture := get_root().get_texture().get_image()
+    var save_error := capture.save_png(target)
+    if save_error != OK:
+        push_error("Could not save GL visual regression capture: %s" % error_string(save_error))
+        quit(save_error)
+        return
+
+    if camera.is_position_behind(foliage_probe.global_position + Vector3(0.0, 6.0, 0.0)):
+        push_error("GL foliage probe unexpectedly behind camera")
+        quit(1)
+        return
+    var probe_screen := camera.unproject_position(foliage_probe.global_position + Vector3(0.0, 6.0, 0.0))
     var colored_foliage := 0
-    # The right horizon contains the actual MultiMesh tree crowns, excluding
-    # the separately drawn foreground palm and the ground. Their first GL
-    # render was entirely black despite a passing dummy-renderer boot.
-    for y in range(150, 221):
-        for x in range(890, 1101):
+    var min_x := clampi(int(round(probe_screen.x)) - 90, 0, capture.get_width() - 1)
+    var max_x := clampi(int(round(probe_screen.x)) + 90, 0, capture.get_width() - 1)
+    var min_y := clampi(int(round(probe_screen.y)) - 110, 0, capture.get_height() - 1)
+    var max_y := clampi(int(round(probe_screen.y)) + 90, 0, capture.get_height() - 1)
+    for y in range(min_y, max_y + 1):
+        for x in range(min_x, max_x + 1):
             var pixel := capture.get_pixel(x, y)
             if pixel.g > maxf(pixel.r, pixel.b) * 1.12 and pixel.g > 0.20:
                 colored_foliage += 1
     if colored_foliage < 20:
-        push_error("GL foliage color regression: only %d green crown pixels" % colored_foliage)
+        push_error("GL foliage color regression: only %d green probe pixels near %s" % [colored_foliage, probe_screen])
         quit(1)
         return
-    var error := capture.save_png(target)
-    if error == OK:
-        print("YARDMAN_VISUALS_RENDER PASS ", target)
-    quit(error)
+    print("YARDMAN_VISUALS_RENDER PASS %s foliage_probe_pixels=%d" % [target, colored_foliage])
+    quit(OK)
