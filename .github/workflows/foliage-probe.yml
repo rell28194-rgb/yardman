@@ -1,0 +1,52 @@
+name: Yardman Foliage Render Probe
+
+on:
+  push:
+    branches:
+      - probe/foliage-f6
+
+jobs:
+  render-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GL probe dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri unzip wget
+      - name: Install Godot 4.7.2
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable"
+          wget -q "$BASE/Godot_v4.7.2-stable_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+          sudo mv /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
+          godot --version
+      - name: Import project
+        run: |
+          set -euxo pipefail
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee /tmp/import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' /tmp/import.log; then exit 1; fi
+      - name: Render deterministic foliage probe
+        env:
+          YARDMAN_RENDER_OUTPUT: ${{ github.workspace }}/godot/foliage-probe.png
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          set -euxo pipefail
+          timeout 180 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --audio-driver Dummy --script res://tests/visuals_render_test.gd 2>&1 | tee /tmp/foliage.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|GL foliage color regression' /tmp/foliage.log; then exit 1; fi
+          grep -q 'YARDMAN_VISUALS_RENDER PASS' /tmp/foliage.log
+      - name: Upload probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Foliage-Probe
+          path: |
+            godot/foliage-probe.png
+            /tmp/foliage.log
+            /tmp/import.log
+          if-no-files-found: warn
+          retention-days: 7
