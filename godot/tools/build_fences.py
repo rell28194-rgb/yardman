@@ -19,7 +19,7 @@ from pathlib import Path
 from pyproj import Transformer
 
 from build_jamaica_roads import CRS_SOURCE, CRS_TARGET, ORIGIN_LAT, ORIGIN_LON
-from road_graph import read_osm_features, split_segment
+from road_graph import split_segment
 
 WIRE_FENCE_TYPES = {
     "chain_link", "chainlink", "chain-link", "wire", "wire_mesh",
@@ -65,6 +65,35 @@ def _hash_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _read_osm_fences(path: Path) -> list[dict]:
+    """Read barrier=fence ways directly; the road reader intentionally cannot."""
+    import osmium
+
+    class Fences(osmium.SimpleHandler):
+        def __init__(self):
+            super().__init__()
+            self.features = []
+
+        def way(self, way):
+            tags = dict(way.tags)
+            if not _is_fence(tags):
+                return
+            try:
+                coordinates = [[node.lon, node.lat] for node in way.nodes]
+            except osmium.InvalidLocationError as exc:
+                raise ValueError(f"Missing location in OSM fence way {way.id}") from exc
+            self.features.append({
+                "type": "Feature",
+                "id": f"w{way.id}",
+                "properties": tags,
+                "geometry": {"type": "LineString", "coordinates": coordinates},
+            })
+
+    handler = Fences()
+    handler.apply_file(str(path), locations=True)
+    return handler.features
+
+
 def extract_fences(features, transformer, origin, tile_size: float) -> dict:
     if tile_size <= 0 or not math.isfinite(tile_size):
         raise ValueError("tile_size must be finite and positive")
@@ -89,6 +118,8 @@ def extract_fences(features, transformer, origin, tile_size: float) -> dict:
         source_id = str(feature.get("id") or tags.get("@id") or "")
         if not source_id:
             source_id = "fence-" + hashlib.sha1(repr((lines, sorted(tags.items()))).encode()).hexdigest()[:20]
+        if source_id in feature_ids:
+            raise ValueError(f"Duplicate fence source id: {source_id}")
         fence_type = _normal(tags.get("fence_type")) or "unspecified"
         material = _normal(tags.get("material")) or "unspecified"
         compatible = _wire_compatible(tags)
@@ -155,7 +186,7 @@ def extract_fences(features, transformer, origin, tile_size: float) -> dict:
 
 
 def write_dataset(input_path: Path, output_dir: Path, tile_size: float) -> dict:
-    features = read_osm_features(input_path) if input_path.suffix == ".pbf" else json.loads(input_path.read_text(encoding="utf-8")).get("features", [])
+    features = _read_osm_fences(input_path) if input_path.suffix == ".pbf" else json.loads(input_path.read_text(encoding="utf-8")).get("features", [])
     transformer = Transformer.from_crs(CRS_SOURCE, CRS_TARGET, always_xy=True)
     origin_e, origin_n = transformer.transform(ORIGIN_LON, ORIGIN_LAT)
     result = extract_fences(features, transformer, (origin_e, origin_n), tile_size)
