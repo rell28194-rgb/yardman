@@ -82,6 +82,9 @@ class ApkFenceValidationTest(unittest.TestCase):
     def test_wrong_wire_compatibility_rule_fails(self):
         altered = dict(self.fence_manifest)
         altered["wire_compatibility_rule"] = "assign recovered chain-link art to every fence"
+        # Mutate both the compiled source and packaged copy. Exact byte/JSON
+        # equality should pass so this test reaches the authority-rule guard.
+        (self.fences / "manifest.json").write_text(json.dumps(altered))
         with self.assertRaisesRegex(ValueError, "compatibility rule"):
             validate(self._write_apk(fence_manifest=altered), self.roads / "manifest.json")
 
