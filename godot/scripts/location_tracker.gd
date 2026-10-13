@@ -33,7 +33,7 @@ func _ready() -> void:
 func _load_places() -> void:
     if not FileAccess.file_exists(DATA_PATH):
         return
-    var payload = JSON.parse_string(FileAccess.get_file_as_string(DATA_PATH))
+    var payload: Variant = JSON.parse_string(FileAccess.get_file_as_string(DATA_PATH))
     if not payload is Dictionary:
         push_warning("Yardman location index is invalid")
         return
@@ -49,28 +49,30 @@ func _process(delta: float) -> void:
     _update_location()
 
 func _update_location() -> void:
-    var scene := get_tree().current_scene
+    var scene: Node = get_tree().current_scene
     if scene == null:
         return
-    var roads = scene.get("roads")
-    var player = scene.get("player")
-    var car = scene.get("car")
-    var hud = scene.get("hud")
+    var roads: Variant = scene.get("roads")
+    var player: Variant = scene.get("player")
+    var car: Variant = scene.get("car")
+    var hud: Variant = scene.get("hud")
     if roads == null or player == null or car == null or hud == null:
         return
-    var active := car if bool(player.get("in_vehicle")) else player
-    if not active is Node3D:
+    var active: Node3D = player as Node3D
+    if bool(player.get("in_vehicle")):
+        active = car as Node3D
+    if active == null:
         return
-    var world = roads.call("local_to_world", active.position)
+    var world: Variant = roads.call("local_to_world", active.position)
     if not world is PackedFloat64Array or world.size() < 3:
         return
-    var x := float(world[0])
-    var z := float(world[2])
-    var parish := _nearest_parish(roads, x, z)
+    var x: float = float(world[0])
+    var z: float = float(world[2])
+    var parish: String = _nearest_parish(roads, x, z)
     if parish.is_empty():
         parish = str(scene.get("current_parish"))
-    var place := _resolve_place(x, z, parish)
-    var label := _compose_label(place, parish)
+    var place: Dictionary = _resolve_place(x, z, parish)
+    var label: String = _compose_label(place, parish)
     if label.is_empty():
         label = parish if not parish.is_empty() else "Jamaica"
 
@@ -83,26 +85,26 @@ func _update_location() -> void:
         _last_label = label
     hud.call("set_status", {"parish": label})
 
-func _nearest_parish(roads, x: float, z: float) -> String:
-    var road_manifest = roads.get("manifest")
+func _nearest_parish(roads: Variant, x: float, z: float) -> String:
+    var road_manifest: Variant = roads.get("manifest")
     if not road_manifest is Dictionary:
         return ""
-    var anchors = road_manifest.get("parish_anchors", {})
+    var anchors: Variant = road_manifest.get("parish_anchors", {})
     if not anchors is Dictionary:
         return ""
-    var best := ""
-    var best_distance := INF
+    var best: String = ""
+    var best_distance: float = INF
     for name in anchors:
-        var raw = anchors[name]
+        var raw: Variant = anchors[name]
         if not raw is Dictionary:
             continue
-        var position = raw.get("road_position", [])
-        var ax := float(raw.get("x", 0.0))
-        var az := float(raw.get("z", 0.0))
+        var position: Variant = raw.get("road_position", [])
+        var ax: float = float(raw.get("x", 0.0))
+        var az: float = float(raw.get("z", 0.0))
         if position is Array and position.size() >= 3:
             ax = float(position[0])
             az = float(position[2])
-        var distance := Vector2(x - ax, z - az).length_squared()
+        var distance: float = Vector2(x - ax, z - az).length_squared()
         if distance < best_distance:
             best_distance = distance
             best = str(name)
@@ -111,23 +113,23 @@ func _nearest_parish(roads, x: float, z: float) -> String:
 func _resolve_place(x: float, z: float, parish: String) -> Dictionary:
     if _tiles.is_empty():
         return {}
-    var tx := int(floor(x / _tile_size))
-    var tz := int(floor(z / _tile_size))
+    var tx: int = int(floor(x / _tile_size))
+    var tz: int = int(floor(z / _tile_size))
     var best_detail: Dictionary = {}
-    var best_detail_distance := INF
+    var best_detail_distance: float = INF
     var best_settlement: Dictionary = {}
-    var best_settlement_distance := INF
+    var best_settlement_distance: float = INF
     for dz in range(-SEARCH_RADIUS_TILES, SEARCH_RADIUS_TILES + 1):
         for dx in range(-SEARCH_RADIUS_TILES, SEARCH_RADIUS_TILES + 1):
-            var key := "%d:%d" % [tx + dx, tz + dz]
-            var records = _tiles.get(key, [])
+            var key: String = "%d:%d" % [tx + dx, tz + dz]
+            var records: Variant = _tiles.get(key, [])
             if not records is Array:
                 continue
             for raw in records:
                 if not raw is Dictionary:
                     continue
-                var kind := str(raw.get("kind", ""))
-                var distance := Vector2(x - float(raw.get("x", 0.0)), z - float(raw.get("z", 0.0))).length()
+                var kind: String = str(raw.get("kind", ""))
+                var distance: float = Vector2(x - float(raw.get("x", 0.0)), z - float(raw.get("z", 0.0))).length()
                 if DETAIL_KINDS.has(kind) and distance <= float(DETAIL_KINDS[kind]) and distance < best_detail_distance:
                     best_detail = raw
                     best_detail_distance = distance
@@ -138,12 +140,12 @@ func _resolve_place(x: float, z: float, parish: String) -> Dictionary:
 
 func _compose_label(place: Dictionary, parish: String) -> String:
     var pieces: Array[String] = []
-    var detail = place.get("detail", {})
-    var settlement = place.get("settlement", {})
+    var detail: Variant = place.get("detail", {})
+    var settlement: Variant = place.get("settlement", {})
     if detail is Dictionary and not detail.is_empty():
         pieces.append(str(detail.get("name", "")))
     if settlement is Dictionary and not settlement.is_empty():
-        var settlement_name := str(settlement.get("name", ""))
+        var settlement_name: String = str(settlement.get("name", ""))
         if not settlement_name.is_empty() and (pieces.is_empty() or settlement_name != pieces[0]):
             pieces.append(settlement_name)
     if not parish.is_empty() and (pieces.is_empty() or parish != pieces.back()):
