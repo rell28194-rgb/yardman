@@ -100,7 +100,7 @@ func _sample_ground_contacts() -> void:
         return
     var space := body.get_world_3d().direct_space_state
     var axle_z := wheelbase_m * 0.50
-    var points := [
+    var points: Array[Vector3] = [
         Vector3(-_track_half_m, SUSPENSION_RAY_TOP_M, -axle_z),
         Vector3(_track_half_m, SUSPENSION_RAY_TOP_M, -axle_z),
         Vector3(-_track_half_m, SUSPENSION_RAY_TOP_M, axle_z),
@@ -110,18 +110,19 @@ func _sample_ground_contacts() -> void:
     var compression_sum := 0.0
     var contacts := 0
     for point in points:
-        var start := body.global_transform * point
-        var finish := start - Vector3.UP * SUSPENSION_RAY_LENGTH_M
+        var start: Vector3 = body.global_transform * point
+        var finish: Vector3 = start - Vector3.UP * SUSPENSION_RAY_LENGTH_M
         var query := PhysicsRayQueryParameters3D.create(start, finish, 1)
         query.exclude = [body.get_rid()]
         query.collide_with_areas = false
-        var hit := space.intersect_ray(query)
+        var hit: Dictionary = space.intersect_ray(query)
         if hit.is_empty():
             continue
         contacts += 1
-        var normal: Vector3 = hit.normal
+        var normal: Vector3 = hit["normal"]
         normal_sum += normal.normalized()
-        var distance := start.distance_to(hit.position)
+        var hit_position: Vector3 = hit["position"]
+        var distance: float = start.distance_to(hit_position)
         compression_sum += clampf((SUSPENSION_RAY_LENGTH_M - distance) / 0.72, 0.0, 1.0)
     _contact_ratio = float(contacts) / 4.0
     if contacts > 0:
