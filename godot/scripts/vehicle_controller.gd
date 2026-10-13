@@ -3,10 +3,10 @@ class_name YardmanVehicleController
 
 const ModelScript = preload("res://scripts/vehicle_model.gd")
 const MAX_FORWARD_MPS := 58.0
-const MAX_REVERSE_MPS := 8.5
-const GRASS_LIMIT_MPS := 20.0
+const MAX_REVERSE_MPS := 7.0
+const GRASS_LIMIT_MPS := 17.0
 const WHEELBASE_M := 2.56
-const DRIFT_LATERAL_CAP_MPS := 10.5
+const DRIFT_LATERAL_CAP_MPS := 9.5
 const SUSPENSION_RAY_TOP_M := 0.95
 const SUSPENSION_RAY_LENGTH_M := 1.65
 
@@ -183,9 +183,9 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
     steering_angle = -_steer * steering_limit
     var yaw_rate := speed_mps * tan(steering_angle) / wheelbase_m
     var drift_mode := on_road and traction and absf(speed_mps) > 7.0 and absf(_steer) > 0.12 and (handbrake or drift_assist)
-    var grip_accel := 13.8 if on_road else 6.2
+    var grip_accel := 11.5 if on_road else 6.2
     if drift_mode:
-        grip_accel = 11.0 if drift_assist else 9.4
+        grip_accel = 10.5 if drift_assist else 9.2
     elif handbrake:
         grip_accel *= 0.62
     var yaw_cap := 1.55 if drift_mode else 1.40
