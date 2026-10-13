@@ -142,7 +142,6 @@ func _refresh_tiles(force: bool) -> void:
                     _queue.append(key)
     _queue.sort_custom(func(a: String, b: String) -> bool:
         return _key_tile(a).distance_squared_to(current) < _key_tile(b).distance_squared_to(current))
-    # Retain an extra ring to prevent load/unload oscillation at a boundary.
     for key in _loaded.keys():
         var tile := _key_tile(str(key))
         if maxi(absi(tile.x - current.x), absi(tile.y - current.y)) > load_radius + 1:
@@ -260,58 +259,57 @@ func _append_segment(vertices: PackedVector3Array, indices: PackedInt32Array,
             [float(segment[2]) + n.x, 0.0, float(segment[3]) + n.y]]
     if polygon.size() < 3:
         return
-    var base := vertices.size()
-    var a := Vector3(float(polygon[0][0]) - origin_x, float(polygon[0][1]), float(polygon[0][2]) - origin_z)
-    var normal := Vector3.UP
-    for i in range(1, polygon.size() - 1):
-        var b := Vector3(float(polygon[i][0]) - origin_x, float(polygon[i][1]), float(polygon[i][2]) - origin_z)
-        var c := Vector3(float(polygon[i + 1][0]) - origin_x, float(polygon[i + 1][1]), float(polygon[i + 1][2]) - origin_z)
-        var candidate := (c - a).cross(b - a)
-        if candidate.length_squared() > 0.000001:
-            normal = candidate.normalized()
-            if normal.y < 0.0:
-                normal = -normal
-            break
     var width := maxf(float(segment[4]), 1.0)
     var paint := int(segment[13]) if segment.size() > 13 else 0
     var lanes := int(segment[14]) if segment.size() > 14 else 2
     var start_station := float(segment[16]) if segment.size() > 16 else 0.0
     var end_station := float(segment[17]) if segment.size() > 17 else 1000000.0
-    # Different source ways can overlap at a real at-grade junction. A tiny
-    # stable source-way bias prevents equal-depth asphalt from flickering,
-    # while all graph pieces/tiles of the same way share one exact offset.
     var source_way := str(segment[7]).get_slice(":", 0) if segment.size() > 7 else "legacy"
     var height_bias := _source_way_height_bias(source_way)
-    var tangent := Vector2(float(segment[2]) - float(segment[0]), float(segment[3]) - float(segment[1])).normalized()
+    var center_a := Vector2(float(segment[0]), float(segment[1]))
+    var center_b := Vector2(float(segment[2]), float(segment[3]))
+    var center_delta := center_b - center_a
+    var center_length := maxf(center_delta.length(), 0.001)
+    var tangent := center_delta / center_length
+    var start_y := float(segment[9]) if segment.size() > 10 else float(polygon[0][1])
+    var end_y := float(segment[10]) if segment.size() > 10 else start_y
+    var forward3 := Vector3(center_delta.x, end_y - start_y, center_delta.y).normalized()
+    var right3 := Vector3(-tangent.y, 0.0, tangent.x)
+    var normal := right3.cross(forward3).normalized()
+    if normal.y < 0.0:
+        normal = -normal
+    var base := vertices.size()
     for vertex_index in range(polygon.size()):
         var p: Array = polygon[vertex_index]
-        # A local decimetre overlay plus a near camera plane and bounded draw
-        # distance avoids precision fighting the 45 km overview depth range.
-        vertices.append(Vector3(float(p[0]) - origin_x, float(p[1]) + height_bias, float(p[2]) - origin_z))
+        var point_2d := Vector2(float(p[0]), float(p[2]))
+        var along := clampf((point_2d - center_a).dot(tangent) / center_length, 0.0, 1.0)
+        # The source DEM controls the centreline elevation, not the left/right
+        # road edges independently. This removes the severe cross-slope and
+        # saw-tooth carriageway deformation produced by conforming the ribbon
+        # to individual terrain triangles.
+        var deck_y := lerpf(start_y, end_y, along)
+        vertices.append(Vector3(float(p[0]) - origin_x, deck_y + height_bias, float(p[2]) - origin_z))
         normals.append(normal)
         var uv := Vector2.ZERO
         if segment.size() > 12 and segment[12].size() == polygon.size():
             uv = Vector2(float(segment[12][vertex_index][0]), float(segment[12][vertex_index][1]))
         else:
-            var relative := Vector2(float(p[0]) - float(segment[0]), float(p[2]) - float(segment[1]))
+            var relative := point_2d - center_a
             uv = Vector2(relative.dot(tangent), relative.dot(Vector2(-tangent.y, tangent.x)))
         uvs.append(uv)
         uv2s.append(Vector2(maxf(0.0, uv.x - start_station), maxf(0.0, end_station - uv.x)))
         colors.append(Color(width / 64.0, float(paint) / 2.0, float(lanes) / 8.0, 1.0))
     for i in range(1, polygon.size() - 1):
-        # Ribbons are counterclockwise in X/Z. Reverse for Godot's upward
-        # facing front side rather than relying on double-sided backfaces.
         indices.append_array(PackedInt32Array([base, base + i + 1, base + i]))
 
 func _source_way_height_bias(source_way: String) -> float:
-    # Avalanche adjacent OSM IDs before choosing a fine-grained offset. The
-    # previous 32 buckets gave unrelated intersecting ways identical depths.
-    # Keep the same overlay range and a shared offset for every piece of a way.
+    # Keep enough separation to avoid equal-depth flicker without turning the
+    # asphalt into a 14-17 cm curb that visibly floats above the terrain.
     var mixed := source_way.hash() & 0xffffffff
     mixed = ((mixed ^ (mixed >> 16)) * 0x7feb352d) & 0xffffffff
     mixed = ((mixed ^ (mixed >> 15)) * 0x846ca68b) & 0xffffffff
     mixed ^= mixed >> 16
-    return 0.14 + float(mixed & 0xffff) * (0.031 / 65535.0)
+    return 0.028 + float(mixed & 0xffff) * (0.018 / 65535.0)
 
 func _flush_mesh_batch() -> void:
     for prefix in ["paved", "dirt"]:
@@ -367,8 +365,6 @@ func _index_surface_segment(index: Dictionary, segment: Array) -> void:
             if not index.has(cell):
                 index[cell] = {}
             if not index[cell].has(identifier):
-                # Do not retain the many terrain-triangle polygon records.
-                # One logical segment record per occupied 128 m cell is enough.
                 index[cell][identifier] = {"a": Vector2(float(segment[0]), float(segment[1])),
                     "b": Vector2(float(segment[2]), float(segment[3])), "width_m": float(segment[4]),
                     "class_id": int(segment[5]), "flags": int(segment[6]), "edge_id": str(segment[7]),
