@@ -18,6 +18,7 @@ BusStopLayer="*res://scripts/bus_stop_layer.gd"
 VehicleDriverLayer="*res://scripts/vehicle_driver_layer.gd"
 StartupMenu="*res://scripts/startup_menu.gd"
 AtmosphereFX="*res://scripts/atmosphere_fx.gd"
+LocationTracker="*res://scripts/location_tracker.gd"
 
 [display]
 window/size/viewport_width=1280

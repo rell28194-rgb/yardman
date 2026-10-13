@@ -182,6 +182,15 @@ def main() -> int:
         sys.executable, str(roadwork_tool), str(args.input_geojson),
         str(args.output_dir / "roadworks"), "--tile-size", str(args.tile_size),
     ], check=True)
+    # Named settlements and public squares share the same source PBF and EPSG:3448
+    # origin. Rebuild them with the national road pass so the HUD location readout
+    # follows the player's actual world position instead of the last travel menu item.
+    if args.input_geojson.suffix.lower() == ".pbf":
+        place_tool = Path(__file__).with_name("build_places.py")
+        subprocess.run([
+            sys.executable, str(place_tool), str(args.input_geojson),
+            str(args.output_dir.parent / "places"), "--tile-size", str(args.tile_size),
+        ], check=True)
     print(json.dumps(manifest["stats"], indent=2, sort_keys=True))
     print(f"Bounds (m): {manifest['bounds']}")
     print(f"Wrote {len(manifest['tiles'])} road tiles and persistent topology to {args.output_dir}")
