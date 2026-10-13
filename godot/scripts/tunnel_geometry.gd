@@ -10,9 +10,13 @@ class_name YardmanTunnelGeometry
 const STRUCTURE_ROOT := "res://data/roads/structures"
 const PORTAL_ROOT := "res://data/roads/tunnel_portals"
 const MASK_RESOLUTION := 1024
-const PORTAL_INSET_M := 24.0
-const PORTAL_OUTSET_M := 3.0
-const PORTAL_MARGIN_M := 1.4
+# Keep the terrain cut tightly around the actual source portal. The previous
+# 24 m inward carve could expose a large rectangular bite in steep terrain and
+# make a correctly located OSM tunnel look like it was punched through the
+# wrong part of the hillside.
+const PORTAL_INSET_M := 10.0
+const PORTAL_OUTSET_M := 1.5
+const PORTAL_MARGIN_M := 0.75
 const COLLISION_DETAIL_M := 4.0
 const TUNNEL_CLEARANCE_M := 5.2
 const WALL_THICKNESS_M := 0.42
