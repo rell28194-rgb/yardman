@@ -55,8 +55,7 @@ func _update_location() -> void:
     var roads: Variant = scene.get("roads")
     var player: Variant = scene.get("player")
     var car: Variant = scene.get("car")
-    var hud: Variant = scene.get("hud")
-    if roads == null or player == null or car == null or hud == null:
+    if roads == null or player == null or car == null:
         return
     var active: Node3D = player as Node3D
     if bool(player.get("in_vehicle")):
@@ -76,14 +75,15 @@ func _update_location() -> void:
     if label.is_empty():
         label = parish if not parish.is_empty() else "Jamaica"
 
-    # Keep gameplay recovery/travel state on a real parish, while the HUD gets
-    # the more precise town/neighbourhood/square label.
+    # Keep recovery/travel state on a parish, while main.gd owns HUD rendering.
+    # This prevents the per-physics-frame HUD refresh from overwriting the live
+    # town/neighbourhood/square label with a stale parish-only value.
     if not parish.is_empty() and parish != _last_parish:
         scene.set("current_parish", parish)
         _last_parish = parish
     if label != _last_label:
         _last_label = label
-    hud.call("set_status", {"parish": label})
+        scene.set("current_location_label", label)
 
 func _nearest_parish(roads: Variant, x: float, z: float) -> String:
     var road_manifest: Variant = roads.get("manifest")
