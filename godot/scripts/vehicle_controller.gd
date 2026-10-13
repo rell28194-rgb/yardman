@@ -34,6 +34,7 @@ var _probe_normal := Vector3.UP
 var _contact_ratio := 1.0
 var _suspension_compression := 0.35
 var _track_half_m := 0.72
+var _headlights: Array[SpotLight3D] = []
 
 func configure(vehicle: CharacterBody3D) -> void:
     body = vehicle
@@ -54,7 +55,30 @@ func configure(vehicle: CharacterBody3D) -> void:
     _track_half_m = clampf(bounds.size.x * 0.36, 0.58, 0.92)
     if bool(visual.get("is_reference_model")):
         _fit_reference_collision()
+    _make_headlights(bounds)
     _ground_basis = Basis.IDENTITY
+
+func _make_headlights(bounds: AABB) -> void:
+    _headlights.clear()
+    var half_width := bounds.size.x * 0.5
+    var lamp_x := clampf(half_width * 0.62, 0.48, 0.72)
+    var lamp_y := clampf(bounds.position.y + bounds.size.y * 0.43, 0.55, 0.92)
+    var front_z := bounds.position.z - 0.06
+    for x in [-lamp_x, lamp_x]:
+        var light := SpotLight3D.new()
+        light.name = "HeadlightLeft" if x < 0.0 else "HeadlightRight"
+        light.position = Vector3(x, lamp_y, front_z)
+        light.light_color = Color(1.0, 0.91, 0.75)
+        light.light_energy = 4.2
+        light.spot_range = 46.0
+        light.spot_angle = 31.0
+        light.spot_angle_attenuation = 1.35
+        light.shadow_enabled = false
+        light.distance_fade_enabled = true
+        light.distance_fade_begin = 28.0
+        light.distance_fade_length = 22.0
+        visual.add_child(light)
+        _headlights.append(light)
 
 func _fit_reference_collision() -> void:
     var bounds: AABB = visual.get("geometry_bounds")
@@ -221,6 +245,9 @@ func _update_visual(delta: float, forward: Vector3, braking: float) -> void:
     visual.basis = _ground_basis
     var suspension_y := lerpf(0.055, -0.035, _suspension_compression)
     visual.position.y = lerpf(visual.position.y, suspension_y, 1.0 - exp(-delta * 10.0))
+    for light in _headlights:
+        light.visible = occupied
+        light.light_energy = lerpf(light.light_energy, 4.2 if occupied else 0.0, 1.0 - exp(-delta * 8.0))
     var body_pitch := clampf(_last_acceleration * 0.0048, -0.070, 0.046)
     var body_roll := clampf(-_last_yaw_rate * speed_mps * 0.0068, -0.09, 0.09)
     if drifting:
