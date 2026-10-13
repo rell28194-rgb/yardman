@@ -10,11 +10,12 @@ class_name YardmanTunnelGeometry
 const STRUCTURE_ROOT := "res://data/roads/structures"
 const PORTAL_ROOT := "res://data/roads/tunnel_portals"
 const MASK_RESOLUTION := 1024
-# Keep the terrain cut tightly around the actual source portal. The previous
-# 24 m inward carve could expose a large rectangular bite in steep terrain and
-# make a correctly located OSM tunnel look like it was punched through the
-# wrong part of the hillside.
-const PORTAL_INSET_M := 10.0
+# Keep the visible terrain cut tight around the real source portal so steep
+# hillsides do not show the old oversized rectangular bite. Physics needs a
+# slightly deeper opening than the visible mask so the car cannot catch the
+# heightfield immediately after entering the bore.
+const VISUAL_PORTAL_INSET_M := 10.0
+const COLLISION_PORTAL_INSET_M := 16.0
 const PORTAL_OUTSET_M := 1.5
 const PORTAL_MARGIN_M := 0.75
 const COLLISION_DETAIL_M := 4.0
@@ -68,6 +69,23 @@ func _on_terrain_tile_ready(tile: Vector2i) -> void:
             _carve_portal_collision(tile_root, local_portals)
             portal_tiles_built += 1
 
+func _bounds_for_portal(portal: Vector2, direction: Vector2, right: Vector2,
+        half_width: float, inset_m: float) -> Rect2:
+    var corners := PackedVector2Array([
+        portal - direction * PORTAL_OUTSET_M - right * half_width,
+        portal - direction * PORTAL_OUTSET_M + right * half_width,
+        portal + direction * inset_m + right * half_width,
+        portal + direction * inset_m - right * half_width,
+    ])
+    var minimum := corners[0]
+    var maximum := corners[0]
+    for corner in corners:
+        minimum.x = minf(minimum.x, corner.x)
+        minimum.y = minf(minimum.y, corner.y)
+        maximum.x = maxf(maximum.x, corner.x)
+        maximum.y = maxf(maximum.y, corner.y)
+    return Rect2(minimum, maximum - minimum)
+
 func _prepare_portals(tile: Vector2i, portals: Array) -> Array:
     var result: Array = []
     var origin := Vector2(float(tile.x) * float(terrain.tile_size), float(tile.y) * float(terrain.tile_size))
@@ -86,35 +104,24 @@ func _prepare_portals(tile: Vector2i, portals: Array) -> Array:
         direction = direction.normalized()
         var right := Vector2(-direction.y, direction.x)
         var half_width := maxf(2.2, float(raw.get("width_m", 6.0)) * 0.5 + PORTAL_MARGIN_M)
-        var corners := PackedVector2Array([
-            portal - direction * PORTAL_OUTSET_M - right * half_width,
-            portal - direction * PORTAL_OUTSET_M + right * half_width,
-            portal + direction * PORTAL_INSET_M + right * half_width,
-            portal + direction * PORTAL_INSET_M - right * half_width,
-        ])
-        var minimum := corners[0]
-        var maximum := corners[0]
-        for corner in corners:
-            minimum.x = minf(minimum.x, corner.x)
-            minimum.y = minf(minimum.y, corner.y)
-            maximum.x = maxf(maximum.x, corner.x)
-            maximum.y = maxf(maximum.y, corner.y)
         result.append({
             "origin": portal,
             "direction": direction,
             "right": right,
             "half_width": half_width,
-            "bounds": Rect2(minimum, maximum - minimum),
+            "bounds": _bounds_for_portal(portal, direction, right, half_width, VISUAL_PORTAL_INSET_M),
+            "collision_bounds": _bounds_for_portal(portal, direction, right, half_width, COLLISION_PORTAL_INSET_M),
         })
     return result
 
-func _inside_portal(point: Vector2, portal: Dictionary) -> bool:
+func _inside_portal(point: Vector2, portal: Dictionary,
+        inset_m: float = VISUAL_PORTAL_INSET_M) -> bool:
     var portal_origin: Vector2 = portal["origin"]
     var portal_direction: Vector2 = portal["direction"]
     var portal_right: Vector2 = portal["right"]
     var offset: Vector2 = point - portal_origin
     var along := offset.dot(portal_direction)
-    if along < -PORTAL_OUTSET_M or along > PORTAL_INSET_M:
+    if along < -PORTAL_OUTSET_M or along > inset_m:
         return false
     return absf(offset.dot(portal_right)) <= float(portal["half_width"])
 
@@ -171,7 +178,7 @@ func _triangle_bounds(a: Vector3, b: Vector3, c: Vector3) -> Rect2:
 func _could_touch_portal(a: Vector3, b: Vector3, c: Vector3, portals: Array) -> bool:
     var bounds := _triangle_bounds(a, b, c)
     for portal in portals:
-        var portal_bounds: Rect2 = portal["bounds"]
+        var portal_bounds: Rect2 = portal["collision_bounds"]
         if bounds.intersects(portal_bounds, true):
             return true
     return false
@@ -179,7 +186,7 @@ func _could_touch_portal(a: Vector3, b: Vector3, c: Vector3, portals: Array) -> 
 func _centroid_in_portal(a: Vector3, b: Vector3, c: Vector3, portals: Array) -> bool:
     var center := Vector2((a.x + b.x + c.x) / 3.0, (a.z + b.z + c.z) / 3.0)
     for portal in portals:
-        if _inside_portal(center, portal):
+        if _inside_portal(center, portal, COLLISION_PORTAL_INSET_M):
             return true
     return false
 
