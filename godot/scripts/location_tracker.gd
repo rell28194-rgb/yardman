@@ -43,10 +43,23 @@ func _load_places() -> void:
 
 func _process(delta: float) -> void:
     _clock += delta
-    if _clock < UPDATE_INTERVAL:
+    if _clock >= UPDATE_INTERVAL:
+        _clock = 0.0
+        _update_location()
+    # main.gd refreshes the rest of the HUD from _physics_process(). Reapply the
+    # cached geographic label in idle processing so the displayed frame keeps
+    # the precise town/neighbourhood/square instead of flashing back to parish.
+    _apply_cached_label()
+
+func _apply_cached_label() -> void:
+    if _last_label.is_empty():
         return
-    _clock = 0.0
-    _update_location()
+    var scene: Node = get_tree().current_scene
+    if scene == null:
+        return
+    var hud: Variant = scene.get("hud")
+    if hud != null:
+        hud.call("set_status", {"parish": _last_label})
 
 func _update_location() -> void:
     var scene: Node = get_tree().current_scene
@@ -75,15 +88,12 @@ func _update_location() -> void:
     if label.is_empty():
         label = parish if not parish.is_empty() else "Jamaica"
 
-    # Keep recovery/travel state on a parish, while main.gd owns HUD rendering.
-    # This prevents the per-physics-frame HUD refresh from overwriting the live
-    # town/neighbourhood/square label with a stale parish-only value.
+    # Keep recovery/travel state on a real parish while the cached label carries
+    # the much more precise place hierarchy shown to the player.
     if not parish.is_empty() and parish != _last_parish:
         scene.set("current_parish", parish)
         _last_parish = parish
-    if label != _last_label:
-        _last_label = label
-        scene.set("current_location_label", label)
+    _last_label = label
 
 func _nearest_parish(roads: Variant, x: float, z: float) -> String:
     var road_manifest: Variant = roads.get("manifest")
