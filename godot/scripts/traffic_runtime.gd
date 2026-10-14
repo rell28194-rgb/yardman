@@ -16,6 +16,7 @@ var _proxy_scene: Node
 var _last_near := 0
 var _last_medium := 0
 var _far_statistical := 0
+var _last_yielding := 0
 var _quality := "Balanced"
 var _thermal_stage := 0
 
@@ -174,6 +175,85 @@ static func continuation_for(current: Dictionary, direction_sign: int, candidate
             best = {"record": candidate, "direction": candidate_direction, "join": start, "score": score}
     return best
 
+static func junction_options(current: Dictionary, direction_sign: int, candidates: Dictionary) -> Array[Dictionary]:
+    var a: Vector2 = current.get("a", Vector2.ZERO)
+    var b: Vector2 = current.get("b", Vector2.ZERO)
+    var endpoint: Vector2 = b if direction_sign >= 0 else a
+    var tangent := (b - a).normalized() * float(1 if direction_sign >= 0 else -1)
+    var current_id := str(current.get("edge_id", ""))
+    var options: Array[Dictionary] = []
+    var keys: Array = candidates.keys()
+    keys.sort()
+    for key in keys:
+        var candidate: Dictionary = candidates[key]
+        if str(candidate.get("edge_id", key)) == current_id:
+            continue
+        var ca: Vector2 = candidate.get("a", Vector2.ZERO)
+        var cb: Vector2 = candidate.get("b", Vector2.ZERO)
+        var da := endpoint.distance_to(ca)
+        var db := endpoint.distance_to(cb)
+        var distance := minf(da, db)
+        if distance > 18.0:
+            continue
+        var candidate_direction := 1 if da <= db else -1
+        var travel := (cb - ca).normalized() if candidate_direction >= 0 else (ca - cb).normalized()
+        if travel.length_squared() < 0.5:
+            continue
+        var alignment := tangent.dot(travel)
+        if alignment < -0.25:
+            continue
+        options.append({
+            "record": candidate,
+            "direction": candidate_direction,
+            "distance": distance,
+            "alignment": alignment,
+            "edge_id": str(candidate.get("edge_id", key)),
+        })
+    return options
+
+static func road_priority(record: Dictionary) -> float:
+    var class_id := clampi(int(record.get("class_id", 5)), 0, 15)
+    var width := clampf(float(record.get("width_m", 6.5)), 3.0, 20.0)
+    return 100.0 - float(class_id) * 8.0 + width * 0.35
+
+static func should_yield_at_junction(identifier: String, current: Dictionary, direction_sign: int,
+        endpoint: Vector2, population: Dictionary, radius_m: float = 18.0) -> bool:
+    var a: Vector2 = current.get("a", Vector2.ZERO)
+    var b: Vector2 = current.get("b", Vector2.ZERO)
+    var my_travel := (b - a).normalized() * float(1 if direction_sign >= 0 else -1)
+    if my_travel.length_squared() < 0.5:
+        return false
+    var my_priority := road_priority(current)
+    var ids: Array = population.keys()
+    ids.sort()
+    for other_id_value in ids:
+        var other_id := str(other_id_value)
+        if other_id == identifier:
+            continue
+        var other: Dictionary = population[other_id_value]
+        var other_point: Vector2 = other.get("position", Vector2.ZERO)
+        var distance := other_point.distance_to(endpoint)
+        if distance > radius_m:
+            continue
+        var other_record: Dictionary = other.get("record", {})
+        var other_direction := int(other.get("direction", 1))
+        var other_pose := lane_pose(other_record, float(other.get("progress", 0.5)), other_direction)
+        if other_pose.is_empty():
+            continue
+        var other_travel: Vector2 = other_pose.travel
+        if other_travel.dot(my_travel) > 0.92:
+            continue
+        if distance > 0.5:
+            var toward_junction := (endpoint - other_point) / distance
+            if other_travel.dot(toward_junction) < 0.18:
+                continue
+        var other_priority := road_priority(other_record)
+        if other_priority > my_priority + 0.05:
+            return true
+        if is_equal_approx(other_priority, my_priority) and other_id < identifier:
+            return true
+    return false
+
 func _reconcile_population(scene: Node, roads, terrain, active_xz: Vector2) -> void:
     var records_value = roads.call("_nearby_surface_segments", active_xz.x, active_xz.y, minf(spawn_radius, 500.0))
     if not records_value is Dictionary:
@@ -241,6 +321,7 @@ func _default_speed(class_id: int) -> float:
     return 10.5
 
 func _advance_agents(delta: float, roads, terrain, active_xz: Vector2) -> void:
+    _last_yielding = 0
     var ids: Array = agents.keys()
     ids.sort()
     for identifier in ids:
@@ -265,12 +346,31 @@ func _advance_agents(delta: float, roads, terrain, active_xz: Vector2) -> void:
             target_speed = 0.0
         elif nearest_ahead < 16.0:
             target_speed *= clampf((nearest_ahead - 6.0) / 10.0, 0.12, 1.0)
+
+        var endpoint := Vector2(record.b if direction >= 0 else record.a)
+        var endpoint_fraction := 1.0 - float(agent.progress) if direction >= 0 else float(agent.progress)
+        var endpoint_distance := maxf(0.0, endpoint_fraction * float(pose.length))
+        var junction_candidates: Dictionary = {}
+        if endpoint_distance <= 22.0:
+            var nearby_value = roads.call("_nearby_surface_segments", endpoint.x, endpoint.y, 44.0)
+            if nearby_value is Dictionary:
+                junction_candidates = nearby_value
+                var options := junction_options(record, direction, junction_candidates)
+                if options.size() > 1:
+                    var approach_scale := clampf(endpoint_distance / 22.0, 0.28, 1.0)
+                    target_speed = minf(target_speed, maxf(3.2, float(agent.target_speed) * approach_scale))
+                    if endpoint_distance <= 16.0 and should_yield_at_junction(str(identifier), record, direction, endpoint, agents):
+                        target_speed = 0.0
+                        _last_yielding += 1
+
         var speed := move_toward(float(agent.speed), target_speed, delta * (4.6 if target_speed < float(agent.speed) else 2.2))
         var progress := float(agent.progress) + float(direction) * speed * delta / maxf(float(pose.length), 0.1)
         if progress > 1.0 or progress < 0.0:
-            var endpoint := Vector2(record.b if direction >= 0 else record.a)
-            var candidates_value = roads.call("_nearby_surface_segments", endpoint.x, endpoint.y, 44.0)
-            var continuation := continuation_for(record, direction, candidates_value if candidates_value is Dictionary else {})
+            if junction_candidates.is_empty():
+                var candidates_value = roads.call("_nearby_surface_segments", endpoint.x, endpoint.y, 44.0)
+                if candidates_value is Dictionary:
+                    junction_candidates = candidates_value
+            var continuation := continuation_for(record, direction, junction_candidates)
             if continuation.is_empty():
                 _destroy_agent(str(identifier))
                 continue
@@ -413,6 +513,7 @@ func _clear_scene_state() -> void:
     _last_near = 0
     _last_medium = 0
     _far_statistical = 0
+    _last_yielding = 0
 
 func runtime_snapshot() -> Dictionary:
     return {
@@ -420,6 +521,7 @@ func runtime_snapshot() -> Dictionary:
         "near_full": _last_near,
         "medium_hlod": _last_medium,
         "far_statistical": _far_statistical,
+        "yielding": _last_yielding,
         "quality": _quality,
         "thermal_stage": _thermal_stage,
         "near_budget": near_visual_budget,
