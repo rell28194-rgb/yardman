@@ -8,7 +8,7 @@ class FakeVehicle:
 
 class FakeScene:
     extends Node
-    var vehicle = FakeVehicle.new()
+    var vehicle: FakeVehicle = FakeVehicle.new()
 
 var failures := 0
 
@@ -31,12 +31,12 @@ func _run() -> void:
     _check(ids.has("toyota_mark_x"), "Toyota Mark X missing from garage")
     _check(ids.has("port_royal_992"), "Port Royal 992 missing from garage")
     _check(garage.has_node("GarageUI/GarageButton"), "Touch-visible GARAGE button missing")
-    _check(garage.has_node("GarageUI/GaragePanel/"), "Garage panel missing")
+    _check(garage.has_node("GarageUI/GaragePanel"), "Garage panel missing")
 
-    var previous := garage.selected_vehicle_id()
+    var previous: String = str(garage.selected_vehicle_id())
     _check(garage.set_selected_vehicle("toyota_mark_x", false, false), "Could not select Mark X")
     _check(garage.selected_vehicle_id() == "toyota_mark_x", "Selection state did not update")
-    var fake := FakeScene.new()
+    var fake: FakeScene = FakeScene.new()
     root.add_child(fake)
     _check(garage.apply_selected_to_scene(fake), "Garage could not bridge selection to a vehicle controller")
     _check(fake.vehicle.applied == "toyota_mark_x", "Controller bridge received wrong vehicle id")
