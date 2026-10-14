@@ -2,6 +2,8 @@ extends Node
 class_name YardmanTrafficRuntime
 
 const VehicleModelScript = preload("res://scripts/vehicle_model.gd")
+const ROAD_FLAG_ONEWAY := 1
+const ROAD_FLAG_ONEWAY_REVERSE := 16
 
 var max_agents := 18
 var near_visual_budget := 6
@@ -122,6 +124,13 @@ static func statistical_population_for(capacity: int, hour: float, weather_facto
     var island_scale := float(maxi(capacity, 8)) * 3.4
     return maxi(0, int(round(island_scale * density_for_hour(hour) * clampf(weather_factor, 0.70, 1.0))))
 
+static func legal_direction_for(record: Dictionary, fallback_direction: int) -> int:
+    var fallback := 1 if fallback_direction >= 0 else -1
+    var flags := int(record.get("flags", 0))
+    if (flags & ROAD_FLAG_ONEWAY) == 0:
+        return fallback
+    return -1 if (flags & ROAD_FLAG_ONEWAY_REVERSE) != 0 else 1
+
 static func lane_pose(record: Dictionary, progress: float, direction_sign: int) -> Dictionary:
     var a: Vector2 = record.get("a", Vector2.ZERO)
     var b: Vector2 = record.get("b", Vector2.ZERO)
@@ -179,6 +188,8 @@ static func continuation_for(current: Dictionary, direction_sign: int, candidate
             candidate_direction = -1
             start = cb
             travel = (ca - cb).normalized()
+        if legal_direction_for(candidate, candidate_direction) != candidate_direction:
+            continue
         if travel.length_squared() < 0.5:
             continue
         var alignment := tangent.dot(travel)
@@ -211,6 +222,8 @@ static func junction_options(current: Dictionary, direction_sign: int, candidate
         if distance > 18.0:
             continue
         var candidate_direction := 1 if da <= db else -1
+        if legal_direction_for(candidate, candidate_direction) != candidate_direction:
+            continue
         var travel := (cb - ca).normalized() if candidate_direction >= 0 else (ca - cb).normalized()
         if travel.length_squared() < 0.5:
             continue
@@ -313,7 +326,8 @@ func _reconcile_population(scene: Node, roads, terrain, active_xz: Vector2) -> v
         if segment_length < 18.0:
             continue
         var edge_id := str(record.get("edge_id", key))
-        var direction := 1 if (absi(edge_id.hash()) & 1) == 0 else -1
+        var fallback_direction := 1 if (absi(edge_id.hash()) & 1) == 0 else -1
+        var direction := legal_direction_for(record, fallback_direction)
         var identifier := "%s:%d" % [edge_id, direction]
         if agents.has(identifier):
             continue
