@@ -76,7 +76,7 @@ func _run() -> void:
     _check(not garage.is_vehicle_owned("toyota_mark_x"), "fresh garage incorrectly owns Mark X")
 
     jobs.set("wallet_jmd", 100000)
-    var price := garage.vehicle_price_jmd("toyota_mark_x")
+    var price: int = int(garage.vehicle_price_jmd("toyota_mark_x"))
     var balance_before := int(jobs.get("wallet_jmd"))
     _check(garage.purchase_vehicle("toyota_mark_x", false), "Mark X purchase failed with sufficient wallet")
     _check(garage.is_vehicle_owned("toyota_mark_x"), "purchased Mark X did not become owned")
