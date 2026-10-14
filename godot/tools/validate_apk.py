@@ -14,6 +14,7 @@ def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = N
     source = json.loads(source_manifest.read_text())
     roadwork_proof = {"roadwork_features": 0, "roadwork_tiles": 0}
     fence_proof = {"fence_features": 0, "wire_fence_features": 0, "fence_tiles": 0}
+    bus_stop_proof = {"bus_stop_features": 0, "bus_stop_tiles": 0}
     with zipfile.ZipFile(apk) as archive:
         corrupt = archive.testzip()
         if corrupt:
@@ -74,6 +75,51 @@ def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = N
                 "fence_features": int(fences.get("stats", {}).get("features", 0)),
                 "wire_fence_features": int(fences.get("stats", {}).get("wire_compatible_features", 0)),
                 "fence_tiles": len(fences.get("tiles", [])),
+            }
+        bus_stop_source_path = source_manifest.parent / "bus_stops" / "manifest.json"
+        if bus_stop_source_path.is_file():
+            bus_stop_name = "assets/data/roads/bus_stops/manifest.json"
+            if bus_stop_name not in names:
+                raise ValueError("Packaged Jamaica bus-stop authority is missing")
+            expected_bus_stops = json.loads(bus_stop_source_path.read_text())
+            bus_stops = json.loads(archive.read(bus_stop_name))
+            if bus_stops != expected_bus_stops:
+                raise ValueError("Packaged bus-stop metadata differs from compiled Jamaica source")
+            if bus_stops.get("crs") != manifest.get("crs") or bus_stops.get("source_sha256") != manifest.get("source_sha256"):
+                raise ValueError("Bus-stop source registration differs from roads")
+            if bus_stops.get("purpose") != "visual-only explicit OSM bus-stop point authority; OSM remains geographic authority":
+                raise ValueError("Bus-stop metadata lost its explicit geographic authority boundary")
+            expected_rule = "explicit highway=bus_stop nodes or public_transport=platform nodes with bus=yes only; no inferred stops, shelters or benches"
+            if bus_stops.get("placement_rule") != expected_rule:
+                raise ValueError("Bus-stop metadata lost its explicit-only placement rule")
+            counted_bus_stops = 0
+            seen_bus_nodes = set()
+            for tile in bus_stops.get("tiles", []):
+                filename = str(tile.get("file", ""))
+                name = "assets/data/roads/bus_stops/" + filename
+                if name not in names:
+                    raise ValueError("A Jamaica bus-stop tile was omitted from the APK: " + name)
+                payload = json.loads(archive.read(name))
+                if payload.get("tile") != [tile.get("x"), tile.get("z")]:
+                    raise ValueError("Bus-stop tile coordinates disagree with manifest: " + filename)
+                records = payload.get("bus_stops", [])
+                if len(records) != int(tile.get("records", -1)):
+                    raise ValueError("Bus-stop tile record count disagrees with manifest: " + filename)
+                for record in records:
+                    source_node = str(record.get("source_node", ""))
+                    position = record.get("position", [])
+                    if not source_node or source_node in seen_bus_nodes:
+                        raise ValueError("Missing or duplicate Jamaica bus-stop source node: " + source_node)
+                    if not isinstance(position, list) or len(position) < 2:
+                        raise ValueError("Invalid Jamaica bus-stop position: " + source_node)
+                    seen_bus_nodes.add(source_node)
+                    counted_bus_stops += 1
+            expected_count = int(bus_stops.get("stats", {}).get("features", -1))
+            if counted_bus_stops != expected_count:
+                raise ValueError("Bus-stop feature count differs from manifest")
+            bus_stop_proof = {
+                "bus_stop_features": counted_bus_stops,
+                "bus_stop_tiles": len(bus_stops.get("tiles", [])),
             }
         structure_proof = {}
         if manifest.get("structures"):
@@ -166,7 +212,7 @@ def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = N
             "coast_tiles": len(coast["tiles"]) if coast_manifest else 0,
             "building_tiles": len(buildings["tiles"]) if buildings_manifest else 0,
             "graph_edges": source["stats"].get("graph_edges", 0), "abis": sorted(abis),
-            **roadwork_proof, **fence_proof, **structure_proof}
+            **roadwork_proof, **fence_proof, **bus_stop_proof, **structure_proof}
 
 
 if __name__ == "__main__":
