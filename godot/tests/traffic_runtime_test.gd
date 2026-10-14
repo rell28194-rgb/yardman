@@ -67,6 +67,20 @@ func _run() -> void:
     _check(Traffic.density_for_hour(8.0) > Traffic.density_for_hour(3.0), "morning traffic should exceed overnight density")
     _check(Traffic.density_for_hour(17.0) > Traffic.density_for_hour(12.0), "evening peak should exceed midday density")
 
+    var dry_speed := Traffic.weather_speed_factor(0.0, 0.0)
+    var rain_speed := Traffic.weather_speed_factor(0.75, 0.35)
+    var storm_speed := Traffic.weather_speed_factor(1.0, 1.0)
+    _check(is_equal_approx(dry_speed, 1.0), "dry traffic speed factor changed baseline driving")
+    _check(rain_speed < dry_speed and storm_speed < rain_speed and storm_speed >= 0.64, "rain/standing water did not progressively reduce traffic speed within safe bounds")
+    var dry_density := Traffic.weather_density_factor(0.0)
+    var storm_density := Traffic.weather_density_factor(1.0)
+    _check(storm_density < dry_density and storm_density >= 0.78, "storm traffic density did not reduce without emptying the island")
+    var morning_far := Traffic.statistical_population_for(18, 8.0, dry_density)
+    var night_far := Traffic.statistical_population_for(18, 3.0, dry_density)
+    var storm_far := Traffic.statistical_population_for(18, 8.0, storm_density)
+    _check(morning_far > night_far, "far statistical traffic ignored daily activity cycle")
+    _check(storm_far < morning_far and storm_far > 0, "far statistical traffic ignored weather or collapsed entirely")
+
     var balanced := Traffic.budget_for("Balanced", 0)
     var hot := Traffic.budget_for("Balanced", 5)
     var performance := Traffic.budget_for("Performance", 0)
@@ -76,7 +90,7 @@ func _run() -> void:
     _check(float(hot.near_radius) >= 120.0 and float(hot.medium_radius) >= 320.0, "thermal policy erased required near/medium simulation coverage")
 
     if failures == 0:
-        print("YARDMAN_TRAFFIC_RUNTIME_TEST PASS lanes=2 continuation=1 junction_yield=4 density_cycle=1 simulation_lod=3")
+        print("YARDMAN_TRAFFIC_RUNTIME_TEST PASS lanes=2 continuation=1 junction_yield=4 density_cycle=1 weather_flow=5 simulation_lod=3")
         quit()
     else:
         print("YARDMAN_TRAFFIC_RUNTIME_TEST FAIL failures=%d" % failures)
