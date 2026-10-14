@@ -29,6 +29,12 @@ var _jump_buffer := 0.0
 var _coyote_time := 0.0
 var _touch_bound := false
 
+const VEHICLE_INTERACTION_SPEED_LIMIT_MPS := 2.0
+const ENTER_DOOR_REACH_M := 2.25
+const EXIT_SIDE_CLEARANCE_M := 0.76
+const EXIT_GROUND_RAY_UP_M := 2.4
+const EXIT_GROUND_RAY_DOWN_M := 3.8
+
 func _ready() -> void:
     collision_layer = 4
     collision_mask = 3
@@ -135,10 +141,14 @@ func step(delta: float, ready: bool) -> void:
     _animate(delta, horizontal_speed)
 
 func can_enter_vehicle() -> bool:
-    return not in_vehicle and vehicle != null and global_position.distance_to(vehicle.body.global_position) <= 3.7 and absf(vehicle.speed_mps) <= 2.0
+    if in_vehicle or vehicle == null or vehicle.body == null:
+        return false
+    if absf(float(vehicle.speed_mps)) > VEHICLE_INTERACTION_SPEED_LIMIT_MPS:
+        return false
+    return nearest_door_distance(global_position, vehicle.body.global_transform, _vehicle_dimensions()) <= ENTER_DOOR_REACH_M
 
 func can_exit_vehicle() -> bool:
-    return in_vehicle and vehicle != null and absf(vehicle.speed_mps) <= 2.0
+    return in_vehicle and vehicle != null and vehicle.body != null and absf(float(vehicle.speed_mps)) <= VEHICLE_INTERACTION_SPEED_LIMIT_MPS
 
 func try_enter_vehicle() -> bool:
     if not can_enter_vehicle():
@@ -147,23 +157,46 @@ func try_enter_vehicle() -> bool:
     return true
 
 func try_exit_vehicle() -> bool:
-    if not can_exit_vehicle():
+    if not can_exit_vehicle() or get_world_3d() == null:
         return false
     var car: CharacterBody3D = vehicle.body
-    for side in [1.0, -1.0]:
-        var candidate: Vector3 = car.global_position + car.global_basis.x * (1.8 * side)
-        var ray := PhysicsRayQueryParameters3D.create(candidate + Vector3.UP * 5.0, candidate - Vector3.UP * 8.0, 1)
+    var space := get_world_3d().direct_space_state
+    var collider := get_node_or_null("PlayerShape") as CollisionShape3D
+    if collider == null or collider.shape == null:
+        return false
+    for local_candidate in exit_candidates_local(_vehicle_dimensions(), EXIT_SIDE_CLEARANCE_M):
+        var candidate: Vector3 = car.global_transform * local_candidate
+        var ray := PhysicsRayQueryParameters3D.create(
+            candidate + Vector3.UP * EXIT_GROUND_RAY_UP_M,
+            candidate - Vector3.UP * EXIT_GROUND_RAY_DOWN_M,
+            1)
         ray.exclude = [car.get_rid(), get_rid()]
-        var hit := get_world_3d().direct_space_state.intersect_ray(ray)
+        var hit := space.intersect_ray(ray)
         if hit.is_empty():
             continue
+        var normal: Vector3 = hit.get("normal", Vector3.UP)
+        if not walkable_exit_normal(normal, floor_max_angle):
+            continue
         candidate.y = float(hit.position.y) + 0.05
+
+        # Refuse exits that would teleport the player through the vehicle or a
+        # nearby wall even when the final capsule itself happens to be clear.
+        var door_local := _nearest_door_local(local_candidate, _vehicle_dimensions())
+        var door_world: Vector3 = car.global_transform * door_local
+        var path := PhysicsRayQueryParameters3D.create(
+            door_world + Vector3.UP * 0.78,
+            candidate + Vector3.UP * 0.78,
+            3)
+        path.exclude = [car.get_rid(), get_rid()]
+        if not space.intersect_ray(path).is_empty():
+            continue
+
         var query := PhysicsShapeQueryParameters3D.new()
-        query.shape = (get_node("PlayerShape") as CollisionShape3D).shape
+        query.shape = collider.shape
         query.transform = Transform3D(Basis.IDENTITY, candidate + Vector3.UP * 0.88)
         query.collision_mask = 3
         query.exclude = [car.get_rid(), get_rid()]
-        if not get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty():
+        if not space.intersect_shape(query, 1).is_empty():
             continue
         global_position = candidate
         velocity = Vector3.ZERO
@@ -171,6 +204,66 @@ func try_exit_vehicle() -> bool:
         _set_occupied(false)
         return true
     return false
+
+func _vehicle_dimensions() -> Vector3:
+    if vehicle == null:
+        return Vector3(1.85, 1.30, 4.0)
+    var metadata: Dictionary = vehicle.profile_metadata() if vehicle.has_method("profile_metadata") else {}
+    return dimensions_from_profile(metadata)
+
+static func dimensions_from_profile(profile_data: Dictionary) -> Vector3:
+    var dimensions: Array = profile_data.get("dimensions_m", [1.85, 1.30, 4.0])
+    if dimensions.size() < 3:
+        return Vector3(1.85, 1.30, 4.0)
+    return Vector3(
+        clampf(float(dimensions[0]), 1.20, 3.20),
+        clampf(float(dimensions[1]), 0.85, 3.40),
+        clampf(float(dimensions[2]), 2.40, 8.50))
+
+static func door_points_local(dimensions: Vector3) -> Array[Vector3]:
+    var half_width := dimensions.x * 0.5
+    var front_door_z := -dimensions.z * 0.13
+    var rear_door_z := dimensions.z * 0.18
+    return [
+        Vector3(-half_width, 0.72, front_door_z),
+        Vector3(half_width, 0.72, front_door_z),
+        Vector3(-half_width, 0.72, rear_door_z),
+        Vector3(half_width, 0.72, rear_door_z),
+    ]
+
+static func exit_candidates_local(dimensions: Vector3, side_clearance: float = EXIT_SIDE_CLEARANCE_M) -> Array[Vector3]:
+    var x := dimensions.x * 0.5 + maxf(side_clearance, 0.45)
+    var front_z := -dimensions.z * 0.13
+    var rear_z := dimensions.z * 0.18
+    var forward_escape_z := -dimensions.z * 0.36
+    var rear_escape_z := dimensions.z * 0.38
+    return [
+        Vector3(-x, 0.05, front_z), Vector3(x, 0.05, front_z),
+        Vector3(-x, 0.05, rear_z), Vector3(x, 0.05, rear_z),
+        Vector3(-x, 0.05, forward_escape_z), Vector3(x, 0.05, forward_escape_z),
+        Vector3(-x, 0.05, rear_escape_z), Vector3(x, 0.05, rear_escape_z),
+    ]
+
+static func nearest_door_distance(point_world: Vector3, car_transform: Transform3D, dimensions: Vector3) -> float:
+    var best := INF
+    for local_point in door_points_local(dimensions):
+        best = minf(best, point_world.distance_to(car_transform * local_point))
+    return best
+
+static func walkable_exit_normal(normal: Vector3, max_floor_angle: float) -> bool:
+    if normal.length_squared() < 0.25:
+        return false
+    return normal.normalized().angle_to(Vector3.UP) <= max_floor_angle + 0.001
+
+static func _nearest_door_local(candidate_local: Vector3, dimensions: Vector3) -> Vector3:
+    var best := Vector3.ZERO
+    var best_distance := INF
+    for door in door_points_local(dimensions):
+        var distance := Vector2(candidate_local.x - door.x, candidate_local.z - door.z).length_squared()
+        if distance < best_distance:
+            best_distance = distance
+            best = door
+    return best
 
 func _set_occupied(value: bool) -> void:
     in_vehicle = value
