@@ -81,15 +81,36 @@ func _run() -> void:
     var runtime = root.get_node_or_null("VehicleVisualRuntime")
     _check(runtime != null and runtime.has_method("style_visual"), "VehicleVisualRuntime autoload is not integrated")
     if runtime != null:
-        var direct := _make_sample()
-        root.add_child(direct)
-        var direct_stats: Dictionary = runtime.style_visual(direct, "toyota_mark_x")
-        _check(str(direct_stats.get("vehicle_id", "")) == "toyota_mark_x", "Runtime styling bridge applied the wrong profile")
-        direct.queue_free()
+        var geometry_signatures: Array[String] = []
+        for vehicle_id in Catalog.production_ids():
+            var direct := _make_sample()
+            root.add_child(direct)
+            var direct_stats: Dictionary = runtime.style_visual(direct, str(vehicle_id))
+            _check(str(direct_stats.get("vehicle_id", "")) == str(vehicle_id), "Runtime styling bridge applied the wrong profile for %s" % vehicle_id)
+            _check(bool(direct_stats.get("profile_geometry", false)), "%s did not receive profile-aware fallback geometry" % vehicle_id)
+            _check(int(direct_stats.get("geometry_mesh_parts", 0)) >= 10, "%s fallback geometry is too sparse to establish a distinct silhouette" % vehicle_id)
+            var signature := str(direct_stats.get("geometry_signature", ""))
+            _check(not signature.is_empty(), "%s geometry signature was not published" % vehicle_id)
+            _check(str(direct.get_meta("yardman_geometry_identity", "")) == str(vehicle_id), "%s geometry identity metadata is wrong" % vehicle_id)
+            _check(direct.get_node_or_null("ProfileIdentityGeometry") != null, "%s did not create its profile identity geometry node" % vehicle_id)
+            geometry_signatures.append(signature)
+            direct.queue_free()
+        _check(geometry_signatures.size() == 3, "Production geometry signature coverage is incomplete")
+        if geometry_signatures.size() == 3:
+            _check(geometry_signatures[0] != geometry_signatures[1], "Crown and Mark X still share one geometry signature")
+            _check(geometry_signatures[1] != geometry_signatures[2], "Mark X and Port Royal still share one geometry signature")
+            _check(geometry_signatures[0] != geometry_signatures[2], "Crown and Port Royal still share one geometry signature")
+
+        var legacy := _make_sample()
+        root.add_child(legacy)
+        var legacy_stats: Dictionary = runtime.style_visual(legacy, "legacy_sedan")
+        _check(not bool(legacy_stats.get("profile_geometry", true)), "Legacy sedan was incorrectly converted into production profile geometry")
+        _check(legacy.get_node_or_null("ProfileIdentityGeometry") == null, "Legacy sedan received a production body replacement")
+        legacy.queue_free()
 
     crown.queue_free()
     mark_x.queue_free()
     sports.queue_free()
     await process_frame
-    print("YARDMAN_VEHICLE_VISUAL_TEST %s paint=1 glass=1 wheel=1 profile_identity=3 runtime_bridge=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_VEHICLE_VISUAL_TEST %s paint=1 glass=1 wheel=1 profile_identity=3 distinct_geometry=3 runtime_bridge=1" % ("PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
