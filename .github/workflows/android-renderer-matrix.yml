@@ -26,6 +26,8 @@ on:
       - 'godot/scripts/environment_audio_runtime.gd'
       - 'godot/scripts/weather_cycle_runtime.gd'
       - 'godot/scripts/vehicle_signal_runtime.gd'
+      - 'godot/scripts/job_runtime.gd'
+      - 'godot/scripts/job_persistence_runtime.gd'
       - 'godot/scripts/shader_warmup.gd'
       - 'godot/scripts/atmosphere_fx.gd'
       - 'godot/scripts/vegetation_budget_runtime.gd'
