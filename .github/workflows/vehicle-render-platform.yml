@@ -11,6 +11,7 @@ on:
       - 'godot/scripts/render_material_registry.gd'
       - 'godot/scripts/shader_warmup.gd'
       - 'godot/scripts/atmosphere_fx.gd'
+      - 'godot/scripts/surface_dynamics_runtime.gd'
       - 'godot/scripts/coastline.gd'
       - 'godot/shaders/**'
       - 'godot/scripts/vehicle_catalog.gd'
@@ -25,6 +26,7 @@ on:
       - 'godot/tests/material_variants_test.gd'
       - 'godot/tests/shader_warmup_test.gd'
       - 'godot/tests/weather_test.gd'
+      - 'godot/tests/surface_dynamics_test.gd'
       - 'godot/tests/vehicle_catalog_test.gd'
       - 'godot/tests/vehicle_visual_test.gd'
       - 'godot/tests/garage_test.gd'
@@ -61,11 +63,11 @@ jobs:
           timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/platform-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/platform-import.log; then exit 1; fi
 
-      - name: Test renderer, weather, vehicle, garage and automotive audio platforms
+      - name: Test renderer, weather, surface dynamics, vehicle, garage and automotive audio platforms
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in render_quality material_variants shader_warmup weather vehicle_catalog vehicle_visual garage audio; do
+          for TEST in render_quality material_variants shader_warmup weather surface_dynamics vehicle_catalog vehicle_visual garage audio; do
             timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"
