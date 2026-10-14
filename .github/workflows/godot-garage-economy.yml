@@ -11,6 +11,7 @@ on:
       - 'godot/scripts/job_runtime.gd'
       - 'godot/scripts/job_persistence_runtime.gd'
       - 'godot/tests/garage_test.gd'
+      - 'godot/tests/garage_economy_test.gd'
       - 'godot/tests/job_runtime_test.gd'
       - 'godot/tests/job_persistence_test.gd'
       - 'godot/tests/job_guidance_test.gd'
@@ -51,7 +52,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in garage job_runtime job_persistence job_guidance; do
+          for TEST in garage garage_economy job_runtime job_persistence job_guidance; do
             timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"

@@ -1,5 +1,6 @@
 extends RefCounted
 class_name YardmanRenderMaterialRegistry
+const QualityManager = preload("res://scripts/render_quality_manager.gd")
 
 # Renderer/tier-specific material families. Expensive and safe paths are kept
 # as separate shader resources so Android GLES never compiles one giant shader
@@ -14,8 +15,7 @@ const TERRAIN_SAFE: Shader = preload("res://shaders/terrain_surface_gles.gdshade
 static func renderer_family(renderer_override: String = "") -> String:
     if not renderer_override.is_empty():
         return _normalize_renderer(renderer_override)
-    var key := "rendering/renderer/rendering_method.mobile" if OS.has_feature("mobile") else "rendering/renderer/rendering_method"
-    return _normalize_renderer(str(ProjectSettings.get_setting(key, "gl_compatibility")))
+    return QualityManager.renderer_family()
 
 static func _normalize_renderer(value: String) -> String:
     if value in ["mobile", "vulkan_mobile"]:

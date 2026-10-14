@@ -11,6 +11,8 @@ var _configured := false
 var _quality := ""
 var _custom_key := ""
 var _budget_clock := 0.0
+var _refresh_clock := 0.0
+var _timing_enabled := false
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -22,6 +24,12 @@ func _ready() -> void:
 func _process(delta: float) -> void:
     if not OS.has_feature("mobile"):
         return
+    if get_tree().paused:
+        manager.reset_frame_history()
+        return
+    if not _timing_enabled:
+        RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
+        _timing_enabled = true
     var scene := get_tree().current_scene
     var quality := "Balanced"
     var custom: Dictionary = {}
@@ -38,7 +46,14 @@ func _process(delta: float) -> void:
         _quality = quality
         _custom_key = custom_key
         _configured = true
-    manager.update_frame(delta, get_viewport())
+    _refresh_clock += delta
+    if _refresh_clock >= 2.0:
+        _refresh_clock = 0.0
+        var screen_hz := ManagerScript.display_refresh_rate()
+        if absf(screen_hz - manager.refresh_rate) > 0.1:
+            manager.set_refresh_rate(screen_hz)
+    var gpu_ms := RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid())
+    manager.update_frame(delta, get_viewport(), false, gpu_ms)
     _budget_clock += delta
     if _budget_clock >= 0.5:
         _budget_clock = 0.0
@@ -137,4 +152,5 @@ func runtime_snapshot() -> Dictionary:
     result["resolution_scale"] = manager.current_scale
     result["thermal_stage"] = manager.thermal_stage
     result["configured"] = _configured
+    result.merge(manager.timing_snapshot())
     return result

@@ -5,20 +5,28 @@ Canonical runtime: Godot 4.7.2 under `godot/` on `codex/godot-polish-002`. Full 
 | ID | Subsystem | State | Current evidence / next gate |
 |---|---|---|---|
 | A-01 | Android renderer architecture | TESTED | Vulkan Mobile is the canonical Android path and a separately configured GLES fallback exported and signature-verified in the renderer matrix. Owner-device acceptance remains open. |
-| A-02 | Quality tier policy | TESTED | Renderer-aware Performance/Balanced/Quality/Ultra/Custom budgets and GLES caps pass the focused platform gate. |
-| A-03 | Dynamic resolution / thermal ladder | TESTED | Hysteretic resolution scaling and six-stage visual degradation are regression-covered; Android OS thermal-signal input and sustained-device validation remain open. |
-| A-04 | Shader/material variants | TESTED | Distinct high/safe road, water and terrain shaders compile and switch at runtime. |
+| A-02 | Quality tier policy | TESTED | Actual backend detection, bounded saved preferences and refresh-matched frame caps pass Godot 4.7.2 regressions, including 60/90/120/144 Hz and fractional refresh. GLES budgets remain independent. |
+| A-03 | Dynamic resolution / thermal ladder | TESTED | Measured GPU headroom permits recovery while frame rate is capped. Quality changes preserve pressure; pauses/loading gaps are excluded. Actual host renders verify 960×540 → 672×378 internal resolution while output remains 960×540 on both backends. Android OS thermal input and sustained-device acceptance remain open. |
+| A-04 | Shader/material variants | TESTED | Six high/safe road, water and terrain variants render on actual Vulkan Mobile and Compatibility software backends. Runtime selection follows the active backend, including command-line selection/fallback. Host fixture evidence does not accept national-world visuals. |
 | A-05 | Sky / exposure / fog / daylight | IMPLEMENTED | Existing `world_visuals.gd` runtime system retained. Visual acceptance remains open. |
 | A-06 | Water / wetness | ACTIVE | Tiered coastline water is integrated and tested; wet-road/puddle behavior is not complete. |
-| A-07 | Shader prewarm | IMPLEMENTED | Android startup now builds an off-screen pass for the active renderer's material set; Vulkan includes thermal-safe fallback variants. Focused runtime gate pending. |
+| A-07 | Shader prewarm | TESTED | Focused runtime gate passes; the off-screen pass follows the active backend and Vulkan includes thermal-safe fallback variants. Android startup hitch measurements remain open. |
 | B-01 | Vehicle data platform | TESTED | Catalog provides per-car dimensions, mass/CG, power, braking, steering, grip, suspension, gearing, RPM, audio and camera metadata. |
 | B-02 | Distinct vehicle physics | TESTED | Controller consumes profiles and the Crown, Mark X and Port Royal 992 no longer share one hard-coded handling tune. |
 | B-03 | Toyota Crown | ACTIVE | Data, handling, garage slot and distinct acoustic bank are tested. Dedicated Crown hero geometry remains unconfirmed/pending. |
 | B-04 | Toyota Mark X | ACTIVE | Data, handling, garage slot and distinct acoustic bank are tested. Dedicated Mark X hero geometry remains unconfirmed/pending. |
 | B-05 | Port Royal 992 parody | ACTIVE | Data, handling, garage slot and distinct acoustic bank are tested. Dedicated 992-class hero geometry remains unconfirmed/pending. |
-| B-06 | Garage / car-selection UI | TESTED | Touch-visible GARAGE button, modal selector, preview and live controller bridge pass the focused gate. |
-| B-07 | Persistent selected vehicle | TESTED | Selection writes and parses `user://yardman/vehicle.json` in regression coverage. |
+| B-06 | Garage / car-selection UI | TESTED | 85 assertions cover full-screen modal input, pause ownership, immediate candidate styling, hidden-preview shutdown, scene/controller replacement, motion guards and transactional live switching. Rendered UI/device acceptance remains open. |
+| B-07 | Persistent selected vehicle | TESTED | Settings are staged and atomically renamed after controller success; write/commit/controller failures preserve selection. Ownership migration and courier-funded purchasing remain integrated and covered by a separate economy regression. Cross-file crash recovery for wallet/ownership is the next durability gate. |
 | B-08 | Layered automotive audio | TESTED | Fixed ten-voice mixer covers idle/low/high-load/exhaust/transmission/road/offroad/scrub/footsteps/wind with per-car engine banks. |
-| B-09 | Hero vehicle visual/material pipeline | IMPLEMENTED | Shared/recovered geometry has profile-driven paint/clearcoat/glass/wheel styling. Focused gate pending; dedicated car meshes remain a separate asset gate. |
+| B-09 | Hero vehicle visual/material pipeline | TESTED | Profile-driven paint/clearcoat/glass/wheel styling passes runtime regressions and applies immediately to garage candidates. Dedicated car meshes, rendered presentation and LOD fidelity remain separate asset gates. |
+| B-10 | Courier-funded vehicle ownership | ACTIVE | Success, affordability, legacy migration, duplicate charging and controller/payment/save failure rollback pass runtime tests. Wallet/ownership crash journaling remains open. |
+| C-01 | Registered Jamaica visual world | ACTIVE | National geography and all 14 parishes remain authoritative. Coastline/material, road visibility and registered-building HLOD gates pass. Road seams, settlements and visible geographic acceptance remain open. |
+| D-01 | Streaming / visibility / HLOD budgets | TESTED | Streaming, road visibility, building HLOD, vegetation and reflection budget regressions pass; national traversal and Android memory/frame pacing remain separate gates. |
+| E-01 | Playable character foundation | ACTIVE | Current locomotion/touch-jump runtime passes focused regression. Character geometry, animation, entry/exit fidelity, slopes/stairs and rendered acceptance remain open. |
+| F-01 | Island traffic / pedestrian simulation | ACTIVE | Lane/density/LOD, parked cars, pedestrian destinations/idles, junction indicators, pedestrian yielding and brake-light/visual variety tests pass. Living-world visual fidelity and long-running national simulation remain open. |
+| G-01 | Persistent weather / localized atmosphere | ACTIVE | Persistent weather, localized ambience, streetlights, player/traffic headlights and building night activity pass focused runtime gates. Day/night/wet-world visual acceptance remains open. |
 
 A feature is advanced to TESTED only after the relevant Godot/CI gate runs on the exact source SHA. ACCEPTED remains owner/runtime evidence, not a code-presence label.
+
+Latest local milestone: `production_evidence/renderer-garage-001.json`. Godot 4.7.2 ran 38 focused suites, plus real GLES and Vulkan Mobile render captures using llvmpipe. No Android-device, dedicated hero-mesh, full-island visual or production-completion claim follows from this milestone. The owner GPU specification `godot-android-gpu.md` governs implementation. PR #4 remains unmerged.

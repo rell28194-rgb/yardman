@@ -53,6 +53,7 @@ on:
       - 'godot/scripts/vehicle_audio_profiles.gd'
       - 'godot/scripts/game_audio.gd'
       - 'godot/tests/render_quality_test.gd'
+      - 'godot/tests/render_runtime_capture_test.gd'
       - 'godot/tests/material_variants_test.gd'
       - 'godot/tests/streaming_budget_test.gd'
       - 'godot/tests/building_hlod_test.gd'
@@ -88,6 +89,7 @@ on:
       - 'godot/tests/vehicle_visual_test.gd'
       - 'godot/tests/vehicle_camera_test.gd'
       - 'godot/tests/garage_test.gd'
+      - 'godot/tests/garage_economy_test.gd'
       - 'godot/tests/audio_test.gd'
       - '.github/workflows/vehicle-render-platform.yml'
   workflow_dispatch:
@@ -125,7 +127,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in render_quality material_variants streaming_budget building_hlod road_visibility traffic_runtime traffic_signal traffic_pedestrian_safety traffic_visual_variety traffic_brake_light parked_vehicle pedestrian_runtime pedestrian_destination pedestrian_idle streetlight_night vehicle_headlight traffic_headlight building_night environment_audio weather_cycle vehicle_signal job_runtime job_persistence job_guidance player_locomotion startup_menu shader_warmup weather surface_dynamics vegetation_budget reflection_budget vehicle_catalog powertrain vehicle_visual vehicle_camera garage audio; do
+          for TEST in render_quality material_variants streaming_budget building_hlod road_visibility traffic_runtime traffic_signal traffic_pedestrian_safety traffic_visual_variety traffic_brake_light parked_vehicle pedestrian_runtime pedestrian_destination pedestrian_idle streetlight_night vehicle_headlight traffic_headlight building_night environment_audio weather_cycle vehicle_signal job_runtime job_persistence job_guidance player_locomotion startup_menu shader_warmup weather surface_dynamics vegetation_budget reflection_budget vehicle_catalog powertrain vehicle_visual vehicle_camera garage garage_economy audio; do
             timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"
@@ -137,5 +139,55 @@ jobs:
         with:
           name: Yardman-Vehicle-Render-Platform-Diagnostics
           path: godot/build/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  actual-renderers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        method: [gl_compatibility, mobile]
+    env:
+      GODOT_VERSION: '4.7.2'
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      GALLIUM_DRIVER: llvmpipe
+      YARDMAN_EXPECT_RENDER_METHOD: ${{ matrix.method }}
+      YARDMAN_RENDER_CAPTURE_DIR: ${{ github.workspace }}/godot/build/render-${{ matrix.method }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot and software renderer
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb mesa-vulkan-drivers libgl1-mesa-dri
+          wget -q "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+      - name: Import production scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/render-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/render-import.log; then exit 1; fi
+      - name: Render production shaders and measure internal resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 180 xvfb-run -a -s '-screen 0 960x540x24' godot --path godot --rendering-method "$YARDMAN_EXPECT_RENDER_METHOD" --audio-driver Dummy --script res://tests/render_runtime_capture_test.gd 2>&1 | tee godot/build/actual-render.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/actual-render.log; then exit 1; fi
+          grep -q 'YARDMAN_RENDER_RUNTIME_CAPTURE_TEST PASS' godot/build/actual-render.log
+      - name: Preserve rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Actual-Render-${{ matrix.method }}
+          path: |
+            godot/build/render-*/
+            godot/build/*render*.log
           if-no-files-found: warn
           retention-days: 14

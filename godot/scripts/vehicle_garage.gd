@@ -4,7 +4,9 @@ signal vehicle_selected(vehicle_id: String)
 
 const Catalog = preload("res://scripts/vehicle_catalog.gd")
 const ModelScript = preload("res://scripts/vehicle_model.gd")
+const Styler = preload("res://scripts/vehicle_visual_styler.gd")
 const SETTINGS_PATH := "user://yardman/vehicle.json"
+
 const STARTER_VEHICLE_ID := "toyota_crown"
 const VEHICLE_PRICES_JMD := {
     "toyota_crown": 0,
@@ -17,6 +19,7 @@ var _owned_ids: Array[String] = [STARTER_VEHICLE_ID]
 var _root: Control
 var _garage_button: Button
 var _panel: PanelContainer
+var _modal: ColorRect
 var _selector: OptionButton
 var _info: Label
 var _status: Label
@@ -26,6 +29,10 @@ var _preview_root: Node3D
 var _preview_model: Node3D
 var _initial_applied := false
 var _paused_by_garage := false
+var _applied_scene_id := 0
+var _applied_controller_id := 0
+var _preview_built_id := ""
+var _last_selection_error := ""
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -34,13 +41,34 @@ func _ready() -> void:
     _build_ui()
 
 func _process(delta: float) -> void:
-    if _preview_model != null and _panel != null and _panel.visible:
+    if is_open() and is_instance_valid(_preview_model):
         _preview_model.rotate_y(delta * 0.30)
-    if not _initial_applied:
-        var scene := get_tree().current_scene
-        if scene != null and apply_selected_to_scene(scene):
-            _initial_applied = true
-            vehicle_selected.emit(_selected_id)
+    var scene := get_tree().current_scene
+    var controller: Object = _scene_controller(scene)
+    var scene_id := scene.get_instance_id() if is_instance_valid(scene) else 0
+    var controller_id := controller.get_instance_id() if is_instance_valid(controller) else 0
+    if scene_id != _applied_scene_id or controller_id != _applied_controller_id:
+        _initial_applied = false
+    if not _initial_applied and apply_selected_to_scene(scene):
+        vehicle_selected.emit(_selected_id)
+
+func _exit_tree() -> void:
+    # Removing/reloading the garage must not leave its pause behind.
+    if _paused_by_garage and get_tree() != null:
+        get_tree().paused = false
+        _paused_by_garage = false
+
+func _input(event: InputEvent) -> void:
+    if not is_open() or not event is InputEventKey:
+        return
+    var key: int = event.physical_keycode if event.physical_keycode != 0 else event.keycode
+    if (key == KEY_ESCAPE or key == KEY_M) and event.pressed and not event.echo:
+        close_garage()
+        get_viewport().set_input_as_handled()
+    elif key not in [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_TAB, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_SHIFT]:
+        # Leave UI navigation to the focused control. Gameplay/menu shortcuts
+        # must not reach always-processing autoloads underneath this modal.
+        get_viewport().set_input_as_handled()
 
 func available_vehicle_ids() -> Array:
     return Catalog.production_ids()
@@ -78,7 +106,7 @@ func wallet_jmd() -> int:
     if runtime == null:
         return 0
     var value = runtime.get("wallet_jmd")
-    if not (value is int or value is float):
+    if not (value is int or value is float) or not is_finite(float(value)):
         return 0
     return maxi(0, int(value))
 
@@ -87,50 +115,166 @@ func can_afford_vehicle(vehicle_id: String) -> bool:
         return true
     return wallet_jmd() >= vehicle_price_jmd(vehicle_id)
 
+func last_selection_error() -> String:
+    return _last_selection_error
+
+func is_open() -> bool:
+    return is_instance_valid(_panel) and _panel.visible
+
 func set_selected_vehicle(vehicle_id: String, persist: bool = true, apply_to_game: bool = true) -> bool:
+    _last_selection_error = ""
     if not Catalog.production_ids().has(vehicle_id) or not is_vehicle_owned(vehicle_id):
+        _last_selection_error = "VEHICLE UNAVAILABLE"
+        return false
+    var scene := get_tree().current_scene
+    var controller: Object = _scene_controller(scene)
+    if apply_to_game:
+        if controller == null or not controller.has_method("apply_profile"):
+            _last_selection_error = "VEHICLE NOT READY"
+            return false
+        if not _switch_allowed(scene):
+            _last_selection_error = "STOP THE VEHICLE BEFORE SWITCHING"
+            return false
+    # Prepare a sibling file first. A failed write cannot corrupt the previous
+    # selection, and a rejected controller never commits the prepared file.
+    if persist and _stage_selection(vehicle_id) != OK:
+        _last_selection_error = "COULD NOT SAVE VEHICLE SELECTION"
+        return false
+    var previous_controller_id := _controller_vehicle_id(controller, _selected_id)
+    if apply_to_game and not _apply_vehicle_to_scene(scene, vehicle_id):
+        _discard_staged_selection()
+        _last_selection_error = "VEHICLE SWITCH FAILED"
+        if not _restore_controller(scene, previous_controller_id):
+            _last_selection_error = "VEHICLE SWITCH FAILED — RELOAD REQUIRED"
+        return false
+    if persist and _commit_staged_selection() != OK:
+        _discard_staged_selection()
+        _last_selection_error = "COULD NOT SAVE VEHICLE SELECTION"
+        if apply_to_game and not _restore_controller(scene, previous_controller_id):
+            _last_selection_error = "VEHICLE SWITCH FAILED — RELOAD REQUIRED"
         return false
     _selected_id = vehicle_id
-    if persist:
-        _save_selection()
+    if apply_to_game:
+        _remember_applied_scene(scene)
     _sync_selector()
     _refresh_preview()
-    if apply_to_game and apply_selected_to_scene(get_tree().current_scene):
+    if apply_to_game:
         vehicle_selected.emit(_selected_id)
     return true
 
 func purchase_vehicle(vehicle_id: String, apply_to_game: bool = true) -> bool:
+    _last_selection_error = ""
     if not Catalog.production_ids().has(vehicle_id):
+        _last_selection_error = "VEHICLE UNAVAILABLE"
         return false
     if is_vehicle_owned(vehicle_id):
         return set_selected_vehicle(vehicle_id, true, apply_to_game)
+    if apply_to_game and not _switch_allowed():
+        _last_selection_error = "STOP THE VEHICLE BEFORE SWITCHING"
+        return false
     var price := vehicle_price_jmd(vehicle_id)
     if price <= 0 or not _spend_wallet(price):
+        _last_selection_error = "COULD NOT COMPLETE VEHICLE PAYMENT"
         return false
     _owned_ids.append(vehicle_id)
-    _selected_id = vehicle_id
-    _save_selection()
-    _sync_selector()
-    _refresh_preview()
-    if apply_to_game and apply_selected_to_scene(get_tree().current_scene):
-        vehicle_selected.emit(_selected_id)
+    if not set_selected_vehicle(vehicle_id, true, apply_to_game):
+        _owned_ids.erase(vehicle_id)
+        if not _refund_wallet(price):
+            _last_selection_error = "PAYMENT RECOVERY FAILED — RELOAD REQUIRED"
+        return false
     return true
 
-func apply_selected_to_scene(scene: Node) -> bool:
-    if scene == null:
+func _wallet_save_path() -> String:
+    return "user://yardman/jobs.json"
+
+func _save_wallet() -> bool:
+    var runtime := get_node_or_null("/root/JobRuntime")
+    var persistence := get_node_or_null("/root/JobPersistenceRuntime")
+    if runtime == null or persistence == null:
         return false
+    var state = runtime.call("save_snapshot")
+    if not state is Dictionary:
+        return false
+    return persistence.call("write_state", _wallet_save_path(), state) == OK
+
+func _spend_wallet(amount: int) -> bool:
+    if amount <= 0 or wallet_jmd() < amount:
+        return false
+    var runtime := get_node_or_null("/root/JobRuntime")
+    var balance := wallet_jmd()
+    runtime.set("wallet_jmd", balance - amount)
+    if not _save_wallet():
+        runtime.set("wallet_jmd", balance)
+        return false
+    runtime.call("_update_ui")
+    return true
+
+func _refund_wallet(amount: int) -> bool:
+    var runtime := get_node_or_null("/root/JobRuntime")
+    if runtime == null:
+        return false
+    runtime.set("wallet_jmd", wallet_jmd() + amount)
+    runtime.call("_update_ui")
+    return _save_wallet()
+
+func _scene_controller(scene: Node) -> Object:
+    if not is_instance_valid(scene):
+        return null
     var controller = scene.get("vehicle")
+    return controller if controller is Object and is_instance_valid(controller) else null
+
+func _controller_vehicle_id(controller: Object, fallback: String) -> String:
+    if is_instance_valid(controller):
+        var candidate = controller.get("vehicle_id")
+        if candidate is String and Catalog.has(candidate):
+            return candidate
+    return fallback
+
+func _apply_vehicle_to_scene(scene: Node, vehicle_id: String) -> bool:
+    var controller: Object = _scene_controller(scene)
     if controller == null or not controller.has_method("apply_profile"):
         return false
-    controller.call("apply_profile", _selected_id)
+    var result = controller.call("apply_profile", vehicle_id)
+    if result is bool and not result:
+        return false
+    # Older controller adapters return void. When a controller publishes its
+    # active profile, verify the result instead of treating a no-op as success.
+    var active_id = controller.get("vehicle_id")
+    return active_id == vehicle_id if active_id != null else result == null or result == true
+
+func _restore_controller(scene: Node, vehicle_id: String) -> bool:
+    var controller: Object = _scene_controller(scene)
+    if controller == null:
+        return false
+    if controller.get("vehicle_id") == vehicle_id:
+        return true
+    return _apply_vehicle_to_scene(scene, vehicle_id)
+
+func _remember_applied_scene(scene: Node) -> void:
+    if scene != get_tree().current_scene:
+        return
+    var controller: Object = _scene_controller(scene)
+    _applied_scene_id = scene.get_instance_id()
+    _applied_controller_id = controller.get_instance_id() if controller != null else 0
+    _initial_applied = true
+
+func apply_selected_to_scene(scene: Node) -> bool:
+    if not _switch_allowed(scene) or not _apply_vehicle_to_scene(scene, _selected_id):
+        return false
+    _remember_applied_scene(scene)
     return true
 
 func open_garage() -> void:
-    if _panel == null:
+    if _panel == null or is_open():
         return
+    _modal.visible = true
     _panel.visible = true
+    _garage_button.disabled = true
     _sync_selector()
     _refresh_preview()
+    _preview_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+    _refresh_action_state()
+    _selector.grab_focus()
     if not get_tree().paused:
         get_tree().paused = true
         _paused_by_garage = true
@@ -138,41 +282,31 @@ func open_garage() -> void:
 func close_garage() -> void:
     if _panel != null:
         _panel.visible = false
+    if _modal != null:
+        _modal.visible = false
+    if _garage_button != null:
+        _garage_button.disabled = false
+    if _preview_viewport != null:
+        _preview_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+    if _selector != null:
+        _selector.get_popup().hide()
     if _paused_by_garage:
         get_tree().paused = false
         _paused_by_garage = false
 
-func _switch_allowed() -> bool:
-    var scene := get_tree().current_scene
+func _switch_allowed(scene: Node = null) -> bool:
     if scene == null:
-        return true
-    var controller = scene.get("vehicle")
+        scene = get_tree().current_scene
+    var controller: Object = _scene_controller(scene)
     if controller == null:
         return true
     var speed_value = controller.get("speed_mps")
     if speed_value == null:
         return true
-    return absf(float(speed_value)) <= 1.5
-
-func _spend_wallet(amount: int) -> bool:
-    if amount <= 0:
-        return true
-    var runtime := get_node_or_null("/root/JobRuntime")
-    if runtime == null:
+    if not (speed_value is int or speed_value is float):
         return false
-    var value = runtime.get("wallet_jmd")
-    if not (value is int or value is float):
-        return false
-    var balance := maxi(0, int(value))
-    if balance < amount:
-        return false
-    runtime.set("wallet_jmd", balance - amount)
-    if runtime.has_method("_update_ui"):
-        runtime.call("_update_ui")
-    var persistence := get_node_or_null("/root/JobPersistenceRuntime")
-    if persistence != null and persistence.has_method("_save_state"):
-        persistence.call("_save_state")
-    return true
+    var speed := float(speed_value)
+    return is_finite(speed) and absf(speed) <= 1.5
 
 func _build_ui() -> void:
     _root = Control.new()
@@ -195,6 +329,14 @@ func _build_ui() -> void:
     _garage_button.mouse_filter = Control.MOUSE_FILTER_STOP
     _garage_button.pressed.connect(open_garage)
     _root.add_child(_garage_button)
+
+    _modal = ColorRect.new()
+    _modal.name = "GarageModal"
+    _modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    _modal.color = Color(0.01, 0.016, 0.025, 0.84)
+    _modal.mouse_filter = Control.MOUSE_FILTER_STOP
+    _modal.visible = false
+    _root.add_child(_modal)
 
     _panel = PanelContainer.new()
     _panel.name = "GaragePanel"
@@ -221,7 +363,7 @@ func _build_ui() -> void:
     outer.add_child(title)
 
     var subtitle := Label.new()
-    subtitle.text = "Courier earnings buy vehicles • ownership persists across launches"
+    subtitle.text = "Choose your next drive"
     subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     outer.add_child(subtitle)
 
@@ -241,7 +383,7 @@ func _build_ui() -> void:
     _preview_viewport = SubViewport.new()
     _preview_viewport.name = "PreviewViewport"
     _preview_viewport.size = Vector2i(640, 360)
-    _preview_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+    _preview_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
     _preview_viewport.own_world_3d = true
     preview_host.add_child(_preview_viewport)
     _build_preview_world()
@@ -273,11 +415,13 @@ func _build_ui() -> void:
 
     _status = Label.new()
     _status.name = "GarageStatus"
+    _status.text = "READY TO SWITCH"
     _status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     side.add_child(_status)
 
     _apply_button = Button.new()
     _apply_button.name = "ApplyVehicle"
+    _apply_button.text = "USE THIS VEHICLE"
     _apply_button.custom_minimum_size = Vector2(300.0, 54.0)
     _apply_button.pressed.connect(_apply_from_selector)
     side.add_child(_apply_button)
@@ -349,18 +493,31 @@ func _on_preview_selected(_index: int) -> void:
     _refresh_preview()
 
 func _preview_id() -> String:
-    if _selector == null or _selector.item_count == 0:
+    if _selector == null or _selector.item_count == 0 or _selector.selected < 0:
         return _selected_id
     return str(_selector.get_item_metadata(_selector.selected))
 
 func _refresh_preview() -> void:
     if _preview_root == null or _selector == null or _info == null:
         return
-    if _preview_model != null:
-        _preview_root.remove_child(_preview_model)
-        _preview_model.queue_free()
     var preview_id := _preview_id()
     var data := Catalog.profile(preview_id)
+    var top_kmh := float(data.max_forward_mps) * 3.6
+    var ownership_text := "OWNED" if is_vehicle_owned(preview_id) else "PRICE: J$%d" % vehicle_price_jmd(preview_id)
+    _info.text = "%s\n%s • %s\n%s • WALLET J$%d\n\nMass: %.0f kg\nWheelbase: %.2f m\nTrack: %.2f m\nTop speed: %.0f km/h" % [
+        str(data.display_name), str(data.manufacturer), str(data.drivetrain), ownership_text, wallet_jmd(),
+        float(data.mass_kg), float(data.wheelbase_m), float(data.track_width_m), top_kmh
+    ]
+    _refresh_action_state()
+    # Candidate changes while hidden update the text/selection only. GPU work
+    # and model allocation start when the garage is actually opened.
+    if not is_open():
+        return
+    if is_instance_valid(_preview_model) and _preview_built_id == preview_id:
+        return
+    if is_instance_valid(_preview_model):
+        _preview_root.remove_child(_preview_model)
+        _preview_model.queue_free()
     _preview_model = ModelScript.new()
     _preview_model.name = "PreviewVehicleModel"
     _preview_root.add_child(_preview_model)
@@ -368,13 +525,8 @@ func _refresh_preview() -> void:
     var scale_data: Array = data.get("visual_scale", [1.0, 1.0, 1.0])
     if scale_data.size() >= 3:
         _preview_model.scale = Vector3(float(scale_data[0]), float(scale_data[1]), float(scale_data[2]))
-    var top_kmh := float(data.max_forward_mps) * 3.6
-    var ownership_text := "OWNED" if is_vehicle_owned(preview_id) else "PRICE: J$%d" % vehicle_price_jmd(preview_id)
-    _info.text = "%s\n%s • %s\n%s • WALLET J$%d\n\nMass tuning: %.0f kg\nWheelbase: %.2f m\nTrack: %.2f m\nCG height: %.2f m\nTop-speed tuning: %.0f km/h\nAudio profile: %s\n\nCurrent hero mesh status: integration pending" % [
-        str(data.display_name), str(data.manufacturer), str(data.drivetrain), ownership_text, wallet_jmd(), float(data.mass_kg), float(data.wheelbase_m),
-        float(data.track_width_m), float(data.cg_height_m), top_kmh, str(data.audio_profile)
-    ]
-    _refresh_action_state()
+    Styler.apply(_preview_model, data)
+    _preview_built_id = preview_id
 
 func _refresh_action_state() -> void:
     if _apply_button == null or _status == null:
@@ -414,14 +566,14 @@ func _apply_from_selector() -> void:
     if purchase_vehicle(requested, true):
         _status.text = "PURCHASED • %s SELECTED" % str(Catalog.profile(requested).display_name).to_upper()
     else:
-        _refresh_action_state()
+        _status.text = _last_selection_error
 
 func _load_selection() -> void:
     _selected_id = STARTER_VEHICLE_ID
     _owned_ids = [STARTER_VEHICLE_ID]
-    if not FileAccess.file_exists(SETTINGS_PATH):
+    if not FileAccess.file_exists(_settings_path()):
         return
-    var file := FileAccess.open(SETTINGS_PATH, FileAccess.READ)
+    var file := FileAccess.open(_settings_path(), FileAccess.READ)
     if file == null:
         return
     var parsed = JSON.parse_string(file.get_as_text())
@@ -432,16 +584,39 @@ func _load_selection() -> void:
         _selected_id = candidate
     _owned_ids = normalized_owned_ids(parsed.get("owned_vehicles", []), _selected_id)
 
-func _save_selection() -> void:
-    var directory := ProjectSettings.globalize_path(SETTINGS_PATH.get_base_dir())
+func _settings_path() -> String:
+    return SETTINGS_PATH
+
+func _staged_settings_path() -> String:
+    return "%s.pending-%d" % [_settings_path(), get_instance_id()]
+
+func _stage_selection(vehicle_id: String) -> Error:
+    var directory := ProjectSettings.globalize_path(_settings_path().get_base_dir())
     var error := DirAccess.make_dir_recursive_absolute(directory)
     if error != OK:
-        push_warning("VehicleGarage: could not create settings directory (%s)" % error_string(error))
-        return
-    var file := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
+        return error
+    var file := FileAccess.open(_staged_settings_path(), FileAccess.WRITE)
     if file == null:
-        push_warning("VehicleGarage: could not open vehicle settings for writing")
-        return
-    file.store_string(JSON.stringify({"selected_vehicle": _selected_id, "owned_vehicles": _owned_ids}, "  "))
+        return FileAccess.get_open_error()
+    file.store_string(JSON.stringify({"selected_vehicle": vehicle_id, "owned_vehicles": _owned_ids}, "  "))
     file.flush()
+    error = file.get_error()
     file.close()
+    if error != OK:
+        _discard_staged_selection()
+    return error
+
+func _commit_staged_selection() -> Error:
+    return DirAccess.rename_absolute(ProjectSettings.globalize_path(_staged_settings_path()), ProjectSettings.globalize_path(_settings_path()))
+
+func _discard_staged_selection() -> void:
+    if FileAccess.file_exists(_staged_settings_path()):
+        DirAccess.remove_absolute(ProjectSettings.globalize_path(_staged_settings_path()))
+
+func _save_selection() -> bool:
+    if _stage_selection(_selected_id) != OK:
+        return false
+    if _commit_staged_selection() != OK:
+        _discard_staged_selection()
+        return false
+    return true

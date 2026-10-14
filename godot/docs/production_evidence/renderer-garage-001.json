@@ -1,0 +1,556 @@
+{
+  "milestone": "renderer-garage-001",
+  "recorded_utc": "2026-10-14T17:06:57.237718+00:00",
+  "engine": "4.7.2.stable.official.ed1daf0bf",
+  "base_commit": "92de80a747e1fff5f099c0b650f4f40747aefe76",
+  "scope": "38 Godot runtime regressions and real software-host GLES/Vulkan Mobile generated-fixture renders. No Android-device, national visual, hero-mesh or project-completion acceptance.",
+  "source_sha256": {
+    "godot/scripts/render_quality_manager.gd": "506054198242ca5b7ec3dc24ea47d674680c1bbbea671f4f83cfbdb924f4ed8e",
+    "godot/scripts/render_runtime.gd": "ab9a69cdb4c4a665d62230e2a6e568e798d7f3880cf547735e3c559a21b5de30",
+    "godot/scripts/render_material_registry.gd": "1419dcb7d5a355f92534b4428be89e28afa9007ea04a68a851b411969fe1f498",
+    "godot/scripts/vehicle_garage.gd": "027422d8b0d47eea6dfef600d8e71c24b3b55fad6cbdf2f7bbdecf025771133d",
+    "godot/tests/render_quality_test.gd": "2b5c50c436b1ed9ab6671e534d2d5770d0147b438561ea8502d773c5ab057ae3",
+    "godot/tests/garage_test.gd": "9fad6c01cc7bf3d129e0f0f456d9b50ec092189f450fbe8a3bcf833edab4b5d2",
+    "godot/tests/garage_economy_test.gd": "267e48f8de452759c078c50af5b85c977c90ae090fb5f467a6c73d602b76abc5",
+    "godot/tests/render_runtime_capture_test.gd": "bcaebf1f9dcdad26f2426ad94cd3bc56c2d71a7ebdfed4c88af0560e61d13fed"
+  },
+  "runtime_tests": [
+    {
+      "test": "render_quality",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "8e31cf8ee85ff8d3ee72c8210da5aae6e8d0ca22558a5b7ceadf177ef7f192c3"
+    },
+    {
+      "test": "material_variants",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "ab053d4516d8b1f83f2c054809c912928ef7743a910c4d7e3f456664f8cfaf2b"
+    },
+    {
+      "test": "streaming_budget",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "648d525393cac80d24ed0eb9b0d82fb6852941861fb6fa7e827dae72fa2500eb"
+    },
+    {
+      "test": "building_hlod",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "3853bb96238a3bb8485ec0e5483778914703c241df0cf55a0d8126e955f5af95"
+    },
+    {
+      "test": "startup_menu",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "f0364e3ef9726a2c59ea1881e3c55c08ee3665bd6b5eef204325ff798ba1ae51"
+    },
+    {
+      "test": "shader_warmup",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "ce9ae92bfee304f80121d266ab40f662b4e53c1c52869213add4316cc020e931"
+    },
+    {
+      "test": "weather",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "e48e63d5be319199d427cca02cd1aaa596ec325c4079218bf271e999e1fb3f29"
+    },
+    {
+      "test": "surface_dynamics",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "26997fb52f1f3e5e86e10c482c071e460ce1878336e7624e6a8e8772052319b2"
+    },
+    {
+      "test": "vegetation_budget",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "b6195d083f672a947b44862eedc1184864f3a413a98d6b7dff44d0087038cba8"
+    },
+    {
+      "test": "reflection_budget",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "defd375ae6250bfdc37a03fa5737eb8ce068a1f3ebb9f266f7846042effb9515"
+    },
+    {
+      "test": "vehicle_catalog",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "e57b905a6c6566d3b40d19644e5bba08ff98ee18cbecc3c4b448b086c44b3b1e"
+    },
+    {
+      "test": "powertrain",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "9280969a4e99739e5aa41456faba85254c3012fd43e916f5d18c862f9ba66ce8"
+    },
+    {
+      "test": "vehicle_visual",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "f175eb8c5d5e0fcea6625e3db1c15be94a743f73dc387c7d000d1c45a98cdef0"
+    },
+    {
+      "test": "vehicle_camera",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "ffa663cb2c1ba81af9ee2269a44d2e2cc27d76694f29164b85ceb558f6ec0ad3"
+    },
+    {
+      "test": "garage",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "5a6ed26d95e5eacfb1dbab5a96ea8f1063580d180c5aeb0dcd649779a5182f13"
+    },
+    {
+      "test": "garage_economy",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "35c709da498584452d2c5407148f572293f22b35d6cc563e68e06b706e284a43"
+    },
+    {
+      "test": "audio",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "b73ef1bd505350b722498ee9b6f52a21ee0900dff243ee07b31c319a3565c4c9"
+    },
+    {
+      "test": "road_visibility",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "622b3f65d3bacc759eb40f3da74731f22c8d54206f00bf78030b84a0fdd3e14f"
+    },
+    {
+      "test": "player_locomotion",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "eeffeeefd193610e9c5244b1d631c4ac3fa8a89cac98c65c477f7cd8eaeb0f73"
+    },
+    {
+      "test": "traffic_runtime",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "4047b6a4c23d3dae027c34df9191d82885ebd76cf7c1183ef6883110d302679f"
+    },
+    {
+      "test": "parked_vehicle",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "0a8b0f7bc5f19c78970c4416f5bbb1473865d23acc70d8cc0cb132cc5823dc82"
+    },
+    {
+      "test": "pedestrian_runtime",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "ca5a9fe84c8e0deb28f1e9ccf18c965383dfded8cfc76ef0774388c49bf3db20"
+    },
+    {
+      "test": "streetlight_night",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "ca2218d885153a6845e39bae6e8ed8aa556251870eb2e9046f8023b0526b65bf"
+    },
+    {
+      "test": "vehicle_headlight",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "398f6ca5fe04d2617b83c178e4b3d7f5ee9635e394bce37c872a75253379ceac"
+    },
+    {
+      "test": "traffic_headlight",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "2f8987dbfdc67accbd8c5abbd977a303d8b4d023b82dbc548617fa497e3aa879"
+    },
+    {
+      "test": "building_night",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "52aa8fdca136162d6bd4e13be7f66ed3aad8db79597ebc1168719d69666e8217"
+    },
+    {
+      "test": "environment_audio",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "3b2d23c1c4f9e59ca1a49b1689162f2d8caad0cfd5dcd9ed58fac1d8fb6d0814"
+    },
+    {
+      "test": "weather_cycle",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "7b04beee065ffb229c21376c07338a04d84bf58e9481abeded648763290c8f6e"
+    },
+    {
+      "test": "pedestrian_destination",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "53e61dbdf49994c6d231b7e90afa8d57101bcce6c786a67aff4ade44ddaea1dd"
+    },
+    {
+      "test": "vehicle_signal",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "5510c4fbcb0d558fd00f154e2d0e04d9b5d9e5817926372f5c8f2b254e1e32a7"
+    },
+    {
+      "test": "traffic_signal",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "42333a02516aebc1f765d99dd62648c1863666a5299a444784f7632127341d6f"
+    },
+    {
+      "test": "job_runtime",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "b67c5f8596440c977805edd760026296d69b099dc9ec66bd91d31b62a612ec6a"
+    },
+    {
+      "test": "job_persistence",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "58c9b60f37f4165fbcf6b23b9a044bb437757fd7974ab70bc12b8cd308a603c2"
+    },
+    {
+      "test": "job_guidance",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "9de6800cee7b32f722b88ba7618778a91793778b7b4b9413f91d20c58370a96b"
+    },
+    {
+      "test": "pedestrian_idle",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "bb494601e4e7ab5ece010ff85ecebec0ff4bf9b2c0d22977b5364def68e69316"
+    },
+    {
+      "test": "traffic_pedestrian_safety",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "dedc6920fab3beacacb3170cb9ed86ae9950215c823086b26e30e76ffd411d19"
+    },
+    {
+      "test": "traffic_visual_variety",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "13cb84728fe8fab3648b80588929b123a1568afc07e2f488cdd54ba44dfee49d"
+    },
+    {
+      "test": "traffic_brake_light",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "08fb82706431c59c463678b5ac35fdbf28504e28bb95167ce14d61e84e874aa4"
+    }
+  ],
+  "garage_assertions": 85,
+  "actual_renders": {
+    "gles": {
+      "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+      "captures": [
+        {
+          "dimension_image": "scale-100-dimensions.png",
+          "image": "scale-100.png",
+          "internal_height": 540,
+          "internal_width": 960,
+          "metrics": {
+            "distinct_rgb_5bit": 99,
+            "maximum_luma": 0.993204706287384,
+            "minimum_luma": 0.0564572574034333
+          },
+          "output_height": 540,
+          "output_width": 960,
+          "panel_pixels": [
+            [
+              0.266666680574417,
+              0.298039227724075,
+              0.325490206480026
+            ],
+            [
+              0.705882370471954,
+              0.662745118141174,
+              0.321568638086319
+            ],
+            [
+              0.0313725508749485,
+              0.266666680574417,
+              0.388235300779343
+            ],
+            [
+              0.270588248968124,
+              0.298039227724075,
+              0.329411774873734
+            ],
+            [
+              0.949019610881805,
+              0.866666674613953,
+              0.439215689897537
+            ],
+            [
+              0.0274509806185961,
+              0.254901975393295,
+              0.376470595598221
+            ]
+          ],
+          "scale": 1.0,
+          "image_sha256": "484685b0a0aed1066ce77aeffe51ead9673441a4da5d1cdc20a5825a1652b94e",
+          "dimension_image_sha256": "f23e9ba1ea3ed51a4946d62c7ffa1c134ed900d2fb8ac60723afc610ebcffc74"
+        },
+        {
+          "dimension_image": "scale-070-dimensions.png",
+          "image": "scale-070.png",
+          "internal_height": 378,
+          "internal_width": 672,
+          "metrics": {
+            "distinct_rgb_5bit": 223,
+            "maximum_luma": 0.993204706287384,
+            "minimum_luma": 0.0429529420165345
+          },
+          "output_height": 540,
+          "output_width": 960,
+          "panel_pixels": [
+            [
+              0.266666680574417,
+              0.298039227724075,
+              0.329411774873734
+            ],
+            [
+              0.705882370471954,
+              0.662745118141174,
+              0.321568638086319
+            ],
+            [
+              0.00784313771873713,
+              0.26274511218071,
+              0.388235300779343
+            ],
+            [
+              0.254901975393295,
+              0.286274522542953,
+              0.313725501298904
+            ],
+            [
+              0.949019610881805,
+              0.866666674613953,
+              0.439215689897537
+            ],
+            [
+              0.0,
+              0.254901975393295,
+              0.376470595598221
+            ]
+          ],
+          "scale": 0.7,
+          "image_sha256": "dbe23c41601c5807ce1426f732fd2fec9eba2bd84b42ed7739d084452999f1a7",
+          "dimension_image_sha256": "3b24b8c98f05d58a28bdbbaea0eb5bcc2f6aac578e3460dba16ec25581824a43"
+        }
+      ],
+      "display": "X11",
+      "engine": {
+        "build": "official",
+        "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+        "hex": 263938,
+        "major": 4,
+        "minor": 7,
+        "patch": 2,
+        "status": "stable",
+        "string": "4.7.2-stable (official)",
+        "timestamp": 0
+      },
+      "failures": 0,
+      "method": "gl_compatibility",
+      "policy_scale": 0.819999992847443,
+      "renderer_family": "gles",
+      "scope": "Actual host render of generated fixture and production shaders; not Android device or national-world acceptance",
+      "visible_shader_panels": [
+        {
+          "family": "road",
+          "shader": "res://shaders/road_surface_gles.gdshader",
+          "variant": "safe"
+        },
+        {
+          "family": "terrain",
+          "shader": "res://shaders/terrain_surface_gles.gdshader",
+          "variant": "safe"
+        },
+        {
+          "family": "water",
+          "shader": "res://shaders/water_gles.gdshader",
+          "variant": "safe"
+        },
+        {
+          "family": "road",
+          "shader": "res://shaders/road_surface.gdshader",
+          "variant": "high"
+        },
+        {
+          "family": "terrain",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "variant": "high"
+        },
+        {
+          "family": "water",
+          "shader": "res://shaders/water.gdshader",
+          "variant": "high"
+        }
+      ]
+    },
+    "vulkan": {
+      "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+      "captures": [
+        {
+          "dimension_image": "scale-100-dimensions.png",
+          "image": "scale-100.png",
+          "internal_height": 540,
+          "internal_width": 960,
+          "metrics": {
+            "distinct_rgb_5bit": 87,
+            "maximum_luma": 0.94255451322794,
+            "minimum_luma": 0.0592619631186128
+          },
+          "output_height": 540,
+          "output_width": 960,
+          "panel_pixels": [
+            [
+              0.541176497936249,
+              0.564705908298492,
+              0.588235318660736
+            ],
+            [
+              0.823529422283173,
+              0.800000011920929,
+              0.588235318660736
+            ],
+            [
+              0.0980392172932625,
+              0.243137255311012,
+              0.317647069692612
+            ],
+            [
+              0.541176497936249,
+              0.564705908298492,
+              0.588235318660736
+            ],
+            [
+              0.949019610881805,
+              0.91372549533844,
+              0.678431391716003
+            ],
+            [
+              0.0509803928434849,
+              0.219607844948769,
+              0.294117659330368
+            ]
+          ],
+          "scale": 1.0,
+          "image_sha256": "660ca10310c633cfb92cdfb9fb88a70ec4c972000e309e0633105307165ba369",
+          "dimension_image_sha256": "e9bafc299b23399b6ab1ca42a8118b8be820042cab8078e8fd1c1f3d34503eb0"
+        },
+        {
+          "dimension_image": "scale-070-dimensions.png",
+          "image": "scale-070.png",
+          "internal_height": 378,
+          "internal_width": 672,
+          "metrics": {
+            "distinct_rgb_5bit": 199,
+            "maximum_luma": 0.967599217617512,
+            "minimum_luma": 0.0592619631186128
+          },
+          "output_height": 540,
+          "output_width": 960,
+          "panel_pixels": [
+            [
+              0.541176497936249,
+              0.564705908298492,
+              0.588235318660736
+            ],
+            [
+              0.823529422283173,
+              0.800000011920929,
+              0.588235318660736
+            ],
+            [
+              0.109803922474384,
+              0.243137255311012,
+              0.317647069692612
+            ],
+            [
+              0.529411792755127,
+              0.552941203117371,
+              0.576470613479614
+            ],
+            [
+              0.949019610881805,
+              0.91372549533844,
+              0.678431391716003
+            ],
+            [
+              0.0509803928434849,
+              0.219607844948769,
+              0.294117659330368
+            ]
+          ],
+          "scale": 0.7,
+          "image_sha256": "b2bce3499cc4c498df724d92ef6b4cc24bf8b8455d5317df397e5d98d893e8a7",
+          "dimension_image_sha256": "cd0ed540406df3636fe286e2c2607450963311663013d2d1283cf130308689ad"
+        }
+      ],
+      "display": "X11",
+      "engine": {
+        "build": "official",
+        "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+        "hex": 263938,
+        "major": 4,
+        "minor": 7,
+        "patch": 2,
+        "status": "stable",
+        "string": "4.7.2-stable (official)",
+        "timestamp": 0
+      },
+      "failures": 0,
+      "method": "mobile",
+      "policy_scale": 1.0,
+      "renderer_family": "vulkan_mobile",
+      "scope": "Actual host render of generated fixture and production shaders; not Android device or national-world acceptance",
+      "visible_shader_panels": [
+        {
+          "family": "road",
+          "shader": "res://shaders/road_surface_gles.gdshader",
+          "variant": "safe"
+        },
+        {
+          "family": "terrain",
+          "shader": "res://shaders/terrain_surface_gles.gdshader",
+          "variant": "safe"
+        },
+        {
+          "family": "water",
+          "shader": "res://shaders/water_gles.gdshader",
+          "variant": "safe"
+        },
+        {
+          "family": "road",
+          "shader": "res://shaders/road_surface.gdshader",
+          "variant": "high"
+        },
+        {
+          "family": "terrain",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "variant": "high"
+        },
+        {
+          "family": "water",
+          "shader": "res://shaders/water.gdshader",
+          "variant": "high"
+        }
+      ]
+    }
+  },
+  "remaining_gates": [
+    "Android device GPU qualification and sustained thermal/frame-pacing runs",
+    "Cross-file wallet/vehicle crash recovery journal",
+    "Dedicated vehicle hero geometry/LOD and rendered garage acceptance",
+    "National registered-world visual/geographic traversal acceptance"
+  ]
+}
