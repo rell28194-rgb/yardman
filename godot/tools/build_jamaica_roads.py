@@ -191,6 +191,15 @@ def main() -> int:
             sys.executable, str(place_tool), str(args.input_geojson),
             str(args.output_dir.parent / "places"), "--tile-size", str(args.tile_size),
         ], check=True)
+        # Bus-stop markers are a runtime autoload, so their explicit OSM point
+        # authority must be regenerated whenever the national PBF is compiled.
+        # Keeping this beside the road build prevents a green Android export from
+        # silently containing the BusStopLayer script but no bus-stop dataset.
+        bus_stop_tool = Path(__file__).with_name("build_bus_stops.py")
+        subprocess.run([
+            sys.executable, str(bus_stop_tool), str(args.input_geojson),
+            str(args.output_dir / "bus_stops"), "--tile-size", str(args.tile_size),
+        ], check=True)
     print(json.dumps(manifest["stats"], indent=2, sort_keys=True))
     print(f"Bounds (m): {manifest['bounds']}")
     print(f"Wrote {len(manifest['tiles'])} road tiles and persistent topology to {args.output_dir}")
