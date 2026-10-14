@@ -18,6 +18,7 @@ on:
       - 'godot/scripts/pedestrian_runtime.gd'
       - 'godot/scripts/streetlight_layer.gd'
       - 'godot/scripts/streetlight_night_runtime.gd'
+      - 'godot/scripts/vehicle_headlight_runtime.gd'
       - 'godot/scripts/shader_warmup.gd'
       - 'godot/scripts/atmosphere_fx.gd'
       - 'godot/scripts/vegetation_budget_runtime.gd'
