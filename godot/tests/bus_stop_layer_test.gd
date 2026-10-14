@@ -19,13 +19,29 @@ func _initialize() -> void:
     _require(bool(plan[1].bench_explicit), "source bench=yes was lost")
     _require(not bool(plan[1].shelter_explicit), "unspecified shelter was invented")
     _require(layer.placement_plan(records, Vector2i(-1, -1), 0.0).is_empty(), "invalid tile size must fail closed")
-    var mesh: ArrayMesh = layer._get_marker_mesh()
-    _require(mesh != null and mesh.get_surface_count() == 1, "neutral stop marker mesh missing")
-    var bounds := mesh.get_aabb()
-    _require(bounds.size.y > 2.7 and bounds.size.y < 3.2, "marker height escaped audited range")
-    _require(bounds.size.x < 0.6 and bounds.size.z < 0.6, "marker must remain orientation-neutral")
+
+    var marker: ArrayMesh = layer._get_marker_mesh()
+    _require(marker != null and marker.get_surface_count() == 1, "neutral stop marker mesh missing")
+    var marker_bounds := marker.get_aabb()
+    _require(marker_bounds.size.y > 2.7 and marker_bounds.size.y < 3.2, "marker height escaped audited range")
+    _require(marker_bounds.size.x < 0.6 and marker_bounds.size.z < 0.6, "marker must remain orientation-neutral")
+
+    var shelter: ArrayMesh = layer._get_shelter_mesh()
+    _require(shelter != null and shelter.get_surface_count() == 1, "explicit shelter mesh missing")
+    var shelter_bounds := shelter.get_aabb()
+    _require(shelter_bounds.size.y > 2.2 and shelter_bounds.size.y < 2.6, "shelter height escaped compact stop range")
+    _require(shelter_bounds.size.x > 1.4 and shelter_bounds.size.x < 1.8, "shelter canopy width invalid")
+    _require(absf(shelter_bounds.size.x - shelter_bounds.size.z) < 0.02, "shelter gained an invented road-facing orientation")
+
+    var bench: ArrayMesh = layer._get_bench_mesh()
+    _require(bench != null and bench.get_surface_count() == 1, "explicit bench mesh missing")
+    var bench_bounds := bench.get_aabb()
+    _require(bench_bounds.size.y > 0.45 and bench_bounds.size.y < 0.60, "bench height invalid")
+    _require(bench_bounds.size.x > 1.0 and bench_bounds.size.x < 1.25, "bench footprint invalid")
+    _require(absf(bench_bounds.size.x - bench_bounds.size.z) < 0.02, "bench gained an invented road-facing orientation")
+
     layer.free()
-    print("YARDMAN_BUS_STOP_LAYER_TEST PASS placements=%d height=%.3f" % [plan.size(), bounds.size.y])
+    print("YARDMAN_BUS_STOP_LAYER_TEST PASS placements=%d marker_h=%.3f shelter_h=%.3f bench_h=%.3f" % [plan.size(), marker_bounds.size.y, shelter_bounds.size.y, bench_bounds.size.y])
     quit(0)
 
 func _require(condition: bool, message: String) -> void:
