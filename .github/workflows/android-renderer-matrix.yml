@@ -18,6 +18,8 @@ on:
       - 'godot/scripts/vegetation_budget_runtime.gd'
       - 'godot/scripts/reflection_budget_runtime.gd'
       - 'godot/scripts/coastline.gd'
+      - 'godot/scripts/player_controller.gd'
+      - 'godot/scripts/touch_controls.gd'
       - 'godot/shaders/**'
       - '.github/workflows/android-renderer-matrix.yml'
   workflow_dispatch:
