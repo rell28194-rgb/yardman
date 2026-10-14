@@ -6,6 +6,9 @@ const ARRIVAL_RADIUS_M := 90.0
 const MAX_VALID_STEP_M := 220.0
 const STARTING_WALLET_JMD := 5000
 const OFFER_COUNT := 3
+const CONTRACT_STANDARD := "standard"
+const CONTRACT_EXPRESS := "express"
+const EXPRESS_REWARD_MULTIPLIER := 1.35
 
 var wallet_jmd := STARTING_WALLET_JMD
 var active_job: Dictionary = {}
@@ -54,6 +57,13 @@ func _process(delta: float) -> void:
         return
     var world := Vector2(float(world_value[0]), float(world_value[2]))
     if not active_job.is_empty():
+        if str(active_job.get("contract_type", CONTRACT_STANDARD)) == CONTRACT_EXPRESS and not get_tree().paused:
+            active_job["time_remaining_s"] = maxf(0.0, float(active_job.get("time_remaining_s", 0.0)) - step)
+            if float(active_job.get("time_remaining_s", 0.0)) <= 0.0:
+                _expire_job(scene, roads)
+                _last_world = world
+                _update_ui()
+                return
         var in_vehicle := bool(player.get("in_vehicle"))
         if in_vehicle and is_finite(_last_world.x):
             active_job["travelled_m"] = float(active_job.get("travelled_m", 0.0)) + eligible_travel_step(_last_world, world)
@@ -76,8 +86,21 @@ static func anchor_xz(anchor: Dictionary) -> Vector2:
 static func reward_for_distance(distance_m: float) -> int:
     return maxi(900, int(round(1200.0 + maxf(distance_m, 0.0) * 0.19)))
 
+static func reward_for_contract(distance_m: float, contract_type: String) -> int:
+    var base := reward_for_distance(distance_m)
+    return int(round(float(base) * EXPRESS_REWARD_MULTIPLIER)) if contract_type == CONTRACT_EXPRESS else base
+
 static func required_travel_for_distance(distance_m: float) -> float:
     return clampf(maxf(distance_m, 0.0) * 0.55, 650.0, 60000.0)
+
+static func express_deadline_for_distance(distance_m: float) -> float:
+    # A gameplay deadline derived from real metre distance, with substantial
+    # slack for Jamaica's road geometry, traffic, weather and stops. It is not
+    # presented as a real-world travel-time estimate.
+    return maxf(300.0, 120.0 + maxf(distance_m, 0.0) / 14.0 * 1.45)
+
+static func express_slot_for(origin: String, sequence: int, count: int) -> int:
+    return deterministic_seed(origin, sequence) % maxi(1, count)
 
 static func eligible_travel_step(previous: Vector2, current: Vector2) -> float:
     if not is_finite(previous.x) or not is_finite(previous.y) or not is_finite(current.x) or not is_finite(current.y):
@@ -117,6 +140,13 @@ static func offer_destinations(parishes: Array, origin: String, sequence: int, c
             cursor = (cursor + 1) % candidates.size()
     return result
 
+static func format_time(seconds: float) -> String:
+    var total := maxi(0, int(ceil(seconds)))
+    var hours := total / 3600
+    var minutes := (total % 3600) / 60
+    var secs := total % 60
+    return "%d:%02d:%02d" % [hours, minutes, secs] if hours > 0 else "%02d:%02d" % [minutes, secs]
+
 func _refresh_offers(scene: Node, roads) -> void:
     _offers.clear()
     var anchors_value = roads.get("manifest")
@@ -132,14 +162,19 @@ func _refresh_offers(scene: Node, roads) -> void:
     var origin_xz := anchor_xz(origin_anchor)
     var parish_names: Array = anchors.keys()
     var destinations := offer_destinations(parish_names, origin, _offer_sequence)
-    for destination in destinations:
+    var express_slot := express_slot_for(origin, _offer_sequence, destinations.size())
+    for index in range(destinations.size()):
+        var destination := destinations[index]
         var destination_anchor = anchors.get(destination, {})
         if not destination_anchor is Dictionary or destination_anchor.is_empty():
             continue
         var destination_xz := anchor_xz(destination_anchor)
         var distance := origin_xz.distance_to(destination_xz)
+        var contract_type := CONTRACT_EXPRESS if index == express_slot else CONTRACT_STANDARD
+        var deadline := express_deadline_for_distance(distance) if contract_type == CONTRACT_EXPRESS else 0.0
         _offers.append({
-            "id": "%s-%s-%d" % [origin.replace(" ", "_"), destination.replace(" ", "_"), _offer_sequence],
+            "id": "%s-%s-%d-%s" % [origin.replace(" ", "_"), destination.replace(" ", "_"), _offer_sequence, contract_type],
+            "contract_type": contract_type,
             "origin_parish": origin,
             "destination_parish": destination,
             "origin_x": origin_xz.x,
@@ -147,8 +182,10 @@ func _refresh_offers(scene: Node, roads) -> void:
             "destination_x": destination_xz.x,
             "destination_z": destination_xz.y,
             "distance_m": distance,
-            "reward_jmd": reward_for_distance(distance),
+            "reward_jmd": reward_for_contract(distance, contract_type),
             "required_travel_m": required_travel_for_distance(distance),
+            "deadline_s": deadline,
+            "time_remaining_s": deadline,
             "travelled_m": 0.0,
             "remaining_m": distance,
         })
@@ -159,6 +196,8 @@ func _accept_offer(offer: Dictionary) -> void:
         return
     active_job = offer.duplicate(true)
     active_job["travelled_m"] = 0.0
+    if str(active_job.get("contract_type", CONTRACT_STANDARD)) == CONTRACT_EXPRESS:
+        active_job["time_remaining_s"] = float(active_job.get("deadline_s", 0.0))
     _offer_sequence += 1
     _offers.clear()
     _last_world = Vector2(INF, INF)
@@ -169,11 +208,20 @@ func _accept_offer(offer: Dictionary) -> void:
 func _complete_job(scene: Node, roads) -> void:
     var reward := int(active_job.get("reward_jmd", 0))
     var destination := str(active_job.get("destination_parish", "Jamaica"))
+    var contract_type := str(active_job.get("contract_type", CONTRACT_STANDARD))
     wallet_jmd += reward
     active_job.clear()
     _last_world = Vector2(INF, INF)
     if scene.has_method("_notify"):
-        scene.call("_notify", "Delivery complete • J$%d • %s" % [reward, destination])
+        scene.call("_notify", "%s complete • J$%d • %s" % ["Express delivery" if contract_type == CONTRACT_EXPRESS else "Delivery", reward, destination])
+    _refresh_offers(scene, roads)
+
+func _expire_job(scene: Node, roads) -> void:
+    var destination := str(active_job.get("destination_parish", "Jamaica"))
+    active_job.clear()
+    _last_world = Vector2(INF, INF)
+    if scene.has_method("_notify"):
+        scene.call("_notify", "Express delivery expired • %s" % destination)
     _refresh_offers(scene, roads)
 
 func _abandon_job() -> void:
@@ -219,7 +267,17 @@ static func _valid_persisted_job(job: Dictionary) -> bool:
         var value = job.get(field, null)
         if not (value is int or value is float) or not is_finite(float(value)):
             return false
-    return int(job.get("reward_jmd", 0)) >= 0 and float(job.get("required_travel_m", 0.0)) >= 0.0 and float(job.get("travelled_m", 0.0)) >= 0.0
+    if int(job.get("reward_jmd", 0)) < 0 or float(job.get("required_travel_m", 0.0)) < 0.0 or float(job.get("travelled_m", 0.0)) < 0.0:
+        return false
+    var contract_type := str(job.get("contract_type", CONTRACT_STANDARD))
+    if contract_type not in [CONTRACT_STANDARD, CONTRACT_EXPRESS]:
+        return false
+    if contract_type == CONTRACT_EXPRESS:
+        for field in ["deadline_s", "time_remaining_s"]:
+            var timer_value = job.get(field, null)
+            if not (timer_value is int or timer_value is float) or not is_finite(float(timer_value)) or float(timer_value) < 0.0:
+                return false
+    return true
 
 func _build_ui() -> void:
     _layer = CanvasLayer.new()
@@ -312,7 +370,10 @@ func _rebuild_offer_buttons() -> void:
         var button := Button.new()
         button.focus_mode = Control.FOCUS_NONE
         button.custom_minimum_size = Vector2(450.0, 56.0)
-        button.text = "%s → %s  •  %.1f km  •  J$%d" % [str(offer.origin_parish), str(offer.destination_parish), float(offer.distance_m) / 1000.0, int(offer.reward_jmd)]
+        var contract_type := str(offer.get("contract_type", CONTRACT_STANDARD))
+        var prefix := "EXPRESS • " if contract_type == CONTRACT_EXPRESS else ""
+        var timer := " • %s" % format_time(float(offer.get("deadline_s", 0.0))) if contract_type == CONTRACT_EXPRESS else ""
+        button.text = "%s%s → %s  •  %.1f km  •  J$%d%s" % [prefix, str(offer.origin_parish), str(offer.destination_parish), float(offer.distance_m) / 1000.0, int(offer.reward_jmd), timer]
         button.pressed.connect(_accept_offer.bind(offer.duplicate(true)))
         _offer_box.add_child(button)
 
@@ -323,16 +384,22 @@ func _update_ui() -> void:
     _wallet_label.text = "Wallet: J$%d" % wallet_jmd
     if active_job.is_empty():
         _mission_label.visible = false
-        _active_label.text = "Choose a delivery. Offers use the same parish road anchors as world travel."
+        _active_label.text = "Choose a delivery. One board slot is an express contract with higher pay and a deadline."
         _abandon_button.visible = false
     else:
         var destination := str(active_job.get("destination_parish", ""))
         var remaining := maxf(0.0, float(active_job.get("remaining_m", active_job.get("distance_m", 0.0))))
         var travelled := float(active_job.get("travelled_m", 0.0))
         var required := float(active_job.get("required_travel_m", 0.0))
+        var contract_type := str(active_job.get("contract_type", CONTRACT_STANDARD))
+        var express := contract_type == CONTRACT_EXPRESS
+        var timer_text := " • %s" % format_time(float(active_job.get("time_remaining_s", 0.0))) if express else ""
         _mission_label.visible = true
-        _mission_label.text = "DELIVERY → %s  •  %.1f km" % [destination, remaining / 1000.0]
-        _active_label.text = "Active: %s → %s\nReward: J$%d\nDriven: %.1f / %.1f km required\nStop within %.0f m of the destination to complete." % [str(active_job.get("origin_parish", "")), destination, int(active_job.get("reward_jmd", 0)), travelled / 1000.0, required / 1000.0, ARRIVAL_RADIUS_M]
+        _mission_label.text = "%s → %s  •  %.1f km%s" % ["EXPRESS" if express else "DELIVERY", destination, remaining / 1000.0, timer_text]
+        _active_label.text = "Active: %s → %s\nType: %s\nReward: J$%d%s\nDriven: %.1f / %.1f km required\nStop within %.0f m of the destination to complete." % [
+            str(active_job.get("origin_parish", "")), destination, "Express" if express else "Standard", int(active_job.get("reward_jmd", 0)),
+            "\nTime left: %s" % format_time(float(active_job.get("time_remaining_s", 0.0))) if express else "",
+            travelled / 1000.0, required / 1000.0, ARRIVAL_RADIUS_M]
         _abandon_button.visible = true
 
 func _set_world_ui_visible(value: bool) -> void:
@@ -350,4 +417,6 @@ func runtime_snapshot() -> Dictionary:
         "offers": _offers.size(),
         "offer_sequence": _offer_sequence,
         "travelled_m": float(active_job.get("travelled_m", 0.0)) if not active_job.is_empty() else 0.0,
+        "contract_type": str(active_job.get("contract_type", "")) if not active_job.is_empty() else "",
+        "time_remaining_s": float(active_job.get("time_remaining_s", 0.0)) if not active_job.is_empty() else 0.0,
     }
