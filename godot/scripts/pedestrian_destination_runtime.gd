@@ -94,13 +94,11 @@ static func make_plan(identifier: String, edge_id: String, direction: int, progr
     var seed := deterministic_seed(identifier, edge_id, sequence)
     var distance_fraction := 0.14 + float(seed % 3300) / 10000.0
     var target := progress + float(travel_direction) * distance_fraction
-    # Keep objectives away from the exact seam so the core continuation logic
-    # remains responsible for road transitions. Near a seam, the next objective
-    # is on the current segment in the opposite direction.
-    if target > 0.94 or target < 0.06:
-        travel_direction = -travel_direction
-        target = progress + float(travel_direction) * distance_fraction
-    target = clampf(target, 0.06, 0.94)
+    # Objectives may extend just beyond a segment seam. In that case the core
+    # road-continuation system changes edge first, which invalidates this plan
+    # and generates a new objective on the actual connected road. This avoids
+    # inventing pedestrian crossings or teleporting between corridors.
+    target = clampf(target, -0.08, 1.08)
     return {
         "edge_id": edge_id,
         "direction": travel_direction,
