@@ -69,12 +69,12 @@ static func profile_for(budget: int, renderer: String) -> Dictionary:
     var level := clampi(budget, 0, 4)
     if renderer != "vulkan_mobile" or level <= 0:
         return {"enabled": false, "recapture_m": INF, "extent_m": 0.0, "height_m": 0.0, "max_distance_m": 0.0, "intensity": 0.0, "mesh_lod_threshold": 4.0, "origin_height_m": 0.0}
-    var recapture := [0.0, 14.0, 9.0, 5.5, 3.5][level]
-    var extent := [0.0, 16.0, 22.0, 28.0, 34.0][level]
-    var height := [0.0, 9.0, 11.0, 13.0, 15.0][level]
-    var max_distance := [0.0, 24.0, 34.0, 44.0, 54.0][level]
-    var intensity := [0.0, 0.68, 0.78, 0.88, 0.96][level]
-    var lod_threshold := [4.0, 2.8, 2.3, 1.9, 1.6][level]
+    var recapture: float = float([0.0, 14.0, 9.0, 5.5, 3.5][level])
+    var extent: float = float([0.0, 16.0, 22.0, 28.0, 34.0][level])
+    var height: float = float([0.0, 9.0, 11.0, 13.0, 15.0][level])
+    var max_distance: float = float([0.0, 24.0, 34.0, 44.0, 54.0][level])
+    var intensity: float = float([0.0, 0.68, 0.78, 0.88, 0.96][level])
+    var lod_threshold: float = float([4.0, 2.8, 2.3, 1.9, 1.6][level])
     return {
         "enabled": true,
         "recapture_m": recapture,
