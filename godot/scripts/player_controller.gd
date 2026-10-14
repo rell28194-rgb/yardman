@@ -27,6 +27,7 @@ var _ground_normal := Vector3.UP
 var _air_time := 0.0
 var _jump_buffer := 0.0
 var _coyote_time := 0.0
+var _touch_bound := false
 
 func _ready() -> void:
     collision_layer = 4
@@ -47,9 +48,28 @@ func _ready() -> void:
     _make_character()
     _make_foot_probes()
     _set_occupied(true)
+    call_deferred("_bind_touch_controls")
 
 func configure(controller) -> void:
     vehicle = controller
+
+func _bind_touch_controls() -> void:
+    if _touch_bound or not is_inside_tree():
+        return
+    var scene := get_tree().current_scene
+    var touch := scene.find_child("TouchControls", true, false) if scene != null else null
+    if touch == null:
+        await get_tree().process_frame
+        call_deferred("_bind_touch_controls")
+        return
+    if touch.has_signal("jump_requested") and not touch.jump_requested.is_connected(request_jump):
+        touch.jump_requested.connect(request_jump)
+    _touch_bound = true
+
+func _unhandled_input(event: InputEvent) -> void:
+    if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_SPACE and not in_vehicle:
+        request_jump()
+        get_viewport().set_input_as_handled()
 
 func request_jump() -> void:
     if in_vehicle:
