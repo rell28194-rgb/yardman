@@ -34,7 +34,7 @@ func _process(delta: float) -> void:
     var budget := budget_for(quality, thermal_stage, renderer)
     _last_applied = apply_material(material, hour, budget)
     _last_night_factor = NightPolicy.night_factor(hour)
-    _last_lit_fraction = lit_fraction_for_hour(hour) * float(budget.get("lit_scale", 1.0))
+    _last_lit_fraction = effective_lit_fraction(hour, budget)
 
 func apply_render_policy(active: Dictionary) -> void:
     renderer = str(active.get("renderer", renderer))
@@ -78,6 +78,11 @@ static func budget_for(quality_name: String, stage_value: int, renderer_name: St
         "thermal_stage": stage,
     }
 
+static func effective_lit_fraction(hour: float, budget: Dictionary) -> float:
+    if NightPolicy.night_factor(hour) <= 0.001:
+        return 0.0
+    return clampf(lit_fraction_for_hour(hour) * float(budget.get("lit_scale", 1.0)), 0.0, 0.72)
+
 static func apply_material(material_value, hour: float, budget: Dictionary) -> bool:
     if not material_value is ShaderMaterial:
         return false
@@ -85,7 +90,7 @@ static func apply_material(material_value, hour: float, budget: Dictionary) -> b
     if material.shader != BuildingShader:
         return false
     var night := NightPolicy.night_factor(hour)
-    var fraction := clampf(lit_fraction_for_hour(hour) * float(budget.get("lit_scale", 1.0)), 0.0, 0.72)
+    var fraction := effective_lit_fraction(hour, budget)
     material.set_shader_parameter("night_factor", night)
     material.set_shader_parameter("window_emission_strength", float(budget.get("emission", 1.35)))
     material.set_shader_parameter("window_lit_threshold", 1.0 - fraction if night > 0.001 else 1.0)
