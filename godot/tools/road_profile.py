@@ -48,6 +48,62 @@ def _smoothed_path(path, max_adjustment_m: float, passes: int, blend: float):
     return refined, adjustments
 
 
+def _percentile(sorted_values: list[float], fraction: float) -> float:
+    if not sorted_values:
+        return 0.0
+    if len(sorted_values) == 1:
+        return sorted_values[0]
+    position = (len(sorted_values) - 1) * fraction
+    lower = int(math.floor(position))
+    upper = int(math.ceil(position))
+    if lower == upper:
+        return sorted_values[lower]
+    weight = position - lower
+    return sorted_values[lower] * (1.0 - weight) + sorted_values[upper] * weight
+
+
+def _grade_diagnostics(edges: dict) -> dict:
+    """Measure non-structural longitudinal grades without silently rewriting them.
+
+    Jamaica has genuinely steep mountain roads, so this is an evidence gate rather
+    than a blanket grade clamp. Extreme values are surfaced with an exact edge and
+    segment locator for later source/DEM inspection.
+    """
+    grades: list[float] = []
+    worst_edge = ""
+    worst_segment = -1
+    worst_grade = -1.0
+    for edge_id in sorted(edges):
+        edge = edges[edge_id]
+        if int(edge.get("flags", 0)) & STRUCTURAL_FLAGS:
+            continue
+        path = edge.get("path") or []
+        for segment_index, (a, b) in enumerate(zip(path, path[1:])):
+            run = _horizontal_distance(a, b)
+            if run < 0.25 or not math.isfinite(run):
+                continue
+            rise = abs(float(b[1]) - float(a[1]))
+            grade = (rise / run) * 100.0
+            if not math.isfinite(grade):
+                raise ValueError(f"Non-finite road grade at {edge_id}:{segment_index}")
+            grades.append(grade)
+            if grade > worst_grade:
+                worst_grade = grade
+                worst_edge = str(edge_id)
+                worst_segment = segment_index
+    ordered = sorted(grades)
+    return {
+        "profile_grade_segments": len(ordered),
+        "profile_grade_max_pct": round(max(ordered, default=0.0), 4),
+        "profile_grade_p95_pct": round(_percentile(ordered, 0.95), 4),
+        "profile_grade_p99_pct": round(_percentile(ordered, 0.99), 4),
+        "profile_grade_over_20pct_segments": sum(value > 20.0 for value in ordered),
+        "profile_grade_over_30pct_segments": sum(value > 30.0 for value in ordered),
+        "profile_grade_worst_edge": worst_edge,
+        "profile_grade_worst_segment": worst_segment,
+    }
+
+
 def smooth_network_profiles(network: dict, *, max_adjustment_m: float = 0.45,
                             passes: int = 2, blend: float = 0.55) -> dict:
     """Refine interior edge elevations and propagate them to streamed surfaces.
@@ -130,5 +186,6 @@ def smooth_network_profiles(network: dict, *, max_adjustment_m: float = 0.45,
         "profile_adjustment_limit_m": max_adjustment_m,
         "profile_passes": passes,
     }
+    stats.update(_grade_diagnostics(edges))
     network.setdefault("stats", {}).update(stats)
     return stats
