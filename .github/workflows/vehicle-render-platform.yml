@@ -17,6 +17,7 @@ on:
       - 'godot/scripts/vegetation_budget_runtime.gd'
       - 'godot/scripts/reflection_budget_runtime.gd'
       - 'godot/scripts/coastline.gd'
+      - 'godot/scripts/startup_menu.gd'
       - 'godot/shaders/**'
       - 'godot/scripts/vehicle_catalog.gd'
       - 'godot/scripts/vehicle_powertrain.gd'
@@ -37,6 +38,7 @@ on:
       - 'godot/tests/surface_dynamics_test.gd'
       - 'godot/tests/vegetation_budget_test.gd'
       - 'godot/tests/reflection_budget_test.gd'
+      - 'godot/tests/startup_menu_test.gd'
       - 'godot/tests/vehicle_catalog_test.gd'
       - 'godot/tests/powertrain_test.gd'
       - 'godot/tests/vehicle_visual_test.gd'
@@ -75,11 +77,11 @@ jobs:
           timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/platform-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/platform-import.log; then exit 1; fi
 
-      - name: Test renderer, streaming/HLOD, weather, scalable vegetation/reflections, powertrain, vehicle presentation, garage and automotive audio platforms
+      - name: Test renderer, streaming/HLOD, startup buttons, weather, scalable vegetation/reflections, powertrain, vehicle presentation, garage and automotive audio platforms
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in render_quality material_variants streaming_budget building_hlod shader_warmup weather surface_dynamics vegetation_budget reflection_budget vehicle_catalog powertrain vehicle_visual vehicle_camera garage audio; do
+          for TEST in render_quality material_variants streaming_budget building_hlod startup_menu shader_warmup weather surface_dynamics vegetation_budget reflection_budget vehicle_catalog powertrain vehicle_visual vehicle_camera garage audio; do
             timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"
