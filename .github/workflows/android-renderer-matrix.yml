@@ -15,6 +15,7 @@ on:
       - 'godot/scripts/road_visibility_runtime.gd'
       - 'godot/scripts/traffic_runtime.gd'
       - 'godot/scripts/traffic_signal_runtime.gd'
+      - 'godot/scripts/traffic_pedestrian_safety_runtime.gd'
       - 'godot/scripts/parked_vehicle_runtime.gd'
       - 'godot/scripts/pedestrian_runtime.gd'
       - 'godot/scripts/pedestrian_destination_runtime.gd'
