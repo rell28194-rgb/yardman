@@ -41,13 +41,13 @@ func _process(delta: float) -> void:
         _set_active_lights([], night)
         return
 
-    var active_position := _active_position(scene)
-    if active_position == null:
+    var active_position: Variant = _active_position(scene)
+    if not active_position is Vector3:
         _set_active_lights([], night)
         return
     var candidates := _streetlight_candidates(scene)
     _candidate_count = candidates.size()
-    var selected := nearest_positions(candidates, active_position, max_real_lights)
+    var selected := nearest_positions(candidates, active_position as Vector3, max_real_lights)
     _set_active_lights(selected, night)
 
 func apply_render_policy(active: Dictionary) -> void:
@@ -110,7 +110,7 @@ static func nearest_positions(candidates: Array, origin: Vector3, limit: int) ->
         result.append(ranked[index].position)
     return result
 
-func _active_position(scene: Node):
+func _active_position(scene: Node) -> Variant:
     var player = scene.get("player")
     var car = scene.get("car")
     if player is Node3D and car is Node3D:
