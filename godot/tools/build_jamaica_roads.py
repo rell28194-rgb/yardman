@@ -231,6 +231,13 @@ def main() -> int:
             sys.executable, str(bus_stop_tool), str(args.input_geojson),
             str(args.output_dir / "bus_stops"), "--tile-size", str(args.tile_size),
         ], check=True)
+        # Hard retaining structures are not inferred from road slope. Only the
+        # explicit OSM barrier=retaining_wall layer is packaged into the runtime.
+        retaining_wall_tool = Path(__file__).with_name("build_retaining_walls.py")
+        subprocess.run([
+            sys.executable, str(retaining_wall_tool), str(args.input_geojson),
+            str(args.output_dir / "retaining_walls"), "--tile-size", str(args.tile_size),
+        ], check=True)
     print(json.dumps(manifest["stats"], indent=2, sort_keys=True))
     print(f"Bounds (m): {manifest['bounds']}")
     print(f"Wrote {len(manifest['tiles'])} road tiles and persistent topology to {args.output_dir}")
