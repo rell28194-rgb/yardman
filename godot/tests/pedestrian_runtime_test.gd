@@ -26,6 +26,20 @@ func _run() -> void:
     _check(Pedestrians.density_for_hour(13.0) > Pedestrians.density_for_hour(3.0), "daytime pedestrian density should exceed overnight density")
     _check(Pedestrians.density_for_hour(18.0) > Pedestrians.density_for_hour(23.5), "evening activity should exceed late-night density")
 
+    var dry_speed := Pedestrians.weather_walk_speed_factor(0.0, 0.0)
+    var rain_speed := Pedestrians.weather_walk_speed_factor(0.70, 0.25)
+    var storm_speed := Pedestrians.weather_walk_speed_factor(1.0, 1.0)
+    _check(is_equal_approx(dry_speed, 1.0), "dry weather changed pedestrian walk speed")
+    _check(rain_speed < dry_speed and storm_speed < rain_speed and storm_speed >= 0.72, "wet weather did not slow pedestrian movement within safe bounds")
+    var dry_density := Pedestrians.weather_density_factor(0.0)
+    var storm_density := Pedestrians.weather_density_factor(1.0)
+    _check(storm_density < dry_density and storm_density >= 0.62, "storm did not reduce outdoor pedestrian density")
+    var daytime_far := Pedestrians.statistical_population_for(18, 13.0, dry_density)
+    var overnight_far := Pedestrians.statistical_population_for(18, 3.0, dry_density)
+    var storm_far := Pedestrians.statistical_population_for(18, 13.0, storm_density)
+    _check(daytime_far > overnight_far, "far pedestrian population ignored day/night activity")
+    _check(storm_far < daytime_far and storm_far > 0, "far pedestrian activity ignored weather or collapsed entirely")
+
     var balanced := Pedestrians.budget_for("Balanced", 0)
     var hot := Pedestrians.budget_for("Balanced", 5)
     var performance := Pedestrians.budget_for("Performance", 0)
@@ -35,7 +49,7 @@ func _run() -> void:
     _check(float(hot.near_radius) >= 60.0 and float(hot.medium_radius) >= 175.0, "thermal policy erased pedestrian simulation coverage")
 
     if failures == 0:
-        print("YARDMAN_PEDESTRIAN_RUNTIME_TEST PASS road_context=2 directions=2 density_cycle=1 simulation_lod=3")
+        print("YARDMAN_PEDESTRIAN_RUNTIME_TEST PASS road_context=2 directions=2 density_cycle=1 weather_activity=5 simulation_lod=3")
         quit()
     else:
         print("YARDMAN_PEDESTRIAN_RUNTIME_TEST FAIL failures=%d" % failures)
