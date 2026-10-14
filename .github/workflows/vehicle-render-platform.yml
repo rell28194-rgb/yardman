@@ -17,6 +17,7 @@ on:
       - 'godot/scripts/parked_vehicle_runtime.gd'
       - 'godot/scripts/pedestrian_runtime.gd'
       - 'godot/scripts/pedestrian_destination_runtime.gd'
+      - 'godot/scripts/pedestrian_idle_runtime.gd'
       - 'godot/scripts/streetlight_layer.gd'
       - 'godot/scripts/streetlight_night_runtime.gd'
       - 'godot/scripts/vehicle_headlight_runtime.gd'
@@ -58,6 +59,7 @@ on:
       - 'godot/tests/parked_vehicle_test.gd'
       - 'godot/tests/pedestrian_runtime_test.gd'
       - 'godot/tests/pedestrian_destination_test.gd'
+      - 'godot/tests/pedestrian_idle_test.gd'
       - 'godot/tests/streetlight_night_test.gd'
       - 'godot/tests/vehicle_headlight_test.gd'
       - 'godot/tests/traffic_headlight_test.gd'
@@ -113,11 +115,11 @@ jobs:
           timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/platform-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/platform-import.log; then exit 1; fi
 
-      - name: Test renderer, streaming/HLOD, road culling, junction-aware traffic, parked vehicles, pedestrian destinations, night lighting, player/traffic headlights, building night activity, environmental ambience, weather cycle, player/traffic signals, courier economy/guidance, player locomotion, startup buttons, weather, scalable vegetation/reflections, powertrain, vehicle presentation, garage and automotive audio platforms
+      - name: Test renderer, streaming/HLOD, road culling, junction-aware traffic, parked vehicles, pedestrian destinations/idles, night lighting, player/traffic headlights, building night activity, environmental ambience, weather cycle, player/traffic signals, courier economy/guidance, player locomotion, startup buttons, weather, scalable vegetation/reflections, powertrain, vehicle presentation, garage and automotive audio platforms
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in render_quality material_variants streaming_budget building_hlod road_visibility traffic_runtime traffic_signal parked_vehicle pedestrian_runtime pedestrian_destination streetlight_night vehicle_headlight traffic_headlight building_night environment_audio weather_cycle vehicle_signal job_runtime job_persistence job_guidance player_locomotion startup_menu shader_warmup weather surface_dynamics vegetation_budget reflection_budget vehicle_catalog powertrain vehicle_visual vehicle_camera garage audio; do
+          for TEST in render_quality material_variants streaming_budget building_hlod road_visibility traffic_runtime traffic_signal parked_vehicle pedestrian_runtime pedestrian_destination pedestrian_idle streetlight_night vehicle_headlight traffic_headlight building_night environment_audio weather_cycle vehicle_signal job_runtime job_persistence job_guidance player_locomotion startup_menu shader_warmup weather surface_dynamics vegetation_budget reflection_budget vehicle_catalog powertrain vehicle_visual vehicle_camera garage audio; do
             timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"
