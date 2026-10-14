@@ -1,0 +1,58 @@
+name: Yardman road earthworks
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - 'godot/scripts/road_earthworks_runtime.gd'
+      - 'godot/tests/road_earthworks_test.gd'
+      - 'godot/project.godot'
+      - '.github/workflows/godot-road-earthworks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  earthworks-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Godot
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+      - name: Import project and reject parser errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/earthworks-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/earthworks-import.log; then exit 1; fi
+      - name: Test road terrain cut fill drainage
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/road_earthworks_test.gd 2>&1 | tee godot/build/road-earthworks.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/road-earthworks.log; then exit 1; fi
+          grep -q 'YARDMAN_ROAD_EARTHWORKS_TEST PASS' godot/build/road-earthworks.log
+      - name: Retain earthworks evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Road-Earthworks-Evidence
+          path: |
+            godot/build/earthworks-import.log
+            godot/build/road-earthworks.log
+          if-no-files-found: error
+          retention-days: 30
