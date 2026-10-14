@@ -152,14 +152,25 @@ static func apply_selected_lights(selected: Array, pool: Array, factor: float, b
         light.spot_range = float(budget.get("range_m", 31.0))
         light.spot_angle = 34.0
         light.shadow_enabled = false
+        light.distance_fade_enabled = true
+        light.distance_fade_begin = maxf(16.0, light.spot_range * 0.68)
+        light.distance_fade_length = maxf(10.0, light.spot_range * 0.52)
         if enabled:
             var entry: Dictionary = selected[index]
             var node = entry.get("node", null)
+            var lamp_offset := Transform3D(Basis.IDENTITY, Vector3(0.0, 0.69, -2.05))
             if node is Node3D and is_instance_valid(node):
                 var body := node as Node3D
-                light.global_transform = body.global_transform * Transform3D(Basis.IDENTITY, Vector3(0.0, 0.69, -2.05))
+                if body.is_inside_tree() and light.is_inside_tree():
+                    light.global_transform = body.global_transform * lamp_offset
+                else:
+                    light.transform = body.transform * lamp_offset
             elif entry.get("position", null) is Vector3:
-                light.global_position = entry.position
+                var position: Vector3 = entry.position
+                if light.is_inside_tree():
+                    light.global_position = position
+                else:
+                    light.position = position
     return count
 
 func _attach_scene(scene: Node) -> void:
