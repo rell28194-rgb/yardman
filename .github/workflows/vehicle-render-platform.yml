@@ -47,6 +47,8 @@ on:
       - 'godot/scripts/vehicle_controller.gd'
       - 'godot/scripts/vehicle_garage.gd'
       - 'godot/scripts/vehicle_model.gd'
+      - 'godot/scripts/vehicle_profile_geometry.gd'
+      - 'godot/scripts/vehicle_stance_runtime.gd'
       - 'godot/scripts/vehicle_visual_styler.gd'
       - 'godot/scripts/vehicle_visual_runtime.gd'
       - 'godot/scripts/vehicle_camera_runtime.gd'
