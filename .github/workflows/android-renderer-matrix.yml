@@ -20,6 +20,7 @@ on:
       - 'godot/scripts/streetlight_night_runtime.gd'
       - 'godot/scripts/vehicle_headlight_runtime.gd'
       - 'godot/scripts/traffic_headlight_runtime.gd'
+      - 'godot/scripts/building_night_runtime.gd'
       - 'godot/scripts/shader_warmup.gd'
       - 'godot/scripts/atmosphere_fx.gd'
       - 'godot/scripts/vegetation_budget_runtime.gd'
