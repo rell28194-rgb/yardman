@@ -1,0 +1,109 @@
+name: Yardman APK Delivery Chunks
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - '.github/workflows/apk-delivery-chunks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  split-delivery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download validated Android artifact from run 136
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/yardman-r3
+          gh run download 38480632116 \
+            --repo "${GITHUB_REPOSITORY}" \
+            --name Yardman-Internal-Android \
+            --dir /tmp/yardman-r3
+          APK="$(find /tmp/yardman-r3 -type f -name 'Yardman-Beta.apk' -print -quit)"
+          test -n "$APK"
+          test -s "$APK"
+          mkdir -p delivery
+          cp "$APK" delivery/Yardman-Beta-R3.apk
+          sha256sum delivery/Yardman-Beta-R3.apk | tee delivery/Yardman-Beta-R3.apk.sha256
+
+      - name: Split APK into transport-safe chunks
+        shell: bash
+        run: |
+          set -euxo pipefail
+          split -b 60M -d -a 2 delivery/Yardman-Beta-R3.apk delivery/Yardman-Beta-R3.apk.part-
+          ls -lh delivery/Yardman-Beta-R3.apk.part-*
+          test -f delivery/Yardman-Beta-R3.apk.part-00
+          test -f delivery/Yardman-Beta-R3.apk.part-05
+
+      - name: Upload part 00
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-R3-part-00
+          path: delivery/Yardman-Beta-R3.apk.part-00
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload part 01
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-R3-part-01
+          path: delivery/Yardman-Beta-R3.apk.part-01
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload part 02
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-R3-part-02
+          path: delivery/Yardman-Beta-R3.apk.part-02
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload part 03
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-R3-part-03
+          path: delivery/Yardman-Beta-R3.apk.part-03
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload part 04
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-R3-part-04
+          path: delivery/Yardman-Beta-R3.apk.part-04
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload part 05
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-R3-part-05
+          path: delivery/Yardman-Beta-R3.apk.part-05
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-R3-checksum
+          path: delivery/Yardman-Beta-R3.apk.sha256
+          if-no-files-found: error
+          retention-days: 7
