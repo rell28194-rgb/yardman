@@ -8,7 +8,9 @@ uniform bool has_reference_albedo = false;
 uniform bool has_reference_detail = false;
 uniform float visibility_distance = 2600.0;
 uniform float wetness : hint_range(0.0, 1.0) = 0.0;
+uniform float standing_water : hint_range(0.0, 1.0) = 0.0;
 varying float camera_distance;
+varying float road_up_alignment;
 
 float hash21(vec2 p) {
     p = fract(p * vec2(123.34, 456.21));
@@ -18,6 +20,7 @@ float hash21(vec2 p) {
 
 void vertex() {
     camera_distance = length((MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz);
+    road_up_alignment = clamp(abs(NORMAL.y), 0.0, 1.0);
     // A minute depth-only scale supplements the physical overlay on grazing
     // views; road lighting and canonical/physics geometry are unchanged.
     Z_CLIP_SCALE = 0.99997;
@@ -72,12 +75,15 @@ void fragment() {
         line *= smoothstep(4.0, 9.0, min(UV2.x, UV2.y));
     }
     float surface_wetness = unpaved ? wetness * 0.48 : wetness;
-    float puddle_mask = unpaved ? 0.0 : smoothstep(0.58, 0.86, patch) * surface_wetness;
+    float puddle_flatness = smoothstep(0.965, 0.998, road_up_alignment);
+    float puddle_mask = unpaved ? 0.0 : smoothstep(0.58, 0.86, patch) * standing_water * puddle_flatness;
     vec3 surface = mix(base, vec3(0.82, 0.815, 0.76), line * (0.78 + grain * 0.15));
     surface *= mix(1.0, 0.70, surface_wetness * 0.82);
+    surface *= mix(1.0, 0.94, puddle_mask * 0.45);
     ALBEDO = surface;
     ROUGHNESS = unpaved ? mix(0.98, 0.84, surface_wetness) : mix(0.88, 0.34, surface_wetness);
-    ROUGHNESS = mix(ROUGHNESS, 0.14, puddle_mask * 0.78);
+    ROUGHNESS = mix(ROUGHNESS, 0.10, puddle_mask * 0.90);
     SPECULAR = mix(0.24, 0.64, surface_wetness);
+    SPECULAR = mix(SPECULAR, 0.82, puddle_mask * 0.72);
     METALLIC = 0.0;
 }
