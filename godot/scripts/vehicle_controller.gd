@@ -3,6 +3,7 @@ class_name YardmanVehicleController
 
 const ModelScript = preload("res://scripts/vehicle_model.gd")
 const Catalog = preload("res://scripts/vehicle_catalog.gd")
+const Powertrain = preload("res://scripts/vehicle_powertrain.gd")
 
 var body: CharacterBody3D
 var speed_mps := 0.0
@@ -31,6 +32,10 @@ var _contact_ratio := 1.0
 var _suspension_compression := 0.35
 var _track_half_m := 0.72
 var _headlights: Array[SpotLight3D] = []
+var _current_gear := 0
+var _shift_timer := 0.0
+var _shift_count := 0
+var _last_shift_direction := 0
 
 func configure(vehicle: CharacterBody3D, requested_vehicle_id: String = "") -> void:
     body = vehicle
@@ -164,6 +169,14 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
     throttle = clampf(throttle, -1.0, 1.0) if occupied else 0.0
     turn = clampf(turn, -1.0, 1.0) if occupied else 0.0
     _last_throttle = throttle
+    _shift_timer = maxf(0.0, _shift_timer - dt)
+    if occupied and speed_mps >= -0.15 and _shift_timer <= 0.0:
+        var requested_gear: int = Powertrain.select_gear(profile, maxf(speed_mps, 0.0), _current_gear, throttle, engine_rpm)
+        if requested_gear != _current_gear:
+            _last_shift_direction = 1 if requested_gear > _current_gear else -1
+            _current_gear = requested_gear
+            _shift_timer = maxf(float(profile.get("shift_time_s", 0.24)), 0.0)
+            _shift_count += 1
     var previous_speed := speed_mps
     var braking := clampf(brake_input, 0.0, 1.0)
     var reverse_braking := (throttle < -0.02 and speed_mps > 0.18) or (throttle > 0.02 and speed_mps < -0.18)
@@ -186,10 +199,13 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
         speed_mps = move_toward(speed_mps, 0.0, brake_deceleration * dt)
     elif absf(throttle) > 0.02 and traction:
         var limit := max_reverse if throttle < 0.0 else (max_forward if on_road else grass_limit)
-        var speed_fraction := clampf(absf(speed_mps) / maxf(max_forward, 1.0), 0.0, 1.0)
-        var acceleration := lerpf(float(profile.acceleration_low_mps2), float(profile.acceleration_high_mps2), speed_fraction) * absf(throttle)
-        if throttle < 0.0:
-            acceleration *= float(profile.reverse_accel_factor)
+        var acceleration: float
+        if throttle > 0.0:
+            acceleration = Powertrain.drive_acceleration(profile, engine_rpm, _current_gear, speed_mps, throttle)
+            acceleration *= Powertrain.shift_torque_factor(profile, _shift_timer)
+        else:
+            var reverse_fraction := clampf(absf(speed_mps) / maxf(max_reverse, 1.0), 0.0, 1.0)
+            acceleration = lerpf(float(profile.acceleration_low_mps2), float(profile.acceleration_high_mps2), reverse_fraction) * absf(throttle) * float(profile.reverse_accel_factor)
         if not on_road:
             acceleration *= 0.70
         if absf(speed_mps) < limit:
@@ -257,10 +273,11 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
         speed_mps = Vector2(body.velocity.x, body.velocity.z).dot(Vector2(forward.x, forward.z))
     _last_acceleration = (speed_mps - previous_speed) / dt
     _update_visual(dt, forward, braking)
-    var ratios: Array = profile.get("rpm_per_mps", [405.0, 245.0, 178.0, 132.0, 101.0])
-    var ratio := float(ratios[mini(_gear_index(), ratios.size() - 1)])
-    var target_rpm := clampf(float(profile.idle_rpm) + absf(speed_mps) * ratio + absf(throttle) * float(profile.throttle_rpm_boost), float(profile.idle_rpm) * 0.91, float(profile.redline_rpm)) if occupied else 0.0
-    engine_rpm = lerpf(engine_rpm, target_rpm, 1.0 - exp(-dt * 9.0))
+    var target_rpm := Powertrain.target_rpm(profile, speed_mps, _current_gear, throttle) if occupied else 0.0
+    var rpm_response := maxf(float(profile.get("rpm_response", 10.0)), 1.0)
+    if _shift_timer > 0.0:
+        rpm_response *= 1.35
+    engine_rpm = lerpf(engine_rpm, target_rpm, 1.0 - exp(-dt * rpm_response))
 
 func _update_visual(delta: float, forward: Vector3, braking: float) -> void:
     if visual == null:
@@ -283,12 +300,25 @@ func _update_visual(delta: float, forward: Vector3, braking: float) -> void:
     visual.call("update_motion", delta, speed_mps, steering_angle, braking, speed_mps < -0.15, occupied, body_pitch, body_roll)
 
 func _gear_index() -> int:
-    var thresholds: Array = profile.get("gear_speed_mps", [9.0, 18.0, 29.0, 42.0])
-    var forward_speed := absf(speed_mps)
-    for index in range(thresholds.size()):
-        if forward_speed < float(thresholds[index]):
-            return index
-    return thresholds.size()
+    return clampi(_current_gear, 0, Powertrain.gear_count(profile) - 1)
+
+func gear_index() -> int:
+    return _gear_index()
+
+func is_shifting() -> bool:
+    return _shift_timer > 0.0
+
+func transmission_snapshot() -> Dictionary:
+    return {
+        "gear_index": _gear_index(),
+        "gear_label": gear_label(),
+        "shifting": is_shifting(),
+        "shift_time_remaining": _shift_timer,
+        "shift_count": _shift_count,
+        "last_shift_direction": _last_shift_direction,
+        "transmission": str(profile.get("transmission", "automatic")),
+        "final_drive": float(profile.get("final_drive", 1.0)),
+    }
 
 func gear_label() -> String:
     if not occupied and absf(speed_mps) < 0.2:
@@ -315,6 +345,10 @@ func reset_motion() -> void:
     _probe_normal = Vector3.UP
     _contact_ratio = 1.0
     _suspension_compression = 0.35
+    _current_gear = 0
+    _shift_timer = 0.0
+    _shift_count = 0
+    _last_shift_direction = 0
     engine_rpm = float(profile.get("idle_rpm", 900.0)) if occupied else 0.0
     _ground_basis = Basis.IDENTITY
     if body != null:
