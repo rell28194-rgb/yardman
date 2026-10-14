@@ -17,6 +17,7 @@ on:
       - 'godot/scripts/traffic_signal_runtime.gd'
       - 'godot/scripts/traffic_pedestrian_safety_runtime.gd'
       - 'godot/scripts/traffic_visual_variety_runtime.gd'
+      - 'godot/scripts/traffic_brake_light_runtime.gd'
       - 'godot/scripts/parked_vehicle_runtime.gd'
       - 'godot/scripts/pedestrian_runtime.gd'
       - 'godot/scripts/pedestrian_destination_runtime.gd'
