@@ -3,6 +3,7 @@ extends Node
 const Catalog = preload("res://scripts/vehicle_catalog.gd")
 const Styler = preload("res://scripts/vehicle_visual_styler.gd")
 const ProfileGeometry = preload("res://scripts/vehicle_profile_geometry.gd")
+const Stance = preload("res://scripts/vehicle_stance_runtime.gd")
 
 var _last_world_visual_id := 0
 var _last_world_vehicle_id := ""
@@ -22,6 +23,7 @@ func style_visual(visual: Node3D, vehicle_id: String) -> Dictionary:
     if visual == null or not Catalog.has(vehicle_id):
         return {}
     var profile := Catalog.profile(vehicle_id)
+    var stance_stats := Stance.apply(visual, profile)
     var geometry_stats := ProfileGeometry.apply(visual, profile)
     var stats := Styler.apply(visual, profile)
     stats["geometry_identity"] = str(geometry_stats.get("vehicle_id", vehicle_id))
@@ -30,6 +32,10 @@ func style_visual(visual: Node3D, vehicle_id: String) -> Dictionary:
     stats["dedicated_mesh"] = bool(geometry_stats.get("dedicated_mesh", false))
     stats["geometry_mesh_parts"] = int(geometry_stats.get("mesh_parts", 0))
     stats["hidden_shared_meshes"] = int(geometry_stats.get("hidden_shared_meshes", 0))
+    stats["stance_wheels"] = int(stance_stats.get("wheels_positioned", 0))
+    stats["stance_wheelbase_m"] = float(stance_stats.get("wheelbase_world_m", 0.0))
+    stats["stance_track_m"] = float(stance_stats.get("track_world_m", 0.0))
+    stats["stance_radius_m"] = float(stance_stats.get("radius_world_m", 0.0))
     return stats
 
 func _style_world_vehicle() -> void:
