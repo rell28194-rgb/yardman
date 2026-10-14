@@ -10,6 +10,7 @@ on:
       - 'godot/scripts/render_runtime.gd'
       - 'godot/scripts/render_material_registry.gd'
       - 'godot/scripts/streaming_budget_runtime.gd'
+      - 'godot/scripts/building_hlod_runtime.gd'
       - 'godot/scripts/shader_warmup.gd'
       - 'godot/scripts/atmosphere_fx.gd'
       - 'godot/scripts/surface_dynamics_runtime.gd'
@@ -30,6 +31,7 @@ on:
       - 'godot/tests/render_quality_test.gd'
       - 'godot/tests/material_variants_test.gd'
       - 'godot/tests/streaming_budget_test.gd'
+      - 'godot/tests/building_hlod_test.gd'
       - 'godot/tests/shader_warmup_test.gd'
       - 'godot/tests/weather_test.gd'
       - 'godot/tests/surface_dynamics_test.gd'
@@ -73,11 +75,11 @@ jobs:
           timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/platform-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/platform-import.log; then exit 1; fi
 
-      - name: Test renderer, streaming, weather, scalable vegetation/reflections, powertrain, vehicle presentation, garage and automotive audio platforms
+      - name: Test renderer, streaming/HLOD, weather, scalable vegetation/reflections, powertrain, vehicle presentation, garage and automotive audio platforms
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in render_quality material_variants streaming_budget shader_warmup weather surface_dynamics vegetation_budget reflection_budget vehicle_catalog powertrain vehicle_visual vehicle_camera garage audio; do
+          for TEST in render_quality material_variants streaming_budget building_hlod shader_warmup weather surface_dynamics vegetation_budget reflection_budget vehicle_catalog powertrain vehicle_visual vehicle_camera garage audio; do
             timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"
