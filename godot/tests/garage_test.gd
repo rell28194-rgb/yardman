@@ -34,14 +34,22 @@ func _run() -> void:
     _check(garage.has_node("GarageUI/GaragePanel"), "Garage panel missing")
 
     var previous: String = str(garage.selected_vehicle_id())
-    _check(garage.set_selected_vehicle("toyota_mark_x", false, false), "Could not select Mark X")
+    _check(garage.set_selected_vehicle("toyota_mark_x", true, false), "Could not persist Mark X selection")
     _check(garage.selected_vehicle_id() == "toyota_mark_x", "Selection state did not update")
+    var settings_path := "user://yardman/vehicle.json"
+    _check(FileAccess.file_exists(settings_path), "Persistent garage selection file was not written")
+    if FileAccess.file_exists(settings_path):
+        var parsed = JSON.parse_string(FileAccess.get_file_as_string(settings_path))
+        _check(parsed is Dictionary, "Persistent garage selection is not valid JSON")
+        if parsed is Dictionary:
+            _check(str(parsed.get("selected_vehicle", "")) == "toyota_mark_x", "Persistent garage selection stored the wrong vehicle")
+
     var fake: FakeScene = FakeScene.new()
     root.add_child(fake)
     _check(garage.apply_selected_to_scene(fake), "Garage could not bridge selection to a vehicle controller")
     _check(fake.vehicle.applied == "toyota_mark_x", "Controller bridge received wrong vehicle id")
-    garage.set_selected_vehicle(previous, false, false)
+    _check(garage.set_selected_vehicle(previous, true, false), "Could not restore previous persisted vehicle")
     fake.queue_free()
     await process_frame
-    print("YARDMAN_GARAGE_TEST %s vehicles=%d button=1 bridge=1" % ["PASS" if failures == 0 else "FAIL", ids.size()])
+    print("YARDMAN_GARAGE_TEST %s vehicles=%d button=1 bridge=1 persistence=1" % ["PASS" if failures == 0 else "FAIL", ids.size()])
     quit(0 if failures == 0 else 1)
