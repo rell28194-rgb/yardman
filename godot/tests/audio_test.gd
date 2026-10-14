@@ -44,7 +44,7 @@ func _run() -> void:
     await process_frame
     _check(audio.debug_state().audio_profile == "crown_v6", "Crown acoustic profile was not applied")
     _check(audio.engine_idle.playing and not audio.engine_high.playing and not audio.footsteps.playing, "Idle vehicle did not select the idle engine layer")
-    var crown_stream := audio.engine_high.stream
+    var crown_stream: AudioStream = audio.engine_high.stream
     var idle_pitch: float = audio.engine_idle.pitch_scale
 
     state.rpm = 6100.0
@@ -68,7 +68,7 @@ func _run() -> void:
     audio.update_state(1.0 / 60.0, state)
     _check(audio.debug_state().audio_profile == "mark_x_v6", "Mark X acoustic profile switch failed")
     _check(audio.engine_high.stream != crown_stream, "Crown and Mark X still share the same synthesized engine bank")
-    var mark_stream := audio.engine_high.stream
+    var mark_stream: AudioStream = audio.engine_high.stream
     state.audio_profile = "port_royal_flat6"
     audio.update_state(1.0 / 60.0, state)
     _check(audio.debug_state().audio_profile == "port_royal_flat6", "Port Royal acoustic profile switch failed")
