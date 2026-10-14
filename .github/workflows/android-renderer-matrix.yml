@@ -15,6 +15,7 @@ on:
       - 'godot/scripts/road_visibility_runtime.gd'
       - 'godot/scripts/traffic_runtime.gd'
       - 'godot/scripts/parked_vehicle_runtime.gd'
+      - 'godot/scripts/pedestrian_runtime.gd'
       - 'godot/scripts/shader_warmup.gd'
       - 'godot/scripts/atmosphere_fx.gd'
       - 'godot/scripts/vegetation_budget_runtime.gd'
