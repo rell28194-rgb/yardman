@@ -15,6 +15,7 @@ signal weather_changed(mode: String)
 var weather_mode := "clear"
 var rain_intensity := 0.0
 var wetness := 0.0
+var standing_water := 0.0
 
 var _camera: Camera3D
 var _sun_light: DirectionalLight3D
@@ -102,6 +103,7 @@ func set_weather(mode: String, immediate: bool = false) -> bool:
     if immediate:
         rain_intensity = _rain_target
         wetness = _rain_target
+        standing_water = _standing_water_target(rain_intensity, wetness)
     weather_changed.emit(weather_mode)
     return true
 
@@ -111,6 +113,7 @@ func weather_snapshot() -> Dictionary:
         "target_rain": _rain_target,
         "rain_intensity": rain_intensity,
         "wetness": wetness,
+        "standing_water": standing_water,
         "particle_budget": _particle_budget,
     }
 
@@ -137,6 +140,14 @@ func _update_weather_state(delta: float) -> void:
     var wet_target := clampf(rain_intensity * 1.08, 0.0, 1.0)
     var wet_rate := 0.18 if wet_target > wetness else 0.010
     wetness = move_toward(wetness, wet_target, delta * wet_rate)
+    var pool_target := _standing_water_target(rain_intensity, wetness)
+    var pool_rate := 0.12 if pool_target > standing_water else 0.004
+    standing_water = move_toward(standing_water, pool_target, delta * pool_rate)
+
+static func _standing_water_target(rain_value: float, wet_value: float) -> float:
+    var rain_factor := clampf((rain_value - 0.25) / 0.75, 0.0, 1.0)
+    var wet_factor := clampf((wet_value - 0.30) / 0.70, 0.0, 1.0)
+    return rain_factor * wet_factor
 
 func _make_rain() -> void:
     _rain = GPUParticles3D.new()
@@ -262,7 +273,9 @@ func _apply_surface_weather(scene: Node) -> void:
     for property_name in ["_asphalt_material", "_dirt_material"]:
         var value = roads_value.get(property_name)
         if value is ShaderMaterial:
-            (value as ShaderMaterial).set_shader_parameter("wetness", wetness)
+            var material := value as ShaderMaterial
+            material.set_shader_parameter("wetness", wetness)
+            material.set_shader_parameter("standing_water", standing_water)
 
 func _make_cloud_texture() -> ImageTexture:
     var size := 256
