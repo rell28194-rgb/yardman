@@ -7,6 +7,7 @@ uniform sampler2D reference_detail : source_color, repeat_enable, filter_linear_
 uniform bool has_reference_albedo = false;
 uniform bool has_reference_detail = false;
 uniform float visibility_distance = 2600.0;
+uniform float wetness : hint_range(0.0, 1.0) = 0.0;
 varying float camera_distance;
 
 float hash21(vec2 p) {
@@ -70,7 +71,13 @@ void fragment() {
         // at intersections. Markings are explicitly inferred, never surveyed.
         line *= smoothstep(4.0, 9.0, min(UV2.x, UV2.y));
     }
-    ALBEDO = mix(base, vec3(0.82, 0.815, 0.76), line * (0.78 + grain * 0.15));
-    ROUGHNESS = unpaved ? 0.98 : 0.88;
+    float surface_wetness = unpaved ? wetness * 0.48 : wetness;
+    float puddle_mask = unpaved ? 0.0 : smoothstep(0.58, 0.86, patch) * surface_wetness;
+    vec3 surface = mix(base, vec3(0.82, 0.815, 0.76), line * (0.78 + grain * 0.15));
+    surface *= mix(1.0, 0.70, surface_wetness * 0.82);
+    ALBEDO = surface;
+    ROUGHNESS = unpaved ? mix(0.98, 0.84, surface_wetness) : mix(0.88, 0.34, surface_wetness);
+    ROUGHNESS = mix(ROUGHNESS, 0.14, puddle_mask * 0.78);
+    SPECULAR = mix(0.24, 0.64, surface_wetness);
     METALLIC = 0.0;
 }
