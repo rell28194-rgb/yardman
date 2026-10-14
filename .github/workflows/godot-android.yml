@@ -40,19 +40,17 @@ jobs:
             https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf \
             -O /tmp/jamaica.osm.pbf
 
+          # This first flat graph only selects terrain coverage. Auxiliary OSM
+          # layers would be deleted by the final registered compile, so skip them.
           python godot/tools/build_jamaica_roads.py \
-            /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096
+            /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096 --skip-auxiliary
 
           python godot/tools/build_terrain.py /tmp/yardman-dem \
             godot/data/roads/manifest.json godot/data/terrain --acquire
+          # The final terrain-registered compile also packages roadworks, places,
+          # bus stops and explicit retaining walls exactly once.
           python godot/tools/build_jamaica_roads.py \
             /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096 --terrain godot/data/terrain
-
-          # Roadwork metadata is visual-only and derived from explicit OSM
-          # construction tags. Package it beside roads so the runtime autoload
-          # cannot silently ship inert while the isolated roadwork workflow passes.
-          python godot/tools/build_roadworks.py \
-            /tmp/jamaica.osm.pbf godot/data/roads/roadworks --tile-size 4096
 
           # Fence authority comes directly from barrier=fence ways, never from
           # the road-only OSM reader. Only explicit wire-compatible tags authorize
@@ -110,6 +108,7 @@ jobs:
           fences = json.loads(Path('godot/data/roads/fences/manifest.json').read_text())
           streetlights = json.loads(Path('godot/data/roads/streetlights/manifest.json').read_text())
           guardrails = json.loads(Path('godot/data/roads/guardrails/manifest.json').read_text())
+          retaining_walls = json.loads(Path('godot/data/roads/retaining_walls/manifest.json').read_text())
           assert topology['parish_anchors']['component_count'] == 1, topology['parish_anchors']
           assert structures['bridge']['edges'] > 0, structures
           assert structures['tunnel']['profiled_edges'] > 0, structures
@@ -135,6 +134,11 @@ jobs:
           assert guardrails['crs'] == m['crs'], (guardrails['crs'], m['crs'])
           assert guardrails['source_sha256'] == m['source_sha256'], (guardrails['source_sha256'], m['source_sha256'])
           assert guardrails['stats']['features'] >= 0 and guardrails['stats']['tile_pieces'] >= 0 and guardrails['stats']['tiles'] >= 0, guardrails['stats']
+          assert retaining_walls['purpose'] == 'visual/collision layer for explicit OSM barrier=retaining_wall geometry; OSM remains placement authority', retaining_walls
+          assert retaining_walls['placement_rule'] == 'explicit barrier=retaining_wall ways only; road cut/fill inference never fabricates a hard wall', retaining_walls
+          assert retaining_walls['crs'] == m['crs'], (retaining_walls['crs'], m['crs'])
+          assert retaining_walls['source_sha256'] == m['source_sha256'], (retaining_walls['source_sha256'], m['source_sha256'])
+          assert retaining_walls['stats']['features'] >= 0 and retaining_walls['stats']['tile_pieces'] >= 0 and retaining_walls['stats']['tiles'] >= 0, retaining_walls['stats']
           print('Jamaica map QA passed:', s['road_features'], 'roads,', s['segments'], 'segments,', s['tiles'], 'tiles')
           print('Road topology:', topology['components']['count'], 'components;',
                 'largest edge ratio', topology['components']['largest_edge_ratio'],
@@ -154,9 +158,11 @@ jobs:
                 streetlights['stats']['tiles'], 'tiles')
           print('Guard-rail authority:', guardrails['stats']['features'], 'explicit ways /',
                 guardrails['stats']['tile_pieces'], 'tile pieces /', guardrails['stats']['tiles'], 'tiles')
+          print('Retaining-wall authority:', retaining_walls['stats']['features'], 'explicit ways /',
+                retaining_walls['stats']['tile_pieces'], 'tile pieces /', retaining_walls['stats']['tiles'], 'tiles')
           PY
           du -sh godot/data/roads
-          ls -lh godot/data/roads/manifest.json godot/data/roads/topology_report.json godot/data/roads/structures.json godot/data/roads/roadworks/manifest.json godot/data/roads/fences/manifest.json godot/data/roads/streetlights/manifest.json godot/data/roads/guardrails/manifest.json
+          ls -lh godot/data/roads/manifest.json godot/data/roads/topology_report.json godot/data/roads/structures.json godot/data/roads/roadworks/manifest.json godot/data/roads/fences/manifest.json godot/data/roads/streetlights/manifest.json godot/data/roads/guardrails/manifest.json godot/data/roads/retaining_walls/manifest.json
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -268,7 +274,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in road_surface road_height_bias road_structure_data roadwork_layer fence_layer streetlight_layer guardrail_layer coastline terrain_coast structural_spawn controls_hud vehicle visuals audio building_streamer reference_building reference_assets reference_foliage polish_integration; do
+          for TEST in road_surface road_height_bias road_structure_data roadwork_layer fence_layer streetlight_layer guardrail_layer retaining_wall_layer road_earthworks road_corridor_terrain coastline terrain_coast structural_spawn controls_hud vehicle visuals audio building_streamer reference_building reference_assets reference_foliage polish_integration; do
             timeout 300 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"
@@ -331,6 +337,7 @@ jobs:
             godot/data/roads/fences/manifest.json
             godot/data/roads/streetlights/**
             godot/data/roads/guardrails/**
+            godot/data/roads/retaining_walls/**
             godot/data/terrain/manifest.json
             godot/data/coast/manifest.json
             godot/data/buildings/manifest.json
@@ -356,6 +363,7 @@ jobs:
             godot/data/roads/fences/manifest.json
             godot/data/roads/streetlights/**
             godot/data/roads/guardrails/**
+            godot/data/roads/retaining_walls/**
             godot/data/terrain/manifest.json
             godot/data/coast/manifest.json
             godot/data/buildings/manifest.json
