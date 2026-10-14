@@ -72,6 +72,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("output_dir", type=Path)
     p.add_argument("--tile-size", type=float, default=DEFAULT_TILE_SIZE)
     p.add_argument("--terrain", type=Path, help="Compiled terrain root for registered road elevation")
+    p.add_argument(
+        "--skip-auxiliary",
+        action="store_true",
+        help="Build only roads/graph. Used by the temporary flat road pass that bootstraps terrain.",
+    )
     return p.parse_args()
 
 
@@ -198,6 +203,39 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
     return manifest
 
 
+def build_auxiliary_layers(input_path: Path, output_dir: Path, tile_size: float) -> None:
+    """Build road-adjacent source layers once, after the final road compile.
+
+    The Android pipeline compiles a temporary flat road graph only so terrain can
+    select DEM coverage. Re-parsing Jamaica's PBF for these layers during that
+    bootstrap pass wastes time and the results are immediately deleted by the
+    final terrain-registered road build.
+    """
+    roadwork_tool = Path(__file__).with_name("build_roadworks.py")
+    subprocess.run([
+        sys.executable, str(roadwork_tool), str(input_path),
+        str(output_dir / "roadworks"), "--tile-size", str(tile_size),
+    ], check=True)
+    if input_path.suffix.lower() != ".pbf":
+        return
+
+    place_tool = Path(__file__).with_name("build_places.py")
+    subprocess.run([
+        sys.executable, str(place_tool), str(input_path),
+        str(output_dir.parent / "places"), "--tile-size", str(tile_size),
+    ], check=True)
+    bus_stop_tool = Path(__file__).with_name("build_bus_stops.py")
+    subprocess.run([
+        sys.executable, str(bus_stop_tool), str(input_path),
+        str(output_dir / "bus_stops"), "--tile-size", str(tile_size),
+    ], check=True)
+    retaining_wall_tool = Path(__file__).with_name("build_retaining_walls.py")
+    subprocess.run([
+        sys.executable, str(retaining_wall_tool), str(input_path),
+        str(output_dir / "retaining_walls"), "--tile-size", str(tile_size),
+    ], check=True)
+
+
 def main() -> int:
     args = parse_args()
     sampler = None
@@ -205,39 +243,10 @@ def main() -> int:
         from build_terrain import TerrainSampler
         sampler = TerrainSampler(args.terrain)
     manifest = compile_dataset(args.input_geojson, args.output_dir, args.tile_size, height_sampler=sampler)
-    # Work-zone geometry is visual metadata only. Build it beside the registered
-    # road graph so recovered cones/barriers can follow real OSM construction
-    # tags without making an under-construction way navigable.
-    roadwork_tool = Path(__file__).with_name("build_roadworks.py")
-    subprocess.run([
-        sys.executable, str(roadwork_tool), str(args.input_geojson),
-        str(args.output_dir / "roadworks"), "--tile-size", str(args.tile_size),
-    ], check=True)
-    # Named settlements and public squares share the same source PBF and EPSG:3448
-    # origin. Rebuild them with the national road pass so the HUD location readout
-    # follows the player's actual world position instead of the last travel menu item.
-    if args.input_geojson.suffix.lower() == ".pbf":
-        place_tool = Path(__file__).with_name("build_places.py")
-        subprocess.run([
-            sys.executable, str(place_tool), str(args.input_geojson),
-            str(args.output_dir.parent / "places"), "--tile-size", str(args.tile_size),
-        ], check=True)
-        # Bus-stop markers are a runtime autoload, so their explicit OSM point
-        # authority must be regenerated whenever the national PBF is compiled.
-        # Keeping this beside the road build prevents a green Android export from
-        # silently containing the BusStopLayer script but no bus-stop dataset.
-        bus_stop_tool = Path(__file__).with_name("build_bus_stops.py")
-        subprocess.run([
-            sys.executable, str(bus_stop_tool), str(args.input_geojson),
-            str(args.output_dir / "bus_stops"), "--tile-size", str(args.tile_size),
-        ], check=True)
-        # Hard retaining structures are not inferred from road slope. Only the
-        # explicit OSM barrier=retaining_wall layer is packaged into the runtime.
-        retaining_wall_tool = Path(__file__).with_name("build_retaining_walls.py")
-        subprocess.run([
-            sys.executable, str(retaining_wall_tool), str(args.input_geojson),
-            str(args.output_dir / "retaining_walls"), "--tile-size", str(args.tile_size),
-        ], check=True)
+    if not args.skip_auxiliary:
+        build_auxiliary_layers(args.input_geojson, args.output_dir, args.tile_size)
+    else:
+        print("Skipped auxiliary source layers for terrain bootstrap road pass")
     print(json.dumps(manifest["stats"], indent=2, sort_keys=True))
     print(f"Bounds (m): {manifest['bounds']}")
     print(f"Wrote {len(manifest['tiles'])} road tiles and persistent topology to {args.output_dir}")
