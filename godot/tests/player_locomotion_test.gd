@@ -25,6 +25,32 @@ func _run() -> void:
     var steep := PlayerScript.slope_tilt_for(Vector3(0.62, 0.55, 0.56).normalized())
     _check(absf(steep.x) <= 0.14001 and absf(steep.y) <= 0.14001, "slope alignment exceeded production tilt clamp")
 
+    var crown_dims := PlayerScript.dimensions_from_profile({"dimensions_m": [1.80, 1.46, 4.89]})
+    var mark_dims := PlayerScript.dimensions_from_profile({"dimensions_m": [1.79, 1.44, 4.77]})
+    var sports_dims := PlayerScript.dimensions_from_profile({"dimensions_m": [1.85, 1.30, 4.54]})
+    _check(crown_dims.is_equal_approx(Vector3(1.80, 1.46, 4.89)), "Crown dimensions were not preserved for interaction geometry")
+    _check(mark_dims.is_equal_approx(Vector3(1.79, 1.44, 4.77)), "Mark X dimensions were not preserved for interaction geometry")
+    _check(sports_dims.is_equal_approx(Vector3(1.85, 1.30, 4.54)), "992-class dimensions were not preserved for interaction geometry")
+
+    var crown_doors := PlayerScript.door_points_local(crown_dims)
+    _check(crown_doors.size() == 4, "production vehicle should expose four interaction door points")
+    _check(is_equal_approx(absf(crown_doors[0].x), crown_dims.x * 0.5), "door point does not follow vehicle width")
+    _check(crown_doors[0].z < 0.0 and crown_doors[2].z > 0.0, "front/rear door zones are not separated")
+
+    var exits := PlayerScript.exit_candidates_local(crown_dims)
+    _check(exits.size() == 8, "blocked-door fallback needs eight profile-aware exit candidates")
+    _check(absf(exits[0].x) > crown_dims.x * 0.5, "exit candidate is still inside vehicle width")
+    _check(exits[4].z < exits[0].z and exits[6].z > exits[2].z, "front/rear escape fallbacks are missing")
+
+    var identity := Transform3D.IDENTITY
+    var near_left_front := identity * crown_doors[0] + Vector3(-0.8, 0.0, 0.0)
+    var far_away := Vector3(9.0, 0.72, 9.0)
+    _check(PlayerScript.nearest_door_distance(near_left_front, identity, crown_dims) < 1.0, "door-aware entry distance rejected a nearby player")
+    _check(PlayerScript.nearest_door_distance(far_away, identity, crown_dims) > 5.0, "door-aware entry distance accepted a remote player")
+    _check(PlayerScript.walkable_exit_normal(Vector3.UP, deg_to_rad(48.0)), "flat exit ground should be walkable")
+    _check(not PlayerScript.walkable_exit_normal(Vector3(0.98, 0.20, 0.0).normalized(), deg_to_rad(48.0)), "unsafe steep exit ground was accepted")
+    _check(not PlayerScript.walkable_exit_normal(Vector3.ZERO, deg_to_rad(48.0)), "invalid exit normal was accepted")
+
     var scene := Node.new()
     scene.name = "PlayerLocomotionTestScene"
     root.add_child(scene)
@@ -63,7 +89,7 @@ func _run() -> void:
     scene.queue_free()
     await process_frame
     if failures == 0:
-        print("YARDMAN_PLAYER_LOCOMOTION_TEST PASS states=5 slopes=1 foot_probes=2 buffered_jump=1 mobile_jump=1")
+        print("YARDMAN_PLAYER_LOCOMOTION_TEST PASS states=5 slopes=1 foot_probes=2 buffered_jump=1 mobile_jump=1 door_geometry=3 exit_candidates=8 slope_exit=1")
         quit()
     else:
         print("YARDMAN_PLAYER_LOCOMOTION_TEST FAIL failures=%d" % failures)
