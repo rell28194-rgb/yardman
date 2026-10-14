@@ -2,6 +2,7 @@ extends Control
 class_name YardmanTouchControls
 
 signal interaction_requested
+signal jump_requested
 signal reverse_changed(selected: bool)
 signal settings_changed(settings: Dictionary)
 
@@ -131,6 +132,8 @@ func _press(index: int, point: Vector2) -> void:
         return
     if zone == "interact" and interaction_enabled:
         interaction_requested.emit()
+    elif zone == "jump" and not driving:
+        jump_requested.emit()
     elif zone == "reverse" and driving:
         reverse_selected = not reverse_selected
         reverse_changed.emit(reverse_selected)
@@ -221,7 +224,7 @@ func consume_look() -> Vector2:
 func _zone_at(point: Vector2) -> String:
     if point.y < 82.0:
         return ""
-    var zones: Array = ["gas", "brake", "handbrake", "reverse"] if driving else ["sprint"]
+    var zones: Array = ["gas", "brake", "handbrake", "reverse"] if driving else ["sprint", "jump"]
     if interaction_enabled:
         zones.append("interact")
     if driving and str(settings.steering_mode) == "Buttons":
@@ -251,6 +254,7 @@ func _center(zone: String) -> Vector2:
         "handbrake": Vector2(brake_x + 20.0, action_y),
         "reverse": Vector2(gas_x + 6.0, action_y - 8.0),
         "sprint": Vector2(gas_x, pedal_y),
+        "jump": Vector2(brake_x, pedal_y),
         "interact": Vector2(gas_x - 2.0, action_y - action_radius * 2.0 - 38.0)
     }
     var value: Vector2 = positions.get(zone, Vector2(100.0, dimensions.y - 100.0))
@@ -270,7 +274,7 @@ func _display_stick_center() -> Vector2:
     return _clamped_center(_stick_origin, "stick") if _stick_owner != -999 else _center("stick")
 
 func _radius(zone: String) -> float:
-    return (76.0 if zone == "stick" else (45.0 if zone in ["gas", "brake", "sprint"] else 32.0)) * float(settings.button_scale)
+    return (76.0 if zone == "stick" else (45.0 if zone in ["gas", "brake", "sprint", "jump"] else 32.0)) * float(settings.button_scale)
 
 func _zone_rect(zone: String) -> Rect2:
     var center := _center(zone)
@@ -281,7 +285,7 @@ func _draw() -> void:
     if not is_touch_mode() or not input_enabled:
         return
     var opacity := float(settings.button_opacity)
-    var zones: Array = ["gas", "brake", "handbrake", "reverse"] if driving else ["sprint"]
+    var zones: Array = ["gas", "brake", "handbrake", "reverse"] if driving else ["sprint", "jump"]
     if interaction_enabled:
         zones.append("interact")
     if driving and str(settings.steering_mode) == "Buttons":
@@ -310,7 +314,7 @@ func _draw() -> void:
             _letter("GAS" if zone == "gas" else "BRAKE", center + Vector2(0, 21.0 * float(settings.button_scale)), int(16.0 * float(settings.button_scale)), ink)
         else:
             _glyph(zone, center, radius * 0.43, ink)
-            var captions := {"handbrake": "HANDBRAKE", "reverse": "REVERSE", "sprint": "SPRINT", "interact": "EXIT" if driving else "ENTER"}
+            var captions := {"handbrake": "HANDBRAKE", "reverse": "REVERSE", "sprint": "SPRINT", "jump": "JUMP", "interact": "EXIT" if driving else "ENTER"}
             if captions.has(zone):
                 _caption(str(captions[zone]), center + Vector2(0, radius + 17.0), opacity)
     if layout_editing:
@@ -347,6 +351,11 @@ func _glyph(zone: String, center: Vector2, size: float, color: Color) -> void:
         draw_line(center + Vector2(size * 0.12, -size * 0.50), torso, color, line, true)
         draw_polyline(PackedVector2Array([torso + Vector2(-size * 0.50, -size * 0.34), torso, torso + Vector2(size * 0.55, size * 0.08)]), color, line, true)
         draw_polyline(PackedVector2Array([torso + Vector2(-size * 0.60, size * 0.75), torso, torso + Vector2(size * 0.45, size * 0.44), torso + Vector2(size * 0.75, size * 0.75)]), color, line, true)
+    elif zone == "jump":
+        draw_line(center + Vector2(0.0, size * 0.85), center + Vector2(0.0, -size * 0.72), color, line, true)
+        draw_line(center + Vector2(0.0, -size * 0.72), center + Vector2(-size * 0.42, -size * 0.22), color, line, true)
+        draw_line(center + Vector2(0.0, -size * 0.72), center + Vector2(size * 0.42, -size * 0.22), color, line, true)
+        draw_line(center + Vector2(-size * 0.62, size * 0.88), center + Vector2(size * 0.62, size * 0.88), color, line, true)
     elif zone in ["left", "right"]:
         var sign_value := -1.0 if zone == "left" else 1.0
         draw_polyline(PackedVector2Array([center + Vector2(-size * 0.5 * sign_value, -size), center + Vector2(size * 0.5 * sign_value, 0), center + Vector2(-size * 0.5 * sign_value, size)]), color, line, true)
