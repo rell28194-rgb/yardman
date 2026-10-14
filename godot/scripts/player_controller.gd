@@ -9,19 +9,33 @@ var sprinting := false
 var reduced_motion := false
 var walk_speed := 3.8
 var sprint_speed := 7.2
+var jump_speed := 6.6
+var gravity := 22.0
+var locomotion_state := "vehicle"
 var _visual: Node3D
 var _left_arm: Node3D
 var _right_arm: Node3D
 var _left_leg: Node3D
 var _right_leg: Node3D
+var _left_foot_probe: RayCast3D
+var _right_foot_probe: RayCast3D
+var _left_leg_rest := Vector3.ZERO
+var _right_leg_rest := Vector3.ZERO
 var _gait := 0.0
 var _motion_blend := 0.0
+var _ground_normal := Vector3.UP
+var _air_time := 0.0
+var _jump_buffer := 0.0
+var _coyote_time := 0.0
 
 func _ready() -> void:
     collision_layer = 4
     collision_mask = 3
     floor_snap_length = 0.6
     floor_max_angle = deg_to_rad(48.0)
+    floor_stop_on_slope = true
+    floor_block_on_wall = true
+    safe_margin = 0.04
     var shape := CapsuleShape3D.new()
     shape.radius = 0.29
     shape.height = 1.76
@@ -31,31 +45,74 @@ func _ready() -> void:
     collider.position.y = 0.88
     add_child(collider)
     _make_character()
+    _make_foot_probes()
     _set_occupied(true)
 
 func configure(controller) -> void:
     vehicle = controller
 
+func request_jump() -> void:
+    if in_vehicle:
+        return
+    _jump_buffer = 0.14
+
 func step(delta: float, ready: bool) -> void:
     if in_vehicle:
-        global_position = vehicle.body.global_position
+        if vehicle != null:
+            global_position = vehicle.body.global_position
+        locomotion_state = "vehicle"
+        _air_time = 0.0
+        _jump_buffer = 0.0
+        _coyote_time = 0.0
+        _ground_normal = Vector3.UP
         _animate(delta, 0.0)
         return
     if not ready:
         velocity = Vector3.ZERO
+        locomotion_state = "idle"
+        _jump_buffer = maxf(0.0, _jump_buffer - delta)
         _animate(delta, 0.0)
         return
+
+    _jump_buffer = maxf(0.0, _jump_buffer - delta)
+    var grounded_before := is_on_floor()
+    if grounded_before:
+        _coyote_time = 0.12
+    else:
+        _coyote_time = maxf(0.0, _coyote_time - delta)
+
     var move_input := movement.limit_length(1.0)
     var direction := Vector3(move_input.x, 0.0, move_input.y).rotated(Vector3.UP, camera_yaw)
     var speed := sprint_speed if sprinting else walk_speed
     var acceleration := 16.0 if direction.length_squared() > 0.001 else 23.0
     velocity.x = move_toward(velocity.x, direction.x * speed, delta * acceleration)
     velocity.z = move_toward(velocity.z, direction.z * speed, delta * acceleration)
-    velocity.y = -1.5 if is_on_floor() else maxf(velocity.y - 22.0 * delta, -45.0)
+
+    if _jump_buffer > 0.0 and _coyote_time > 0.0:
+        velocity.y = jump_speed
+        _jump_buffer = 0.0
+        _coyote_time = 0.0
+    elif grounded_before:
+        velocity.y = -1.5
+    else:
+        velocity.y = maxf(velocity.y - gravity * delta, -45.0)
+
     move_and_slide()
+    var grounded_after := is_on_floor()
+    if grounded_after:
+        _air_time = 0.0
+        var floor_normal := get_floor_normal()
+        if floor_normal.length_squared() > 0.5:
+            _ground_normal = _ground_normal.slerp(floor_normal.normalized(), clampf(delta * 10.0, 0.0, 1.0))
+    else:
+        _air_time += delta
+        _ground_normal = _ground_normal.slerp(Vector3.UP, clampf(delta * 4.0, 0.0, 1.0))
+
     if direction.length_squared() > 0.001:
         _visual.global_rotation.y = lerp_angle(_visual.global_rotation.y, atan2(-direction.x, -direction.z), clampf(delta * 11.0, 0.0, 1.0))
-    _animate(delta, Vector2(velocity.x, velocity.z).length())
+    var horizontal_speed := Vector2(velocity.x, velocity.z).length()
+    locomotion_state = locomotion_state_for(false, grounded_after, horizontal_speed, sprinting, walk_speed)
+    _animate(delta, horizontal_speed)
 
 func can_enter_vehicle() -> bool:
     return not in_vehicle and vehicle != null and global_position.distance_to(vehicle.body.global_position) <= 3.7 and absf(vehicle.speed_mps) <= 2.0
@@ -104,19 +161,85 @@ func _set_occupied(value: bool) -> void:
     visible = not value
     velocity = Vector3.ZERO
     movement = Vector2.ZERO
+    _jump_buffer = 0.0
+    _coyote_time = 0.0
+    _air_time = 0.0
+    locomotion_state = "vehicle" if value else "idle"
+    if _left_foot_probe != null:
+        _left_foot_probe.enabled = not value
+    if _right_foot_probe != null:
+        _right_foot_probe.enabled = not value
+
+func _make_foot_probes() -> void:
+    _left_foot_probe = _foot_probe("LeftFootProbe", -0.14)
+    _right_foot_probe = _foot_probe("RightFootProbe", 0.14)
+
+func _foot_probe(probe_name: String, x_offset: float) -> RayCast3D:
+    var probe := RayCast3D.new()
+    probe.name = probe_name
+    probe.position = Vector3(x_offset, 0.52, 0.0)
+    probe.target_position = Vector3(0.0, -0.86, 0.0)
+    probe.collision_mask = 1
+    probe.exclude_parent = true
+    probe.enabled = false
+    add_child(probe)
+    return probe
 
 func _animate(delta: float, horizontal_speed: float) -> void:
     if _visual == null:
         return
-    _motion_blend = move_toward(_motion_blend, clampf(horizontal_speed / walk_speed, 0.0, 1.5), delta * 6.0)
+    var airborne := locomotion_state == "airborne"
+    var target_blend := clampf(horizontal_speed / walk_speed, 0.0, 1.5)
+    if airborne:
+        target_blend *= 0.35
+    _motion_blend = move_toward(_motion_blend, target_blend, delta * 6.0)
     _gait += delta * (6.5 + horizontal_speed * 1.15)
     var swing := sin(_gait) * 0.48 * _motion_blend
     _left_leg.rotation.x = swing
     _right_leg.rotation.x = -swing
     _left_arm.rotation.x = -swing * 0.75
     _right_arm.rotation.x = swing * 0.75
-    _visual.position.y = 0.0 if reduced_motion else absf(sin(_gait)) * 0.025 * _motion_blend
-    _visual.rotation.x = -0.035 * _motion_blend if sprinting else 0.0
+
+    var left_y := _left_leg_rest.y
+    var right_y := _right_leg_rest.y
+    if not airborne and is_inside_tree():
+        left_y = _foot_target_y(_left_foot_probe, _left_leg_rest.y)
+        right_y = _foot_target_y(_right_foot_probe, _right_leg_rest.y)
+    _left_leg.position.y = lerpf(_left_leg.position.y, left_y, clampf(delta * 13.0, 0.0, 1.0))
+    _right_leg.position.y = lerpf(_right_leg.position.y, right_y, clampf(delta * 13.0, 0.0, 1.0))
+
+    _visual.position.y = 0.0 if reduced_motion or airborne else absf(sin(_gait)) * 0.025 * _motion_blend
+    var slope_tilt := slope_tilt_for(_ground_normal)
+    var sprint_lean := -0.035 * _motion_blend if locomotion_state == "sprint" else 0.0
+    _visual.rotation.x = lerpf(_visual.rotation.x, slope_tilt.x + sprint_lean, clampf(delta * 8.0, 0.0, 1.0))
+    _visual.rotation.z = lerpf(_visual.rotation.z, slope_tilt.y, clampf(delta * 8.0, 0.0, 1.0))
+
+func _foot_target_y(probe: RayCast3D, rest_y: float) -> float:
+    if probe == null or not probe.enabled:
+        return rest_y
+    probe.force_raycast_update()
+    if not probe.is_colliding():
+        return rest_y
+    var hit_local := to_local(probe.get_collision_point())
+    return rest_y + clampf(hit_local.y - 0.06, -0.10, 0.14)
+
+static func locomotion_state_for(occupied: bool, grounded: bool, horizontal_speed: float, wants_sprint: bool, walk_speed_value: float = 3.8) -> String:
+    if occupied:
+        return "vehicle"
+    if not grounded:
+        return "airborne"
+    if horizontal_speed < 0.15:
+        return "idle"
+    if wants_sprint and horizontal_speed > walk_speed_value * 1.05:
+        return "sprint"
+    return "walk"
+
+static func slope_tilt_for(normal: Vector3) -> Vector2:
+    var safe := normal.normalized() if normal.length_squared() > 0.001 else Vector3.UP
+    var denominator := maxf(safe.y, 0.001)
+    var pitch := clampf(atan2(safe.z, denominator) * 0.35, -0.14, 0.14)
+    var roll := clampf(-atan2(safe.x, denominator) * 0.35, -0.14, 0.14)
+    return Vector2(pitch, roll)
 
 func _part(parent: Node3D, mesh: Mesh, position_local: Vector3, color: Color) -> MeshInstance3D:
     var instance := MeshInstance3D.new()
@@ -172,6 +295,8 @@ func _make_character() -> void:
     _part(_visual, nose, Vector3(0, 1.64, -0.167), skin)
     _left_leg = _limb(_visual, Vector3(-0.125, 0.86, 0), 0.097, 0.78, trousers)
     _right_leg = _limb(_visual, Vector3(0.125, 0.86, 0), 0.097, 0.78, trousers)
+    _left_leg_rest = _left_leg.position
+    _right_leg_rest = _right_leg.position
     _left_arm = _limb(_visual, Vector3(-0.315, 1.41, 0), 0.080, 0.64, skin)
     _right_arm = _limb(_visual, Vector3(0.315, 1.41, 0), 0.080, 0.64, skin)
     for leg in [_left_leg, _right_leg]:
