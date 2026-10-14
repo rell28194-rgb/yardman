@@ -7,27 +7,27 @@ class_name YardmanRenderQualityManager
 const POLICIES := {
     "Performance": {
         "target_fps": 60, "resolution_min": 0.60, "resolution_default": 0.75, "resolution_max": 0.85,
-        "shadow_distance": 62.0, "road_visibility": 1800.0, "water_variant": "opaque",
+        "shadow_distance": 62.0, "road_visibility": 1800.0, "road_variant": "safe", "water_variant": "opaque",
         "terrain_variant": "2layer", "screen_effects": false, "reflection_budget": 1,
     },
     "Balanced": {
         "target_fps": 45, "resolution_min": 0.70, "resolution_default": 0.85, "resolution_max": 0.95,
-        "shadow_distance": 88.0, "road_visibility": 2400.0, "water_variant": "dual_normal",
+        "shadow_distance": 88.0, "road_visibility": 2400.0, "road_variant": "high", "water_variant": "dual_normal",
         "terrain_variant": "2layer", "screen_effects": false, "reflection_budget": 2,
     },
     "Quality": {
         "target_fps": 30, "resolution_min": 0.78, "resolution_default": 0.95, "resolution_max": 1.00,
-        "shadow_distance": 118.0, "road_visibility": 2800.0, "water_variant": "dual_normal",
+        "shadow_distance": 118.0, "road_visibility": 2800.0, "road_variant": "high", "water_variant": "dual_normal",
         "terrain_variant": "3layer", "screen_effects": true, "reflection_budget": 3,
     },
     "Ultra": {
         "target_fps": 30, "resolution_min": 0.82, "resolution_default": 1.00, "resolution_max": 1.00,
-        "shadow_distance": 145.0, "road_visibility": 3200.0, "water_variant": "depth",
+        "shadow_distance": 145.0, "road_visibility": 3200.0, "road_variant": "high", "water_variant": "depth",
         "terrain_variant": "3layer", "screen_effects": true, "reflection_budget": 4,
     },
     "Custom": {
         "target_fps": 45, "resolution_min": 0.55, "resolution_default": 1.00, "resolution_max": 1.00,
-        "shadow_distance": 100.0, "road_visibility": 2600.0, "water_variant": "dual_normal",
+        "shadow_distance": 100.0, "road_visibility": 2600.0, "road_variant": "high", "water_variant": "dual_normal",
         "terrain_variant": "2layer", "screen_effects": false, "reflection_budget": 2,
     },
 }
@@ -37,6 +37,7 @@ const GLES_CAP := {
     "resolution_max": 0.82,
     "shadow_distance": 78.0,
     "road_visibility": 2200.0,
+    "road_variant": "safe",
     "water_variant": "opaque",
     "terrain_variant": "2layer",
     "screen_effects": false,
@@ -76,6 +77,7 @@ static func policy_for(requested_quality: String, renderer_family_name: String, 
         result.resolution_default = minf(float(result.resolution_default), float(result.resolution_max))
         result.shadow_distance = minf(float(result.shadow_distance), float(GLES_CAP.shadow_distance))
         result.road_visibility = minf(float(result.road_visibility), float(GLES_CAP.road_visibility))
+        result.road_variant = GLES_CAP.road_variant
         result.water_variant = GLES_CAP.water_variant
         result.terrain_variant = GLES_CAP.terrain_variant
         result.screen_effects = GLES_CAP.screen_effects
@@ -105,6 +107,8 @@ func effective_policy() -> Dictionary:
     result.shadow_distance = float(result.shadow_distance) * float([1.0, 0.90, 0.80, 0.70, 0.62, 0.55][stage])
     result.vegetation_factor = float([1.0, 1.0, 0.88, 0.74, 0.62, 0.52][stage])
     result.screen_effects = bool(result.screen_effects) and stage < 3
+    if stage >= 3:
+        result.road_variant = "safe"
     if stage >= 4:
         result.water_variant = "opaque"
         result.terrain_variant = "2layer"
