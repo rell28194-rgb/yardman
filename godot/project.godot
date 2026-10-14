@@ -29,8 +29,11 @@ window/stretch/mode="canvas_items"
 window/handheld/orientation=0
 
 [rendering]
+; Desktop/headless validation stays on Compatibility. Android defaults to the
+; Vulkan Mobile renderer per godot-android-gpu.md; a separately exported GLES
+; fallback remains a distinct build/test path rather than silent auto-fallback.
 renderer/rendering_method="gl_compatibility"
-renderer/rendering_method.mobile="gl_compatibility"
+renderer/rendering_method.mobile="mobile"
 textures/vram_compression/import_etc2_astc=true
 textures/default_filters/use_nearest_mipmap_filter=false
 
