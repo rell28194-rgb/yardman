@@ -41,16 +41,30 @@ static func apply(root: Node3D, profile: Dictionary) -> Dictionary:
         if pivot == null:
             continue
         var label := pivot.name.to_lower()
+        var current_x := pivot.position.x
+        var current_z := pivot.position.z
         if label.contains("front"):
             pivot.position.z = -wheelbase_local * 0.5
         elif label.contains("rear"):
             pivot.position.z = wheelbase_local * 0.5
+        elif current_z < 0.0:
+            pivot.position.z = -wheelbase_local * 0.5
+        elif current_z > 0.0:
+            pivot.position.z = wheelbase_local * 0.5
         else:
             continue
+
         if label.contains("left"):
             pivot.position.x = -track_local * 0.5
         elif label.contains("right"):
             pivot.position.x = track_local * 0.5
+        elif current_x < 0.0:
+            pivot.position.x = -track_local * 0.5
+        elif current_x > 0.0:
+            pivot.position.x = track_local * 0.5
+        else:
+            continue
+
         spin.scale = Vector3.ONE * radius_scale
         positioned += 1
 
