@@ -100,10 +100,10 @@ func effective_policy() -> Dictionary:
     if result.is_empty():
         result = policy_for(quality, renderer if not renderer.is_empty() else renderer_family())
     var stage := clampi(thermal_stage, 0, 5)
-    var thermal_scale_loss := [0.0, 0.06, 0.12, 0.18, 0.24, 0.30][stage]
+    var thermal_scale_loss: float = float([0.0, 0.06, 0.12, 0.18, 0.24, 0.30][stage])
     result.resolution_max = maxf(float(result.resolution_min), float(result.resolution_max) - thermal_scale_loss)
-    result.shadow_distance = float(result.shadow_distance) * [1.0, 0.90, 0.80, 0.70, 0.62, 0.55][stage]
-    result.vegetation_factor = [1.0, 1.0, 0.88, 0.74, 0.62, 0.52][stage]
+    result.shadow_distance = float(result.shadow_distance) * float([1.0, 0.90, 0.80, 0.70, 0.62, 0.55][stage])
+    result.vegetation_factor = float([1.0, 1.0, 0.88, 0.74, 0.62, 0.52][stage])
     result.screen_effects = bool(result.screen_effects) and stage < 3
     if stage >= 4:
         result.water_variant = "opaque"
