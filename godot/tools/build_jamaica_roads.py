@@ -15,6 +15,7 @@ from typing import Dict, Iterator, List, Sequence, Tuple
 
 from pyproj import Transformer
 from road_graph import build_network, partition_id, read_osm_features
+from road_profile import smooth_network_profiles
 
 CRS_SOURCE = "EPSG:4326"
 CRS_TARGET = "EPSG:3448"
@@ -136,6 +137,11 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
         anchors[name] = (e - origin_e, origin_n - n)
     network = build_network(features, transformer, (origin_e, origin_n), tile_size,
                             ROAD_WIDTHS, ROAD_CLASSES, road_flags, anchors, height_sampler)
+    if height_sampler:
+        # Preserve graph junction elevations and bridge/tunnel structural profiles,
+        # but remove sub-metre high-frequency DEM bumps from interior road vertices.
+        # Raw polygon Y remains untouched for the runtime cut/fill earthworks layer.
+        smooth_network_profiles(network)
     stats, bounds = network["stats"], network["bounds"]
     if not stats["source_segments"]:
         raise ValueError("No drivable road segments were generated")
@@ -175,7 +181,8 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
         "road_geometry": {"join": "shared bounded miter, complete source way before tile clipping",
                           "width": "source width, then source lanes, then carriageway-class estimate",
                           "uv": "continuous source-way station metres and signed lateral metres",
-                          "markings": "inferred presentation, not surveyed road-paint positions"},
+                          "markings": "inferred presentation, not surveyed road-paint positions",
+                          "elevation": "DEM registered; interior longitudinal bumps bounded to 0.45m adjustment; graph junctions and bridge/tunnel profiles preserved"},
         "graph": {"format": 1, "partition": "sha1(id)[0:2]", "directory": "graph",
                   "nodes": stats["graph_nodes"], "edges": stats["graph_edges"]},
         "elevation_source": "DEM" if height_sampler else "unmeasured-flat",
