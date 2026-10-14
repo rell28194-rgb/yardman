@@ -4,6 +4,7 @@ extends Node
 # validation remains Compatibility and is intentionally not dynamically scaled.
 const ManagerScript = preload("res://scripts/render_quality_manager.gd")
 const MaterialRegistry = preload("res://scripts/render_material_registry.gd")
+const StreamingBudgetScript = preload("res://scripts/streaming_budget_runtime.gd")
 
 var manager = ManagerScript.new()
 var _configured := false
@@ -13,6 +14,10 @@ var _budget_clock := 0.0
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
+    if get_node_or_null("StreamingBudgetRuntime") == null:
+        var streaming_budget := StreamingBudgetScript.new()
+        streaming_budget.name = "StreamingBudgetRuntime"
+        add_child(streaming_budget)
 
 func _process(delta: float) -> void:
     if not OS.has_feature("mobile"):
@@ -45,6 +50,7 @@ func _apply_scene_budgets(scene: Node) -> void:
     var active := manager.effective_policy()
     active["quality"] = manager.quality
     active["renderer"] = manager.renderer
+    active["thermal_stage"] = manager.thermal_stage
     var sun_value = scene.get("sun")
     if sun_value is DirectionalLight3D:
         var sun := sun_value as DirectionalLight3D
