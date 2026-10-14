@@ -24,7 +24,7 @@ func _process(_delta: float) -> void:
         _finish()
 
 static func planned_shader_paths(renderer_family: String) -> Array[String]:
-    var safe := [
+    var safe: Array[String] = [
         Registry.ROAD_SAFE.resource_path,
         Registry.WATER_SAFE.resource_path,
         Registry.TERRAIN_SAFE.resource_path,
