@@ -36,6 +36,15 @@ ROAD_WIDTHS = {
 }
 ROAD_CLASSES = {name: i for i, name in enumerate(ROAD_WIDTHS)}
 
+# Surface-record flag layout. Bits 1/2/4/8 are already consumed by one-way,
+# bridge, tunnel and unpaved state. Bit 16 preserves the otherwise-lost OSM
+# oneway=-1 direction so the runtime traffic solver can reject wrong-way routes.
+ROAD_FLAG_ONEWAY = 1
+ROAD_FLAG_BRIDGE = 2
+ROAD_FLAG_TUNNEL = 4
+ROAD_FLAG_UNPAVED = 8
+ROAD_FLAG_ONEWAY_REVERSE = 16
+
 # CI coverage sentinels. These parish-capital/administrative-centre anchors are
 # only QA points: a partial-island road extract is not allowed to pass.
 PARISH_COVERAGE_ANCHORS = {
@@ -80,16 +89,31 @@ def midpoint_tile(x1: float, z1: float, x2: float, z2: float, tile_size: float) 
 
 def road_flags(properties: dict) -> int:
     flags = 0
-    if str(properties.get("oneway", "")).lower() in {"yes", "1", "true", "-1"}:
-        flags |= 1
+    oneway = str(properties.get("oneway", "")).strip().lower()
+    highway = str(properties.get("highway", "")).strip().lower()
+    junction = str(properties.get("junction", "")).strip().lower()
+
+    # Match the graph compiler's direction policy. Motorways and roundabouts are
+    # implicitly one-way unless OSM explicitly says otherwise. Preserve -1 in a
+    # separate bit because surface tiles do not carry the full tag dictionary.
+    explicit_two_way = oneway in {"no", "0", "false"}
+    forward_oneway = oneway in {"yes", "1", "true"}
+    reverse_oneway = oneway == "-1"
+    implicit_oneway = not explicit_two_way and not reverse_oneway and (
+        junction == "roundabout" or highway == "motorway"
+    )
+    if forward_oneway or reverse_oneway or implicit_oneway:
+        flags |= ROAD_FLAG_ONEWAY
+    if reverse_oneway:
+        flags |= ROAD_FLAG_ONEWAY_REVERSE
     if str(properties.get("bridge", "")).lower() not in {"", "no", "0", "false"}:
-        flags |= 2
+        flags |= ROAD_FLAG_BRIDGE
     if str(properties.get("tunnel", "")).lower() not in {"", "no", "0", "false"}:
-        flags |= 4
+        flags |= ROAD_FLAG_TUNNEL
     if str(properties.get("surface", "")).lower() in {
         "unpaved", "gravel", "dirt", "ground", "earth", "sand", "mud", "compacted"
     }:
-        flags |= 8
+        flags |= ROAD_FLAG_UNPAVED
     return flags
 
 
