@@ -6,6 +6,7 @@ var screen: Control
 var parish_menu: OptionButton
 var quality_menu: OptionButton
 var continue_button: Button
+var garage_button: Button
 var menu_open := true
 var camera_modes := [62.0, 78.0, 92.0]
 var camera_mode_index := 1
@@ -43,9 +44,9 @@ func _build_ui() -> void:
     var panel := PanelContainer.new()
     panel.set_anchors_preset(Control.PRESET_CENTER)
     panel.offset_left = -340.0
-    panel.offset_top = -330.0
+    panel.offset_top = -350.0
     panel.offset_right = 340.0
-    panel.offset_bottom = 330.0
+    panel.offset_bottom = 350.0
     screen.add_child(panel)
 
     var margin := MarginContainer.new()
@@ -56,7 +57,7 @@ func _build_ui() -> void:
     panel.add_child(margin)
 
     var stack := VBoxContainer.new()
-    stack.add_theme_constant_override("separation", 14)
+    stack.add_theme_constant_override("separation", 12)
     margin.add_child(stack)
 
     var title := Label.new()
@@ -79,6 +80,14 @@ func _build_ui() -> void:
     continue_button.custom_minimum_size = Vector2(0, 54)
     continue_button.pressed.connect(func() -> void: _set_open(false))
     stack.add_child(continue_button)
+
+    garage_button = Button.new()
+    garage_button.name = "StartupGarageButton"
+    garage_button.text = "VEHICLE GARAGE"
+    garage_button.tooltip_text = "Choose, preview, purchase or switch vehicles"
+    garage_button.custom_minimum_size = Vector2(0, 48)
+    garage_button.pressed.connect(_open_vehicle_garage)
+    stack.add_child(garage_button)
 
     var start_button := Button.new()
     start_button.text = "START / RESTART SELECTED PARISH"
@@ -145,6 +154,15 @@ func _quality_selected(index: int) -> void:
     if game == null or index < 0 or index >= quality_menu.item_count:
         return
     game.call("set_quality", quality_menu.get_item_text(index))
+
+func _open_vehicle_garage() -> void:
+    var garage := get_node_or_null("/root/VehicleGarage")
+    if garage == null or not garage.has_method("open_garage"):
+        if game != null and game.has_method("_notify"):
+            game.call("_notify", "Garage unavailable")
+        return
+    _set_open(false)
+    garage.call("open_garage")
 
 func _start_selected_parish() -> void:
     if game == null:
