@@ -2,6 +2,7 @@ extends Node
 
 const Catalog = preload("res://scripts/vehicle_catalog.gd")
 const Styler = preload("res://scripts/vehicle_visual_styler.gd")
+const ProfileGeometry = preload("res://scripts/vehicle_profile_geometry.gd")
 
 var _last_world_visual_id := 0
 var _last_world_vehicle_id := ""
@@ -20,7 +21,16 @@ func _process(_delta: float) -> void:
 func style_visual(visual: Node3D, vehicle_id: String) -> Dictionary:
     if visual == null or not Catalog.has(vehicle_id):
         return {}
-    return Styler.apply(visual, Catalog.profile(vehicle_id))
+    var profile := Catalog.profile(vehicle_id)
+    var geometry_stats := ProfileGeometry.apply(visual, profile)
+    var stats := Styler.apply(visual, profile)
+    stats["geometry_identity"] = str(geometry_stats.get("vehicle_id", vehicle_id))
+    stats["geometry_signature"] = str(geometry_stats.get("signature", ""))
+    stats["profile_geometry"] = bool(geometry_stats.get("profile_geometry", false))
+    stats["dedicated_mesh"] = bool(geometry_stats.get("dedicated_mesh", false))
+    stats["geometry_mesh_parts"] = int(geometry_stats.get("mesh_parts", 0))
+    stats["hidden_shared_meshes"] = int(geometry_stats.get("hidden_shared_meshes", 0))
+    return stats
 
 func _style_world_vehicle() -> void:
     var scene := get_tree().current_scene
