@@ -9,6 +9,7 @@ on:
       - 'godot/scripts/render_quality_manager.gd'
       - 'godot/scripts/render_runtime.gd'
       - 'godot/scripts/render_material_registry.gd'
+      - 'godot/scripts/shader_warmup.gd'
       - 'godot/scripts/coastline.gd'
       - 'godot/shaders/**'
       - 'godot/scripts/vehicle_catalog.gd'
@@ -21,6 +22,7 @@ on:
       - 'godot/scripts/game_audio.gd'
       - 'godot/tests/render_quality_test.gd'
       - 'godot/tests/material_variants_test.gd'
+      - 'godot/tests/shader_warmup_test.gd'
       - 'godot/tests/vehicle_catalog_test.gd'
       - 'godot/tests/vehicle_visual_test.gd'
       - 'godot/tests/garage_test.gd'
@@ -61,7 +63,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in render_quality material_variants vehicle_catalog vehicle_visual garage audio; do
+          for TEST in render_quality material_variants shader_warmup vehicle_catalog vehicle_visual garage audio; do
             timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"
