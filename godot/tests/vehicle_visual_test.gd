@@ -2,6 +2,7 @@ extends SceneTree
 
 const Styler = preload("res://scripts/vehicle_visual_styler.gd")
 const Catalog = preload("res://scripts/vehicle_catalog.gd")
+const ModelScript = preload("res://scripts/vehicle_model.gd")
 var failures := 0
 
 func _initialize() -> void:
@@ -55,6 +56,28 @@ func _paint_color(root_node: Node3D) -> Color:
     var body := root_node.get_node("BodyPaint") as MeshInstance3D
     return (body.get_active_material(0) as StandardMaterial3D).albedo_color
 
+func _wheel_world_span(model: Node3D) -> Vector2:
+    var spins_value = model.get("wheels")
+    if not spins_value is Array or spins_value.is_empty():
+        return Vector2.ZERO
+    var min_x := INF
+    var max_x := -INF
+    var min_z := INF
+    var max_z := -INF
+    for spin_value in spins_value:
+        if not spin_value is Node3D:
+            continue
+        var pivot := (spin_value as Node3D).get_parent() as Node3D
+        if pivot == null:
+            continue
+        min_x = minf(min_x, pivot.position.x * model.scale.x)
+        max_x = maxf(max_x, pivot.position.x * model.scale.x)
+        min_z = minf(min_z, pivot.position.z * model.scale.z)
+        max_z = maxf(max_z, pivot.position.z * model.scale.z)
+    if min_x == INF or min_z == INF:
+        return Vector2.ZERO
+    return Vector2(max_x - min_x, max_z - min_z)
+
 func _run() -> void:
     var crown := _make_sample()
     root.add_child(crown)
@@ -101,6 +124,23 @@ func _run() -> void:
             _check(geometry_signatures[1] != geometry_signatures[2], "Mark X and Port Royal still share one geometry signature")
             _check(geometry_signatures[0] != geometry_signatures[2], "Crown and Port Royal still share one geometry signature")
 
+        # Exercise the actual fallback wheel rig, not only metadata. The profile
+        # stance layer must survive the controller's legacy visual scale and land
+        # on the requested real-world wheelbase/track for every production car.
+        for vehicle_id in Catalog.production_ids():
+            var profile := Catalog.profile(str(vehicle_id))
+            var model := ModelScript.new()
+            root.add_child(model)
+            model.build()
+            var visual_scale: Array = profile.get("visual_scale", [1.0, 1.0, 1.0])
+            model.scale = Vector3(float(visual_scale[0]), float(visual_scale[1]), float(visual_scale[2]))
+            var model_stats: Dictionary = runtime.style_visual(model, str(vehicle_id))
+            _check(int(model_stats.get("stance_wheels", 0)) == 4, "%s did not reposition all four fallback wheels" % vehicle_id)
+            var span := _wheel_world_span(model)
+            _check(absf(span.x - float(profile.track_width_m)) <= 0.025, "%s fallback track does not match its profile: %.3f vs %.3f" % [vehicle_id, span.x, float(profile.track_width_m)])
+            _check(absf(span.y - float(profile.wheelbase_m)) <= 0.025, "%s fallback wheelbase does not match its profile: %.3f vs %.3f" % [vehicle_id, span.y, float(profile.wheelbase_m)])
+            model.queue_free()
+
         var legacy := _make_sample()
         root.add_child(legacy)
         var legacy_stats: Dictionary = runtime.style_visual(legacy, "legacy_sedan")
@@ -112,5 +152,5 @@ func _run() -> void:
     mark_x.queue_free()
     sports.queue_free()
     await process_frame
-    print("YARDMAN_VEHICLE_VISUAL_TEST %s paint=1 glass=1 wheel=1 profile_identity=3 distinct_geometry=3 runtime_bridge=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_VEHICLE_VISUAL_TEST %s paint=1 glass=1 wheel=1 profile_identity=3 distinct_geometry=3 stance=3 runtime_bridge=1" % ("PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
