@@ -189,6 +189,7 @@ func _button(text_value: String, tooltip_value: String) -> Button:
     button.tooltip_text = tooltip_value
     button.custom_minimum_size = Vector2(68.0, 48.0)
     button.focus_mode = Control.FOCUS_NONE
+    button.toggle_mode = true
     return button
 
 func _set_controls_visible(value: bool) -> void:
@@ -198,9 +199,9 @@ func _set_controls_visible(value: bool) -> void:
 func _update_button_state() -> void:
     if _left_button == null:
         return
-    _left_button.button_pressed = signal_state == SIGNAL_LEFT
-    _right_button.button_pressed = signal_state == SIGNAL_RIGHT
-    _hazard_button.button_pressed = signal_state == SIGNAL_HAZARD
+    _left_button.set_pressed_no_signal(signal_state == SIGNAL_LEFT)
+    _right_button.set_pressed_no_signal(signal_state == SIGNAL_RIGHT)
+    _hazard_button.set_pressed_no_signal(signal_state == SIGNAL_HAZARD)
 
 func runtime_snapshot() -> Dictionary:
     return {
