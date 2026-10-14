@@ -12,6 +12,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 [autoload]
 RenderRuntime="*res://scripts/render_runtime.gd"
 VegetationBudgetRuntime="*res://scripts/vegetation_budget_runtime.gd"
+ReflectionBudgetRuntime="*res://scripts/reflection_budget_runtime.gd"
 ShaderWarmup="*res://scripts/shader_warmup.gd"
 VehicleGarage="*res://scripts/vehicle_garage.gd"
 VehicleVisualRuntime="*res://scripts/vehicle_visual_runtime.gd"

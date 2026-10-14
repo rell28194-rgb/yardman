@@ -13,6 +13,7 @@ on:
       - 'godot/scripts/atmosphere_fx.gd'
       - 'godot/scripts/surface_dynamics_runtime.gd'
       - 'godot/scripts/vegetation_budget_runtime.gd'
+      - 'godot/scripts/reflection_budget_runtime.gd'
       - 'godot/scripts/coastline.gd'
       - 'godot/shaders/**'
       - 'godot/scripts/vehicle_catalog.gd'
@@ -30,6 +31,7 @@ on:
       - 'godot/tests/weather_test.gd'
       - 'godot/tests/surface_dynamics_test.gd'
       - 'godot/tests/vegetation_budget_test.gd'
+      - 'godot/tests/reflection_budget_test.gd'
       - 'godot/tests/vehicle_catalog_test.gd'
       - 'godot/tests/vehicle_visual_test.gd'
       - 'godot/tests/vehicle_camera_test.gd'
@@ -67,11 +69,11 @@ jobs:
           timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/platform-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/platform-import.log; then exit 1; fi
 
-      - name: Test renderer, weather, scalable vegetation, vehicle presentation, garage and automotive audio platforms
+      - name: Test renderer, weather, scalable vegetation/reflections, vehicle presentation, garage and automotive audio platforms
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in render_quality material_variants shader_warmup weather surface_dynamics vegetation_budget vehicle_catalog vehicle_visual vehicle_camera garage audio; do
+          for TEST in render_quality material_variants shader_warmup weather surface_dynamics vegetation_budget reflection_budget vehicle_catalog vehicle_visual vehicle_camera garage audio; do
             timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"
