@@ -1,15 +1,17 @@
 extends Node3D
 class_name YardmanCoastline
 
-const WaterShader = preload("res://shaders/water.gdshader")
+const MaterialRegistry = preload("res://scripts/render_material_registry.gd")
 const BeachShader = preload("res://shaders/beach.gdshader")
 const ReferenceAssets = preload("res://scripts/reference_assets.gd")
 var water_material: ShaderMaterial
 var beach_material: ShaderMaterial
+var _quality := "Balanced"
+var _force_safe_water := false
 
 func _init() -> void:
     water_material = ShaderMaterial.new()
-    water_material.shader = WaterShader
+    water_material.shader = MaterialRegistry.shader_for("water")
     beach_material = ShaderMaterial.new()
     beach_material.shader = BeachShader
     for binding in [
@@ -22,6 +24,21 @@ func _init() -> void:
         if texture != null:
             binding[0].set_shader_parameter(str(binding[1]), texture)
             binding[0].set_shader_parameter(str(binding[2]), true)
+
+func _ready() -> void:
+    add_to_group("yardman_render_quality")
+
+func apply_render_policy(policy: Dictionary, renderer_override: String = "") -> void:
+    var requested_quality := str(policy.get("quality", _quality))
+    if not requested_quality.is_empty():
+        _quality = requested_quality
+    _force_safe_water = str(policy.get("water_variant", "dual_normal")) == "opaque"
+    var selected := MaterialRegistry.shader_for("water", renderer_override, _quality, _force_safe_water)
+    if water_material.shader != selected:
+        water_material.shader = selected
+
+func material_variant() -> String:
+    return MaterialRegistry.variant_name("water", "", _quality, _force_safe_water)
 
 # Attach below the terrain tile root. The shared parent already places this
 # sea-level tile relative to the floating origin, so rebase shifts it once.

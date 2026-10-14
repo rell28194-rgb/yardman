@@ -8,11 +8,15 @@ on:
       - 'godot/project.godot'
       - 'godot/scripts/render_quality_manager.gd'
       - 'godot/scripts/render_runtime.gd'
+      - 'godot/scripts/render_material_registry.gd'
+      - 'godot/scripts/coastline.gd'
+      - 'godot/shaders/**'
       - 'godot/scripts/vehicle_catalog.gd'
       - 'godot/scripts/vehicle_controller.gd'
       - 'godot/scripts/vehicle_garage.gd'
       - 'godot/scripts/vehicle_model.gd'
       - 'godot/tests/render_quality_test.gd'
+      - 'godot/tests/material_variants_test.gd'
       - 'godot/tests/vehicle_catalog_test.gd'
       - 'godot/tests/garage_test.gd'
       - '.github/workflows/vehicle-render-platform.yml'
@@ -47,11 +51,11 @@ jobs:
           timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/platform-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/platform-import.log; then exit 1; fi
 
-      - name: Test renderer policy, vehicle catalog and garage
+      - name: Test renderer policy, material variants, vehicle catalog and garage
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in render_quality vehicle_catalog garage; do
+          for TEST in render_quality material_variants vehicle_catalog garage; do
             timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"

@@ -42,15 +42,20 @@ func _apply_scene_budgets(scene: Node) -> void:
     if scene == null or not _configured:
         return
     var active := manager.effective_policy()
+    active["quality"] = manager.quality
     var sun_value = scene.get("sun")
     if sun_value is DirectionalLight3D:
         var sun := sun_value as DirectionalLight3D
         sun.directional_shadow_max_distance = float(active.shadow_distance)
+    for node in get_tree().get_nodes_in_group("yardman_render_quality"):
+        if node.has_method("apply_render_policy"):
+            node.call("apply_render_policy", active)
 
 func set_thermal_stage(stage: int) -> void:
     manager.set_thermal_stage(stage)
     if OS.has_feature("mobile"):
         manager.apply_viewport(get_viewport())
+        _apply_scene_budgets(get_tree().current_scene)
 
 func set_adaptive_resolution_enabled(enabled: bool) -> void:
     manager.adaptive_resolution_enabled = enabled
