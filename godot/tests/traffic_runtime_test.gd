@@ -33,6 +33,10 @@ func _run() -> void:
     _check(Vector2(forward.position).y * Vector2(reverse.position).y < 0.0, "opposing Jamaica lanes should occupy opposite carriageway sides")
     _check(Vector2(forward.travel).dot(Vector2(reverse.travel)) < -0.99, "opposing travel headings are not opposite")
 
+    _check(Traffic.legal_direction_for({"flags": 0}, -1) == -1, "bidirectional road discarded requested reverse travel")
+    _check(Traffic.legal_direction_for({"flags": 1}, -1) == 1, "forward one-way road allowed reverse travel")
+    _check(Traffic.legal_direction_for({"flags": 17}, 1) == -1, "OSM oneway=-1 direction was not preserved")
+
     var next_forward := {"a": Vector2(100, 0), "b": Vector2(180, 5), "width_m": 8.0, "class_id": 1, "edge_id": "next"}
     var turn_south := {"a": Vector2(100, 0), "b": Vector2(100, 80), "width_m": 6.0, "class_id": 5, "edge_id": "south"}
     var uturn := {"a": Vector2(100, 0), "b": Vector2(40, 0), "width_m": 8.0, "class_id": 2, "edge_id": "uturn"}
@@ -44,6 +48,25 @@ func _run() -> void:
     _check(int(continuation.direction) == 1, "continuation direction incorrect")
     var options := Traffic.junction_options(arterial, 1, candidates)
     _check(options.size() == 2, "junction did not expose straight and turning options")
+
+    # At the arterial endpoint, this geometry can only be entered from candidate
+    # endpoint B, which means runtime direction -1. A normal one-way record must
+    # reject it; oneway=-1 must accept exactly that traversal.
+    var reversed_geometry_forward_only := {
+        "a": Vector2(180, 0), "b": Vector2(100, 0), "width_m": 8.0,
+        "class_id": 1, "edge_id": "wrong-oneway", "flags": 1,
+    }
+    var blocked := Traffic.continuation_for(arterial, 1, {"wrong": reversed_geometry_forward_only})
+    _check(blocked.is_empty(), "junction routing entered a forward-only road from its forbidden end")
+    _check(Traffic.junction_options(arterial, 1, {"wrong": reversed_geometry_forward_only}).is_empty(), "junction options advertised an illegal one-way turn")
+
+    var reversed_geometry_reverse_oneway := reversed_geometry_forward_only.duplicate(true)
+    reversed_geometry_reverse_oneway.edge_id = "reverse-oneway"
+    reversed_geometry_reverse_oneway.flags = 17
+    var reverse_allowed := Traffic.continuation_for(arterial, 1, {"reverse": reversed_geometry_reverse_oneway})
+    _check(not reverse_allowed.is_empty(), "OSM oneway=-1 continuation was incorrectly blocked")
+    if not reverse_allowed.is_empty():
+        _check(int(reverse_allowed.direction) == -1, "OSM oneway=-1 continuation chose the wrong travel direction")
 
     var side_road := {"a": Vector2(100, -70), "b": Vector2(100, 0), "width_m": 5.5, "class_id": 5, "edge_id": "side"}
     var endpoint := Vector2(100, 0)
@@ -90,7 +113,7 @@ func _run() -> void:
     _check(float(hot.near_radius) >= 120.0 and float(hot.medium_radius) >= 320.0, "thermal policy erased required near/medium simulation coverage")
 
     if failures == 0:
-        print("YARDMAN_TRAFFIC_RUNTIME_TEST PASS lanes=2 continuation=1 junction_yield=4 density_cycle=1 weather_flow=5 simulation_lod=3")
+        print("YARDMAN_TRAFFIC_RUNTIME_TEST PASS lanes=2 one_way=7 continuation=1 junction_yield=4 density_cycle=1 weather_flow=5 simulation_lod=3")
         quit()
     else:
         print("YARDMAN_TRAFFIC_RUNTIME_TEST FAIL failures=%d" % failures)
