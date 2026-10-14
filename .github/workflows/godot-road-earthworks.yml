@@ -6,7 +6,9 @@ on:
       - codex/godot-polish-002
     paths:
       - 'godot/scripts/road_earthworks_runtime.gd'
+      - 'godot/scripts/road_corridor_terrain_runtime.gd'
       - 'godot/tests/road_earthworks_test.gd'
+      - 'godot/tests/road_corridor_terrain_test.gd'
       - 'godot/project.godot'
       - '.github/workflows/godot-road-earthworks.yml'
   workflow_dispatch:
@@ -47,6 +49,13 @@ jobs:
           timeout 120 godot --headless --path godot --script res://tests/road_earthworks_test.gd 2>&1 | tee godot/build/road-earthworks.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/road-earthworks.log; then exit 1; fi
           grep -q 'YARDMAN_ROAD_EARTHWORKS_TEST PASS' godot/build/road-earthworks.log
+      - name: Test coarse terrain road corridor replacement
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/road_corridor_terrain_test.gd 2>&1 | tee godot/build/road-corridor-terrain.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/road-corridor-terrain.log; then exit 1; fi
+          grep -q 'YARDMAN_ROAD_CORRIDOR_TERRAIN_TEST PASS' godot/build/road-corridor-terrain.log
       - name: Retain earthworks evidence
         uses: actions/upload-artifact@v4
         with:
@@ -54,5 +63,6 @@ jobs:
           path: |
             godot/build/earthworks-import.log
             godot/build/road-earthworks.log
+            godot/build/road-corridor-terrain.log
           if-no-files-found: error
           retention-days: 30
