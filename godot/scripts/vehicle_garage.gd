@@ -5,8 +5,15 @@ signal vehicle_selected(vehicle_id: String)
 const Catalog = preload("res://scripts/vehicle_catalog.gd")
 const ModelScript = preload("res://scripts/vehicle_model.gd")
 const SETTINGS_PATH := "user://yardman/vehicle.json"
+const STARTER_VEHICLE_ID := "toyota_crown"
+const VEHICLE_PRICES_JMD := {
+    "toyota_crown": 0,
+    "toyota_mark_x": 32000,
+    "port_royal_992": 95000,
+}
 
-var _selected_id := "toyota_crown"
+var _selected_id := STARTER_VEHICLE_ID
+var _owned_ids: Array[String] = [STARTER_VEHICLE_ID]
 var _root: Control
 var _garage_button: Button
 var _panel: PanelContainer
@@ -41,19 +48,72 @@ func available_vehicle_ids() -> Array:
 func selected_vehicle_id() -> String:
     return _selected_id
 
+func owned_vehicle_ids() -> Array[String]:
+    var result: Array[String] = []
+    for vehicle_id in _owned_ids:
+        result.append(vehicle_id)
+    return result
+
+static func vehicle_price_jmd(vehicle_id: String) -> int:
+    return maxi(0, int(VEHICLE_PRICES_JMD.get(vehicle_id, 0)))
+
+static func normalized_owned_ids(value: Variant, selected_id: String) -> Array[String]:
+    var result: Array[String] = [STARTER_VEHICLE_ID]
+    if value is Array:
+        for entry in value:
+            var vehicle_id := str(entry)
+            if Catalog.production_ids().has(vehicle_id) and not result.has(vehicle_id):
+                result.append(vehicle_id)
+    if Catalog.production_ids().has(selected_id) and not result.has(selected_id):
+        # Legacy vehicle.json files only stored selected_vehicle. Treat that
+        # existing selection as owned so an update never takes a car away.
+        result.append(selected_id)
+    return result
+
+func is_vehicle_owned(vehicle_id: String) -> bool:
+    return _owned_ids.has(vehicle_id)
+
+func wallet_jmd() -> int:
+    var runtime := get_node_or_null("/root/JobRuntime")
+    if runtime == null:
+        return 0
+    var value = runtime.get("wallet_jmd")
+    if not (value is int or value is float):
+        return 0
+    return maxi(0, int(value))
+
+func can_afford_vehicle(vehicle_id: String) -> bool:
+    if is_vehicle_owned(vehicle_id):
+        return true
+    return wallet_jmd() >= vehicle_price_jmd(vehicle_id)
+
 func set_selected_vehicle(vehicle_id: String, persist: bool = true, apply_to_game: bool = true) -> bool:
-    if not Catalog.has(vehicle_id) or vehicle_id == Catalog.DEFAULT_ID:
+    if not Catalog.production_ids().has(vehicle_id) or not is_vehicle_owned(vehicle_id):
         return false
     _selected_id = vehicle_id
     if persist:
         _save_selection()
     _sync_selector()
     _refresh_preview()
-    if apply_to_game:
-        var applied := apply_selected_to_scene(get_tree().current_scene)
-        if applied:
-            vehicle_selected.emit(_selected_id)
-        return applied
+    if apply_to_game and apply_selected_to_scene(get_tree().current_scene):
+        vehicle_selected.emit(_selected_id)
+    return true
+
+func purchase_vehicle(vehicle_id: String, apply_to_game: bool = true) -> bool:
+    if not Catalog.production_ids().has(vehicle_id):
+        return false
+    if is_vehicle_owned(vehicle_id):
+        return set_selected_vehicle(vehicle_id, true, apply_to_game)
+    var price := vehicle_price_jmd(vehicle_id)
+    if price <= 0 or not _spend_wallet(price):
+        return false
+    _owned_ids.append(vehicle_id)
+    _selected_id = vehicle_id
+    _save_selection()
+    _sync_selector()
+    _refresh_preview()
+    if apply_to_game and apply_selected_to_scene(get_tree().current_scene):
+        vehicle_selected.emit(_selected_id)
     return true
 
 func apply_selected_to_scene(scene: Node) -> bool:
@@ -71,9 +131,6 @@ func open_garage() -> void:
     _panel.visible = true
     _sync_selector()
     _refresh_preview()
-    var allowed := _switch_allowed()
-    _apply_button.disabled = not allowed
-    _status.text = "READY TO SWITCH" if allowed else "STOP THE VEHICLE BEFORE SWITCHING"
     if not get_tree().paused:
         get_tree().paused = true
         _paused_by_garage = true
@@ -96,6 +153,26 @@ func _switch_allowed() -> bool:
     if speed_value == null:
         return true
     return absf(float(speed_value)) <= 1.5
+
+func _spend_wallet(amount: int) -> bool:
+    if amount <= 0:
+        return true
+    var runtime := get_node_or_null("/root/JobRuntime")
+    if runtime == null:
+        return false
+    var value = runtime.get("wallet_jmd")
+    if not (value is int or value is float):
+        return false
+    var balance := maxi(0, int(value))
+    if balance < amount:
+        return false
+    runtime.set("wallet_jmd", balance - amount)
+    if runtime.has_method("_update_ui"):
+        runtime.call("_update_ui")
+    var persistence := get_node_or_null("/root/JobPersistenceRuntime")
+    if persistence != null and persistence.has_method("_save_state"):
+        persistence.call("_save_state")
+    return true
 
 func _build_ui() -> void:
     _root = Control.new()
@@ -144,7 +221,7 @@ func _build_ui() -> void:
     outer.add_child(title)
 
     var subtitle := Label.new()
-    subtitle.text = "Distinct handling profiles • selection persists across launches"
+    subtitle.text = "Courier earnings buy vehicles • ownership persists across launches"
     subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     outer.add_child(subtitle)
 
@@ -196,13 +273,11 @@ func _build_ui() -> void:
 
     _status = Label.new()
     _status.name = "GarageStatus"
-    _status.text = "READY TO SWITCH"
     _status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     side.add_child(_status)
 
     _apply_button = Button.new()
     _apply_button.name = "ApplyVehicle"
-    _apply_button.text = "USE THIS VEHICLE"
     _apply_button.custom_minimum_size = Vector2(300.0, 54.0)
     _apply_button.pressed.connect(_apply_from_selector)
     side.add_child(_apply_button)
@@ -294,33 +369,68 @@ func _refresh_preview() -> void:
     if scale_data.size() >= 3:
         _preview_model.scale = Vector3(float(scale_data[0]), float(scale_data[1]), float(scale_data[2]))
     var top_kmh := float(data.max_forward_mps) * 3.6
-    _info.text = "%s\n%s • %s\n\nMass tuning: %.0f kg\nWheelbase: %.2f m\nTrack: %.2f m\nCG height: %.2f m\nTop-speed tuning: %.0f km/h\nAudio profile: %s\n\nCurrent hero mesh status: integration pending" % [
-        str(data.display_name), str(data.manufacturer), str(data.drivetrain), float(data.mass_kg), float(data.wheelbase_m),
+    var ownership_text := "OWNED" if is_vehicle_owned(preview_id) else "PRICE: J$%d" % vehicle_price_jmd(preview_id)
+    _info.text = "%s\n%s • %s\n%s • WALLET J$%d\n\nMass tuning: %.0f kg\nWheelbase: %.2f m\nTrack: %.2f m\nCG height: %.2f m\nTop-speed tuning: %.0f km/h\nAudio profile: %s\n\nCurrent hero mesh status: integration pending" % [
+        str(data.display_name), str(data.manufacturer), str(data.drivetrain), ownership_text, wallet_jmd(), float(data.mass_kg), float(data.wheelbase_m),
         float(data.track_width_m), float(data.cg_height_m), top_kmh, str(data.audio_profile)
     ]
+    _refresh_action_state()
+
+func _refresh_action_state() -> void:
+    if _apply_button == null or _status == null:
+        return
+    var preview_id := _preview_id()
+    if not _switch_allowed():
+        _apply_button.disabled = true
+        _apply_button.text = "STOP VEHICLE"
+        _status.text = "STOP THE VEHICLE BEFORE SWITCHING"
+        return
+    if is_vehicle_owned(preview_id):
+        _apply_button.disabled = false
+        _apply_button.text = "USE THIS VEHICLE"
+        _status.text = "CURRENT VEHICLE" if preview_id == _selected_id else "OWNED • READY TO SWITCH"
+        return
+    var price := vehicle_price_jmd(preview_id)
+    var balance := wallet_jmd()
+    _apply_button.text = "BUY • J$%d" % price
+    if balance >= price:
+        _apply_button.disabled = false
+        _status.text = "READY TO BUY • WALLET J$%d" % balance
+    else:
+        _apply_button.disabled = true
+        _status.text = "NEED J$%d MORE" % (price - balance)
 
 func _apply_from_selector() -> void:
     if not _switch_allowed():
-        _status.text = "STOP THE VEHICLE BEFORE SWITCHING"
-        _apply_button.disabled = true
+        _refresh_action_state()
         return
     var requested := _preview_id()
-    if set_selected_vehicle(requested, true, true):
-        _status.text = "%s SELECTED" % str(Catalog.profile(requested).display_name).to_upper()
+    if is_vehicle_owned(requested):
+        if set_selected_vehicle(requested, true, true):
+            _status.text = "%s SELECTED" % str(Catalog.profile(requested).display_name).to_upper()
+        else:
+            _status.text = "VEHICLE SWITCH FAILED"
+        return
+    if purchase_vehicle(requested, true):
+        _status.text = "PURCHASED • %s SELECTED" % str(Catalog.profile(requested).display_name).to_upper()
     else:
-        _status.text = "VEHICLE SWITCH FAILED"
+        _refresh_action_state()
 
 func _load_selection() -> void:
+    _selected_id = STARTER_VEHICLE_ID
+    _owned_ids = [STARTER_VEHICLE_ID]
     if not FileAccess.file_exists(SETTINGS_PATH):
         return
     var file := FileAccess.open(SETTINGS_PATH, FileAccess.READ)
     if file == null:
         return
     var parsed = JSON.parse_string(file.get_as_text())
-    if parsed is Dictionary:
-        var candidate := str(parsed.get("selected_vehicle", _selected_id))
-        if Catalog.has(candidate) and candidate != Catalog.DEFAULT_ID:
-            _selected_id = candidate
+    if not parsed is Dictionary:
+        return
+    var candidate := str(parsed.get("selected_vehicle", STARTER_VEHICLE_ID))
+    if Catalog.production_ids().has(candidate):
+        _selected_id = candidate
+    _owned_ids = normalized_owned_ids(parsed.get("owned_vehicles", []), _selected_id)
 
 func _save_selection() -> void:
     var directory := ProjectSettings.globalize_path(SETTINGS_PATH.get_base_dir())
@@ -332,6 +442,6 @@ func _save_selection() -> void:
     if file == null:
         push_warning("VehicleGarage: could not open vehicle settings for writing")
         return
-    file.store_string(JSON.stringify({"selected_vehicle": _selected_id}, "  "))
+    file.store_string(JSON.stringify({"selected_vehicle": _selected_id, "owned_vehicles": _owned_ids}, "  "))
     file.flush()
     file.close()
