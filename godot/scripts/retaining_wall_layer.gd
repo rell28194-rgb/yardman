@@ -132,7 +132,7 @@ func placement_plan(records: Array, tile: Vector2i, tile_size: float,
         var source_way := str(record.get("source_way", ""))
         if source_way.is_empty():
             continue
-        var explicit_height := record.has("height_m")
+        var explicit_height: bool = record.has("height_m")
         var height := float(record.get("height_m", DEFAULT_HEIGHT_M))
         if not is_finite(height):
             height = DEFAULT_HEIGHT_M
