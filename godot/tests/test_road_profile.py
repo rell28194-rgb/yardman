@@ -49,6 +49,39 @@ class RoadProfileTests(unittest.TestCase):
         self.assertEqual(stats["profile_smoothed_vertices"], 1)
         self.assertEqual(stats["profile_structural_edges_skipped"], 1)
         self.assertAlmostEqual(stats["profile_max_adjustment_m"], 0.45, places=6)
+        self.assertEqual(stats["profile_grade_segments"], 2)
+        self.assertAlmostEqual(stats["profile_grade_max_pct"], 15.5, places=4)
+        self.assertAlmostEqual(stats["profile_grade_p99_pct"], 15.5, places=4)
+        self.assertEqual(stats["profile_grade_over_20pct_segments"], 0)
+        self.assertEqual(stats["profile_grade_worst_edge"], "road")
+        self.assertIn(stats["profile_grade_worst_segment"], (0, 1))
+
+    def test_grade_diagnostics_surface_extreme_non_structural_segments(self):
+        network = {
+            "edges": {
+                "mountain": {
+                    "id": "mountain",
+                    "flags": 0,
+                    "path": [(0.0, 0.0, 0.0), (10.0, 4.0, 0.0)],
+                },
+                "structure": {
+                    "id": "structure",
+                    "flags": 4,
+                    "path": [(0.0, 0.0, 20.0), (10.0, 20.0, 20.0)],
+                },
+            },
+            "tiles": {},
+            "anchor_roads": {},
+            "stats": {},
+        }
+        stats = smooth_network_profiles(network)
+        self.assertEqual(stats["profile_grade_segments"], 1)
+        self.assertAlmostEqual(stats["profile_grade_max_pct"], 40.0, places=4)
+        self.assertEqual(stats["profile_grade_over_20pct_segments"], 1)
+        self.assertEqual(stats["profile_grade_over_30pct_segments"], 1)
+        self.assertEqual(stats["profile_grade_worst_edge"], "mountain")
+        self.assertEqual(stats["profile_grade_worst_segment"], 0)
+        self.assertEqual(stats["profile_structural_edges_skipped"], 1)
 
     def test_invalid_policy_fails_closed(self):
         network = self._network()
@@ -69,6 +102,9 @@ class RoadProfileTests(unittest.TestCase):
         stats = smooth_network_profiles(network)
         self.assertEqual(network["edges"]["short"]["path"], original)
         self.assertEqual(stats["profile_smoothed_vertices"], 0)
+        self.assertEqual(stats["profile_grade_segments"], 1)
+        self.assertAlmostEqual(stats["profile_grade_max_pct"], 20.0, places=4)
+        self.assertEqual(stats["profile_grade_over_20pct_segments"], 0)
 
 
 if __name__ == "__main__":
