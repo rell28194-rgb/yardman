@@ -4,18 +4,21 @@ Canonical runtime: Godot 4.7.2 under `godot/` on `codex/godot-polish-002`. Full 
 
 | ID | Subsystem | State | Current evidence / next gate |
 |---|---|---|---|
-| A-01 | Android renderer architecture | ACTIVE | Android project default moved toward Vulkan Mobile while desktop/headless stays Compatibility. Separate GLES Android export/validation still must be wired and proven. |
-| A-02 | Quality tier policy | IMPLEMENTED | Dedicated renderer-aware policy defines FPS, resolution, shadows, road visibility, reflection/effect and water/terrain budgets. Runtime integration remains next. |
-| A-03 | Dynamic resolution / thermal ladder | IMPLEMENTED | Hysteretic resolution controller and six-stage degradation policy exist; Android thermal-signal adapter and sustained-device proof remain open. |
-| A-04 | Shader/material variants | ACTIVE | Existing terrain/foliage/water shaders remain; formal Vulkan/GLES variant split and warmup scene are not complete. |
+| A-01 | Android renderer architecture | TESTED | Vulkan Mobile is the canonical Android path and a separately configured GLES fallback exported and signature-verified in the renderer matrix. Owner-device acceptance remains open. |
+| A-02 | Quality tier policy | TESTED | Renderer-aware Performance/Balanced/Quality/Ultra/Custom budgets and GLES caps pass the focused platform gate. |
+| A-03 | Dynamic resolution / thermal ladder | TESTED | Hysteretic resolution scaling and six-stage visual degradation are regression-covered; Android OS thermal-signal input and sustained-device validation remain open. |
+| A-04 | Shader/material variants | TESTED | Distinct high/safe road, water and terrain shaders compile and switch at runtime; shader prewarm remains open. |
 | A-05 | Sky / exposure / fog / daylight | IMPLEMENTED | Existing `world_visuals.gd` runtime system retained. Visual acceptance remains open. |
-| A-06 | Water / wetness | ACTIVE | Existing coastline/water path retained; renderer-tier variants and wet-road integration remain open. |
-| B-01 | Vehicle data platform | IMPLEMENTED | `vehicle_catalog.gd` adds per-car mass, wheelbase, track, CG, power/drag/brake/steer/grip/suspension/gearing/RPM/audio/camera metadata. |
-| B-02 | Distinct vehicle physics | IMPLEMENTED | Controller now consumes profile data instead of one global constants block; legacy sedan remains regression baseline. CI/runtime test pending at this checkpoint. |
-| B-03 | Toyota Crown | ACTIVE | Handling/data profile exists; dedicated hero mesh/material/audio integration not yet accepted. |
-| B-04 | Toyota Mark X | ACTIVE | Handling/data profile exists; dedicated hero mesh/material/audio integration not yet accepted. |
-| B-05 | Port Royal 992 parody | ACTIVE | Fictional 992-class handling/data profile exists; dedicated hero mesh/material/audio integration not yet accepted. |
-| B-06 | Garage / car-selection UI | NOT STARTED | Next Phase B integration after catalog/controller tests pass. |
-| B-07 | Persistent selected vehicle | NOT STARTED | Will be added with garage workflow and save migration-safe default. |
+| A-06 | Water / wetness | ACTIVE | Tiered coastline water is integrated and tested; wet-road/puddle behavior is not complete. |
+| A-07 | Shader prewarm | NOT STARTED | Separate material variants now exist; representative pipeline prewarm is the next rendering-stutter gate. |
+| B-01 | Vehicle data platform | TESTED | Catalog provides per-car dimensions, mass/CG, power, braking, steering, grip, suspension, gearing, RPM, audio and camera metadata. |
+| B-02 | Distinct vehicle physics | TESTED | Controller consumes profiles and the Crown, Mark X and Port Royal 992 no longer share one hard-coded handling tune. |
+| B-03 | Toyota Crown | ACTIVE | Data, handling, garage slot and distinct acoustic bank are tested. Dedicated Crown hero geometry remains unconfirmed/pending. |
+| B-04 | Toyota Mark X | ACTIVE | Data, handling, garage slot and distinct acoustic bank are tested. Dedicated Mark X hero geometry remains unconfirmed/pending. |
+| B-05 | Port Royal 992 parody | ACTIVE | Data, handling, garage slot and distinct acoustic bank are tested. Dedicated 992-class hero geometry remains unconfirmed/pending. |
+| B-06 | Garage / car-selection UI | TESTED | Touch-visible GARAGE button, modal selector, preview and live controller bridge pass the focused gate. |
+| B-07 | Persistent selected vehicle | TESTED | Selection writes and parses `user://yardman/vehicle.json` in regression coverage. |
+| B-08 | Layered automotive audio | TESTED | Fixed ten-voice mixer covers idle/low/high-load/exhaust/transmission/road/offroad/scrub/footsteps/wind with per-car engine banks. |
+| B-09 | Hero vehicle visual/material pipeline | IMPLEMENTED | Shared/recovered geometry now has a non-destructive profile-driven paint/glass/wheel styling layer; focused runtime test pending. Dedicated car meshes remain a separate asset gate. |
 
 A feature is advanced to TESTED only after the relevant Godot/CI gate runs on the exact source SHA. ACCEPTED remains owner/runtime evidence, not a code-presence label.
