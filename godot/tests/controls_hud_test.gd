@@ -6,6 +6,18 @@ const PlayerScript = preload("res://scripts/player_controller.gd")
 var failures := 0
 var interaction_count := 0
 
+class VehicleStub:
+    extends RefCounted
+    var body: CharacterBody3D
+    var occupied := true
+    var speed_mps := 0.0
+
+    func _init(vehicle_body: CharacterBody3D) -> void:
+        body = vehicle_body
+
+    func profile_metadata() -> Dictionary:
+        return {"dimensions_m": [1.85, 1.30, 4.0]}
+
 func _initialize() -> void:
     call_deferred("_run")
 
@@ -148,7 +160,8 @@ func _run() -> void:
     var player = PlayerScript.new()
     var car := CharacterBody3D.new()
     root.add_child(car)
-    player.configure({"body": car, "occupied": true, "speed_mps": 0.0})
+    var vehicle_stub := VehicleStub.new(car)
+    player.configure(vehicle_stub)
     root.add_child(player)
     player._set_occupied(false)
     player._animate(0.2, 4.0)
