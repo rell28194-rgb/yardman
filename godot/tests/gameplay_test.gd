@@ -56,12 +56,15 @@ func _run() -> void:
         await physics_frame
     scene.toggle_vehicle()
     _check(scene.player.in_vehicle and not scene.player.visible, "Player could not re-enter the nearby stopped car")
+    await _wait_ready(scene)
     var mileage: float = scene.vehicle.odometer_m
     Input.action_press("ui_up")
-    for frame in range(100):
+    for frame in range(240):
         await physics_frame
+        if scene.vehicle.odometer_m - mileage > 8.0:
+            break
     Input.action_release("ui_up")
-    _check(scene.vehicle.odometer_m - mileage > 6.0, "Driving input did not move the car")
+    _check(scene.vehicle.odometer_m - mileage > 8.0, "Driving input did not move the car far enough under the selected vehicle profile")
     scene.vehicle.reset_motion()
     scene.toggle_vehicle()
     _check(not scene.player.in_vehicle, "Could not park and exit before distant streaming test")
