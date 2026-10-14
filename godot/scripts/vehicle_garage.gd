@@ -323,7 +323,15 @@ func _load_selection() -> void:
             _selected_id = candidate
 
 func _save_selection() -> void:
-    DirAccess.make_dir_recursive_absolute("user://yardman")
+    var directory := ProjectSettings.globalize_path(SETTINGS_PATH.get_base_dir())
+    var error := DirAccess.make_dir_recursive_absolute(directory)
+    if error != OK:
+        push_warning("VehicleGarage: could not create settings directory (%s)" % error_string(error))
+        return
     var file := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
-    if file != null:
-        file.store_string(JSON.stringify({"selected_vehicle": _selected_id}, "  "))
+    if file == null:
+        push_warning("VehicleGarage: could not open vehicle settings for writing")
+        return
+    file.store_string(JSON.stringify({"selected_vehicle": _selected_id}, "  "))
+    file.flush()
+    file.close()
