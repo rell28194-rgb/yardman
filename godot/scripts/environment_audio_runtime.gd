@@ -300,32 +300,32 @@ static func _prepare_streams() -> void:
         _streams[layer] = _make_loop(layer, 2.0)
 
 static func _make_loop(kind: String, seconds: float) -> AudioStreamWAV:
-    var samples := int(round(seconds * SAMPLE_RATE)) + 1
+    var samples: int = int(round(seconds * SAMPLE_RATE)) + 1
     var pcm := PackedByteArray()
     pcm.resize(samples * 2)
-    var seed := abs(kind.hash()) % 100003 + 17
-    for index in range(samples):
-        var normalized := float(index) / float(maxi(samples - 1, 1))
-        var phase := TAU * normalized
-        var noise_seed := posmod(index * 1103515245 + seed * 12345, 2147483647)
-        var noise := float(noise_seed % 65536) / 32767.5 - 1.0
-        var sample := 0.0
+    var seed: int = int(abs(kind.hash())) % 100003 + 17
+    for index: int in range(samples):
+        var normalized: float = float(index) / float(maxi(samples - 1, 1))
+        var phase: float = TAU * normalized
+        var noise_seed: int = int(posmod(index * 1103515245 + seed * 12345, 2147483647))
+        var noise: float = float(noise_seed % 65536) / 32767.5 - 1.0
+        var sample: float = 0.0
         match kind:
             "ocean":
-                var swell := sin(phase) * 0.52 + sin(phase * 3.0 + 0.4) * 0.23
-                var wash := noise * (0.10 + 0.08 * (sin(phase * 2.0) * 0.5 + 0.5))
+                var swell: float = sin(phase) * 0.52 + sin(phase * 3.0 + 0.4) * 0.23
+                var wash: float = noise * (0.10 + 0.08 * (sin(phase * 2.0) * 0.5 + 0.5))
                 sample = swell * 0.34 + wash
             "wind":
                 sample = noise * 0.14 + sin(phase * 2.0) * 0.055 + sin(phase * 5.0 + 0.8) * 0.025
             "birds":
-                var bird_gate := pow(maxf(sin(phase * 2.0), 0.0), 7.0) + 0.72 * pow(maxf(sin(phase * 3.0 + 1.6), 0.0), 9.0)
+                var bird_gate: float = pow(maxf(sin(phase * 2.0), 0.0), 7.0) + 0.72 * pow(maxf(sin(phase * 3.0 + 1.6), 0.0), 9.0)
                 sample = sin(phase * 63.0 + sin(phase * 2.0) * 7.0) * bird_gate * 0.16
             "insects":
-                var insect_gate := 0.58 + 0.42 * sin(phase * 4.0) * sin(phase * 4.0)
+                var insect_gate: float = 0.58 + 0.42 * sin(phase * 4.0) * sin(phase * 4.0)
                 sample = (sin(phase * 94.0) * 0.09 + sin(phase * 121.0 + 0.3) * 0.055) * insect_gate
             "settlement":
                 sample = sin(phase * 5.0) * 0.045 + sin(phase * 11.0 + 0.6) * 0.025 + noise * 0.065
-        var encoded := int(round(clampf(sample, -0.92, 0.92) * 32767.0))
+        var encoded: int = int(round(clampf(sample, -0.92, 0.92) * 32767.0))
         pcm.encode_s16(index * 2, encoded)
     pcm.encode_s16((samples - 1) * 2, pcm.decode_s16(0))
     var stream := AudioStreamWAV.new()
