@@ -74,8 +74,9 @@ static func deterministic_seed(identifier: String) -> int:
 
 static func variant_for(identifier: String) -> Dictionary:
     var seed := deterministic_seed(identifier)
-    var style_index := seed % STYLE_IDS.size()
-    var paint_index := (seed / maxi(1, STYLE_IDS.size())) % PAINTS.size()
+    var style_index: int = seed % STYLE_IDS.size()
+    var paint_bucket: int = floori(float(seed) / float(maxi(1, STYLE_IDS.size())))
+    var paint_index: int = paint_bucket % PAINTS.size()
     return {
         "vehicle_id": STYLE_IDS[style_index],
         "paint_rgb": (PAINTS[paint_index] as Array).duplicate(),
