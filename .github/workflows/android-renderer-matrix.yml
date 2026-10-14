@@ -16,6 +16,7 @@ on:
       - 'godot/scripts/traffic_runtime.gd'
       - 'godot/scripts/parked_vehicle_runtime.gd'
       - 'godot/scripts/pedestrian_runtime.gd'
+      - 'godot/scripts/pedestrian_destination_runtime.gd'
       - 'godot/scripts/streetlight_layer.gd'
       - 'godot/scripts/streetlight_night_runtime.gd'
       - 'godot/scripts/vehicle_headlight_runtime.gd'
