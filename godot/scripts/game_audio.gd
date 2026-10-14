@@ -31,6 +31,9 @@ var _rpm := 900.0
 var _load := 0.0
 var _previous_speed := 0.0
 var _last_driving := false
+var _shifting := false
+var _shift_mix := 0.0
+var _gear_index := 0
 
 func _ready() -> void:
     if not _configured:
@@ -116,11 +119,21 @@ func update_state(delta: float, state: Dictionary) -> void:
     var slip_angle := absf(_finite_value(state.get("slip_angle_deg", -1.0), -90.0, 90.0))
     if slip_angle < 0.0:
         slip_angle = 0.0
+    var shifting := bool(state.get("shifting", false))
+    var gear_index := clampi(int(state.get("gear_index", 0)), 0, 12)
     if controller != null:
         if not state.has("slip_angle_deg"):
             var controller_slip = controller.get("drift_angle_deg")
             if controller_slip != null:
                 slip_angle = absf(_finite_value(controller_slip, -90.0, 90.0))
+        if not state.has("shifting") and controller.has_method("is_shifting"):
+            shifting = bool(controller.call("is_shifting"))
+        if not state.has("gear_index") and controller.has_method("gear_index"):
+            gear_index = clampi(int(controller.call("gear_index")), 0, 12)
+    _shifting = shifting and driving
+    _gear_index = gear_index
+    var shift_response := 24.0 if _shifting else 11.0
+    _shift_mix = lerpf(_shift_mix, 1.0 if _shifting else 0.0, 1.0 - exp(-dt * shift_response))
     _rpm = lerpf(_rpm, desired_rpm, 1.0 - exp(-dt * 8.5))
     _load = lerpf(_load, desired_load, 1.0 - exp(-dt * 9.0))
     _previous_speed = speed
@@ -141,6 +154,8 @@ func update_state(delta: float, state: Dictionary) -> void:
     var low_mix := smoothstep(0.04, 0.22, rpm_fraction + _load * 0.12) * (1.0 - smoothstep(0.70, 0.94, rpm_fraction))
     var high_mix := smoothstep(0.24, 0.68, rpm_fraction * 0.82 + _load * 0.46)
     var exhaust_mix := smoothstep(0.10, 0.52, _load) * smoothstep(0.04, 0.32, rpm_fraction + _load * 0.18)
+    var shift_engine_gain := lerpf(1.0, 0.56, _shift_mix)
+    var shift_engine_db := linear_to_db(maxf(shift_engine_gain, 0.05))
 
     var idle_pitch := clampf(pitch_bias * (0.82 + rpm_fraction * 0.72), 0.66, 1.72)
     var low_pitch := clampf(pitch_bias * (0.68 + rpm_fraction * 1.62), 0.62, 2.58)
@@ -149,16 +164,19 @@ func update_state(delta: float, state: Dictionary) -> void:
     _voice(engine_idle, driving and desired_rpm > 0.0 and idle_mix > 0.012,
         float(_audio_profile.idle_db) + linear_to_db(maxf(idle_mix, 0.012)), idle_pitch)
     _voice(engine_low, driving and desired_rpm > 0.0 and low_mix > 0.012,
-        float(_audio_profile.low_db) + linear_to_db(maxf(low_mix, 0.012)) + _load * 2.0, low_pitch)
+        float(_audio_profile.low_db) + linear_to_db(maxf(low_mix, 0.012)) + _load * 2.0 + shift_engine_db, low_pitch)
     _voice(engine_high, driving and desired_rpm > 0.0 and high_mix > 0.012,
-        float(_audio_profile.high_db) + linear_to_db(maxf(high_mix, 0.012)) + _load * 3.5, high_pitch)
+        float(_audio_profile.high_db) + linear_to_db(maxf(high_mix, 0.012)) + _load * 3.5 + shift_engine_db, high_pitch)
     _voice(exhaust, driving and desired_rpm > 0.0 and exhaust_mix > 0.012,
-        float(_audio_profile.exhaust_db) + linear_to_db(maxf(exhaust_mix, 0.012)) + _load * 2.8, exhaust_pitch)
+        float(_audio_profile.exhaust_db) + linear_to_db(maxf(exhaust_mix, 0.012)) + _load * 2.8 + shift_engine_db * 0.65, exhaust_pitch)
 
-    var transmission_mix := speed_fraction * smoothstep(0.10, 0.36, rpm_fraction + _load * 0.15)
+    var transmission_base := speed_fraction * smoothstep(0.10, 0.36, rpm_fraction + _load * 0.15)
+    var shift_pulse := _shift_mix * (0.46 + minf(float(_gear_index), 7.0) * 0.035)
+    var transmission_mix := maxf(transmission_base, shift_pulse)
+    var transmission_pitch := clampf(0.68 + speed_fraction * 1.25 + rpm_fraction * 0.34 + _shift_mix * 0.22, 0.62, 2.55)
     _voice(transmission, driving and transmission_mix > 0.025,
-        float(_audio_profile.transmission_db) + transmission_mix * 7.0,
-        clampf(0.68 + speed_fraction * 1.25 + rpm_fraction * 0.34, 0.62, 2.35))
+        float(_audio_profile.transmission_db) + transmission_mix * 7.0 + _shift_mix * 2.2,
+        transmission_pitch)
 
     var roll_pitch := clampf(0.66 + absf(speed) * 0.030, 0.62, 2.12)
     var roll_db := -42.0 + speed_fraction * 14.5
@@ -192,8 +210,11 @@ func debug_state() -> Dictionary:
         "engine_high_pitch": engine_high.pitch_scale if engine_high != null else 1.0,
         "engine_high_db": engine_high.volume_db if engine_high != null else SILENT_DB,
         "exhaust_db": exhaust.volume_db if exhaust != null else SILENT_DB,
+        "transmission_db": transmission.volume_db if transmission != null else SILENT_DB,
+        "transmission_pitch": transmission.pitch_scale if transmission != null else 1.0,
         "road_pitch": road_roll.pitch_scale if road_roll != null else 1.0,
         "rpm": _rpm, "load": _load, "volume": volume,
+        "shifting": _shifting, "shift_mix": _shift_mix, "gear_index": _gear_index,
     }
 
 func _current_vehicle_controller() -> Object:

@@ -39,7 +39,8 @@ func _run() -> void:
         _check(player.max_polyphony == 1 and not player.playing, "Voice started before an active world state")
 
     var state := {"audio_profile": "crown_v6", "driving": true, "speed_mps": 0.0, "rpm": 720.0,
-        "on_road": true, "walk_speed": 0.0, "ready": true, "menu_open": false, "throttle": 0.0, "slip_angle_deg": 0.0}
+        "on_road": true, "walk_speed": 0.0, "ready": true, "menu_open": false, "throttle": 0.0, "slip_angle_deg": 0.0,
+        "shifting": false, "gear_index": 0}
     audio.update_state(1.0 / 60.0, state)
     await process_frame
     _check(audio.debug_state().audio_profile == "crown_v6", "Crown acoustic profile was not applied")
@@ -56,6 +57,22 @@ func _run() -> void:
     _check(audio.engine_idle.pitch_scale >= idle_pitch, "RPM response moved idle pitch in the wrong direction")
     _check(audio.engine_high.playing and audio.exhaust.playing and audio.transmission.playing and audio.road_roll.playing, "Loaded Crown did not engage high-load, exhaust, transmission and rolling layers")
     _check(audio.engine_high.volume_db <= -10.0 and audio.exhaust.volume_db <= -10.0 and audio.wind.volume_db < audio.engine_high.volume_db, "Driving mix exceeds its output ceiling or wind dominates the powertrain")
+
+    var pre_shift_high_db: float = audio.engine_high.volume_db
+    var pre_shift_transmission_pitch: float = audio.transmission.pitch_scale
+    state.shifting = true
+    state.gear_index = 2
+    for frame in range(8):
+        audio.update_state(1.0 / 60.0, state)
+    var shift_debug: Dictionary = audio.debug_state()
+    _check(bool(shift_debug.shifting) and float(shift_debug.shift_mix) > 0.75, "Controller shift state did not reach the transmission mix")
+    _check(int(shift_debug.gear_index) == 2, "Transmission audio ignored selected gear telemetry")
+    _check(audio.transmission.playing and audio.transmission.pitch_scale > pre_shift_transmission_pitch, "Shift did not create a transmission-layer pulse")
+    _check(audio.engine_high.volume_db < pre_shift_high_db - 0.5, "Shift torque cut did not dip the loaded engine layer")
+    state.shifting = false
+    for frame in range(35):
+        audio.update_state(1.0 / 60.0, state)
+    _check(float(audio.debug_state().shift_mix) < 0.05, "Shift audio envelope did not release")
 
     state.slip_angle_deg = 18.0
     audio.update_state(1.0 / 60.0, state)
@@ -120,5 +137,5 @@ func _run() -> void:
     await process_frame
     await process_frame
     _check(AudioScript._stream_cache.is_empty(), "Cached PCM outlived all audio owners")
-    print("YARDMAN_AUDIO_TEST %s profiles=3 voices=10 load_layers=1 transmission=1 scrub=1 grass=1 footsteps=1 cache_reuse=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_AUDIO_TEST %s profiles=3 voices=10 load_layers=1 transmission=1 shift_pulse=1 scrub=1 grass=1 footsteps=1 cache_reuse=1" % ("PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
