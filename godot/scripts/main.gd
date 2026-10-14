@@ -84,7 +84,7 @@ func _ready() -> void:
     game_audio = AudioScript.new()
     game_audio.name = "GameAudio"
     add_child(game_audio)
-    set_quality("Balanced")
+    set_quality("Quality")
     var snapshot: Dictionary = SaveScript.load_file(SAVE_PATH)
     if snapshot.is_empty():
         goto_parish(current_parish)
@@ -175,6 +175,7 @@ func set_quality(quality: String, custom: Dictionary = {}) -> void:
         quality = "Balanced"
     visuals.quality = quality
     visuals.custom = custom.duplicate()
+    visuals.apply_environment_quality(environment, quality)
     var profile: Dictionary = visuals.settings().duplicate()
     if quality == "Custom":
         profile.merge(custom, true)

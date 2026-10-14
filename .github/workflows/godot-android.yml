@@ -9,6 +9,7 @@ on:
     branches:
       - codex/godot-beta-001
       - codex/godot-polish-002
+      - codex/graphics-pass-001
     paths:
       - 'godot/**'
       - '.github/workflows/godot-android.yml'
