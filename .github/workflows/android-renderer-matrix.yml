@@ -10,6 +10,8 @@ on:
       - 'godot/scripts/render_quality_manager.gd'
       - 'godot/scripts/render_runtime.gd'
       - 'godot/scripts/render_material_registry.gd'
+      - 'godot/scripts/streaming_budget_runtime.gd'
+      - 'godot/scripts/building_hlod_runtime.gd'
       - 'godot/scripts/shader_warmup.gd'
       - 'godot/scripts/atmosphere_fx.gd'
       - 'godot/scripts/vegetation_budget_runtime.gd'
