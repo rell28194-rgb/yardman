@@ -25,6 +25,7 @@ func _run() -> void:
     for i in range(180):
         manager.update_frame(1.0 / 30.0, null, true)
     _check(manager.current_scale < start_scale, "Sustained missed frame budget did not reduce internal resolution")
+
     manager.configure("Ultra", {}, "vulkan_mobile")
     manager.set_thermal_stage(3)
     var warm := manager.effective_policy()
@@ -33,5 +34,19 @@ func _run() -> void:
     var hot := manager.effective_policy()
     _check(float(hot.resolution_max) < float(vulkan.resolution_max), "Thermal stage did not cap resolution")
     _check(str(hot.water_variant) == "opaque" and str(hot.terrain_variant) == "2layer" and not bool(hot.screen_effects), "Thermal stage did not move to cheaper water/terrain/effect policy")
-    print("YARDMAN_RENDER_QUALITY_TEST %s renderer_policy=1 adaptive=1 thermal=1 material_ladder=1" % ("PASS" if failures == 0 else "FAIL"))
+    _check(int(hot.reflection_budget) <= 1, "Hot thermal stage retained expensive reflection budget")
+
+    manager.configure("Performance", {}, "vulkan_mobile")
+    manager.set_thermal_stage(5)
+    var critical := manager.effective_policy()
+    _check(int(critical.target_fps) == 30, "Critical thermal stage did not cap frame pacing to 30 FPS")
+    _check(Engine.max_fps == 30, "Engine frame cap did not follow thermal policy")
+
+    manager.configure("Performance", {}, "vulkan_mobile")
+    manager.current_scale = float(manager.effective_policy().resolution_min)
+    for i in range(260):
+        manager.update_frame(1.0 / 20.0, null, true)
+    _check(manager.thermal_stage >= 1, "Sustained overload at minimum resolution did not escalate thermal/performance stage")
+
+    print("YARDMAN_RENDER_QUALITY_TEST %s renderer_policy=1 adaptive=1 thermal=1 frame_pacing=1 auto_pressure=1 material_ladder=1" % ("PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)

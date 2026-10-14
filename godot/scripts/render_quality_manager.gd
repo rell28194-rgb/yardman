@@ -44,16 +44,23 @@ const GLES_CAP := {
     "reflection_budget": 1,
 }
 
+# Thermal stages cap requested frame rate only after the device is under
+# sustained pressure. Quality/Ultra already target 30 FPS and are unaffected.
+const THERMAL_FPS_CAPS := [240, 60, 50, 40, 35, 30]
+
 var quality := "Balanced"
 var renderer := "gl_compatibility"
 var policy: Dictionary = {}
 var current_scale := 0.85
 var thermal_stage := 0
 var adaptive_resolution_enabled := true
+var auto_thermal_enabled := true
 var _frame_ms_ema := 16.67
 var _slow_seconds := 0.0
 var _fast_seconds := 0.0
 var _change_cooldown := 0.0
+var _thermal_pressure_seconds := 0.0
+var _thermal_recovery_seconds := 0.0
 
 static func renderer_family() -> String:
     var key := "rendering/renderer/rendering_method.mobile" if OS.has_feature("mobile") else "rendering/renderer/rendering_method"
@@ -93,8 +100,10 @@ func configure(requested_quality: String, custom: Dictionary = {}, renderer_over
     _slow_seconds = 0.0
     _fast_seconds = 0.0
     _change_cooldown = 0.0
+    _thermal_pressure_seconds = 0.0
+    _thermal_recovery_seconds = 0.0
     current_scale = clampf(float(custom.get("resolution", policy.resolution_default)), float(policy.resolution_min), float(policy.resolution_max))
-    Engine.max_fps = maxi(0, int(policy.target_fps))
+    _apply_frame_cap()
     return effective_policy()
 
 func effective_policy() -> Dictionary:
@@ -106,18 +115,25 @@ func effective_policy() -> Dictionary:
     result.resolution_max = maxf(float(result.resolution_min), float(result.resolution_max) - thermal_scale_loss)
     result.shadow_distance = float(result.shadow_distance) * float([1.0, 0.90, 0.80, 0.70, 0.62, 0.55][stage])
     result.vegetation_factor = float([1.0, 1.0, 0.88, 0.74, 0.62, 0.52][stage])
+    result.target_fps = mini(int(result.target_fps), int(THERMAL_FPS_CAPS[stage]))
     result.screen_effects = bool(result.screen_effects) and stage < 3
     if stage >= 3:
         result.road_variant = "safe"
     if stage >= 4:
         result.water_variant = "opaque"
         result.terrain_variant = "2layer"
+        result.reflection_budget = mini(int(result.reflection_budget), 1)
     return result
 
 func set_thermal_stage(stage: int) -> void:
     thermal_stage = clampi(stage, 0, 5)
     var active := effective_policy()
     current_scale = minf(current_scale, float(active.resolution_max))
+    _apply_frame_cap()
+
+func _apply_frame_cap() -> void:
+    var active := effective_policy()
+    Engine.max_fps = maxi(0, int(active.target_fps))
 
 func apply_viewport(viewport: Viewport) -> void:
     if viewport == null:
@@ -153,5 +169,32 @@ func update_frame(delta: float, viewport: Viewport = null, force_adaptive: bool 
         current_scale = minf(float(active.resolution_max), current_scale + 0.025)
         _fast_seconds = 0.0
         _change_cooldown = 2.0
+    _update_thermal_pressure(delta, effective_policy(), force_adaptive)
     apply_viewport(viewport)
     return current_scale
+
+func _update_thermal_pressure(delta: float, active: Dictionary, force_adaptive: bool) -> void:
+    if not auto_thermal_enabled or (not force_adaptive and not OS.has_feature("mobile")):
+        _thermal_pressure_seconds = 0.0
+        _thermal_recovery_seconds = 0.0
+        return
+    var target_ms := 1000.0 / maxf(float(active.target_fps), 1.0)
+    var at_floor := current_scale <= float(active.resolution_min) + 0.001
+    if at_floor and _frame_ms_ema > target_ms * 1.15:
+        _thermal_pressure_seconds += delta
+        _thermal_recovery_seconds = 0.0
+    elif thermal_stage > 0 and _frame_ms_ema < target_ms * 0.74:
+        _thermal_recovery_seconds += delta
+        _thermal_pressure_seconds = maxf(0.0, _thermal_pressure_seconds - delta)
+    else:
+        _thermal_pressure_seconds = maxf(0.0, _thermal_pressure_seconds - delta * 0.5)
+        _thermal_recovery_seconds = maxf(0.0, _thermal_recovery_seconds - delta * 0.5)
+
+    if _thermal_pressure_seconds >= 8.0 and thermal_stage < 5:
+        _thermal_pressure_seconds = 0.0
+        _thermal_recovery_seconds = 0.0
+        set_thermal_stage(thermal_stage + 1)
+    elif _thermal_recovery_seconds >= 30.0 and thermal_stage > 0:
+        _thermal_pressure_seconds = 0.0
+        _thermal_recovery_seconds = 0.0
+        set_thermal_stage(thermal_stage - 1)
