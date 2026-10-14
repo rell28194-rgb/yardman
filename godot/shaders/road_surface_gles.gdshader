@@ -9,6 +9,7 @@ uniform sampler2D reference_detail : source_color, repeat_enable, filter_linear_
 uniform bool has_reference_albedo = false;
 uniform bool has_reference_detail = false;
 uniform float visibility_distance = 2200.0;
+uniform float wetness : hint_range(0.0, 1.0) = 0.0;
 varying float camera_distance;
 
 float cheap_hash(vec2 p) {
@@ -52,8 +53,11 @@ void fragment() {
         line = (1.0 - smoothstep(0.045, 0.085, abs(UV.y))) * dash;
         line *= smoothstep(4.0, 9.0, min(UV2.x, UV2.y));
     }
-    ALBEDO = mix(base, vec3(0.82, 0.815, 0.76), line * 0.80);
-    ROUGHNESS = unpaved ? 0.98 : 0.90;
-    SPECULAR = 0.20;
+    float surface_wetness = unpaved ? wetness * 0.45 : wetness;
+    vec3 surface = mix(base, vec3(0.82, 0.815, 0.76), line * 0.80);
+    surface *= mix(1.0, 0.72, surface_wetness * 0.78);
+    ALBEDO = surface;
+    ROUGHNESS = unpaved ? mix(0.98, 0.86, surface_wetness) : mix(0.90, 0.46, surface_wetness);
+    SPECULAR = mix(0.20, 0.50, surface_wetness);
     METALLIC = 0.0;
 }
