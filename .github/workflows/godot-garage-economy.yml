@@ -1,0 +1,68 @@
+name: Yardman Garage Economy
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - 'godot/project.godot'
+      - 'godot/scripts/vehicle_catalog.gd'
+      - 'godot/scripts/vehicle_garage.gd'
+      - 'godot/scripts/job_runtime.gd'
+      - 'godot/scripts/job_persistence_runtime.gd'
+      - 'godot/tests/garage_test.gd'
+      - 'godot/tests/job_runtime_test.gd'
+      - 'godot/tests/job_persistence_test.gd'
+      - 'godot/tests/job_guidance_test.gd'
+      - '.github/workflows/godot-garage-economy.yml'
+  workflow_dispatch:
+
+jobs:
+  garage-economy:
+    name: Garage ownership and courier wallet
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Parse project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/garage-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/garage-import.log; then exit 1; fi
+
+      - name: Run garage and courier economy tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for TEST in garage job_runtime job_persistence job_guidance; do
+            timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
+            if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
+            grep -q 'PASS' "godot/build/${TEST}.log"
+          done
+          echo 'YARDMAN_GARAGE_ECONOMY_GATE PASS'
+
+      - name: Preserve focused diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Garage-Economy-Diagnostics
+          path: godot/build/*.log
+          if-no-files-found: warn
+          retention-days: 7
