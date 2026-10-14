@@ -19,6 +19,8 @@ var _far_statistical := 0
 var _last_yielding := 0
 var _quality := "Balanced"
 var _thermal_stage := 0
+var _weather_speed_factor := 1.0
+var _weather_density_factor := 1.0
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -40,6 +42,7 @@ func _physics_process(delta: float) -> void:
     var active_world: PackedFloat64Array = roads.local_to_world(active.global_position)
     var active_xz := Vector2(float(active_world[0]), float(active_world[2]))
 
+    _update_weather_factors()
     _spawn_clock += delta
     if _spawn_clock >= 1.0:
         _spawn_clock = 0.0
@@ -106,6 +109,18 @@ static func density_for_hour(hour: float) -> float:
     if h < 22.0:
         return 0.72
     return 0.54
+
+static func weather_speed_factor(rain_intensity: float, standing_water: float) -> float:
+    var rain := clampf(rain_intensity, 0.0, 1.0)
+    var water := clampf(standing_water, 0.0, 1.0)
+    return clampf(1.0 - rain * 0.18 - water * 0.14, 0.64, 1.0)
+
+static func weather_density_factor(rain_intensity: float) -> float:
+    return clampf(1.0 - clampf(rain_intensity, 0.0, 1.0) * 0.16, 0.78, 1.0)
+
+static func statistical_population_for(capacity: int, hour: float, weather_factor: float) -> int:
+    var island_scale := float(maxi(capacity, 8)) * 3.4
+    return maxi(0, int(round(island_scale * density_for_hour(hour) * clampf(weather_factor, 0.70, 1.0))))
 
 static func lane_pose(record: Dictionary, progress: float, direction_sign: int) -> Dictionary:
     var a: Vector2 = record.get("a", Vector2.ZERO)
@@ -254,13 +269,27 @@ static func should_yield_at_junction(identifier: String, current: Dictionary, di
             return true
     return false
 
+func _update_weather_factors() -> void:
+    var rain := 0.0
+    var standing_water := 0.0
+    var atmosphere := get_node_or_null("/root/AtmosphereFX")
+    if atmosphere != null and atmosphere.has_method("weather_snapshot"):
+        var snapshot = atmosphere.call("weather_snapshot")
+        if snapshot is Dictionary:
+            rain = float(snapshot.get("rain_intensity", 0.0))
+            standing_water = float(snapshot.get("standing_water", 0.0))
+    _weather_speed_factor = weather_speed_factor(rain, standing_water)
+    _weather_density_factor = weather_density_factor(rain)
+
 func _reconcile_population(scene: Node, roads, terrain, active_xz: Vector2) -> void:
     var records_value = roads.call("_nearby_surface_segments", active_xz.x, active_xz.y, minf(spawn_radius, 500.0))
     if not records_value is Dictionary:
         return
     var records: Dictionary = records_value
-    var density := density_for_hour(float(scene.get("day_hour")))
+    var hour := float(scene.get("day_hour"))
+    var density := density_for_hour(hour) * _weather_density_factor
     var target := clampi(int(round(float(max_agents) * density)), 4, max_agents)
+    var far_target := statistical_population_for(max_agents, hour, _weather_density_factor)
 
     for identifier in agents.keys():
         var agent: Dictionary = agents[identifier]
@@ -269,7 +298,7 @@ func _reconcile_population(scene: Node, roads, terrain, active_xz: Vector2) -> v
             _destroy_agent(str(identifier))
 
     if agents.size() >= target:
-        _far_statistical = maxi(0, int(round(float(target) * 1.6)) - agents.size())
+        _far_statistical = maxi(0, far_target - agents.size())
         return
 
     var keys: Array = records.keys()
@@ -306,12 +335,12 @@ func _reconcile_population(scene: Node, roads, terrain, active_xz: Vector2) -> v
             "progress": progress,
             "position": point,
             "heading": float(pose.heading),
-            "speed": target_speed * 0.72,
+            "speed": target_speed * 0.72 * _weather_speed_factor,
             "target_speed": target_speed,
             "node": null,
             "model": null,
         }
-    _far_statistical = maxi(0, int(round(float(target) * 1.6)) - agents.size())
+    _far_statistical = maxi(0, far_target - agents.size())
 
 func _default_speed(class_id: int) -> float:
     if class_id <= 1:
@@ -335,7 +364,7 @@ func _advance_agents(delta: float, roads, terrain, active_xz: Vector2) -> void:
             _destroy_agent(str(identifier))
             continue
         var point: Vector2 = pose.position
-        var target_speed := float(agent.target_speed)
+        var target_speed := float(agent.target_speed) * _weather_speed_factor
         var player_distance := point.distance_to(active_xz)
         if player_distance < 9.0:
             target_speed = 0.0
@@ -358,7 +387,7 @@ func _advance_agents(delta: float, roads, terrain, active_xz: Vector2) -> void:
                 var options := junction_options(record, direction, junction_candidates)
                 if options.size() > 1:
                     var approach_scale := clampf(endpoint_distance / 22.0, 0.28, 1.0)
-                    target_speed = minf(target_speed, maxf(3.2, float(agent.target_speed) * approach_scale))
+                    target_speed = minf(target_speed, maxf(3.2, float(agent.target_speed) * _weather_speed_factor * approach_scale))
                     if endpoint_distance <= 16.0 and should_yield_at_junction(str(identifier), record, direction, endpoint, agents):
                         target_speed = 0.0
                         _last_yielding += 1
@@ -514,6 +543,8 @@ func _clear_scene_state() -> void:
     _last_medium = 0
     _far_statistical = 0
     _last_yielding = 0
+    _weather_speed_factor = 1.0
+    _weather_density_factor = 1.0
 
 func runtime_snapshot() -> Dictionary:
     return {
@@ -525,4 +556,6 @@ func runtime_snapshot() -> Dictionary:
         "quality": _quality,
         "thermal_stage": _thermal_stage,
         "near_budget": near_visual_budget,
+        "weather_speed_factor": _weather_speed_factor,
+        "weather_density_factor": _weather_density_factor,
     }
