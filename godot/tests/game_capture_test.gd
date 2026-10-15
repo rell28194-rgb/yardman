@@ -80,6 +80,7 @@ func _run() -> void:
     print("YARDMAN_CAPTURE_PROGRESS phase=scene_load output_dir=%s elapsed_ms=%d" % [output_dir, Time.get_ticks_msec() - _started_ms])
     scene = load("res://main.tscn").instantiate()
     root.add_child(scene)
+    current_scene = scene
     scene.set_quality("Ultra")
     scene.touch._touch_seen = true
     for parish in ["St. Ann", "Manchester"]:
@@ -107,6 +108,8 @@ func _run() -> void:
         quit(1)
         return
     print("YARDMAN_CAPTURE_TEST PASS actual_gl_frames=4 renderer=" + RenderingServer.get_video_adapter_name())
+    if current_scene == scene:
+        current_scene = null
     scene.queue_free()
     await process_frame
     quit(0)
