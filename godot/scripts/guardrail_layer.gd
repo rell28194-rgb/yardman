@@ -12,12 +12,15 @@ const BEAM_CENTER_Y_M := 0.62
 const POST_HEIGHT_M := 0.78
 const POST_WIDTH_M := 0.13
 const VISIBILITY_RANGE_M := 900.0
+const DEFAULT_TILE_SIZE_M := 4096.0
+const QUERY_MAX_RADIUS_M := 96.0
 
 var _terrain: Node
 var _connected := false
 var _beam_mesh: BoxMesh
 var _post_mesh: BoxMesh
 var _material: StandardMaterial3D
+var _record_cache: Dictionary = {}
 
 func _ready() -> void:
     set_process(true)
@@ -128,15 +131,67 @@ func _make_multimesh_instance(name_value: String, mesh: Mesh, transforms: Array[
     instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     return instance
 
+func _cache_key(tile: Vector2i) -> String:
+    return "%d:%d" % [tile.x, tile.y]
+
 func _load_tile(tile: Vector2i) -> Array:
+    var key := _cache_key(tile)
+    if _record_cache.has(key):
+        return _record_cache[key]
     var path := "res://data/roads/guardrails/tile_%d_%d.json" % [tile.x, tile.y]
     if not FileAccess.file_exists(path):
-        return []
+        _record_cache[key] = []
+        return _record_cache[key]
     var payload = JSON.parse_string(FileAccess.get_file_as_string(path))
     if not payload is Dictionary or not payload.get("guard_rails", null) is Array:
         push_warning("Invalid Yardman guard-rail tile: " + path)
-        return []
-    return payload.guard_rails
+        _record_cache[key] = []
+        return _record_cache[key]
+    _record_cache[key] = payload.guard_rails
+    return _record_cache[key]
+
+static func _segment_distance_squared(point: Vector2, a: Vector2, b: Vector2) -> float:
+    var direction := b - a
+    var length_squared := direction.length_squared()
+    if length_squared < 0.000001:
+        return point.distance_squared_to(a)
+    var fraction := clampf((point - a).dot(direction) / length_squared, 0.0, 1.0)
+    return point.distance_squared_to(a + direction * fraction)
+
+func has_mapped_guardrail_near(world_point: Vector2, radius_m: float) -> bool:
+    """Return true only when explicit compiled Jamaica guard-rail evidence is near.
+
+    Inferred road-safety systems use this as an authority gate so they cannot draw a
+    second rail over sourced OSM geometry. The query is spatially bounded and reads
+    only the few guard-rail tiles intersecting the requested radius.
+    """
+    if not is_finite(world_point.x) or not is_finite(world_point.y) or not is_finite(radius_m) or radius_m <= 0.0:
+        return false
+    var radius := clampf(radius_m, 0.25, QUERY_MAX_RADIUS_M)
+    var tile_size := DEFAULT_TILE_SIZE_M
+    if _terrain != null and "tile_size" in _terrain:
+        tile_size = float(_terrain.tile_size)
+    if not is_finite(tile_size) or tile_size <= 0.0:
+        return false
+    var first := Vector2i(floori((world_point.x - radius) / tile_size), floori((world_point.y - radius) / tile_size))
+    var last := Vector2i(floori((world_point.x + radius) / tile_size), floori((world_point.y + radius) / tile_size))
+    var radius_squared := radius * radius
+    for tz in range(first.y, last.y + 1):
+        for tx in range(first.x, last.x + 1):
+            for raw_record in _load_tile(Vector2i(tx, tz)):
+                if not raw_record is Dictionary or str(raw_record.get("barrier", "")) != "guard_rail":
+                    continue
+                var start_raw = raw_record.get("start", [])
+                var end_raw = raw_record.get("end", [])
+                if not start_raw is Array or not end_raw is Array or start_raw.size() < 2 or end_raw.size() < 2:
+                    continue
+                var a := Vector2(float(start_raw[0]), float(start_raw[1]))
+                var b := Vector2(float(end_raw[0]), float(end_raw[1]))
+                if not is_finite(a.x) or not is_finite(a.y) or not is_finite(b.x) or not is_finite(b.y):
+                    continue
+                if _segment_distance_squared(world_point, a, b) <= radius_squared:
+                    return true
+    return false
 
 func placement_plan(records: Array, tile: Vector2i, tile_size: float, max_span_m: float = MAX_SPAN_M) -> Array[Dictionary]:
     var result: Array[Dictionary] = []
