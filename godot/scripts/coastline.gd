@@ -14,20 +14,23 @@ func _init() -> void:
     water_material.shader = MaterialRegistry.shader_for("water")
     beach_material = ShaderMaterial.new()
     beach_material.shader = BeachShader
+    _bind_reference_media()
+
+func _bind_reference_media() -> void:
     for binding in [
         [beach_material, "reference_sand", "has_reference_sand", "beach_sand.png"],
         [water_material, "reference_surface", "has_reference_surface", "water_surface.png"],
         [water_material, "reference_foam", "has_reference_foam", "water_foam.png"],
         [water_material, "reference_caustics", "has_reference_caustics", "water_caustics.png"],
         # Direct owner-authorized Beta2 recovery. The KTX keeps the original
-        # uCaptain WaterBump ETC1 mip chain; public/asset-absent builds simply
+        # uCaptain WaterBump ETC1 mip chain; asset-absent validation builds simply
         # retain Yardman's procedural normal field.
         [water_material, "reference_normal", "has_reference_normal", "beta2_ucaptain_water_bump.ktx"],
     ]:
         var texture: Texture2D = ReferenceAssets.texture(str(binding[3]))
+        binding[0].set_shader_parameter(str(binding[2]), texture != null)
         if texture != null:
             binding[0].set_shader_parameter(str(binding[1]), texture)
-            binding[0].set_shader_parameter(str(binding[2]), true)
 
 func _ready() -> void:
     add_to_group("yardman_render_quality")
@@ -40,6 +43,10 @@ func apply_render_policy(policy: Dictionary, renderer_override: String = "") -> 
     var selected := MaterialRegistry.shader_for("water", renderer_override, _quality, _force_safe_water)
     if water_material.shader != selected:
         water_material.shader = selected
+        # ShaderMaterial parameter tables are shader-specific. Re-apply both the
+        # ordinary private media and direct Beta2 source normal after any renderer
+        # or thermal-quality variant swap.
+        _bind_reference_media()
 
 func material_variant() -> String:
     return MaterialRegistry.variant_name("water", "", _quality, _force_safe_water)
