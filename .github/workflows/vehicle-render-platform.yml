@@ -59,6 +59,7 @@ on:
       - 'godot/tests/render_runtime_capture_test.gd'
       - 'godot/tests/material_variants_test.gd'
       - 'godot/tests/reference_assets_test.gd'
+      - 'godot/tools/validate_reference_role_fallback.py'
       - 'godot/tests/streaming_budget_test.gd'
       - 'godot/tests/building_hlod_test.gd'
       - 'godot/tests/road_visibility_test.gd'
@@ -128,6 +129,12 @@ jobs:
           timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/platform-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/platform-import.log; then exit 1; fi
 
+      - name: Validate material roles with isolated generated controls
+        run: |
+          python3 godot/tools/validate_reference_role_fallback.py \
+            --godot godot --project-root godot \
+            --evidence-dir godot/build/role-fallback --mutation-control
+
       - name: Test renderer, streaming/HLOD, road culling, junction-aware traffic, pedestrian-aware traffic safety, traffic visual/brake behavior, parked vehicles, pedestrian destinations/idles, night lighting, player/traffic headlights, building night activity, environmental ambience, weather cycle, player/traffic signals, courier economy/guidance, player locomotion, startup buttons, weather, scalable vegetation/reflections, powertrain, vehicle presentation, garage and automotive audio platforms
         shell: bash
         run: |
@@ -143,7 +150,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Yardman-Vehicle-Render-Platform-Diagnostics
-          path: godot/build/*.log
+          path: |
+            godot/build/*.log
+            godot/build/role-fallback/
           if-no-files-found: warn
           retention-days: 14
 
