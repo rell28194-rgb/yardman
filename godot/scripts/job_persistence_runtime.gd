@@ -92,14 +92,25 @@ static func write_state(path: String, state: Dictionary) -> Error:
     file.close()
     if read_state(temporary).is_empty():
         return ERR_FILE_CORRUPT
+    return _commit_staged(temporary, path)
+
+static func _commit_staged(temporary: String, path: String) -> Error:
+    var error := OK
     if FileAccess.file_exists(path):
-        if FileAccess.file_exists(path + ".bak"):
-            DirAccess.remove_absolute(path + ".bak")
-        error = DirAccess.rename_absolute(path, path + ".bak")
+        if not _read_valid(path).is_empty():
+            if FileAccess.file_exists(path + ".bak"):
+                error = DirAccess.remove_absolute(path + ".bak")
+                if error != OK:
+                    return error
+            error = DirAccess.rename_absolute(path, path + ".bak")
+        else:
+            # A recovered backup is the last good checkpoint. Never replace it
+            # with the corrupt primary while installing the next valid save.
+            error = DirAccess.remove_absolute(path)
         if error != OK:
             return error
     error = DirAccess.rename_absolute(temporary, path)
-    if error != OK and FileAccess.file_exists(path + ".bak"):
+    if error != OK and not _read_valid(path + ".bak").is_empty():
         DirAccess.rename_absolute(path + ".bak", path)
     return error
 

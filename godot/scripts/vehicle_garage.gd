@@ -179,6 +179,16 @@ func purchase_vehicle(vehicle_id: String, apply_to_game: bool = true) -> bool:
     if price <= 0:
         _last_selection_error = "COULD NOT COMPLETE VEHICLE PAYMENT"
         return false
+    if wallet_jmd() < price:
+        _last_selection_error = "COULD NOT COMPLETE VEHICLE PAYMENT"
+        return false
+    var jobs := get_node_or_null("/root/JobRuntime")
+    # Seed a wallet+ownership baseline BEFORE the first debit. Otherwise the
+    # first purchase's .bak could contain a legacy wallet without ownership and
+    # incorrectly grandfather the newer selection cache after backup recovery.
+    if jobs == null or (jobs.get("garage_owned_ids") == null and not _save_wallet()):
+        _last_selection_error = "COULD NOT COMPLETE VEHICLE PAYMENT"
+        return false
     _owned_ids.append(vehicle_id)
     if not _spend_wallet(price):
         _owned_ids.erase(vehicle_id)
@@ -191,6 +201,7 @@ func purchase_vehicle(vehicle_id: String, apply_to_game: bool = true) -> bool:
             # in-memory refund which failed to reach disk or offer a second debit.
             var runtime := get_node_or_null("/root/JobRuntime")
             _owned_ids = normalized_owned_ids(runtime.get("garage_owned_ids"), STARTER_VEHICLE_ID)
+            _refresh_preview()
             _last_selection_error = "PURCHASE SAVED — SELECT YOUR VEHICLE AGAIN"
         return false
     return true

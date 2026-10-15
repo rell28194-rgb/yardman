@@ -129,8 +129,15 @@ func _run() -> void:
     _seed(garage, runtime)
     garage.reject_selection = true
     garage.fail_save = 2
+    var selector: OptionButton = garage.get("_selector")
+    for index in range(selector.item_count):
+        if str(selector.get_item_metadata(index)) == "toyota_mark_x":
+            selector.select(index)
+    garage._refresh_preview()
     _check(not garage.purchase_vehicle("toyota_mark_x", false), "failed refund reported normal purchase success")
     _check(garage.wallet_jmd() == 68000 and garage.is_vehicle_owned("toyota_mark_x"), "failed refund left memory inconsistent with the paid record")
+    _check(str(garage.get("_info").text).contains("OWNED") and str(garage.get("_info").text).contains("68000"),
+        "failed refund left the garage displaying the wrong ownership or wallet")
     garage.reject_selection = false
     _check(garage.purchase_vehicle("toyota_mark_x", false) and garage.wallet_jmd() == 68000, "retry after failed refund charged twice")
     garage._load_selection()
@@ -141,6 +148,44 @@ func _run() -> void:
     _write(garage._settings_path(), JSON.stringify({"selected_vehicle": "port_royal_992"}))
     garage._load_selection()
     _check(garage.is_vehicle_owned("port_royal_992"), "legacy selection migration lost an existing car")
+
+    # The FIRST purchase must create a legacy ownership baseline so falling
+    # back to .bak never combines an old wallet with the newer selection cache.
+    var legacy := {"wallet_jmd": 100000, "offer_sequence": 0, "active_job": {}}
+    _check(Persistence.write_state(garage._wallet_save_path(), legacy) == OK, "first-purchase legacy wallet fixture failed")
+    _write(garage._settings_path(), JSON.stringify({"selected_vehicle": "toyota_crown"}))
+    runtime.call("restore_snapshot", legacy)
+    garage._load_selection()
+    garage.saves = 0
+    garage.fail_save = 0
+    _check(garage.purchase_vehicle("toyota_mark_x", false), "first legacy purchase failed")
+    var first_backup := Persistence._read_valid(garage._wallet_save_path() + ".bak")
+    _check(first_backup.get("wallet_jmd") == 100000 and first_backup.get("garage_owned_ids") == ["toyota_crown"],
+        "first purchase backup lacks an atomic legacy baseline")
+    _write(garage._wallet_save_path(), "corrupt paid primary")
+    runtime.call("restore_snapshot", Persistence.read_state(garage._wallet_save_path()))
+    garage._load_selection()
+    _check(garage.wallet_jmd() == 100000 and not garage.is_vehicle_owned("toyota_mark_x")
+        and garage.selected_vehicle_id() == "toyota_crown", "legacy backup recovery granted a free paid car")
+
+    # A failed installation after recovery must preserve the LAST GOOD backup,
+    # rather than rotating the corrupt primary over it.
+    var recovered := Persistence.read_state(garage._wallet_save_path())
+    var missing_temporary := garage.directory.path_join("missing.tmp")
+    _check(Persistence._commit_staged(missing_temporary, garage._wallet_save_path()) != OK,
+        "missing staged save did not simulate installation failure")
+    _check(Persistence.read_state(garage._wallet_save_path()) == recovered,
+        "failed save after recovery destroyed the good wallet/ownership checkpoint")
+    # The successful path must also retain a good backup if interrupted later.
+    _write(garage._wallet_save_path(), "corrupt primary again")
+    _write(garage._wallet_save_path() + ".bak", JSON.stringify(Persistence.wrap_state(recovered)))
+    var next := recovered.duplicate(true)
+    next.wallet_jmd = 105000
+    _check(Persistence.write_state(garage._wallet_save_path(), next) == OK, "save after backup recovery failed")
+    _check(Persistence._read_valid(garage._wallet_save_path() + ".bak") == recovered,
+        "save after backup recovery replaced the valid backup with corrupt data")
+    _check(Persistence.read_state(garage._wallet_save_path()).wallet_jmd == 105000,
+        "save after backup recovery did not install the new wallet")
 
     runtime.call("restore_snapshot", original)
     var test_directory := ProjectSettings.globalize_path(garage.directory)
