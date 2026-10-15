@@ -60,6 +60,8 @@ class RoadProfileTests(unittest.TestCase):
         self.assertIn(stats["profile_grade_worst_segment"], (0, 1))
         self.assertEqual(stats["profile_grade_break_vertices"], 1)
         self.assertAlmostEqual(stats["profile_grade_break_max_pct_points"], 31.0, places=4)
+        self.assertEqual(stats["profile_grade_break_worst_edge"], "road")
+        self.assertEqual(stats["profile_grade_break_worst_vertex"], 1)
         self.assertEqual(stats["profile_crest_reversal_vertices"], 1)
         self.assertEqual(stats["profile_sag_reversal_vertices"], 0)
 
