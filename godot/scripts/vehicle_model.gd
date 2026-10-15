@@ -3,6 +3,7 @@ class_name YardmanVehicleModel
 
 # Owner-supplied reference art is optional so source-only builds still boot.
 const References = preload("res://scripts/reference_assets.gd")
+const Catalog = preload("res://scripts/vehicle_catalog.gd")
 
 var shell: Node3D
 var front_pivots: Array[Node3D] = []
@@ -12,6 +13,7 @@ var reverse_material: StandardMaterial3D
 var is_reference_model := false
 var reference_asset_name := ""
 var wheelbase_m := 2.56
+var track_width_m := 1.90
 var wheel_radius_m := 0.35
 var geometry_bounds := AABB(Vector3(-0.925, 0.0, -2.0), Vector3(1.85, 1.3, 4.0))
 var _brake_materials: Array[StandardMaterial3D] = []
@@ -167,11 +169,20 @@ func _try_reference_sedan(asset_name: String, scene_loader: Callable = Callable(
     wheels.assign(spins)
     geometry_bounds = bounds
     wheelbase_m = measured_wheelbase
+    track_width_m = measured_track
     wheel_radius_m = measured_radius
     _capture_motion_rest_pose()
     _bind_reference_lamps(imported)
     is_reference_model = true
     reference_asset_name = asset_name
+    # Only catalog-bound source scenes supersede a production fallback body.
+    # A recovered generic sedan must never masquerade as a Crown/Mark X/992.
+    for vehicle_id in Catalog.production_ids():
+        var source_profile := Catalog.profile(str(vehicle_id))
+        if str(source_profile.get("hero_scene", "")) == asset_name:
+            set_meta("yardman_dedicated_vehicle_mesh", true)
+            set_meta("yardman_dedicated_vehicle_id", str(vehicle_id))
+            break
     print("YARDMAN_REFERENCE_VEHICLE source=%s bounds_m=%s wheelbase_m=%.3f tyre_radius_m=%.3f brake_materials=%d reverse_materials=%d" % [reference_asset_name, geometry_bounds.size, wheelbase_m, wheel_radius_m, _brake_materials.size(), _reverse_materials.size()])
     return true
 

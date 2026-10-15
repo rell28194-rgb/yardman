@@ -567,7 +567,7 @@ func _refresh_preview() -> void:
     _preview_root.add_child(_preview_model)
     _preview_model.call("build", str(data.get("hero_scene", "")))
     var scale_data: Array = data.get("visual_scale", [1.0, 1.0, 1.0])
-    if scale_data.size() >= 3:
+    if not bool(_preview_model.get_meta("yardman_dedicated_vehicle_mesh", false)) and scale_data.size() >= 3:
         _preview_model.scale = Vector3(float(scale_data[0]), float(scale_data[1]), float(scale_data[2]))
     Styler.apply(_preview_model, data)
     _preview_built_id = preview_id

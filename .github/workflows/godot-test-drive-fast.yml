@@ -19,6 +19,7 @@ on:
       - 'godot/tests/vehicle_test.gd'
       - 'godot/tests/vehicle_catalog_test.gd'
       - 'godot/tests/vehicle_hero_asset_test.gd'
+      - 'godot/tests/vehicle_hero_integration_test.gd'
       - 'godot/tests/vehicle_visual_styler_test.gd'
       - 'godot/tests/road_surface_test.gd'
       - 'godot/tests/road_hairpin_test.gd'
@@ -58,7 +59,7 @@ jobs:
           mkdir -p godot/build
           timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/fast-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/fast-import.log; then exit 1; fi
-          for TEST in vehicle vehicle_catalog vehicle_hero_asset vehicle_visual_styler road_surface road_hairpin traffic_runtime pedestrian_runtime location_tracker; do
+          for TEST in vehicle vehicle_catalog vehicle_hero_asset vehicle_hero_integration vehicle_visual_styler road_surface road_hairpin traffic_runtime pedestrian_runtime location_tracker; do
             timeout 180 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/fast-${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/fast-${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/fast-${TEST}.log"

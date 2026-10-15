@@ -33,6 +33,7 @@ func style_visual(visual: Node3D, vehicle_id: String) -> Dictionary:
     stats["geometry_mesh_parts"] = int(geometry_stats.get("mesh_parts", 0))
     stats["hidden_shared_meshes"] = int(geometry_stats.get("hidden_shared_meshes", 0))
     stats["stance_wheels"] = int(stance_stats.get("wheels_positioned", 0))
+    stats["source_stance_preserved"] = bool(stance_stats.get("dedicated_mesh", false))
     stats["stance_wheelbase_m"] = float(stance_stats.get("wheelbase_world_m", 0.0))
     stats["stance_track_m"] = float(stance_stats.get("track_world_m", 0.0))
     stats["stance_radius_m"] = float(stance_stats.get("radius_world_m", 0.0))

@@ -29,8 +29,8 @@ static func apply(root: Node3D, profile: Dictionary) -> Dictionary:
         root.set_meta("yardman_geometry_signature", "legacy")
         return empty
 
-    # Future dedicated imports can opt out explicitly. Until then, suppress the
-    # shared Chaser/procedural body and retain its independently animated wheels.
+    # Catalog-bound hero imports retain their source body and independent rig.
+    # Shared Chaser/procedural bodies still receive the profile fallback below.
     if bool(root.get_meta("yardman_dedicated_vehicle_mesh", false)):
         var dedicated := empty.duplicate(true)
         dedicated["dedicated_mesh"] = true

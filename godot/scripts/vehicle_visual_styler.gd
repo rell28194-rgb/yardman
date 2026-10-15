@@ -24,6 +24,14 @@ static func apply(root: Node3D, profile: Dictionary) -> Dictionary:
     var wheel := _array_color(preset.get("wheel", [0.54, 0.58, 0.62]), Color(0.54, 0.58, 0.62))
     var clones: Dictionary = {}
     var stats := {"paint_materials": 0, "glass_materials": 0, "wheel_materials": 0, "vehicle_id": vehicle_id, "paint_rgb": [paint.r, paint.g, paint.b]}
+    if bool(root.get_meta("yardman_dedicated_vehicle_mesh", false)):
+        # Recovered hero materials have source-specific texture/roughness/glass
+        # translation. Broad fallback name heuristics would repaint interiors,
+        # erase authored lens settings and replace the recovered paint response.
+        stats["source_materials_preserved"] = true
+        root.set_meta("yardman_vehicle_visual_id", vehicle_id)
+        root.set_meta("yardman_vehicle_visual_stats", stats.duplicate(true))
+        return stats
     var meshes: Array[MeshInstance3D] = []
     if root is MeshInstance3D:
         meshes.append(root as MeshInstance3D)

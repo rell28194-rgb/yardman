@@ -14,6 +14,16 @@ static func apply(root: Node3D, profile: Dictionary) -> Dictionary:
     }
     if root == null:
         return result
+    if bool(root.get_meta("yardman_dedicated_vehicle_mesh", false)):
+        # Source rigs are already normalized to metres. The fallback stance
+        # layer must not move authored axles or replace spindle transforms.
+        result["dedicated_mesh"] = true
+        result["wheelbase_world_m"] = float(root.get("wheelbase_m"))
+        result["track_world_m"] = float(root.get("track_width_m"))
+        result["radius_world_m"] = float(root.get("wheel_radius_m"))
+        root.set_meta("yardman_stance_vehicle_id", str(result.vehicle_id))
+        root.set_meta("yardman_stance_stats", result.duplicate(true))
+        return result
     var spins_value = root.get("wheels")
     if not spins_value is Array:
         return result

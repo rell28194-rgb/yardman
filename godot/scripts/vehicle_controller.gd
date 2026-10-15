@@ -23,6 +23,7 @@ var vehicle_id := Catalog.DEFAULT_ID
 var profile: Dictionary = Catalog.profile(Catalog.DEFAULT_ID)
 var _steer := 0.0
 var _ground_basis := Basis.IDENTITY
+var _visual_scale := Vector3.ONE
 var _last_acceleration := 0.0
 var _last_yaw_rate := 0.0
 var _last_throttle := 0.0
@@ -71,15 +72,21 @@ func _rebuild_visual() -> void:
     visual.name = "VisualRig"
     body.add_child(visual)
     visual.call("build", str(profile.get("hero_scene", "")))
-    if bool(profile.get("use_visual_wheelbase", false)):
+    var dedicated := bool(visual.get_meta("yardman_dedicated_vehicle_mesh", false))
+    if dedicated or bool(profile.get("use_visual_wheelbase", false)):
         wheelbase_m = clampf(float(visual.get("wheelbase_m")), 1.8, 4.5)
+    if dedicated:
+        _track_half_m = clampf(float(visual.get("track_width_m")) * 0.5, 0.50, 1.40)
     var scale_data: Array = profile.get("visual_scale", [1.0, 1.0, 1.0])
-    if scale_data.size() >= 3:
+    if not dedicated and scale_data.size() >= 3:
         visual.scale = Vector3(float(scale_data[0]), float(scale_data[1]), float(scale_data[2]))
+    _visual_scale = visual.scale
     _make_headlights(_profile_bounds())
     _ground_basis = Basis.IDENTITY
 
 func _profile_bounds() -> AABB:
+    if visual != null and bool(visual.get_meta("yardman_dedicated_vehicle_mesh", false)):
+        return visual.get("geometry_bounds")
     var dims: Array = profile.get("dimensions_m", [1.85, 1.30, 4.0])
     var width := float(dims[0]) if dims.size() > 0 else 1.85
     var height := float(dims[1]) if dims.size() > 1 else 1.30
@@ -287,7 +294,7 @@ func _update_visual(delta: float, forward: Vector3, braking: float) -> void:
     if ahead.length_squared() > 0.01:
         var desired_basis := body.global_basis.inverse() * Basis.looking_at(ahead, up)
         _ground_basis = _ground_basis.slerp(desired_basis, 1.0 - exp(-delta * 8.5)).orthonormalized()
-    visual.basis = _ground_basis
+    visual.basis = _ground_basis.scaled_local(_visual_scale)
     var suspension_y := lerpf(0.055, -0.035, _suspension_compression)
     visual.position.y = lerpf(visual.position.y, suspension_y, 1.0 - exp(-delta * 10.0))
     for light in _headlights:
@@ -354,6 +361,6 @@ func reset_motion() -> void:
     if body != null:
         body.velocity = Vector3.ZERO
     if visual != null:
-        visual.basis = Basis.IDENTITY
+        visual.basis = Basis.IDENTITY.scaled_local(_visual_scale)
         visual.position.y = 0.0
         visual.call("update_motion", 1.0, 0.0, 0.0, 0.0, false, occupied, 0.0, 0.0)
