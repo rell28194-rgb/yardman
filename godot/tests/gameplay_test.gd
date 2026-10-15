@@ -32,6 +32,11 @@ func _run() -> void:
             return
     var scene = load("res://main.tscn").instantiate()
     root.add_child(scene)
+    # Autoloads and runtime services resolve the production world through
+    # SceneTree.current_scene. Tests that only parent main.tscn can otherwise
+    # silently exercise legacy/default vehicle state instead of the active game.
+    current_scene = scene
+    _check(current_scene == scene, "Production main scene was not activated as SceneTree.current_scene")
     await _wait_ready(scene)
     _check(scene.roads.manifest.parish_anchors.size() == 14, "All fourteen parishes must be addressable")
     for parish in scene.roads.manifest.parish_anchors:
@@ -136,7 +141,9 @@ func _run() -> void:
         scene.set_quality(quality, {"trees": 99, "road_radius": 1, "terrain_radius": 1})
         _check(scene.visuals.quality == quality, "Quality selection failed")
     _check(int(scene.visuals.settings().trees) == 99, "Custom density was ignored")
-    print("YARDMAN_GAMEPLAY_TEST %s parishes=14 walk=1 drive=1 enter_exit=1 save_backup=1 multitouch=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_GAMEPLAY_TEST %s parishes=14 walk=1 drive=1 enter_exit=1 save_backup=1 multitouch=1 current_scene=1" % ("PASS" if failures == 0 else "FAIL"))
+    if current_scene == scene:
+        current_scene = null
     scene.queue_free()
     await process_frame
     quit(0 if failures == 0 else 1)
