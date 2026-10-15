@@ -17,8 +17,15 @@ func _run() -> void:
     _check(References.texture("../outside.png") == null, "Path traversal accepted")
     _check(References.scene("script.gd") == null, "Executable reference script accepted")
     _check(References.audio("folder/sample.wav") == null, "Nested path accepted")
-    _check(str(References.TEXTURE_UPGRADES.get("ground_rock.png", "")) == "beta2_ucaptain_mountain_terrain_albedo.ktx",
-        "Beta2 mountain texture upgrade mapping changed")
+    _check(str(References.TEXTURE_UPGRADES.get("ground_dry_grass.png", "")) == "beta2_ucaptain_mountain_terrain_albedo.ktx",
+        "Beta2 vegetated mountain surface must occupy the dry grass/earth slot")
+    _check(str(References.TEXTURE_UPGRADES.get("ground_rock.png", "")) == "ground_rock_alternate.png",
+        "Exposed rock must select the approved snow-free rock source")
+    _check("ground_rock.png" in References.STRICT_TEXTURE_UPGRADES,
+        "Missing dry rock must fall back procedurally, never to the snowy original")
+    if not ResourceLoader.exists(References.ROOT + "ground_rock_alternate.png"):
+        _check(References.texture("ground_rock.png") == null,
+            "Missing approved dry rock incorrectly loaded the snowy original")
     _check(str(References.TEXTURE_UPGRADES.get("ground_grass.png", "")) == "beta2_ucaptain_scrub_grass_albedo.ktx",
         "Beta2 scrub-grass texture upgrade mapping changed")
     # These methods are part of main.gd's live streaming/quality contract and
@@ -71,8 +78,19 @@ func _run() -> void:
         _check(References.texture("beta2_ucaptain_water_bump.ktx") != null, "Recovered Beta2 water normal missing")
         var direct_mountain := References.texture("beta2_ucaptain_mountain_terrain_albedo.ktx")
         _check(direct_mountain != null, "Recovered Beta2 mountain terrain missing")
-        _check(References.texture("ground_rock.png") == direct_mountain,
-            "Terrain semantic alias did not select recovered Beta2 mountain source")
+        _check(References.texture("ground_dry_grass.png") == direct_mountain,
+            "Dry grass/earth semantic alias did not select recovered Beta2 mountain source")
+        var exposed_rock := References.texture("ground_rock.png")
+        _check(exposed_rock != null and exposed_rock != direct_mountain,
+            "Exposed rock must remain distinct from vegetated mountain earth")
+        _check(exposed_rock == References.texture("ground_rock_alternate.png"),
+            "Exposed rock must bind the approved alternate directly")
+        _check(exposed_rock != null and exposed_rock.resource_path.ends_with("/ground_rock_alternate.png"),
+            "Exposed-rock binding did not select the approved dry-rock source")
+        _check(material_a.get_shader_parameter("reference_dry_grass") == direct_mountain,
+            "Terrain did not bind recovered mountain earth as dry ground")
+        _check(material_a.get_shader_parameter("reference_rock") == exposed_rock,
+            "Terrain did not preserve the separate exposed-rock material")
         var direct_grass := References.texture("beta2_ucaptain_scrub_grass_albedo.ktx")
         _check(direct_grass != null, "Recovered Beta2 scrub grass missing")
         _check(References.texture("ground_grass.png") == direct_grass,

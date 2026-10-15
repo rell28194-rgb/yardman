@@ -1,0 +1,809 @@
+{
+  "fixture_sha256": "f689aa1db866f4d200aeab2a2515938f947eed6d2d92b908dcaa8ea2638ae928",
+  "source_pack_version": 10,
+  "source_pack_sha256": "c4efbd98e7b42a8314bbc47ea61ce4f577b21bb677ef968949e4add88e8d5fea",
+  "role_fix": "Scrub KTX\u2192grass; vegetated mountain KTX\u2192dry ground; approved dry ground_rock_alternate.png\u2192exposed rock. Strict rock alias rejects snowy original when approved alternate is missing.",
+  "regressions": [
+    {
+      "test": "reference_assets",
+      "passed": true,
+      "exit_code": 0,
+      "require_reference": true
+    },
+    {
+      "test": "material_variants",
+      "passed": true,
+      "exit_code": 0,
+      "require_reference": false
+    },
+    {
+      "test": "visuals",
+      "passed": true,
+      "exit_code": 0,
+      "require_reference": false
+    }
+  ],
+  "fallback_cases": [
+    {
+      "case": "asset-absent",
+      "passed": true,
+      "exit_code": 0
+    },
+    {
+      "case": "snowy-only",
+      "passed": true,
+      "exit_code": 0
+    }
+  ],
+  "sources": [
+    {
+      "name": "beta2_ucaptain_mountain_terrain_albedo.ktx",
+      "sha256": "cbd6e4d7d94c6508c54bcdee21668da35d57d7b083b26759760809f068761d81",
+      "bytes": 349656,
+      "unchanged_from_version10": true,
+      "role": "approved role or original diagnostic control"
+    },
+    {
+      "name": "beta2_ucaptain_scrub_grass_albedo.ktx",
+      "sha256": "dde3a29571530551f875123e4661e2d7322091daaccbccb91ad2e736472b53f5",
+      "bytes": 349656,
+      "unchanged_from_version10": true,
+      "role": "approved role or original diagnostic control"
+    },
+    {
+      "name": "beta2_ucaptain_scrub_grass_normal.ktx",
+      "sha256": "199a5055d5333009848a313a8f67711e32c94510dfd98ab39ff168a605689208",
+      "bytes": 174880,
+      "unchanged_from_version10": true,
+      "role": "approved role or original diagnostic control"
+    },
+    {
+      "name": "ground_grass.png",
+      "sha256": "7861e6a2aa1604e34138d80ec856b6cad7c00d3cf8fb57aee6deaf11edaea6c7",
+      "bytes": 489572,
+      "unchanged_from_version10": true,
+      "role": "approved role or original diagnostic control"
+    },
+    {
+      "name": "ground_dry_grass.png",
+      "sha256": "a99fbb5d8cb47a2a7d1e8d2bf920ed9f0b5a274e8db9d40059bed02619b83060",
+      "bytes": 1703571,
+      "unchanged_from_version10": true,
+      "role": "approved role or original diagnostic control"
+    },
+    {
+      "name": "ground_rock.png",
+      "sha256": "1c80c8a6e47ddbda3dc9a8e9d2022dcdee9b01ed77ff96f87208584c3e2db879",
+      "bytes": 354430,
+      "unchanged_from_version10": true,
+      "role": "rejected diagnostic snow control"
+    },
+    {
+      "name": "ground_rock_alternate.png",
+      "sha256": "2e7ff30ab4ba88e9a05d6c98332ec2316f26574b7409920c1dec60de24fd2dcf",
+      "bytes": 313255,
+      "unchanged_from_version10": true,
+      "role": "approved role or original diagnostic control"
+    }
+  ],
+  "dependencies": {
+    "scripts/world_visuals.gd": "c7824d8cbce17ccbe737d37c63e085dc82cd5fc6baefb9179be432a3e38d75d2",
+    "scripts/reference_assets.gd": "d4c2ef37ed85b0be21f71d25bc90718371e7ea7e6381131105831feaaa82daa0",
+    "scripts/render_runtime.gd": "ab9a69cdb4c4a665d62230e2a6e568e798d7f3880cf547735e3c559a21b5de30",
+    "shaders/terrain_surface.gdshader": "2f4bb2bb203069c8857daac6bdeb0d70d928f2b04c792adb91640f1016243938",
+    "shaders/terrain_surface_gles.gdshader": "4da938ad72a41e3758925a01bad37145ac9961d899e1ee2fbec68c0fe3526ff1",
+    "tests/reference_assets_test.gd": "3226ba6c81b4bade85ba9251784c69a70b4b54ba8a52f3622f6640928536e825"
+  },
+  "renderers": {
+    "gles": {
+      "method": "gl_compatibility",
+      "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+      "pairs": 12,
+      "normal_changed_fraction": [
+        0.212296875,
+        0.025390625,
+        0.212296875
+      ]
+    },
+    "vulkan": {
+      "method": "mobile",
+      "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+      "pairs": 12,
+      "normal_changed_fraction": [
+        0.250546875,
+        0.063046875,
+        0.250546875
+      ]
+    }
+  },
+  "limitations": [
+    "Actual Godot 4.7.2 llvmpipe software GLES and Vulkan Mobile; no Android hardware/performance/thermal claim.",
+    "Generated flat/cliff test geometry only; no source-world geography or Jamaica terrain replacement.",
+    "Fine normal response is measured in a 4m close-up with grazing light; distant mip averages intentionally attenuate detail.",
+    "Dry-rock material role and snow-free source verified; world-scale art acceptance, rock placement and national performance remain open.",
+    "Host lacks ETC/ETC2 support; Godot converts source KTX uploads to RGBA8. Original installed KTX bytes/mip chains remain preserved."
+  ],
+  "milestone": "recovered-terrain-001",
+  "base_commit": "b6a6d49b49ce50487852e950e72fde20ae92f164",
+  "recorded_utc": "2026-10-15T03:41:12.815982+00:00",
+  "source_sha256": {
+    "godot/scripts/reference_assets.gd": "d4c2ef37ed85b0be21f71d25bc90718371e7ea7e6381131105831feaaa82daa0",
+    "godot/tests/reference_assets_test.gd": "3226ba6c81b4bade85ba9251784c69a70b4b54ba8a52f3622f6640928536e825",
+    "godot/tests/recovered_terrain_render_test.gd": "f689aa1db866f4d200aeab2a2515938f947eed6d2d92b908dcaa8ea2638ae928"
+  },
+  "actual_renders": {
+    "gles": {
+      "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+      "canonical_origin": [
+        -32768.0,
+        8192.0
+      ],
+      "captures": [
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "grass-albedo",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.19421875,
+            "maximum_rgb": 0.108496740460396,
+            "mean_absolute_rgb": 0.00494387236877811,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-before-grass-albedo-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-before-grass-albedo",
+          "recovered_image": "high-before-grass-albedo-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "c8238340746a2a7248d7da15d1a1f8f56cecff9cb7e87734a3634e5dd309336d",
+          "fallback_image_sha256": "e98b0ed0a6a84b3776dabe30f06d374114b406dca21c729c992532692cbab3a0"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "soil-albedo",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.195015625,
+            "maximum_rgb": 0.126797383030256,
+            "mean_absolute_rgb": 0.0101540029312019,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-before-soil-albedo-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-before-soil-albedo",
+          "recovered_image": "high-before-soil-albedo-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "c8238340746a2a7248d7da15d1a1f8f56cecff9cb7e87734a3634e5dd309336d",
+          "fallback_image_sha256": "0aa94530ecd2fc2303a7b2c9a17e1dc86670ba234ef2ff5f01c5509b32f3781d"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "grass-normal",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.212296875,
+            "maximum_rgb": 0.0222222258647283,
+            "mean_absolute_rgb": 0.00287904407658307,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-before-grass-normal-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-before-grass-normal",
+          "recovered_image": "high-before-grass-normal-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 2.5,
+          "view_size_m": 4.0,
+          "recovered_image_sha256": "98cd70ce36b067d3eda93a0c2be92f17cac7e2654eab3903aa18bcaf601084a0",
+          "fallback_image_sha256": "93031acb18e27b28d564c15ec4421723e616df63da09afd4082cfd27e5e94e12"
+        },
+        {
+          "comparison": "approved dry rock versus rejected snow-covered original",
+          "contribution": "exposed-rock-role",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.345390625,
+            "maximum_rgb": 0.924183004846176,
+            "mean_absolute_rgb": 0.0766510224974091,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-before-exposed-rock-role-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-before-exposed-rock-role",
+          "recovered_image": "high-before-exposed-rock-role-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "b5879c1b8c15f6b4ab0bb7090b01417115fa9d660b1c1f81ed3c7da3bcfd2c1c",
+          "fallback_image_sha256": "d70fc747f062edc3fb60b0748d4d8d4328591040869b80fed64835af9b288c24"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "grass-albedo",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.19465625,
+            "maximum_rgb": 0.0967320203781128,
+            "mean_absolute_rgb": 0.00444274894695265,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "safe-grass-albedo-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "safe-grass-albedo",
+          "recovered_image": "safe-grass-albedo-recovered.png",
+          "shader": "res://shaders/terrain_surface_gles.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "bbdd8434a2ac2fd2884aeadbadcc187079cef7600ff0a680a0b1b216973d2728",
+          "fallback_image_sha256": "8209ead7a63c94fd64a94043742c653f2306e1d3060f348d55f8979cecf48d63"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "soil-albedo",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.19503125,
+            "maximum_rgb": 0.113725488384565,
+            "mean_absolute_rgb": 0.0102624995174896,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "safe-soil-albedo-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "safe-soil-albedo",
+          "recovered_image": "safe-soil-albedo-recovered.png",
+          "shader": "res://shaders/terrain_surface_gles.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "bbdd8434a2ac2fd2884aeadbadcc187079cef7600ff0a680a0b1b216973d2728",
+          "fallback_image_sha256": "8b50209a3894df4b3cd5d17f2a1df834253ebceaca44e4875e463c9b7b4a8183"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "grass-normal",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.025390625,
+            "maximum_rgb": 0.0117647051811218,
+            "mean_absolute_rgb": 0.0013592728524624,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "safe-grass-normal-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "safe-grass-normal",
+          "recovered_image": "safe-grass-normal-recovered.png",
+          "shader": "res://shaders/terrain_surface_gles.gdshader",
+          "sun_energy": 2.5,
+          "view_size_m": 4.0,
+          "recovered_image_sha256": "21d8e697fa3ab2e5153411026cfc96de82eedf8a313eadb9952bfd0da98a77af",
+          "fallback_image_sha256": "d4a45b1e1c744670338bbdb5fb3cfea35679c735f29211d2ed32bb4a41213e97"
+        },
+        {
+          "comparison": "approved dry rock versus rejected snow-covered original",
+          "contribution": "exposed-rock-role",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.345546875,
+            "maximum_rgb": 0.915032682940364,
+            "mean_absolute_rgb": 0.0850127257141238,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "safe-exposed-rock-role-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "safe-exposed-rock-role",
+          "recovered_image": "safe-exposed-rock-role-recovered.png",
+          "shader": "res://shaders/terrain_surface_gles.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "0b3a8316d6683afc63b151c5a3fe1db46a3849280d245e33c40db44c308cc976",
+          "fallback_image_sha256": "f6d10b392a728784fe65b7cd8e53181fccdb06447d55c78b34a20e935fd67005"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "grass-albedo",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.19421875,
+            "maximum_rgb": 0.108496740460396,
+            "mean_absolute_rgb": 0.00494387236877811,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-restored-grass-albedo-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-restored-grass-albedo",
+          "recovered_image": "high-restored-grass-albedo-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "c8238340746a2a7248d7da15d1a1f8f56cecff9cb7e87734a3634e5dd309336d",
+          "fallback_image_sha256": "e98b0ed0a6a84b3776dabe30f06d374114b406dca21c729c992532692cbab3a0"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "soil-albedo",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.195015625,
+            "maximum_rgb": 0.126797383030256,
+            "mean_absolute_rgb": 0.0101540029312019,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-restored-soil-albedo-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-restored-soil-albedo",
+          "recovered_image": "high-restored-soil-albedo-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "c8238340746a2a7248d7da15d1a1f8f56cecff9cb7e87734a3634e5dd309336d",
+          "fallback_image_sha256": "0aa94530ecd2fc2303a7b2c9a17e1dc86670ba234ef2ff5f01c5509b32f3781d"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "grass-normal",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.212296875,
+            "maximum_rgb": 0.0222222258647283,
+            "mean_absolute_rgb": 0.00287904407658307,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-restored-grass-normal-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-restored-grass-normal",
+          "recovered_image": "high-restored-grass-normal-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 2.5,
+          "view_size_m": 4.0,
+          "recovered_image_sha256": "98cd70ce36b067d3eda93a0c2be92f17cac7e2654eab3903aa18bcaf601084a0",
+          "fallback_image_sha256": "93031acb18e27b28d564c15ec4421723e616df63da09afd4082cfd27e5e94e12"
+        },
+        {
+          "comparison": "approved dry rock versus rejected snow-covered original",
+          "contribution": "exposed-rock-role",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.345390625,
+            "maximum_rgb": 0.924183004846176,
+            "mean_absolute_rgb": 0.0766510224974091,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-restored-exposed-rock-role-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-restored-exposed-rock-role",
+          "recovered_image": "high-restored-exposed-rock-role-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "b5879c1b8c15f6b4ab0bb7090b01417115fa9d660b1c1f81ed3c7da3bcfd2c1c",
+          "fallback_image_sha256": "d70fc747f062edc3fb60b0748d4d8d4328591040869b80fed64835af9b288c24"
+        }
+      ],
+      "engine": {
+        "build": "official",
+        "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+        "hex": 263938,
+        "major": 4,
+        "minor": 7,
+        "patch": 2,
+        "status": "stable",
+        "string": "4.7.2-stable (official)",
+        "timestamp": 0
+      },
+      "failures": 0,
+      "method": "gl_compatibility",
+      "scope": "Actual software host GLES/Vulkan material tests on generated geometry; not Android device, source-world geography or national deployment acceptance.",
+      "sources": [
+        {
+          "height": 512,
+          "name": "beta2_ucaptain_scrub_grass_albedo.ktx",
+          "original_ktx_mip_levels": 10,
+          "width": 512
+        },
+        {
+          "height": 512,
+          "name": "beta2_ucaptain_mountain_terrain_albedo.ktx",
+          "original_ktx_mip_levels": 10,
+          "width": 512
+        },
+        {
+          "height": 512,
+          "name": "beta2_ucaptain_scrub_grass_normal.ktx",
+          "original_ktx_mip_levels": 10,
+          "width": 512
+        }
+      ]
+    },
+    "vulkan": {
+      "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+      "canonical_origin": [
+        -32768.0,
+        8192.0
+      ],
+      "captures": [
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "grass-albedo",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.192140625,
+            "maximum_rgb": 0.109803919990857,
+            "mean_absolute_rgb": 0.00492810431561278,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-before-grass-albedo-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-before-grass-albedo",
+          "recovered_image": "high-before-grass-albedo-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "41277dfa4246c9de4d32c67df34b8141c3441fb16dd376c9dd29cf8bb2b47475",
+          "fallback_image_sha256": "313a0aa28f6ff596a59316b1ba0dfd83ec2719b66d94b37e31fa68461625d779"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "soil-albedo",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.195015625,
+            "maximum_rgb": 0.132026140888532,
+            "mean_absolute_rgb": 0.0107647463779821,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-before-soil-albedo-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-before-soil-albedo",
+          "recovered_image": "high-before-soil-albedo-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "41277dfa4246c9de4d32c67df34b8141c3441fb16dd376c9dd29cf8bb2b47475",
+          "fallback_image_sha256": "9e7b3a12209d3482dd1b89c5e826a0a5acef530f1106c93d5ac95c382c9005c4"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "grass-normal",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.250546875,
+            "maximum_rgb": 0.0222222208976746,
+            "mean_absolute_rgb": 0.00296629894555858,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-before-grass-normal-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-before-grass-normal",
+          "recovered_image": "high-before-grass-normal-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 2.5,
+          "view_size_m": 4.0,
+          "recovered_image_sha256": "a6ee77fa2f94c294f1ba8f7496f7dca7d7de14d507314509a9b03bfd12ae7716",
+          "fallback_image_sha256": "c3d0dce69d357598d1a5fa230fefa1f24c5fd957e108d7de3e8ed25e1098b9f2"
+        },
+        {
+          "comparison": "approved dry rock versus rejected snow-covered original",
+          "contribution": "exposed-rock-role",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.345140625,
+            "maximum_rgb": 0.828758172690868,
+            "mean_absolute_rgb": 0.0706267780544013,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-before-exposed-rock-role-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-before-exposed-rock-role",
+          "recovered_image": "high-before-exposed-rock-role-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "2817b23dff1ef8c93c29d7527af02609054f1d98d9de753a520b8919792d7b41",
+          "fallback_image_sha256": "91becae4f1735cf9afcb3a5614f80902f6850b66cea7660878579ac9ac938974"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "grass-albedo",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.19378125,
+            "maximum_rgb": 0.0875816941261292,
+            "mean_absolute_rgb": 0.00444356591890877,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "safe-grass-albedo-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "safe-grass-albedo",
+          "recovered_image": "safe-grass-albedo-recovered.png",
+          "shader": "res://shaders/terrain_surface_gles.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "edfecc10e594ba0f11de5e11bca64f8cf0dbda3fc6fd0c86e9115a5f829f57cd",
+          "fallback_image_sha256": "a3a03fa488f97665f98aa7663692e7c951e5dac3ed5e39748f17deb1fbace860"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "soil-albedo",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.19503125,
+            "maximum_rgb": 0.122875817120075,
+            "mean_absolute_rgb": 0.0110203427042194,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "safe-soil-albedo-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "safe-soil-albedo",
+          "recovered_image": "safe-soil-albedo-recovered.png",
+          "shader": "res://shaders/terrain_surface_gles.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "edfecc10e594ba0f11de5e11bca64f8cf0dbda3fc6fd0c86e9115a5f829f57cd",
+          "fallback_image_sha256": "8db08598ae8801aa85dff9d473a1fd8d917271bc66793b6b369f9a43114a6fbc"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "grass-normal",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.063046875,
+            "maximum_rgb": 0.0117647051811218,
+            "mean_absolute_rgb": 0.00138239375335009,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "safe-grass-normal-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "safe-grass-normal",
+          "recovered_image": "safe-grass-normal-recovered.png",
+          "shader": "res://shaders/terrain_surface_gles.gdshader",
+          "sun_energy": 2.5,
+          "view_size_m": 4.0,
+          "recovered_image_sha256": "1521a8e645de6bc338a6de0d0928648bdab426f813f3b0bcd2c01ce3bbb715ac",
+          "fallback_image_sha256": "3ab59948ad57ca59a44e999a4dcfd1b7a9e1b0897f219897906c391ed981e399"
+        },
+        {
+          "comparison": "approved dry rock versus rejected snow-covered original",
+          "contribution": "exposed-rock-role",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.345390625,
+            "maximum_rgb": 0.881045754998922,
+            "mean_absolute_rgb": 0.0816667290368543,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "safe-exposed-rock-role-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "safe-exposed-rock-role",
+          "recovered_image": "safe-exposed-rock-role-recovered.png",
+          "shader": "res://shaders/terrain_surface_gles.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "197bbc9351bad15bf8ce80463e8f0e585d30bd559e76328c8a92f06298ecc635",
+          "fallback_image_sha256": "153813df217e800fd7215f074170131369ab62d1660cff586d8066ab2888a439"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "grass-albedo",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.192140625,
+            "maximum_rgb": 0.109803919990857,
+            "mean_absolute_rgb": 0.00492810431561278,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-restored-grass-albedo-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-restored-grass-albedo",
+          "recovered_image": "high-restored-grass-albedo-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "41277dfa4246c9de4d32c67df34b8141c3441fb16dd376c9dd29cf8bb2b47475",
+          "fallback_image_sha256": "313a0aa28f6ff596a59316b1ba0dfd83ec2719b66d94b37e31fa68461625d779"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "soil-albedo",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.195015625,
+            "maximum_rgb": 0.132026140888532,
+            "mean_absolute_rgb": 0.0107647463779821,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-restored-soil-albedo-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-restored-soil-albedo",
+          "recovered_image": "high-restored-soil-albedo-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "41277dfa4246c9de4d32c67df34b8141c3441fb16dd376c9dd29cf8bb2b47475",
+          "fallback_image_sha256": "9e7b3a12209d3482dd1b89c5e826a0a5acef530f1106c93d5ac95c382c9005c4"
+        },
+        {
+          "comparison": "only named source contribution changed",
+          "contribution": "grass-normal",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.250546875,
+            "maximum_rgb": 0.0222222208976746,
+            "mean_absolute_rgb": 0.00296629894555858,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-restored-grass-normal-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-restored-grass-normal",
+          "recovered_image": "high-restored-grass-normal-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 2.5,
+          "view_size_m": 4.0,
+          "recovered_image_sha256": "a6ee77fa2f94c294f1ba8f7496f7dca7d7de14d507314509a9b03bfd12ae7716",
+          "fallback_image_sha256": "c3d0dce69d357598d1a5fa230fefa1f24c5fd957e108d7de3e8ed25e1098b9f2"
+        },
+        {
+          "comparison": "approved dry rock versus rejected snow-covered original",
+          "contribution": "exposed-rock-role",
+          "difference": {
+            "changed_fraction_over_1_byte": 0.345140625,
+            "maximum_rgb": 0.828758172690868,
+            "mean_absolute_rgb": 0.0706267780544013,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-restored-exposed-rock-role-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-restored-exposed-rock-role",
+          "recovered_image": "high-restored-exposed-rock-role-recovered.png",
+          "shader": "res://shaders/terrain_surface.gdshader",
+          "sun_energy": 1.1,
+          "view_size_m": 25.0,
+          "recovered_image_sha256": "2817b23dff1ef8c93c29d7527af02609054f1d98d9de753a520b8919792d7b41",
+          "fallback_image_sha256": "91becae4f1735cf9afcb3a5614f80902f6850b66cea7660878579ac9ac938974"
+        }
+      ],
+      "engine": {
+        "build": "official",
+        "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+        "hex": 263938,
+        "major": 4,
+        "minor": 7,
+        "patch": 2,
+        "status": "stable",
+        "string": "4.7.2-stable (official)",
+        "timestamp": 0
+      },
+      "failures": 0,
+      "method": "mobile",
+      "scope": "Actual software host GLES/Vulkan material tests on generated geometry; not Android device, source-world geography or national deployment acceptance.",
+      "sources": [
+        {
+          "height": 512,
+          "name": "beta2_ucaptain_scrub_grass_albedo.ktx",
+          "original_ktx_mip_levels": 10,
+          "width": 512
+        },
+        {
+          "height": 512,
+          "name": "beta2_ucaptain_mountain_terrain_albedo.ktx",
+          "original_ktx_mip_levels": 10,
+          "width": 512
+        },
+        {
+          "height": 512,
+          "name": "beta2_ucaptain_scrub_grass_normal.ktx",
+          "original_ktx_mip_levels": 10,
+          "width": 512
+        }
+      ]
+    }
+  },
+  "role_dispositions": {
+    "beta2_ucaptain_scrub_grass_albedo.ktx": "Direct grass albedo",
+    "beta2_ucaptain_scrub_grass_normal.ktx": "Direct grass normal",
+    "beta2_ucaptain_mountain_terrain_albedo.ktx": "Vegetated/dry ground; not exposed rock",
+    "ground_rock_alternate.png": "Approved dry-rock replacement; original snow-covered source is retained privately but excluded from this role",
+    "ground_rock.png": "Original source has baked snow cover; rejected for Jamaica rock binding, with procedural fallback when approved alternate is absent"
+  },
+  "remaining_acceptance": [
+    "Actual Android ETC/ETC2 sampling and thermal/frame pacing",
+    "Regional surface/geology and national visual deployment; generated fixture contribution is not geographic acceptance"
+  ]
+}

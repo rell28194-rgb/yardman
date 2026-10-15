@@ -8,8 +8,15 @@ const ROOT := "res://assets/user_reference/"
 # can replace an older fallback without changing gameplay scripts.
 const TEXTURE_UPGRADES := {
     "ground_grass.png": "beta2_ucaptain_scrub_grass_albedo.ktx",
-    "ground_rock.png": "beta2_ucaptain_mountain_terrain_albedo.ktx",
+    # The recovered mountain surface visibly contains vegetation and earth.
+    # Keep exposed rock on its existing rock source instead of painting grass
+    # across every steep cut/cliff through the rock semantic slot.
+    "ground_dry_grass.png": "beta2_ucaptain_mountain_terrain_albedo.ktx",
+    "ground_rock.png": "ground_rock_alternate.png",
 }
+# The original ground_rock.png contains snow. If its approved dry-rock
+# replacement is absent, leave the shader's procedural rock active.
+const STRICT_TEXTURE_UPGRADES := ["ground_rock.png"]
 static var _textures: Dictionary = {}
 static var _scenes: Dictionary = {}
 
@@ -28,7 +35,8 @@ static func texture(filename: String) -> Texture2D:
     var upgraded := str(TEXTURE_UPGRADES.get(filename, ""))
     if not upgraded.is_empty():
         candidates.append(upgraded)
-    candidates.append(filename)
+    if not filename in STRICT_TEXTURE_UPGRADES:
+        candidates.append(filename)
     for candidate in candidates:
         var path := ROOT + candidate
         if not ResourceLoader.exists(path):
