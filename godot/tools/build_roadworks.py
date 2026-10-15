@@ -6,10 +6,10 @@ This dataset is deliberately separate from the drivable road graph. A way tagged
 ``construction`` tag) may drive work-zone visuals, but it cannot become a
 navigable Yardman road merely because a recovered cone asset exists.
 
-The CLI also compiles the sibling registered ``barrier=fence`` sidecar. Keeping
-both optional road-furniture layers on the same packaging invocation prevents an
-Android build from silently shipping a runtime fence layer with no Jamaica fence
-metadata. The two datasets remain logically and geographically independent.
+The CLI also compiles sibling registered fence and drainage sidecars. Keeping
+optional road-furniture/engineering evidence on the same packaging invocation
+prevents Android builds from silently shipping runtimes without Jamaica metadata.
+The datasets remain logically and geographically independent.
 """
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ from pathlib import Path
 
 from pyproj import Transformer
 
+from build_drainage import write_dataset as write_drainage_dataset
 from build_fences import write_dataset as write_fence_dataset
 from build_jamaica_roads import CRS_SOURCE, CRS_TARGET, ORIGIN_LAT, ORIGIN_LON, ROAD_WIDTHS
 from road_graph import read_osm_features, road_dimensions, split_segment
@@ -179,16 +180,19 @@ def main() -> int:
     parser.add_argument("--tile-size", type=float, default=4096.0)
     args = parser.parse_args()
     manifest = write_dataset(args.input, args.output_dir, args.tile_size)
-    # Normal Android builds already invoke this compiler. Build the sibling
-    # fence sidecar on the same exact source/tile grid so the optional runtime
-    # layer cannot silently ship without registered Jamaica metadata.
     fence_manifest = write_fence_dataset(args.input, args.output_dir.parent / "fences", args.tile_size)
+    drainage_manifest = write_drainage_dataset(args.input, args.output_dir.parent / "drainage", args.tile_size)
     stats = manifest["stats"]
     fence_stats = fence_manifest["stats"]
+    drainage_stats = drainage_manifest["stats"]
     print("YARDMAN_ROADWORKS_BUILD PASS features=%d source_segments=%d tile_pieces=%d tiles=%d" %
           (stats["features"], stats["source_segments"], stats["tile_pieces"], stats["tiles"]))
     print("YARDMAN_FENCES_SIDECAR PASS features=%d wire=%d source_segments=%d tile_pieces=%d tiles=%d" %
           (fence_stats["features"], fence_stats["wire_compatible_features"], fence_stats["source_segments"], fence_stats["tile_pieces"], fence_stats["tiles"]))
+    print("YARDMAN_DRAINAGE_SIDECAR PASS features=%d culverts=%d ditches=%d drains=%d tile_pieces=%d tiles=%d" %
+          (drainage_stats["features"], drainage_stats["by_kind"].get("culvert", 0),
+           drainage_stats["by_kind"].get("ditch", 0), drainage_stats["by_kind"].get("drain", 0),
+           drainage_stats["tile_pieces"], drainage_stats["tiles"]))
     return 0
 
 

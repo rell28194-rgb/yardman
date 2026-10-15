@@ -6,7 +6,9 @@ on:
       - codex/godot-polish-002
     paths:
       - 'godot/tools/build_roadworks.py'
+      - 'godot/tools/build_drainage.py'
       - 'godot/tests/test_roadworks.py'
+      - 'godot/tests/test_drainage.py'
       - '.github/workflows/godot-roadworks.yml'
   workflow_dispatch:
 
@@ -18,9 +20,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install geodata dependencies
         run: python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4' 'osmium>=4,<5'
-      - name: Test visual-only roadwork compiler
-        run: python -m unittest godot/tests/test_roadworks.py -v
-      - name: Compile current Jamaica OSM roadwork metadata
+      - name: Test roadwork and drainage compilers
+        run: python -m unittest godot/tests/test_roadworks.py godot/tests/test_drainage.py -v
+      - name: Compile current Jamaica OSM roadwork and drainage metadata
         shell: bash
         run: |
           set -euxo pipefail
@@ -30,19 +32,26 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          p = Path('godot/build/roadworks/manifest.json')
-          m = json.loads(p.read_text())
-          s = m['stats']
-          assert s['features'] >= 0 and s['source_segments'] >= 0 and s['tile_pieces'] >= 0
-          assert m['purpose'] == 'visual-only OSM-tagged roadworks; never navigation authority'
-          print('ROADWORK_COUNTS', json.dumps(s, sort_keys=True))
+          road = json.loads(Path('godot/build/roadworks/manifest.json').read_text())
+          rs = road['stats']
+          assert rs['features'] >= 0 and rs['source_segments'] >= 0 and rs['tile_pieces'] >= 0
+          assert road['purpose'] == 'visual-only OSM-tagged roadworks; never navigation authority'
+          drainage = json.loads(Path('godot/build/drainage/manifest.json').read_text())
+          ds = drainage['stats']
+          assert ds['features'] >= 0 and ds['source_segments'] >= 0 and ds['tile_pieces'] >= 0
+          assert set(ds['by_kind']).issubset({'culvert', 'ditch', 'drain'})
+          assert drainage['purpose'] == 'explicit OSM drainage evidence for Jamaica road engineering; never road or terrain authority'
+          print('ROADWORK_COUNTS', json.dumps(rs, sort_keys=True))
+          print('DRAINAGE_COUNTS', json.dumps(ds, sort_keys=True))
           PY
-      - name: Retain roadwork evidence
+      - name: Retain roadwork and drainage evidence
         uses: actions/upload-artifact@v4
         with:
-          name: Yardman-Jamaica-Roadworks-Metadata
+          name: Yardman-Jamaica-Roadworks-Drainage-Metadata
           path: |
             godot/build/roadworks/
+            godot/build/fences/
+            godot/build/drainage/
             godot/build/roadworks.log
           if-no-files-found: error
           retention-days: 14
