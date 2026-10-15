@@ -97,6 +97,15 @@
     "Rejected CRS/non-finite coordinates do not alter the valid save"
   ],
   "open": [
-    "OS/device power-loss and filesystem synchronization evidence"
-  ]
+    "OS/device power-loss and filesystem synchronization evidence",
+    "Full gameplay needs compiler-generated national manifests; local source-only checkout lacks them. Android CI compiles them before gameplay."
+  ],
+  "gameplay_prerequisite_control": {
+    "expected_failure": true,
+    "exit": 1,
+    "elapsed_s": 0.999,
+    "reason": "Generated national road/terrain manifests absent in source-only checkout",
+    "detected": true,
+    "full_gameplay_passed": false
+  }
 }

@@ -22,6 +22,14 @@ func _wait_ready(scene) -> void:
     _check(false, "Terrain/physics did not become ready in " + scene.current_parish)
 
 func _run() -> void:
+    # National gameplay requires the registered compiler outputs. A source-only
+    # checkout must fail clearly before waiting on terrain which cannot load.
+    for path in ["res://data/roads/manifest.json", "res://data/terrain/manifest.json"]:
+        if not FileAccess.file_exists(path):
+            _check(false, "Build registered Jamaica data before gameplay testing: missing " + path)
+            print("YARDMAN_GAMEPLAY_TEST FAIL prerequisite=registered_jamaica_data")
+            quit(1)
+            return
     var scene = load("res://main.tscn").instantiate()
     root.add_child(scene)
     await _wait_ready(scene)
