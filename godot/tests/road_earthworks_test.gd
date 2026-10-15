@@ -57,6 +57,7 @@ func _initialize() -> void:
     var geometry := runtime.build_geometry([paved, bridge, tunnel], Vector2i.ZERO, 4096.0, sampler, 10.0)
     _require(int(geometry.segments) == 1, "bridge/tunnel segments must not receive terrain earthworks")
     _require(int(geometry.structural_skips) == 2, "bridge/tunnel skip accounting changed")
+    _require(int(geometry.transition_refined_segments) == 0, "earthworks refined a vertical transition without graph evidence")
     _require(int(geometry.cut_profiles) > 0 and int(geometry.fill_profiles) > 0, "cut/fill geometry accounting missing")
     _require(int(geometry.drainage_profiles) > 0, "procedural drainage geometry accounting missing")
     _require(int(geometry.mapped_drainage_profiles) == 0, "default earthworks invented mapped drainage evidence")
@@ -71,6 +72,24 @@ func _initialize() -> void:
     _require(runtime.segment_sections(bridge, Vector2i.ZERO, 4096.0, sampler, 10.0).is_empty(), "bridge earthworks must fail closed")
     _require(runtime.segment_sections(tunnel, Vector2i.ZERO, 4096.0, sampler, 10.0).is_empty(), "tunnel earthworks must fail closed")
     _require(runtime.build_geometry([paved], Vector2i.ZERO, 0.0, sampler, 10.0).vertices.is_empty(), "invalid tile size must fail closed")
+
+    # Graph profile evidence does not rewrite the road deck here. It only raises
+    # local roadside sampling around a known crest/sag/grade-break boundary so
+    # shoulders, cut/fill ties and drainage do not bridge over the transition.
+    var transition_query := func(edge_id: String) -> Array:
+        if edge_id == "w100":
+            return [{"kind": "crest", "vertex_index": 1, "station_m": 40.0,
+                "incoming_grade_pct": 5.0, "outgoing_grade_pct": -5.0,
+                "grade_break_pct_points": 10.0}]
+        return []
+    var transition_geometry := runtime.build_geometry(
+        [paved], Vector2i.ZERO, 4096.0, sampler, 10.0, Callable(), transition_query)
+    _require(int(transition_geometry.transition_refined_segments) == 1,
+        "vertical-transition graph evidence did not refine adjacent earthworks")
+    _require(transition_geometry.vertices.size() > geometry.vertices.size(),
+        "transition-aware earthworks did not increase local roadside sampling")
+    _require(int(transition_geometry.structural_skips) == 0,
+        "transition-aware refinement altered structural skip accounting")
 
     var mapped_query := func(_world_point: Vector2, _radius_m: float) -> bool:
         return true
@@ -110,8 +129,9 @@ func _initialize() -> void:
     _require(fill_geometry.vertices.size() > 0 and fill_geometry.collision_faces.size() > 0, "fill bench did not produce collidable geometry")
 
     runtime.free()
-    print("YARDMAN_ROAD_EARTHWORKS_TEST PASS sections=%d cuts=%d fills=%d drainage=%d cut_benches=%d fill_benches=%d mapped=%d vertices=%d" % [
-        sections.size(), cut_count, fill_count, ditch_count, cut_bench_count, fill_bench_count, mapped_cut_count, vertices.size()])
+    print("YARDMAN_ROAD_EARTHWORKS_TEST PASS sections=%d cuts=%d fills=%d drainage=%d cut_benches=%d fill_benches=%d mapped=%d transition_refined=%d vertices=%d" % [
+        sections.size(), cut_count, fill_count, ditch_count, cut_bench_count, fill_bench_count, mapped_cut_count,
+        int(transition_geometry.transition_refined_segments), vertices.size()])
     quit(0)
 
 func _require(condition: bool, message: String) -> void:
