@@ -76,6 +76,38 @@ func _check_active_vehicle(scene) -> void:
         selected, controller_id, reference_name, str(private_crown_available)
     ])
 
+func _configure_functional_streaming(scene) -> void:
+    # This suite validates national traversal, terrain/collision registration,
+    # vehicle/player controls, saves and mobile input. It is not a frame-budget
+    # benchmark. Keep production streaming logic and data intact while allowing
+    # the headless runner to consume incremental geometry queues aggressively.
+    # Otherwise dense urban tiles can spend most of the global 600-second CI
+    # allowance honoring mobile-sized per-frame budgets before the assertions run.
+    scene.set_quality("Performance")
+    scene.roads.max_io_jobs = 4
+    scene.roads.max_segments_per_frame = 16384
+    scene.roads.geometry_budget_us = 50000
+    scene.terrain.max_io_jobs = 4
+    scene.terrain.geometry_budget_us = 50000
+    # Building and roadside art are covered by render/geometry suites. They are
+    # deliberately excluded here so visual assembly cannot mask a traversal bug.
+    scene.buildings.set_process(false)
+    scene.buildings.reference_facades_enabled = false
+    var road_decorator := Callable(scene, "_decorate_tile")
+    if scene.roads.tile_content_ready.is_connected(road_decorator):
+        scene.roads.tile_content_ready.disconnect(road_decorator)
+    var terrain_decorator := Callable(scene, "_decorate_ready_terrain")
+    if scene.terrain.tile_ready.is_connected(terrain_decorator):
+        scene.terrain.tile_ready.disconnect(terrain_decorator)
+    scene._refresh_streamers()
+    print("YARDMAN_GAMEPLAY_FUNCTIONAL_STREAMING road_radius=%d terrain_radius=%d road_segments_per_frame=%d road_budget_us=%d terrain_budget_us=%d" % [
+        scene.roads.load_radius,
+        scene.terrain.load_radius,
+        scene.roads.max_segments_per_frame,
+        scene.roads.geometry_budget_us,
+        scene.terrain.geometry_budget_us
+    ])
+
 func _run() -> void:
     # National gameplay requires the registered compiler outputs. A source-only
     # checkout must fail clearly before waiting on terrain which cannot load.
@@ -92,6 +124,7 @@ func _run() -> void:
     # silently exercise legacy/default vehicle state instead of the active game.
     current_scene = scene
     _check(current_scene == scene, "Production main scene was not activated as SceneTree.current_scene")
+    _configure_functional_streaming(scene)
     if not (await _wait_ready(scene, "initial")):
         quit(1)
         return
@@ -212,7 +245,7 @@ func _run() -> void:
         scene.set_quality(quality, {"trees": 99, "road_radius": 1, "terrain_radius": 1})
         _check(scene.visuals.quality == quality, "Quality selection failed")
     _check(int(scene.visuals.settings().trees) == 99, "Custom density was ignored")
-    print("YARDMAN_GAMEPLAY_TEST %s parishes=14 walk=1 drive=1 enter_exit=1 save_backup=1 multitouch=1 current_scene=1 vehicle_selection=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_GAMEPLAY_TEST %s parishes=14 walk=1 drive=1 enter_exit=1 save_backup=1 multitouch=1 current_scene=1 vehicle_selection=1 functional_streaming=1" % ("PASS" if failures == 0 else "FAIL"))
     if current_scene == scene:
         current_scene = null
     scene.queue_free()
