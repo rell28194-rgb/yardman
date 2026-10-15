@@ -43,8 +43,30 @@ func _initialize() -> void:
     _require(runtime.build_geometry([first, second], Vector2i.ZERO, 0.0).vertices.is_empty(),
         "invalid tile size must fail closed")
 
+    # Consecutive source segments can live in adjacent streamed tiles. The bend
+    # must survive that seam, but deterministic joint ownership must emit it once.
+    var seam_first := [4070.0, 0.0, 4096.0, 0.0, 6.0, 5, 0, "seam-edge", 20, 44.0, 45.0,
+        [[4070.0, 44.0, -3.0], [4070.0, 44.0, 3.0], [4096.0, 45.0, 3.0], [4096.0, 45.0, -3.0]]]
+    var seam_second := [4096.0, 0.0, 4096.0, 24.0, 6.0, 5, 0, "seam-edge", 21, 45.0, 46.0,
+        [[4093.0, 45.0, 0.0], [4099.0, 45.0, 0.0], [4099.0, 46.0, 24.0], [4093.0, 46.0, 24.0]]]
+    runtime._segments_by_tile[Vector2i(0, 0)] = [seam_first]
+    runtime._segments_by_tile[Vector2i(1, 0)] = [seam_second]
+    var gathered := runtime._segments_for_neighborhood(Vector2i(1, 0))
+    _require(gathered.size() == 2, "adjacent road tile segments were not gathered for seam bend detection")
+    var owner_geometry := runtime.build_geometry(gathered, Vector2i(1, 0), 4096.0)
+    var non_owner_geometry := runtime.build_geometry(gathered, Vector2i(0, 0), 4096.0)
+    _require(int(owner_geometry.sharp_bends) == 1 and owner_geometry.vertices.size() == 8,
+        "tile-boundary sharp bend lost its widening apron")
+    _require(non_owner_geometry.vertices.is_empty(), "tile-boundary bend apron was duplicated across seam")
+
+    # Neighbor copies of the same source segment must not duplicate geometry.
+    var duplicate_gather := [seam_first, seam_first.duplicate(true), seam_second]
+    var deduped_geometry := runtime.build_geometry(duplicate_gather, Vector2i(1, 0), 4096.0)
+    _require(deduped_geometry.vertices.size() == 8 and int(deduped_geometry.sharp_bends) == 1,
+        "neighbor segment duplication produced duplicate hairpin geometry")
+
     runtime.free()
-    print("YARDMAN_ROAD_HAIRPIN_TEST PASS turn=%.1f widen=%.2f hairpin=%.1f" % [
+    print("YARDMAN_ROAD_HAIRPIN_TEST PASS turn=%.1f widen=%.2f hairpin=%.1f seam=1" % [
         float(record.turn_deg), float(record.widen_m), float(hairpin.turn_deg)])
     quit(0)
 
