@@ -64,6 +64,19 @@ class RoadProfileTests(unittest.TestCase):
         self.assertEqual(stats["profile_grade_break_worst_vertex"], 1)
         self.assertEqual(stats["profile_crest_reversal_vertices"], 1)
         self.assertEqual(stats["profile_sag_reversal_vertices"], 0)
+        self.assertEqual(stats["profile_vertical_transition_candidates"], 1)
+        self.assertEqual(stats["profile_vertical_transition_crests"], 1)
+        self.assertEqual(stats["profile_vertical_transition_sags"], 0)
+        self.assertEqual(stats["profile_vertical_transition_grade_breaks"], 0)
+        self.assertEqual(network["edges"]["road"]["vertical_transitions"], [{
+            "kind": "crest",
+            "vertex_index": 1,
+            "station_m": 10.0,
+            "incoming_grade_pct": 15.5,
+            "outgoing_grade_pct": -15.5,
+            "grade_break_pct_points": 31.0,
+        }])
+        self.assertNotIn("vertical_transitions", network["edges"]["bridge"])
 
     def test_grade_diagnostics_surface_extreme_non_structural_segments(self):
         network = {
@@ -77,6 +90,7 @@ class RoadProfileTests(unittest.TestCase):
                     "id": "structure",
                     "flags": 4,
                     "path": [(0.0, 0.0, 20.0), (10.0, 20.0, 20.0)],
+                    "vertical_transitions": [{"kind": "stale"}],
                 },
             },
             "tiles": {},
@@ -92,6 +106,7 @@ class RoadProfileTests(unittest.TestCase):
         self.assertEqual(stats["profile_grade_worst_segment"], 0)
         self.assertEqual(stats["profile_structural_edges_skipped"], 1)
         self.assertEqual(stats["profile_grade_break_vertices"], 0)
+        self.assertNotIn("vertical_transitions", network["edges"]["structure"])
 
     def test_vertical_grade_breaks_locate_crest_and_sag_candidates(self):
         path = [
@@ -118,6 +133,40 @@ class RoadProfileTests(unittest.TestCase):
         self.assertEqual(stats["profile_grade_break_worst_vertex"], 1)
         self.assertEqual(stats["profile_crest_reversal_vertices"], 1)
         self.assertEqual(stats["profile_sag_reversal_vertices"], 1)
+        self.assertEqual(stats["profile_vertical_transition_candidates"], 2)
+        self.assertEqual(network["edges"]["ridge"]["vertical_transitions"], [
+            {
+                "kind": "crest", "vertex_index": 1, "station_m": 10.0,
+                "incoming_grade_pct": 20.0, "outgoing_grade_pct": -20.0,
+                "grade_break_pct_points": 40.0,
+            },
+            {
+                "kind": "sag", "vertex_index": 3, "station_m": 30.0,
+                "incoming_grade_pct": -10.0, "outgoing_grade_pct": 20.0,
+                "grade_break_pct_points": 30.0,
+            },
+        ])
+
+    def test_same_direction_significant_grade_break_is_persisted_deterministically(self):
+        path = [(0.0, 0.0, 0.0), (10.0, 0.5, 0.0), (20.0, 2.5, 0.0)]
+        baseline = {
+            "edges": {"climb": {"id": "climb", "flags": 0, "path": list(path)}},
+            "tiles": {}, "anchor_roads": {}, "stats": {},
+        }
+        first = copy.deepcopy(baseline)
+        second = copy.deepcopy(baseline)
+        first_stats = smooth_network_profiles(first, max_adjustment_m=0.0)
+        second_stats = smooth_network_profiles(second, max_adjustment_m=0.0)
+        expected = [{
+            "kind": "grade_break", "vertex_index": 1, "station_m": 10.0,
+            "incoming_grade_pct": 5.0, "outgoing_grade_pct": 20.0,
+            "grade_break_pct_points": 15.0,
+        }]
+        self.assertEqual(first["edges"]["climb"]["vertical_transitions"], expected)
+        self.assertEqual(second["edges"]["climb"]["vertical_transitions"], expected)
+        self.assertEqual(first_stats["profile_vertical_transition_grade_breaks"], 1)
+        self.assertEqual(first_stats["profile_vertical_transition_edges"], 1)
+        self.assertEqual(first_stats["profile_vertical_transition_threshold_pp"], 10.0)
 
     def test_invalid_policy_fails_closed(self):
         network = self._network()
@@ -142,6 +191,7 @@ class RoadProfileTests(unittest.TestCase):
         self.assertAlmostEqual(stats["profile_grade_max_pct"], 20.0, places=4)
         self.assertEqual(stats["profile_grade_over_20pct_segments"], 0)
         self.assertEqual(stats["profile_grade_break_vertices"], 0)
+        self.assertEqual(stats["profile_vertical_transition_candidates"], 0)
 
 
 if __name__ == "__main__":
