@@ -117,7 +117,6 @@ func _make_headlights(bounds: AABB) -> void:
 
 func _fit_profile_collision() -> void:
     var bounds := _profile_bounds()
-    # Preserve actual recovered sedan collision proportions for the legacy rig.
     if bool(profile.get("use_visual_wheelbase", false)) and visual != null and bool(visual.get("is_reference_model")):
         bounds = visual.get("geometry_bounds")
     for node in body.find_children("*", "CollisionShape3D", true, false):
@@ -130,6 +129,18 @@ func _fit_profile_collision() -> void:
         var centre := bounds.get_center()
         collision.position = Vector3(centre.x, maxf(shape.size.y * 0.48, 0.46), centre.z)
         break
+
+func _vector_is_finite(value: Vector3) -> bool:
+    return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
+
+func _basis_is_finite(value: Basis) -> bool:
+    return _vector_is_finite(value.x) and _vector_is_finite(value.y) and _vector_is_finite(value.z)
+
+func _safe_normal(value: Vector3, fallback: Vector3 = Vector3.UP) -> Vector3:
+    if not _vector_is_finite(value) or value.length_squared() < 0.000001:
+        return fallback
+    var result := value.normalized()
+    return result if _vector_is_finite(result) else fallback
 
 func _sample_ground_contacts() -> void:
     if body == null or not body.is_inside_tree() or body.get_world_3d() == null:
@@ -150,20 +161,29 @@ func _sample_ground_contacts() -> void:
     for point in points:
         var start: Vector3 = body.global_transform * point
         var finish: Vector3 = start - Vector3.UP * ray_length
+        if not _vector_is_finite(start) or not _vector_is_finite(finish):
+            continue
         var query := PhysicsRayQueryParameters3D.create(start, finish, 1)
         query.exclude = [body.get_rid()]
         query.collide_with_areas = false
         var hit: Dictionary = space.intersect_ray(query)
         if hit.is_empty():
             continue
+        var hit_position: Vector3 = hit.get("position", start)
+        var hit_normal: Vector3 = hit.get("normal", Vector3.UP)
+        if not _vector_is_finite(hit_position):
+            continue
         contacts += 1
-        normal_sum += (hit["normal"] as Vector3).normalized()
-        var distance: float = start.distance_to(hit["position"])
-        compression_sum += clampf((ray_length - distance) / 0.72, 0.0, 1.0)
+        normal_sum += _safe_normal(hit_normal, Vector3.UP)
+        var distance: float = start.distance_to(hit_position)
+        if is_finite(distance):
+            compression_sum += clampf((ray_length - distance) / 0.72, 0.0, 1.0)
     _contact_ratio = float(contacts) / 4.0
     if contacts > 0:
-        _probe_normal = (normal_sum / float(contacts)).normalized()
-        _suspension_compression = lerpf(_suspension_compression, compression_sum / float(contacts), 0.32)
+        _probe_normal = _safe_normal(normal_sum / float(contacts), Vector3.UP)
+        var compression := compression_sum / float(contacts)
+        if is_finite(compression):
+            _suspension_compression = lerpf(_suspension_compression, compression, 0.32)
     else:
         _probe_normal = Vector3.UP
         _suspension_compression = lerpf(_suspension_compression, 0.0, 0.20)
@@ -289,13 +309,32 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
 func _update_visual(delta: float, forward: Vector3, braking: float) -> void:
     if visual == null:
         return
-    var up := _probe_normal if _contact_ratio >= 0.25 else (body.get_floor_normal().normalized() if body.is_on_floor() else Vector3.UP)
-    var ahead := forward.slide(up).normalized()
-    if ahead.length_squared() > 0.01:
-        var desired_basis := body.global_basis.inverse() * Basis.looking_at(ahead, up)
-        _ground_basis = _ground_basis.slerp(desired_basis, 1.0 - exp(-delta * 8.5)).orthonormalized()
-    visual.basis = _ground_basis.scaled_local(_visual_scale)
+    var floor_normal := Vector3.UP
+    if body != null and body.is_on_floor():
+        floor_normal = _safe_normal(body.get_floor_normal(), Vector3.UP)
+    var up := _safe_normal(_probe_normal, Vector3.UP) if _contact_ratio >= 0.25 else floor_normal
+    var fallback_forward := Vector3.FORWARD
+    if body != null and _basis_is_finite(body.global_basis):
+        fallback_forward = _safe_normal(-body.global_basis.z, Vector3.FORWARD)
+    var safe_forward := _safe_normal(forward, fallback_forward)
+    var ahead := safe_forward.slide(up)
+    if _vector_is_finite(ahead) and ahead.length_squared() > 0.01:
+        ahead = _safe_normal(ahead, safe_forward)
+        if absf(ahead.dot(up)) < 0.985 and body != null and _basis_is_finite(body.global_basis):
+            var desired_basis := body.global_basis.inverse() * Basis.looking_at(ahead, up)
+            if _basis_is_finite(desired_basis):
+                if not _basis_is_finite(_ground_basis):
+                    _ground_basis = Basis.IDENTITY
+                var blended := _ground_basis.slerp(desired_basis, 1.0 - exp(-delta * 8.5)).orthonormalized()
+                if _basis_is_finite(blended):
+                    _ground_basis = blended
+    if not _basis_is_finite(_ground_basis):
+        _ground_basis = Basis.IDENTITY
+    var safe_scale := _visual_scale if _vector_is_finite(_visual_scale) else Vector3.ONE
+    visual.basis = _ground_basis.scaled_local(safe_scale)
     var suspension_y := lerpf(0.055, -0.035, _suspension_compression)
+    if not is_finite(suspension_y):
+        suspension_y = 0.0
     visual.position.y = lerpf(visual.position.y, suspension_y, 1.0 - exp(-delta * 10.0))
     for light in _headlights:
         light.visible = occupied
@@ -361,6 +400,7 @@ func reset_motion() -> void:
     if body != null:
         body.velocity = Vector3.ZERO
     if visual != null:
-        visual.basis = Basis.IDENTITY.scaled_local(_visual_scale)
+        var safe_scale := _visual_scale if _vector_is_finite(_visual_scale) else Vector3.ONE
+        visual.basis = Basis.IDENTITY.scaled_local(safe_scale)
         visual.position.y = 0.0
         visual.call("update_motion", 1.0, 0.0, 0.0, 0.0, false, occupied, 0.0, 0.0)
