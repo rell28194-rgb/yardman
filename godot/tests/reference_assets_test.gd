@@ -58,6 +58,8 @@ func _run() -> void:
     _check(roads._asphalt_material.get_shader_parameter("has_reference_albedo") == true, "Asphalt reference not active")
     _check(roads._dirt_material.get_shader_parameter("has_reference_albedo") == true, "Gravel reference not active")
     var visuals := Visuals.new()
+    _check(visuals.has_method("make_roadside"), "World visuals lost roadside generation")
+    _check(visuals.has_method("apply_roadside_quality"), "World visuals lost roadside quality control")
     var material_a: ShaderMaterial = visuals.terrain_material(Vector2.ZERO)
     var material_b: ShaderMaterial = visuals.terrain_material(Vector2(4096.0, 0.0))
     _check(material_a.get_shader_parameter("has_reference_ground") == true, "Ground references not active")
