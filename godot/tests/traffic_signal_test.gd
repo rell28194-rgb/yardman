@@ -29,8 +29,50 @@ func _run() -> void:
     _check(Signals.turn_state(south, east) == PlayerSignals.SIGNAL_LEFT, "southbound physical left-turn sign is reversed")
     _check(Signals.turn_state(south, west) == PlayerSignals.SIGNAL_RIGHT, "southbound physical right-turn sign is reversed")
 
+    # National streaming can free an agent body or its signal child before the
+    # runtime's next 160 ms update. Reproduce both stale-reference paths so the
+    # regression catches the exact `is`-on-freed-instance failure seen in CI.
+    var runtime := Signals.new()
+    runtime.set_process(false)
+    root.add_child(runtime)
+    var body := Node3D.new()
+    root.add_child(body)
+
+    var first_rig: Dictionary = runtime._ensure_rig("stale-remove", body)
+    var first_root = first_rig.get("root", null)
+    _check(is_instance_valid(first_root), "fixture failed to create first signal rig")
+    if is_instance_valid(first_root):
+        first_root.free()
+    _check(not is_instance_valid(first_root), "fixture failed to produce a freed rig reference")
+    runtime._remove_rig("stale-remove")
+    _check(int(runtime.runtime_snapshot().get("signal_rigs", -1)) == 0, "stale rig removal left cached state")
+
+    var second_rig: Dictionary = runtime._ensure_rig("stale-recreate", body)
+    var second_root = second_rig.get("root", null)
+    _check(is_instance_valid(second_root), "fixture failed to create second signal rig")
+    var second_id := 0
+    if is_instance_valid(second_root):
+        second_id = second_root.get_instance_id()
+        second_root.free()
+    var replacement: Dictionary = runtime._ensure_rig("stale-recreate", body)
+    var replacement_root = replacement.get("root", null)
+    _check(is_instance_valid(replacement_root), "freed cached rig was not recreated")
+    if is_instance_valid(replacement_root):
+        _check(replacement_root.get_instance_id() != second_id, "stale rig cache returned the freed instance")
+
+    var stale_body := Node3D.new()
+    root.add_child(stale_body)
+    stale_body.free()
+    _check(not Signals._is_live_node3d(stale_body), "freed traffic body was reported as live")
+
+    runtime._clear_all()
+    if is_instance_valid(body):
+        body.queue_free()
+    runtime.queue_free()
+    await process_frame
+
     if failures == 0:
-        print("YARDMAN_TRAFFIC_SIGNAL_TEST PASS left=1 right=1 straight=1 bend_filter=1 direction_invariant=1")
+        print("YARDMAN_TRAFFIC_SIGNAL_TEST PASS left=1 right=1 straight=1 bend_filter=1 direction_invariant=1 freed_rig=1 freed_body=1")
         quit()
     else:
         print("YARDMAN_TRAFFIC_SIGNAL_TEST FAIL failures=%d" % failures)
