@@ -21,39 +21,21 @@ func _wait_ready(scene, phase: String) -> bool:
         var body: CharacterBody3D = scene.car if scene.player.in_vehicle else scene.player
         if frame % 120 == 0:
             print("YARDMAN_GAMEPLAY_PROGRESS phase=%s parish=%s frame=%d world_ready=%s on_floor=%s elapsed_ms=%d phase_ms=%d" % [
-                phase,
-                scene.current_parish,
-                frame,
-                str(scene.world_ready),
-                str(body.is_on_floor()),
-                Time.get_ticks_msec() - _started_ms,
-                Time.get_ticks_msec() - began_ms
+                phase, scene.current_parish, frame, str(scene.world_ready), str(body.is_on_floor()),
+                Time.get_ticks_msec() - _started_ms, Time.get_ticks_msec() - began_ms
             ])
-        # Production main.gd only raises world_ready after local collision data is
-        # present and the actor's spawn has completed its settle pass. Requiring
-        # CharacterBody3D.is_on_floor() here duplicates that gate and can remain
-        # false for a correctly settled body between physics contacts. The terrain
-        # elevation assertion immediately after each parish transfer remains the
-        # independent proof that the car settled onto real Jamaica terrain.
         if scene.world_ready:
             for settle in range(6):
                 await physics_frame
             body = scene.car if scene.player.in_vehicle else scene.player
             print("YARDMAN_GAMEPLAY_READY phase=%s parish=%s frame=%d on_floor=%s elapsed_ms=%d phase_ms=%d" % [
-                phase,
-                scene.current_parish,
-                frame,
-                str(body.is_on_floor()),
-                Time.get_ticks_msec() - _started_ms,
-                Time.get_ticks_msec() - began_ms
+                phase, scene.current_parish, frame, str(body.is_on_floor()),
+                Time.get_ticks_msec() - _started_ms, Time.get_ticks_msec() - began_ms
             ])
             return true
     _check(false, "Terrain/physics did not become ready in " + scene.current_parish)
     print("YARDMAN_GAMEPLAY_TIMEOUT phase=%s parish=%s elapsed_ms=%d phase_ms=%d" % [
-        phase,
-        scene.current_parish,
-        Time.get_ticks_msec() - _started_ms,
-        Time.get_ticks_msec() - began_ms
+        phase, scene.current_parish, Time.get_ticks_msec() - _started_ms, Time.get_ticks_msec() - began_ms
     ])
     return false
 
@@ -76,19 +58,21 @@ func _check_active_vehicle(scene) -> void:
         selected, controller_id, reference_name, str(private_crown_available)
     ])
 
-func _prepare_functional_collision_tiles(scene, phase: String) -> bool:
-    # Production waits for every point under the actor's 10 m x 10 m support
-    # footprint, not merely the tile containing its center. A load_radius of zero
-    # is useful for this headless functional gate, but a parish anchor can sit a
-    # few metres from a 4096 m tile seam (Kingston does). Queue exactly the real
-    # compiled terrain tiles touched by the same 3x3 footprint used by
-    # Main._collision_ready(). This preserves production collision semantics
-    # without loading a visual terrain ring or weakening readiness on devices.
+func _footprint_offsets(margin_m: float) -> Array[float]:
+    var margin := maxf(margin_m, 5.0)
+    return [-margin, 0.0, margin]
+
+func _prepare_functional_collision_tiles(scene, phase: String, margin_m: float = 5.0) -> bool:
+    # Production readiness probes +/-5 m around the active actor. Movement checks
+    # need a small look-ahead because the visual road streamer is intentionally
+    # disabled in this headless functional suite. The larger margin still loads
+    # only the compiled 4096 m collision tiles touched by the actor's path.
     var active: Node3D = scene.car if scene.player.in_vehicle else scene.player
     var world: PackedFloat64Array = scene.roads.local_to_world(active.position)
     var required: Dictionary = {}
-    for dx in [-5.0, 0.0, 5.0]:
-        for dz in [-5.0, 0.0, 5.0]:
+    var offsets := _footprint_offsets(margin_m)
+    for dx in offsets:
+        for dz in offsets:
             var tile: Vector2i = scene.terrain.coordinates.tile_for(float(world[0]) + dx, float(world[2]) + dz)
             var key: String = scene.terrain._tile_key(tile.x, tile.y)
             required[key] = tile
@@ -106,23 +90,14 @@ func _prepare_functional_collision_tiles(scene, phase: String) -> bool:
             continue
         scene.terrain._queue.append(key)
         queued += 1
-    print("YARDMAN_GAMEPLAY_COLLISION_TILES phase=%s parish=%s required=%d queued=%d elapsed_ms=%d" % [
-        phase,
-        scene.current_parish,
-        required.size(),
-        queued,
-        Time.get_ticks_msec() - _started_ms
+    print("YARDMAN_GAMEPLAY_COLLISION_TILES phase=%s parish=%s margin=%.1f required=%d queued=%d elapsed_ms=%d" % [
+        phase, scene.current_parish, margin_m, required.size(), queued, Time.get_ticks_msec() - _started_ms
     ])
     return true
 
-func _prepare_functional_road_tile(scene, phase: String) -> bool:
-    if not _prepare_functional_collision_tiles(scene, phase):
+func _prepare_functional_road_tile(scene, phase: String, margin_m: float = 5.0) -> bool:
+    if not _prepare_functional_collision_tiles(scene, phase, margin_m):
         return false
-    # Main._collision_ready() applies the same 3x3 footprint to road residency as
-    # it does to terrain. Load every existing compiled road tile touched by that
-    # footprint, not only the tile under the actor centre. Kingston's parish anchor
-    # sits close enough to a tile seam that centre-only residency can never satisfy
-    # the production readiness contract when the adjacent road tile exists.
     var active: Node3D = scene.car if scene.player.in_vehicle else scene.player
     var world: PackedFloat64Array = scene.roads.local_to_world(active.position)
     var center_tile: Vector2i = scene.roads.coordinates.tile_for(world[0], world[2])
@@ -130,15 +105,13 @@ func _prepare_functional_road_tile(scene, phase: String) -> bool:
         _check(false, "No compiled road tile covers %s at %s" % [scene.current_parish, str(center_tile)])
         return false
     var required: Dictionary = {}
-    for dx in [-5.0, 0.0, 5.0]:
-        for dz in [-5.0, 0.0, 5.0]:
+    var offsets := _footprint_offsets(margin_m)
+    for dx in offsets:
+        for dz in offsets:
             var tile: Vector2i = scene.roads.coordinates.tile_for(float(world[0]) + dx, float(world[2]) + dz)
             if scene.roads.has_tile(tile):
                 required[scene.roads._tile_key(tile.x, tile.y)] = tile
 
-    # Keep only the exact road footprint resident. This remains bounded to at
-    # most four 4096 m tiles while avoiding ArrayMesh construction in this
-    # functional suite; renderer/geometry suites retain visual assembly coverage.
     for loaded_key in scene.roads._loaded.keys():
         var loaded_root = scene.roads._loaded[loaded_key]
         if is_instance_valid(loaded_root):
@@ -179,25 +152,13 @@ func _prepare_functional_road_tile(scene, phase: String) -> bool:
         scene.roads._surface_indices[key] = surface_index
         total_segments += payload.segments.size()
         total_indexed += indexed
-    print("YARDMAN_GAMEPLAY_ROAD_DATA_READY phase=%s parish=%s center=%s required=%d resident=%d segments=%d indexed=%d elapsed_ms=%d" % [
-        phase,
-        scene.current_parish,
-        str(center_tile),
-        required.size(),
-        scene.roads._loaded.size(),
-        total_segments,
-        total_indexed,
-        Time.get_ticks_msec() - _started_ms
+    print("YARDMAN_GAMEPLAY_ROAD_DATA_READY phase=%s parish=%s center=%s margin=%.1f required=%d resident=%d segments=%d indexed=%d elapsed_ms=%d" % [
+        phase, scene.current_parish, str(center_tile), margin_m, required.size(), scene.roads._loaded.size(),
+        total_segments, total_indexed, Time.get_ticks_msec() - _started_ms
     ])
     return true
 
 func _configure_functional_streaming(scene) -> void:
-    # This suite validates national traversal, terrain/collision registration,
-    # vehicle/player controls, saves and mobile input. It is not a frame-budget
-    # benchmark. Keep production streaming logic and data intact while allowing
-    # the headless runner to consume only the exact actor collision footprint.
-    # Road visual geometry is replaced by exact compiled-tile data/index loading
-    # above; visual assembly remains covered by renderer/geometry suites.
     scene.set_quality("Performance")
     scene.roads.load_radius = 0
     scene.terrain.load_radius = 0
@@ -212,22 +173,12 @@ func _configure_functional_streaming(scene) -> void:
     var terrain_decorator := Callable(scene, "_decorate_ready_terrain")
     if scene.terrain.tile_ready.is_connected(terrain_decorator):
         scene.terrain.tile_ready.disconnect(terrain_decorator)
-    # Refresh terrain after shrinking the radius. Exact footprint seam tiles are
-    # added by _prepare_functional_collision_tiles before each readiness wait.
-    # Exact road-footprint residency is supplied synchronously by
-    # _prepare_functional_road_tile so the headless test never enters production
-    # ArrayMesh construction.
     scene._refresh_streamers()
     print("YARDMAN_GAMEPLAY_FUNCTIONAL_STREAMING road_radius=%d terrain_radius=%d road_process=%s terrain_budget_us=%d" % [
-        scene.roads.load_radius,
-        scene.terrain.load_radius,
-        str(scene.roads.is_processing()),
-        scene.terrain.geometry_budget_us
+        scene.roads.load_radius, scene.terrain.load_radius, str(scene.roads.is_processing()), scene.terrain.geometry_budget_us
     ])
 
 func _run() -> void:
-    # National gameplay requires the registered compiler outputs. A source-only
-    # checkout must fail clearly before waiting on terrain which cannot load.
     for path in ["res://data/roads/manifest.json", "res://data/terrain/manifest.json"]:
         if not FileAccess.file_exists(path):
             _check(false, "Build registered Jamaica data before gameplay testing: missing " + path)
@@ -236,9 +187,6 @@ func _run() -> void:
             return
     var scene = load("res://main.tscn").instantiate()
     root.add_child(scene)
-    # Autoloads and runtime services resolve the production world through
-    # SceneTree.current_scene. Tests that only parent main.tscn can otherwise
-    # silently exercise legacy/default vehicle state instead of the active game.
     current_scene = scene
     _check(current_scene == scene, "Production main scene was not activated as SceneTree.current_scene")
     _configure_functional_streaming(scene)
@@ -266,8 +214,9 @@ func _run() -> void:
         _check(scene.car.position.length() < 3000.0, "Parish travel bypassed local origin rebasing")
         _check(scene.terrain._loaded.size() <= 25, "Terrain residency exceeds the configured bounded ring")
         print("YARDMAN_GAMEPLAY_PROGRESS phase=parish_ready parish=%s elapsed_ms=%d" % [parish_name, Time.get_ticks_msec() - _started_ms])
+
     scene.goto_parish("St. Mary")
-    if not _prepare_functional_road_tile(scene, "st_mary_gameplay"):
+    if not _prepare_functional_road_tile(scene, "st_mary_gameplay", 16.0):
         quit(1)
         return
     if not (await _wait_ready(scene, "st_mary_gameplay")):
@@ -278,6 +227,13 @@ func _run() -> void:
     scene.vehicle.reset_motion()
     scene.toggle_vehicle()
     _check(not scene.player.in_vehicle and scene.player.visible, "Player did not exit into the world")
+    if not _prepare_functional_road_tile(scene, "on_foot_exit", 16.0):
+        quit(1)
+        return
+    if not (await _wait_ready(scene, "on_foot_exit")):
+        quit(1)
+        return
+
     var start: Vector3 = scene.player.position
     Input.action_press("ui_up")
     for frame in range(90):
@@ -291,11 +247,21 @@ func _run() -> void:
     Input.action_release("ui_down")
     for frame in range(20):
         await physics_frame
+    if not _prepare_functional_road_tile(scene, "on_foot_return", 16.0):
+        quit(1)
+        return
+    if not (await _wait_ready(scene, "on_foot_return")):
+        quit(1)
+        return
     scene.toggle_vehicle()
     _check(scene.player.in_vehicle and not scene.player.visible, "Player could not re-enter the nearby stopped car")
+    if not _prepare_functional_road_tile(scene, "reenter_vehicle", 16.0):
+        quit(1)
+        return
     if not (await _wait_ready(scene, "reenter_vehicle")):
         quit(1)
         return
+
     var mileage: float = scene.vehicle.odometer_m
     Input.action_press("ui_up")
     for frame in range(240):
@@ -307,6 +273,7 @@ func _run() -> void:
     scene.vehicle.reset_motion()
     scene.toggle_vehicle()
     _check(not scene.player.in_vehicle, "Could not park and exit before distant streaming test")
+
     var parked: Dictionary = scene.get_snapshot().car
     var destination: Array = scene.roads.manifest.parish_anchors.Hanover.road_position
     scene.player.position = scene.roads.world_to_local(float(destination[0]), float(destination[2]), float(destination[1]) + 0.35)
@@ -324,6 +291,7 @@ func _run() -> void:
     var frozen: Dictionary = scene.get_snapshot().car
     for field in ["easting", "northing", "elevation"]:
         _check(absf(float(frozen[field]) - float(parked[field])) < 0.001, "Distant parked car changed " + field)
+
     scene.goto_parish("St. Mary")
     if not _prepare_functional_road_tile(scene, "return_st_mary"):
         quit(1)
@@ -339,6 +307,7 @@ func _run() -> void:
     _check(absf(float(shifted.car.easting) - canonical_x) < 0.02 and absf(float(shifted.car.northing) - canonical_n) < 0.02, "Origin shift changed canonical saved coordinates")
     scene.restore_snapshot(snapshot)
     _check(absf(float(scene.get_snapshot().car.easting) - canonical_x) < 0.001, "Restoring a save changed global position")
+
     var path := "user://yardman/tests/save.json"
     for suffix in ["", ".bak", ".tmp"]:
         if FileAccess.file_exists(path + suffix):
@@ -357,6 +326,7 @@ func _run() -> void:
     var invalid := snapshot.duplicate(true)
     invalid.car.easting = NAN
     _check(SaveScript.save_file(path, invalid) == ERR_INVALID_DATA, "Non-finite world coordinates were saved")
+
     var controls = scene.touch
     controls.apply_settings({"steering_mode": "Buttons"})
     for item in [[0, "gas"], [1, "left"]]:
@@ -373,6 +343,7 @@ func _run() -> void:
     _check(controls.throttle() == 1.0 and controls.steering() == 0.0, "Releasing one finger cleared the other")
     controls._notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
     _check(controls.fingers.is_empty(), "Controls remained stuck after focus loss")
+
     for quality in ["Performance", "Balanced", "Quality", "Ultra", "Custom"]:
         scene.set_quality(quality, {"trees": 99, "road_radius": 1, "terrain_radius": 1})
         _check(scene.visuals.quality == quality, "Quality selection failed")
