@@ -24,8 +24,6 @@ ORIGIN_LON = -76.7936
 DEFAULT_TILE_SIZE = 4096.0
 
 ROAD_WIDTHS = {
-    # These are individual carriageways, not an entire divided highway.
-    # OSM width/lanes tags take precedence over these documented estimates.
     "motorway": 8.4, "motorway_link": 4.6,
     "trunk": 8.0, "trunk_link": 4.3,
     "primary": 7.2, "primary_link": 4.0,
@@ -37,17 +35,12 @@ ROAD_WIDTHS = {
 }
 ROAD_CLASSES = {name: i for i, name in enumerate(ROAD_WIDTHS)}
 
-# Surface-record flag layout. Bits 1/2/4/8 are already consumed by one-way,
-# bridge, tunnel and unpaved state. Bit 16 preserves the otherwise-lost OSM
-# oneway=-1 direction so the runtime traffic solver can reject wrong-way routes.
 ROAD_FLAG_ONEWAY = 1
 ROAD_FLAG_BRIDGE = 2
 ROAD_FLAG_TUNNEL = 4
 ROAD_FLAG_UNPAVED = 8
 ROAD_FLAG_ONEWAY_REVERSE = 16
 
-# CI coverage sentinels. These parish-capital/administrative-centre anchors are
-# only QA points: a partial-island road extract is not allowed to pass.
 PARISH_COVERAGE_ANCHORS = {
     "Kingston": (17.9714, -76.7936),
     "St. Andrew": (18.0120, -76.7970),
@@ -98,10 +91,6 @@ def road_flags(properties: dict) -> int:
     oneway = str(properties.get("oneway", "")).strip().lower()
     highway = str(properties.get("highway", "")).strip().lower()
     junction = str(properties.get("junction", "")).strip().lower()
-
-    # Match the graph compiler's direction policy. Motorways and roundabouts are
-    # implicitly one-way unless OSM explicitly says otherwise. Preserve -1 in a
-    # separate bit because surface tiles do not carry the full tag dictionary.
     explicit_two_way = oneway in {"no", "0", "false"}
     forward_oneway = oneway in {"yes", "1", "true"}
     reverse_oneway = oneway == "-1"
@@ -143,9 +132,6 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
     network = build_network(features, transformer, (origin_e, origin_n), tile_size,
                             ROAD_WIDTHS, ROAD_CLASSES, road_flags, anchors, height_sampler)
     if height_sampler:
-        # Preserve graph junction elevations and bridge/tunnel structural profiles,
-        # but remove sub-metre high-frequency DEM bumps from interior road vertices.
-        # Raw polygon Y remains untouched for the runtime cut/fill earthworks layer.
         smooth_network_profiles(network)
     stats, bounds = network["stats"], network["bounds"]
     if not stats["source_segments"]:
@@ -156,7 +142,6 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
         missing = [p for p, d in stats["parish_anchor_distance_m"].items() if d > 10000]
         if missing:
             raise ValueError("Missing parish coverage: " + ", ".join(missing))
-    # Build into a sibling staging directory; failed compiles retain old outputs.
     staging = out.with_name(out.name + ".staging")
     if staging.exists():
         shutil.rmtree(staging)
@@ -204,13 +189,7 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
 
 
 def build_auxiliary_layers(input_path: Path, output_dir: Path, tile_size: float) -> None:
-    """Build road-adjacent source layers once, after the final road compile.
-
-    The Android pipeline compiles a temporary flat road graph only so terrain can
-    select DEM coverage. Re-parsing Jamaica's PBF for these layers during that
-    bootstrap pass wastes time and the results are immediately deleted by the
-    final terrain-registered road build.
-    """
+    """Build source-derived layers once after the final terrain-registered road compile."""
     roadwork_tool = Path(__file__).with_name("build_roadworks.py")
     subprocess.run([
         sys.executable, str(roadwork_tool), str(input_path),
@@ -223,6 +202,11 @@ def build_auxiliary_layers(input_path: Path, output_dir: Path, tile_size: float)
     subprocess.run([
         sys.executable, str(place_tool), str(input_path),
         str(output_dir.parent / "places"), "--tile-size", str(tile_size),
+    ], check=True)
+    parish_tool = Path(__file__).with_name("build_parishes.py")
+    subprocess.run([
+        sys.executable, str(parish_tool), str(input_path),
+        str(output_dir.parent / "parishes"),
     ], check=True)
     bus_stop_tool = Path(__file__).with_name("build_bus_stops.py")
     subprocess.run([
