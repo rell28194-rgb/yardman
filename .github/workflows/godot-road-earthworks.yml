@@ -8,11 +8,13 @@ on:
       - 'godot/scripts/road_earthworks_runtime.gd'
       - 'godot/scripts/road_corridor_terrain_runtime.gd'
       - 'godot/scripts/road_engineering_detail_runtime.gd'
+      - 'godot/scripts/roadside_engineering_runtime.gd'
       - 'godot/scripts/retaining_wall_layer.gd'
       - 'godot/tools/build_retaining_walls.py'
       - 'godot/tests/road_earthworks_test.gd'
       - 'godot/tests/road_corridor_terrain_test.gd'
       - 'godot/tests/road_engineering_detail_test.gd'
+      - 'godot/tests/roadside_engineering_test.gd'
       - 'godot/tests/retaining_wall_layer_test.gd'
       - 'godot/tests/test_retaining_walls.py'
       - 'godot/project.godot'
@@ -62,6 +64,13 @@ jobs:
           timeout 120 godot --headless --path godot --script res://tests/road_engineering_detail_test.gd 2>&1 | tee godot/build/road-engineering-detail.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/road-engineering-detail.log; then exit 1; fi
           grep -q 'YARDMAN_ROAD_ENGINEERING_DETAIL_TEST PASS' godot/build/road-engineering-detail.log
+      - name: Test terrain-inferred retaining and safety treatment
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/roadside_engineering_test.gd 2>&1 | tee godot/build/roadside-engineering.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/roadside-engineering.log; then exit 1; fi
+          grep -q 'YARDMAN_ROADSIDE_ENGINEERING_TEST PASS' godot/build/roadside-engineering.log
       - name: Test coarse terrain road corridor replacement
         shell: bash
         run: |
@@ -84,6 +93,7 @@ jobs:
             godot/build/earthworks-import.log
             godot/build/road-earthworks.log
             godot/build/road-engineering-detail.log
+            godot/build/roadside-engineering.log
             godot/build/road-corridor-terrain.log
             godot/build/retaining-wall.log
           if-no-files-found: error
