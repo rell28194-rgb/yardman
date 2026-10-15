@@ -127,6 +127,7 @@ func _run() -> void:
         _check_reference_model(scene, collision)
     else:
         _check_fallback_panels()
+
     await _step_frames(420, 1.0)
     var acceleration_speed: float = controller.speed_mps
     _check(acceleration_speed > 27.8 and acceleration_speed < 42.01, "Seven seconds of road acceleration did not reach 100 km/h within its cap")
@@ -144,6 +145,7 @@ func _run() -> void:
     _check(controller.speed_mps < -3.0 and controller.speed_mps >= -7.01 and controller.gear_label() == "R", "Reverse did not work within its separate cap")
     var reverse_material: StandardMaterial3D = controller.visual.get("reverse_material")
     _check(reverse_material != null and reverse_material.emission_energy_multiplier > 1.0, "Reverse lamps did not illuminate")
+
     await _reset()
     controller.speed_mps = 35.0
     car.velocity = Vector3(0, -1.2, -35.0)
@@ -188,7 +190,19 @@ func _run() -> void:
     controller.occupied = false
     await _step_frames(30, 1.0, 1.0)
     _check(controller.speed_mps == 0.0 and controller.gear_label() == "P", "Empty vehicle accepted driving input")
-    print("YARDMAN_VEHICLE_TEST %s acceleration_kmh=%.1f braking=1 reverse=1 steering=1 drift_angle=%.1f grass=1 freeze=1 reference_model=%s triangles=%d textured_surfaces=%d" % ["PASS" if failures == 0 else "FAIL", acceleration_speed * 3.6, peak_drift_angle, reference_model, reference_triangles, reference_textured_surfaces])
+
+    # A bad physics normal must never reach RenderingServer as a NaN transform.
+    # National teleports and steep/edge contacts can briefly produce degenerate
+    # orientation inputs; the controller must recover to a finite visual basis.
+    controller.occupied = true
+    controller._probe_normal = Vector3(NAN, NAN, NAN)
+    controller._contact_ratio = 1.0
+    controller._ground_basis = Basis(Vector3(NAN, 0.0, 0.0), Vector3.UP, Vector3.FORWARD)
+    controller._update_visual(1.0 / 60.0, Vector3.FORWARD, 0.0)
+    _check(controller._basis_is_finite(controller._ground_basis), "Degenerate ground normal left a non-finite vehicle basis")
+    _check(controller._basis_is_finite(controller.visual.basis), "Vehicle visual submitted a non-finite transform")
+
+    print("YARDMAN_VEHICLE_TEST %s acceleration_kmh=%.1f braking=1 reverse=1 steering=1 drift_angle=%.1f grass=1 freeze=1 finite_visual_basis=1 reference_model=%s triangles=%d textured_surfaces=%d" % ["PASS" if failures == 0 else "FAIL", acceleration_speed * 3.6, peak_drift_angle, reference_model, reference_triangles, reference_textured_surfaces])
     scene.queue_free()
     await process_frame
     quit(0 if failures == 0 else 1)
