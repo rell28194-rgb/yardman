@@ -11,6 +11,10 @@ on:
       - codex/godot-polish-002
     paths:
       - 'godot/**'
+      # Evidence/checkpoint updates must not cancel an in-flight national build.
+      # Runtime, data compiler, tests and asset-recovery gates still match above.
+      - '!godot/docs/production_evidence/**'
+      - '!godot/docs/PRODUCTION_EXECUTION_REGISTER.md'
       - '.github/workflows/godot-android.yml'
   workflow_dispatch:
 
