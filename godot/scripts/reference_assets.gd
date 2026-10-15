@@ -11,7 +11,9 @@ static func _valid_name(filename: String, extensions: PackedStringArray) -> bool
         and not filename.contains("..") and filename.get_extension().to_lower() in extensions
 
 static func texture(filename: String) -> Texture2D:
-    if not _valid_name(filename, PackedStringArray(["png", "jpg", "webp"])):
+    # KTX is accepted so owner-authorized source textures can preserve their
+    # original GPU-compressed mip chain instead of being needlessly re-encoded.
+    if not _valid_name(filename, PackedStringArray(["png", "jpg", "webp", "ktx"])):
         return null
     if _textures.has(filename):
         return _textures[filename] as Texture2D
