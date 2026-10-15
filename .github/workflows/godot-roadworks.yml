@@ -7,8 +7,10 @@ on:
     paths:
       - 'godot/tools/build_roadworks.py'
       - 'godot/tools/build_drainage.py'
+      - 'godot/tools/validate_apk.py'
       - 'godot/tests/test_roadworks.py'
       - 'godot/tests/test_drainage.py'
+      - 'godot/tests/test_validate_apk_drainage.py'
       - '.github/workflows/godot-roadworks.yml'
   workflow_dispatch:
 
@@ -20,8 +22,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install geodata dependencies
         run: python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4' 'osmium>=4,<5'
-      - name: Test roadwork and drainage compilers
-        run: python -m unittest godot/tests/test_roadworks.py godot/tests/test_drainage.py -v
+      - name: Test roadwork, drainage, and APK drainage validators
+        run: python -m unittest godot/tests/test_roadworks.py godot/tests/test_drainage.py godot/tests/test_validate_apk_drainage.py -v
       - name: Compile current Jamaica OSM roadwork and drainage metadata
         shell: bash
         run: |
@@ -41,6 +43,7 @@ jobs:
           assert ds['features'] >= 0 and ds['source_segments'] >= 0 and ds['tile_pieces'] >= 0
           assert set(ds['by_kind']).issubset({'culvert', 'ditch', 'drain'})
           assert drainage['purpose'] == 'explicit OSM drainage evidence for Jamaica road engineering; never road or terrain authority'
+          assert drainage['placement_rule'] == 'mapped waterway=ditch/drain plus explicit culvert-tagged waterways only; generic streams are excluded'
           print('ROADWORK_COUNTS', json.dumps(rs, sort_keys=True))
           print('DRAINAGE_COUNTS', json.dumps(ds, sort_keys=True))
           PY
