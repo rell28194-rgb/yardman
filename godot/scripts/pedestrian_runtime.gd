@@ -122,6 +122,10 @@ static func statistical_population_for(capacity: int, hour: float, weather_facto
     return maxi(0, int(round(island_scale * density_for_hour(hour) * clampf(weather_factor, 0.55, 1.0))))
 
 static func roadside_walk_pose(record: Dictionary, progress: float, direction_sign: int, side_sign: int) -> Dictionary:
+    # Roadside corridors are inferred context, not mapped sidewalks. Never extend
+    # them through bridges or tunnels, where doing so would fabricate support.
+    if (int(record.get("flags", 0)) & 6) != 0:
+        return {}
     var a: Vector2 = record.get("a", Vector2.ZERO)
     var b: Vector2 = record.get("b", Vector2.ZERO)
     var tangent := b - a
