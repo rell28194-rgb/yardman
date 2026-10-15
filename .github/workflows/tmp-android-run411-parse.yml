@@ -14,6 +14,12 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+      - name: Test packaged geography validators
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s godot/tests -p 'test_validate_geography_apk.py' -v
+          python -m unittest discover -s godot/tests -p 'test_validate_streetlight_apk.py' -v
       - name: Install Godot 4.7.2
         shell: bash
         run: |
