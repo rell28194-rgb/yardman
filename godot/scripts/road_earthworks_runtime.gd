@@ -7,6 +7,8 @@ extends Node
 const FLAG_BRIDGE := 2
 const FLAG_TUNNEL := 4
 const SAMPLE_STEP_M := 12.0
+const TRANSITION_SAMPLE_SCALE := 0.5
+const MIN_TRANSITION_SAMPLE_STEP_M := 4.0
 const MIN_SHOULDER_M := 0.65
 const MAX_SHOULDER_M := 1.35
 const MIN_TIE_RUN_M := 3.5
@@ -82,6 +84,13 @@ func _try_build(tile: Vector2i) -> void:
         return
     _decorate(tile, tile_root, _segments_by_tile[tile])
 
+func _vertical_transitions_for_edge(edge_id: String) -> Array:
+    if _roads == null:
+        return []
+    var edge: Dictionary = _roads.graph.get_edge(edge_id)
+    var transitions = edge.get("vertical_transitions", [])
+    return transitions if transitions is Array else []
+
 func _decorate(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
     var existing := tile_root.get_node_or_null("RoadEarthworksProxy")
     if existing != null:
@@ -92,7 +101,8 @@ func _decorate(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
     var drainage := get_node_or_null("/root/RoadDrainageRuntime")
     if drainage != null and drainage.has_method("has_mapped_channel_near"):
         drainage_query = Callable(drainage, "has_mapped_channel_near")
-    var geometry := build_geometry(segments, tile, float(_roads.tile_size), _terrain.height_at, SAMPLE_STEP_M, drainage_query)
+    var transition_query := Callable(self, "_vertical_transitions_for_edge")
+    var geometry := build_geometry(segments, tile, float(_roads.tile_size), _terrain.height_at, SAMPLE_STEP_M, drainage_query, transition_query)
     var vertices: PackedVector3Array = geometry.get("vertices", PackedVector3Array())
     if vertices.is_empty():
         return
@@ -118,6 +128,7 @@ func _decorate(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
     proxy.set_meta("bench_profiles", int(geometry.get("bench_profiles", 0)))
     proxy.set_meta("cut_bench_profiles", int(geometry.get("cut_bench_profiles", 0)))
     proxy.set_meta("fill_bench_profiles", int(geometry.get("fill_bench_profiles", 0)))
+    proxy.set_meta("vertical_transition_refined_segments", int(geometry.get("transition_refined_segments", 0)))
     proxy.set_meta("bridge_tunnel_skips", int(geometry.get("structural_skips", 0)))
 
     var instance := MeshInstance3D.new()
@@ -142,8 +153,24 @@ func _decorate(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
         proxy.add_child(body)
     tile_root.add_child(proxy)
 
+func _segment_has_vertical_transition(segment: Array, transition_query: Callable) -> bool:
+    if not transition_query.is_valid() or segment.size() < 9:
+        return false
+    var records = transition_query.call(str(segment[7]))
+    if not records is Array:
+        return false
+    var segment_index := int(segment[8])
+    for raw_record in records:
+        if not raw_record is Dictionary:
+            continue
+        var vertex_index := int(raw_record.get("vertex_index", -1000000))
+        if vertex_index == segment_index or vertex_index == segment_index + 1:
+            return true
+    return false
+
 func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sampler: Callable,
-        sample_step_m: float = SAMPLE_STEP_M, drainage_query: Callable = Callable()) -> Dictionary:
+        sample_step_m: float = SAMPLE_STEP_M, drainage_query: Callable = Callable(),
+        transition_query: Callable = Callable()) -> Dictionary:
     var vertices := PackedVector3Array()
     var normals := PackedVector3Array()
     var colors := PackedColorArray()
@@ -157,12 +184,14 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
     var bench_profiles := 0
     var cut_bench_profiles := 0
     var fill_bench_profiles := 0
+    var transition_refined_segments := 0
     var structural_skips := 0
     if tile_size <= 0.0 or sample_step_m <= 0.0 or not is_finite(tile_size) or not is_finite(sample_step_m) or not height_sampler.is_valid():
         return {"vertices": vertices, "normals": normals, "colors": colors, "indices": indices,
             "collision_faces": collision_faces, "segments": 0, "cut_profiles": 0, "fill_profiles": 0,
             "drainage_profiles": 0, "mapped_drainage_profiles": 0, "bench_profiles": 0,
-            "cut_bench_profiles": 0, "fill_bench_profiles": 0, "structural_skips": 0}
+            "cut_bench_profiles": 0, "fill_bench_profiles": 0, "transition_refined_segments": 0,
+            "structural_skips": 0}
 
     var seen: Dictionary = {}
     for segment in segments:
@@ -178,7 +207,11 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
         if seen.has(identifier):
             continue
         seen[identifier] = true
-        var sections: Array[Dictionary] = segment_sections(segment, tile, tile_size, height_sampler, sample_step_m, drainage_query)
+        var local_step := sample_step_m
+        if _segment_has_vertical_transition(segment, transition_query):
+            local_step = maxf(MIN_TRANSITION_SAMPLE_STEP_M, sample_step_m * TRANSITION_SAMPLE_SCALE)
+            transition_refined_segments += 1
+        var sections: Array[Dictionary] = segment_sections(segment, tile, tile_size, height_sampler, local_step, drainage_query)
         if sections.size() < 2:
             continue
         segment_count += 1
@@ -207,7 +240,7 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
         "fill_profiles": fill_profiles, "drainage_profiles": drainage_profiles,
         "mapped_drainage_profiles": mapped_drainage_profiles, "bench_profiles": bench_profiles,
         "cut_bench_profiles": cut_bench_profiles, "fill_bench_profiles": fill_bench_profiles,
-        "structural_skips": structural_skips}
+        "transition_refined_segments": transition_refined_segments, "structural_skips": structural_skips}
 
 func segment_sections(segment: Array, tile: Vector2i, tile_size: float, height_sampler: Callable,
         sample_step_m: float = SAMPLE_STEP_M, drainage_query: Callable = Callable()) -> Array[Dictionary]:
