@@ -172,7 +172,8 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
                           "width": "source width, then source lanes, then carriageway-class estimate",
                           "uv": "continuous source-way station metres and signed lateral metres",
                           "markings": "inferred presentation, not surveyed road-paint positions",
-                          "elevation": "DEM registered; interior longitudinal bumps bounded to 0.45m adjustment; graph junctions and bridge/tunnel profiles preserved"},
+                          "elevation": "DEM registered; interior longitudinal bumps bounded to 0.45m adjustment; graph junctions and bridge/tunnel profiles preserved",
+                          "vertical_transition_qa": "signed grades, grade-break percent-points, and crest/sag reversal candidates retained in stats for evidence-driven engineering"},
         "graph": {"format": 1, "partition": "sha1(id)[0:2]", "directory": "graph",
                   "nodes": stats["graph_nodes"], "edges": stats["graph_edges"]},
         "elevation_source": "DEM" if height_sampler else "unmeasured-flat",
@@ -189,12 +190,27 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
 
 
 def build_auxiliary_layers(input_path: Path, output_dir: Path, tile_size: float) -> None:
-    """Build source-derived layers once after the final terrain-registered road compile."""
+    """Build canonical source-derived engineering/context layers after roads."""
     roadwork_tool = Path(__file__).with_name("build_roadworks.py")
     subprocess.run([
         sys.executable, str(roadwork_tool), str(input_path),
         str(output_dir / "roadworks"), "--tile-size", str(tile_size),
     ], check=True)
+
+    # These are part of the same road-engineering evidence stack as the deck and
+    # earthworks. Keeping them in the canonical road build prevents stale drainage
+    # or safety geometry from surviving a fresh Jamaica source compile.
+    drainage_tool = Path(__file__).with_name("build_drainage.py")
+    subprocess.run([
+        sys.executable, str(drainage_tool), str(input_path),
+        str(output_dir / "drainage"), "--tile-size", str(tile_size),
+    ], check=True)
+    guardrail_tool = Path(__file__).with_name("build_guardrails.py")
+    subprocess.run([
+        sys.executable, str(guardrail_tool), str(input_path),
+        str(output_dir / "guardrails"), "--tile-size", str(tile_size),
+    ], check=True)
+
     if input_path.suffix.lower() != ".pbf":
         return
 
