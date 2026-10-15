@@ -3,14 +3,14 @@ extends Node
 # Adds visual-only engineering cues where Jamaica's road deck and surrounding DEM
 # strongly imply human intervention that the source map does not explicitly tag.
 # This never changes road routing or claims a surveyed structure. Explicit OSM
-# guardrails/retaining walls remain higher-authority layers.
+# guardrails/retaining walls remain higher-authority layers. DEM-only cut faces are
+# delegated to the soft road-earthworks system instead of inventing hard walls.
 const FLAG_BRIDGE := 2
 const FLAG_TUNNEL := 4
 const SAMPLE_STEP_M := 18.0
 const MIN_ENGINEERED_WIDTH_M := 4.2
-const HIGH_CUT_THRESHOLD_M := 2.4
+const EARTHWORK_CUT_THRESHOLD_M := 2.4
 const DEEP_DROP_THRESHOLD_M := 1.8
-const MAX_RETAINING_HEIGHT_M := 3.2
 const RAIL_HEIGHT_M := 0.72
 const VISIBILITY_RANGE_M := 1200.0
 
@@ -90,8 +90,9 @@ func _try_build(tile: Vector2i) -> void:
     mesh.surface_set_material(0, _engineering_material())
     var proxy := Node3D.new()
     proxy.name = "RoadsideEngineeringProxy"
-    proxy.set_meta("source", "terrain-inferred visual engineering; not surveyed authority")
+    proxy.set_meta("source", "terrain-inferred visual safety; cut faces delegated to road earthworks")
     proxy.set_meta("retaining_spans", int(geometry.retaining_spans))
+    proxy.set_meta("earthwork_cut_spans", int(geometry.earthwork_cut_spans))
     proxy.set_meta("safety_spans", int(geometry.safety_spans))
     proxy.set_meta("structural_skips", int(geometry.structural_skips))
     var instance := MeshInstance3D.new()
@@ -109,11 +110,12 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
     var colors := PackedColorArray()
     var indices := PackedInt32Array()
     var retaining_spans := 0
+    var earthwork_cut_spans := 0
     var safety_spans := 0
     var structural_skips := 0
     if tile_size <= 0.0 or sample_step_m <= 0.0 or not height_sampler.is_valid():
         return {"vertices": vertices, "normals": normals, "colors": colors, "indices": indices,
-            "retaining_spans": 0, "safety_spans": 0, "structural_skips": 0}
+            "retaining_spans": 0, "earthwork_cut_spans": 0, "safety_spans": 0, "structural_skips": 0}
     for segment in segments:
         if not segment is Array or segment.size() < 12:
             continue
@@ -137,7 +139,14 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
                 var kind := str(pa.get("kind", "none"))
                 if kind != str(pb.get("kind", "none")):
                     continue
-                if kind == "retaining":
+                if kind == "earthwork_cut":
+                    # Geometry is intentionally owned by road_earthworks_runtime.gd.
+                    # Counting the delegated span keeps diagnostics explicit while
+                    # preventing a second, contradictory hard retaining structure.
+                    earthwork_cut_spans += 1
+                elif kind == "retaining":
+                    # Legacy compatibility only. classify_side no longer infers this
+                    # from DEM height alone; sourced retaining_wall_layer owns walls.
                     _append_quad(pa.base, pa.top, pb.top, pb.base, Color(0.43, 0.39, 0.33, 1.0),
                         vertices, normals, colors, indices)
                     retaining_spans += 1
@@ -146,8 +155,8 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
                         vertices, normals, colors, indices)
                     safety_spans += 1
     return {"vertices": vertices, "normals": normals, "colors": colors, "indices": indices,
-        "retaining_spans": retaining_spans, "safety_spans": safety_spans,
-        "structural_skips": structural_skips}
+        "retaining_spans": retaining_spans, "earthwork_cut_spans": earthwork_cut_spans,
+        "safety_spans": safety_spans, "structural_skips": structural_skips}
 
 func sample_sections(segment: Array, tile: Vector2i, tile_size: float, height_sampler: Callable,
         sample_step_m: float = SAMPLE_STEP_M) -> Array[Dictionary]:
@@ -201,20 +210,11 @@ func classify_side(center: Vector2, deck_y: float, right_axis: Vector2, side: fl
     if not is_finite(terrain_y):
         return {"kind": "none"}
     var delta := terrain_y - deck_y
-    if delta >= HIGH_CUT_THRESHOLD_M:
-        var wall_offset := half_width + shoulder + 1.35
-        var wall_world := center + right_axis * side * wall_offset
-        var wall_ground := float(height_sampler.call(wall_world.x, wall_world.y))
-        if not is_finite(wall_ground):
-            return {"kind": "none"}
-        var base_y := deck_y - 0.08
-        var top_y := minf(wall_ground, deck_y + MAX_RETAINING_HEIGHT_M)
-        if top_y - base_y < 0.8:
-            return {"kind": "none"}
-        return {"kind": "retaining",
-            "base": Vector3(wall_world.x - tile_origin.x, base_y, wall_world.y - tile_origin.y),
-            "top": Vector3(wall_world.x - tile_origin.x, top_y, wall_world.y - tile_origin.y),
-            "terrain_delta_m": delta}
+    if delta >= EARTHWORK_CUT_THRESHOLD_M:
+        # A high DEM cut proves that the road needs earthworks, not that a hard
+        # retaining wall exists. The soft cut/bench/ditch runtime owns this shape;
+        # only explicit retaining-wall source data may create the hard wall layer.
+        return {"kind": "earthwork_cut", "terrain_delta_m": delta}
     if delta <= -DEEP_DROP_THRESHOLD_M:
         var rail_offset := half_width + 0.18
         var rail_world := center + right_axis * side * rail_offset
