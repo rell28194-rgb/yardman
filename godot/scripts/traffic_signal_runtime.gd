@@ -16,10 +16,12 @@ func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
 
 static func _is_live_node3d(value) -> bool:
-    # `is Node3D` throws when `value` is a previously freed Object. Always
-    # validate the Object first; traffic agents and signal rigs are routinely
-    # removed during streamed parish changes/rebases.
-    return is_instance_valid(value) and value is Node3D
+    # A freed Object is still a Variant that can reach this cache between stream
+    # updates. Godot raises before evaluating `value is Node3D` on such a stale
+    # instance, so never use the `is` operator for cached Object references.
+    if not is_instance_valid(value):
+        return false
+    return bool(value.is_class("Node3D"))
 
 func _process(delta: float) -> void:
     _clock += delta
@@ -114,7 +116,7 @@ func _ensure_rig(identifier: String, body: Node3D) -> Dictionary:
     var existing: Dictionary = _rigs.get(identifier, {})
     if not existing.is_empty():
         var root_value = existing.get("root", null)
-        if _is_live_node3d(root_value) and (root_value as Node3D).get_parent() == body:
+        if _is_live_node3d(root_value) and root_value.get_parent() == body:
             return existing
         _remove_rig(identifier)
     var root := Node3D.new()
@@ -183,8 +185,10 @@ func _remove_rig(identifier: String) -> void:
         return
     var rig: Dictionary = rig_value
     var root_value = rig.get("root", null)
-    if is_instance_valid(root_value) and root_value is Node:
-        (root_value as Node).queue_free()
+    # The rig contract only stores Nodes. Once validity has been checked, call
+    # the Object dynamically instead of applying `is Node` to a stale reference.
+    if is_instance_valid(root_value):
+        root_value.queue_free()
 
 func _clear_all() -> void:
     var identifiers: Array = _rigs.keys()
