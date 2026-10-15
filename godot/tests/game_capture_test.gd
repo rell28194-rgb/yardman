@@ -3,16 +3,40 @@ extends SceneTree
 var scene
 var output_dir := ""
 
-func _initialize() -> void:
-    call_deferred("_run")
+func _local_stream_ready() -> bool:
+    if scene == null or not scene.world_ready or not scene.car.is_on_floor():
+        return false
+    var world: PackedFloat64Array = scene.roads.local_to_world(scene.car.position)
+    var tile: Vector2i = scene.roads.coordinates.tile_for(world[0], world[2])
+    var road_key: String = scene.roads._tile_key(tile.x, tile.y)
+    if not scene.roads._loaded.has(road_key):
+        return false
+    if not scene.terrain.is_tile_ready(tile):
+        return false
+    return true
 
-func _wait_world() -> bool:
-    for frame in range(3600):
+func _wait_world(parish: String) -> bool:
+    # Captures need the player-facing local road/terrain/collision to be ready,
+    # not every background tile in the Ultra streaming radius. Requiring global
+    # inflight_count()==0 made this visual smoke gate scale with the complete
+    # national dataset and blocked an otherwise valid Android export.
+    var deadline_ms := Time.get_ticks_msec() + 150000
+    var stable_frames := 0
+    while Time.get_ticks_msec() < deadline_ms:
         await process_frame
-        if scene.world_ready and scene.car.is_on_floor() and scene.roads.inflight_count() == 0 and scene.terrain.inflight_count() == 0:
-            if scene.buildings != null and scene.buildings.inflight_count() > 0:
-                continue
-            return true
+        if _local_stream_ready():
+            stable_frames += 1
+            if stable_frames >= 12:
+                print("CAPTURE_TEST_READY parish=%s road_inflight=%d terrain_inflight=%d building_inflight=%d" % [
+                    parish, scene.roads.inflight_count(), scene.terrain.inflight_count(), scene.buildings.inflight_count()
+                ])
+                return true
+        else:
+            stable_frames = 0
+    print("CAPTURE_TEST_TIMEOUT parish=%s world_ready=%s floor=%s road_inflight=%d terrain_inflight=%d building_inflight=%d" % [
+        parish, str(scene.world_ready), str(scene.car.is_on_floor()), scene.roads.inflight_count(),
+        scene.terrain.inflight_count(), scene.buildings.inflight_count()
+    ])
     return false
 
 func _capture(name_value: String) -> bool:
@@ -36,8 +60,8 @@ func _run() -> void:
     for parish in ["St. Ann", "Manchester"]:
         scene.goto_parish(parish)
         scene.day_hour = 10.0
-        if not await _wait_world():
-            push_error("CAPTURE_TEST: Failed to prepare " + parish)
+        if not await _wait_world(parish):
+            push_error("CAPTURE_TEST: Failed to prepare local streamed world for " + parish)
             quit(1)
             return
         if not await _capture("yardman-" + parish.to_lower().replace(".", "").replace(" ", "-")):
