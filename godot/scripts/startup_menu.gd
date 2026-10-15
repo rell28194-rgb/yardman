@@ -126,7 +126,7 @@ func _build_ui() -> void:
     stack.add_child(controls)
 
     var note := Label.new()
-    note.text = "Test build: full Jamaica layout remains geographically authoritative. Visual/detail recovery is still Beta 1 work."
+    note.text = "Test build: full Jamaica layout remains geographically authoritative. Recovered Beta assets are integrated in validated batches; visual/detail recovery and polish remain in progress."
     note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     note.modulate = Color(0.74, 0.78, 0.82)
