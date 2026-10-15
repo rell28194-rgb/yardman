@@ -1,5 +1,6 @@
 extends SceneTree
 
+const References = preload("res://scripts/reference_assets.gd")
 var scene
 var output_dir := ""
 var _started_ms := 0
@@ -18,6 +19,29 @@ func _local_stream_ready() -> bool:
     if not scene.roads._loaded.has(road_key):
         return false
     if not scene.terrain.is_tile_ready(tile):
+        return false
+    return true
+
+func _active_vehicle_contract() -> bool:
+    var garage := root.get_node_or_null("VehicleGarage")
+    if garage == null:
+        push_error("CAPTURE_TEST: VehicleGarage autoload unavailable")
+        return false
+    var selected := str(garage.call("selected_vehicle_id"))
+    var controller_id := str(scene.vehicle.get("vehicle_id"))
+    var visual = scene.vehicle.get("visual")
+    var reference_name := ""
+    if is_instance_valid(visual):
+        reference_name = str(visual.get("reference_asset_name"))
+    var private_crown_available := References.scene("toyota_crown_2013.glb") != null
+    print("YARDMAN_CAPTURE_VEHICLE selected=%s controller=%s reference=%s private_crown=%s" % [
+        selected, controller_id, reference_name, str(private_crown_available)
+    ])
+    if controller_id != selected:
+        push_error("CAPTURE_TEST: Active controller does not match garage selection")
+        return false
+    if private_crown_available and selected == "toyota_crown" and reference_name != "toyota_crown_2013.glb":
+        push_error("CAPTURE_TEST: Manifest-verified private Crown is present but capture substituted another vehicle")
         return false
     return true
 
@@ -83,6 +107,7 @@ func _run() -> void:
     current_scene = scene
     scene.set_quality("Ultra")
     scene.touch._touch_seen = true
+    var vehicle_checked := false
     for parish in ["St. Ann", "Manchester"]:
         print("YARDMAN_CAPTURE_PROGRESS phase=parish_begin parish=%s elapsed_ms=%d" % [parish, Time.get_ticks_msec() - _started_ms])
         scene.goto_parish(parish)
@@ -91,6 +116,11 @@ func _run() -> void:
             push_error("CAPTURE_TEST: Failed to prepare local streamed world for " + parish)
             quit(1)
             return
+        if not vehicle_checked:
+            if not _active_vehicle_contract():
+                quit(1)
+                return
+            vehicle_checked = true
         if not await _capture("yardman-" + parish.to_lower().replace(".", "").replace(" ", "-")):
             push_error("CAPTURE_TEST: Could not save actual engine frame")
             quit(1)
