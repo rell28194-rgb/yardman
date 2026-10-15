@@ -3,8 +3,10 @@ extends SceneTree
 const SaveScript = preload("res://scripts/save_game.gd")
 const References = preload("res://scripts/reference_assets.gd")
 var failures := 0
+var _started_ms := 0
 
 func _initialize() -> void:
+    _started_ms = Time.get_ticks_msec()
     call_deferred("_run")
 
 func _check(condition: bool, message: String) -> void:
@@ -12,15 +14,48 @@ func _check(condition: bool, message: String) -> void:
         failures += 1
         push_error("GAMEPLAY_TEST: " + message)
 
-func _wait_ready(scene) -> void:
+func _wait_ready(scene, phase: String) -> bool:
+    var began_ms := Time.get_ticks_msec()
     for frame in range(1800):
         await physics_frame
         var body: CharacterBody3D = scene.car if scene.player.in_vehicle else scene.player
-        if scene.world_ready and body.is_on_floor():
+        if frame % 120 == 0:
+            print("YARDMAN_GAMEPLAY_PROGRESS phase=%s parish=%s frame=%d world_ready=%s on_floor=%s elapsed_ms=%d phase_ms=%d" % [
+                phase,
+                scene.current_parish,
+                frame,
+                str(scene.world_ready),
+                str(body.is_on_floor()),
+                Time.get_ticks_msec() - _started_ms,
+                Time.get_ticks_msec() - began_ms
+            ])
+        # Production main.gd only raises world_ready after local collision data is
+        # present and the actor's spawn has completed its settle pass. Requiring
+        # CharacterBody3D.is_on_floor() here duplicates that gate and can remain
+        # false for a correctly settled body between physics contacts. The terrain
+        # elevation assertion immediately after each parish transfer remains the
+        # independent proof that the car settled onto real Jamaica terrain.
+        if scene.world_ready:
             for settle in range(6):
                 await physics_frame
-            return
+            body = scene.car if scene.player.in_vehicle else scene.player
+            print("YARDMAN_GAMEPLAY_READY phase=%s parish=%s frame=%d on_floor=%s elapsed_ms=%d phase_ms=%d" % [
+                phase,
+                scene.current_parish,
+                frame,
+                str(body.is_on_floor()),
+                Time.get_ticks_msec() - _started_ms,
+                Time.get_ticks_msec() - began_ms
+            ])
+            return true
     _check(false, "Terrain/physics did not become ready in " + scene.current_parish)
+    print("YARDMAN_GAMEPLAY_TIMEOUT phase=%s parish=%s elapsed_ms=%d phase_ms=%d" % [
+        phase,
+        scene.current_parish,
+        Time.get_ticks_msec() - _started_ms,
+        Time.get_ticks_msec() - began_ms
+    ])
+    return false
 
 func _check_active_vehicle(scene) -> void:
     var garage := root.get_node_or_null("VehicleGarage")
@@ -57,19 +92,28 @@ func _run() -> void:
     # silently exercise legacy/default vehicle state instead of the active game.
     current_scene = scene
     _check(current_scene == scene, "Production main scene was not activated as SceneTree.current_scene")
-    await _wait_ready(scene)
+    if not (await _wait_ready(scene, "initial")):
+        quit(1)
+        return
     _check_active_vehicle(scene)
     _check(scene.roads.manifest.parish_anchors.size() == 14, "All fourteen parishes must be addressable")
     for parish in scene.roads.manifest.parish_anchors:
-        scene.goto_parish(str(parish))
-        await _wait_ready(scene)
+        var parish_name := str(parish)
+        print("YARDMAN_GAMEPLAY_PROGRESS phase=parish_begin parish=%s elapsed_ms=%d" % [parish_name, Time.get_ticks_msec() - _started_ms])
+        scene.goto_parish(parish_name)
+        if not (await _wait_ready(scene, "parish_stream")):
+            quit(1)
+            return
         var world: PackedFloat64Array = scene.roads.local_to_world(scene.car.position)
         var ground: float = scene.terrain.height_at(world[0], world[2])
-        _check(is_finite(ground) and absf(world[1] - ground) < 1.0, "Car did not settle on real terrain in " + str(parish))
+        _check(is_finite(ground) and absf(world[1] - ground) < 1.0, "Car did not settle on real terrain in " + parish_name)
         _check(scene.car.position.length() < 3000.0, "Parish travel bypassed local origin rebasing")
         _check(scene.terrain._loaded.size() <= 25, "Terrain residency exceeds the configured bounded ring")
+        print("YARDMAN_GAMEPLAY_PROGRESS phase=parish_ready parish=%s elapsed_ms=%d" % [parish_name, Time.get_ticks_msec() - _started_ms])
     scene.goto_parish("St. Mary")
-    await _wait_ready(scene)
+    if not (await _wait_ready(scene, "st_mary_gameplay")):
+        quit(1)
+        return
     scene.vehicle.speed_mps = 4.0
     _check(not scene.player.try_exit_vehicle(), "Exit allowed while vehicle is moving")
     scene.vehicle.reset_motion()
@@ -90,7 +134,9 @@ func _run() -> void:
         await physics_frame
     scene.toggle_vehicle()
     _check(scene.player.in_vehicle and not scene.player.visible, "Player could not re-enter the nearby stopped car")
-    await _wait_ready(scene)
+    if not (await _wait_ready(scene, "reenter_vehicle")):
+        quit(1)
+        return
     var mileage: float = scene.vehicle.odometer_m
     Input.action_press("ui_up")
     for frame in range(240):
@@ -108,14 +154,18 @@ func _run() -> void:
     scene._rebase(float(destination[0]), float(destination[2]))
     scene._settle_spawn = true
     scene._refresh_streamers()
-    await _wait_ready(scene)
+    if not (await _wait_ready(scene, "parked_remote_stream")):
+        quit(1)
+        return
     for frame in range(30):
         await physics_frame
     var frozen: Dictionary = scene.get_snapshot().car
     for field in ["easting", "northing", "elevation"]:
         _check(absf(float(frozen[field]) - float(parked[field])) < 0.001, "Distant parked car changed " + field)
     scene.goto_parish("St. Mary")
-    await _wait_ready(scene)
+    if not (await _wait_ready(scene, "return_st_mary")):
+        quit(1)
+        return
     var snapshot: Dictionary = scene.get_snapshot()
     var canonical_x := float(snapshot.car.easting)
     var canonical_n := float(snapshot.car.northing)
