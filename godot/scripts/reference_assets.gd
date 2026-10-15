@@ -7,6 +7,7 @@ const ROOT := "res://assets/user_reference/"
 # Callers keep stable semantic names while the best authorized recovered source
 # can replace an older fallback without changing gameplay scripts.
 const TEXTURE_UPGRADES := {
+    "ground_grass.png": "beta2_ucaptain_scrub_grass_albedo.ktx",
     "ground_rock.png": "beta2_ucaptain_mountain_terrain_albedo.ktx",
 }
 static var _textures: Dictionary = {}
