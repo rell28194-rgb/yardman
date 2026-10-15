@@ -396,23 +396,56 @@ static func _segment_distance_squared(point: Vector2, a: Vector2, b: Vector2) ->
     var fraction := clampf((point - a).dot(direction) / length_squared, 0.0, 1.0)
     return point.distance_squared_to(a + direction * fraction)
 
-func road_surface_at(x: float, z: float) -> Dictionary:
+func road_surface_at(x: float, z: float, y: float = NAN) -> Dictionary:
     var nearest: Dictionary = {"found": false, "surface": "offroad", "distance_m": INF}
     var point := Vector2(x, z)
+    var query_y := y
+    if not is_finite(query_y) and target != null and is_instance_valid(target):
+        var target_world: PackedFloat64Array = coordinates.local_to_world(target.global_position)
+        var target_xz := Vector2(float(target_world[0]), float(target_world[2]))
+        if target_xz.distance_squared_to(point) <= 9.0:
+            query_y = float(target_world[1])
     var nearest_squared := INF
+    var nearest_vertical := INF
     var records := _nearby_surface_segments(x, z, 32.0)
     for record: Dictionary in records.values():
+        var direction: Vector2 = record.b - record.a
+        var length_squared := direction.length_squared()
+        var fraction := 0.0
+        if length_squared >= 0.000001:
+            fraction = clampf((point - Vector2(record.a)).dot(direction) / length_squared, 0.0, 1.0)
         var distance_squared := _segment_distance_squared(point, record.a, record.b)
         var on_surface := distance_squared <= pow(float(record.width_m) * 0.5 + 0.15, 2.0)
+        var deck_y := NAN
+        var vertical_distance := INF
+        if is_finite(query_y):
+            var height_a := float(record.get("height_a", NAN))
+            var height_b := float(record.get("height_b", NAN))
+            if is_finite(height_a) and is_finite(height_b):
+                deck_y = lerpf(height_a, height_b, fraction)
+                vertical_distance = absf(query_y - deck_y)
+                # Player/vehicle origins sit above the contact deck. A generous
+                # window preserves ordinary suspension/jump behavior while
+                # rejecting a different stacked carriageway at the same X/Z.
+                on_surface = on_surface and vertical_distance <= 2.75
         if nearest.found and not on_surface:
             continue
-        if on_surface == bool(nearest.found) and distance_squared >= nearest_squared:
-            continue
+        if on_surface == bool(nearest.found):
+            if on_surface and is_finite(query_y) and is_finite(vertical_distance):
+                if vertical_distance > nearest_vertical + 0.001:
+                    continue
+                if absf(vertical_distance - nearest_vertical) <= 0.001 and distance_squared >= nearest_squared:
+                    continue
+            elif distance_squared >= nearest_squared:
+                continue
         nearest_squared = distance_squared
+        nearest_vertical = vertical_distance
         var tangent: Vector2 = record.b - record.a
         nearest = record.duplicate()
         nearest["found"] = on_surface
         nearest["distance_m"] = sqrt(distance_squared)
+        nearest["vertical_distance_m"] = vertical_distance
+        nearest["deck_y"] = deck_y
         nearest["surface"] = ("unpaved" if (int(record.flags) & 8) != 0 else "paved") if on_surface else "offroad"
         nearest["heading"] = atan2(-tangent.x, -tangent.y)
     return nearest
