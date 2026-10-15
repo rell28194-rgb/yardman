@@ -21,12 +21,17 @@ func _run() -> void:
         "Beta2 mountain texture upgrade mapping changed")
     _check(str(References.TEXTURE_UPGRADES.get("ground_grass.png", "")) == "beta2_ucaptain_scrub_grass_albedo.ktx",
         "Beta2 scrub-grass texture upgrade mapping changed")
+    # These methods are part of main.gd's live streaming/quality contract and
+    # must exist even when CI runs without the private reference pack.
+    var visuals := Visuals.new()
+    _check(visuals.has_method("make_roadside"), "World visuals lost roadside generation")
+    _check(visuals.has_method("apply_roadside_quality"), "World visuals lost roadside quality control")
     var manifest: Dictionary = References.manifest()
     var required := OS.get_environment("YARDMAN_REQUIRE_REFERENCE") == "1"
     if manifest.is_empty():
         _check(not required, "Required personal asset manifest missing")
         _check(References.texture("road_asphalt.png") == null, "Missing pack supplied a texture")
-        print("YARDMAN_REFERENCE_ASSETS_TEST %s private_pack=0 fallback=1" % ("PASS" if failures == 0 else "FAIL"))
+        print("YARDMAN_REFERENCE_ASSETS_TEST %s private_pack=0 fallback=1 roadside_api=1" % ("PASS" if failures == 0 else "FAIL"))
         quit(failures)
         return
     var verified := 0
@@ -57,9 +62,6 @@ func _run() -> void:
     roads._make_materials()
     _check(roads._asphalt_material.get_shader_parameter("has_reference_albedo") == true, "Asphalt reference not active")
     _check(roads._dirt_material.get_shader_parameter("has_reference_albedo") == true, "Gravel reference not active")
-    var visuals := Visuals.new()
-    _check(visuals.has_method("make_roadside"), "World visuals lost roadside generation")
-    _check(visuals.has_method("apply_roadside_quality"), "World visuals lost roadside quality control")
     var material_a: ShaderMaterial = visuals.terrain_material(Vector2.ZERO)
     var material_b: ShaderMaterial = visuals.terrain_material(Vector2(4096.0, 0.0))
     _check(material_a.get_shader_parameter("has_reference_ground") == true, "Ground references not active")
@@ -83,6 +85,6 @@ func _run() -> void:
             "Terrain material did not bind the recovered scrub-grass normal")
         _check(ktx_textures >= 4, "Expected recovered Beta2 KTX textures were not imported")
     roads.free()
-    print("YARDMAN_REFERENCE_ASSETS_TEST %s private_pack=1 verified=%d textures=%d ktx=%d materials=1 mipmaps=1" % [
+    print("YARDMAN_REFERENCE_ASSETS_TEST %s private_pack=1 verified=%d textures=%d ktx=%d materials=1 mipmaps=1 roadside_api=1" % [
         "PASS" if failures == 0 else "FAIL", verified, textures, ktx_textures])
     quit(failures)
