@@ -17,6 +17,11 @@ var geometry_bounds := AABB(Vector3(-0.925, 0.0, -2.0), Vector3(1.85, 1.3, 4.0))
 var _brake_materials: Array[StandardMaterial3D] = []
 var _reverse_materials: Array[StandardMaterial3D] = []
 var _shell_rest_position := Vector3.ZERO
+var _shell_rest_rotation := Basis.IDENTITY
+var _wheel_rest_rotations: Array[Basis] = []
+var _pivot_rest_rotations: Array[Basis] = []
+var _body_pitch := 0.0
+var _body_roll := 0.0
 var _wheel_rotation := 0.0
 var _paint: StandardMaterial3D
 var _trim: StandardMaterial3D
@@ -50,18 +55,34 @@ func build(hero_scene_filename: String = "", scene_loader: Callable = Callable()
     _batch_meshes(shell)
     for wheel in wheels:
         _batch_meshes(wheel)
+    _capture_motion_rest_pose()
+
+func _capture_motion_rest_pose() -> void:
+    _shell_rest_position = shell.position
+    _shell_rest_rotation = Basis(shell.quaternion)
+    _wheel_rest_rotations.clear()
+    _pivot_rest_rotations.clear()
+    for wheel in wheels:
+        _wheel_rest_rotations.append(Basis(wheel.quaternion))
+    for pivot in front_pivots:
+        _pivot_rest_rotations.append(Basis(pivot.quaternion))
 
 func update_motion(delta: float, speed: float, steering: float, braking: float, reversing: bool, running: bool, pitch: float, roll: float) -> void:
     if shell == null:
         return
     _wheel_rotation = fmod(_wheel_rotation - speed * delta / wheel_radius_m, TAU)
-    for wheel in wheels:
-        wheel.rotation.x = _wheel_rotation
-    for pivot in front_pivots:
-        pivot.rotation.y = steering
+    for index in range(wheels.size()):
+        var wheel := wheels[index]
+        # Animate in the authored axle frame. Preserve scale applied later by
+        # the profile stance layer instead of restoring the import-time scale.
+        wheel.basis = (_wheel_rest_rotations[index] * Basis(Vector3.RIGHT, _wheel_rotation)).scaled_local(wheel.scale)
+    for index in range(front_pivots.size()):
+        var pivot := front_pivots[index]
+        pivot.basis = (Basis(Vector3.UP, steering) * _pivot_rest_rotations[index]).scaled_local(pivot.scale)
     var response := 1.0 - exp(-delta * 8.0)
-    shell.rotation.x = lerpf(shell.rotation.x, pitch, response)
-    shell.rotation.z = lerpf(shell.rotation.z, roll, response)
+    _body_pitch = lerpf(_body_pitch, pitch, response)
+    _body_roll = lerpf(_body_roll, roll, response)
+    shell.basis = (Basis.from_euler(Vector3(_body_pitch, 0.0, _body_roll)) * _shell_rest_rotation).scaled_local(shell.scale)
     shell.position.y = lerpf(shell.position.y, _shell_rest_position.y - minf(absf(roll) * 0.12, 0.018), response)
     var brake_energy := 2.0 if braking > 0.05 else (0.35 if running else 0.0)
     var reverse_energy := 1.4 if reversing else 0.0
@@ -82,16 +103,18 @@ func _try_reference_sedan(asset_name: String, scene_loader: Callable = Callable(
         packed = References.scene(asset_name)
     if packed == null:
         return false
-    var imported := packed.instantiate() as Node3D
-    if imported == null:
+    var instance := packed.instantiate()
+    if not instance is Node3D:
+        instance.free()
         return false
+    var imported := instance as Node3D
     var body_shell := imported.find_child("BodyShell", true, false) as Node3D
     var pivots: Array[Node3D] = []
     var spins: Array[Node3D] = []
     for wheel_name in ["FrontWheelLeft", "FrontWheelRight", "RearWheelLeft", "RearWheelRight"]:
         var pivot := imported.find_child(wheel_name, true, false) as Node3D
         var spin := imported.find_child(wheel_name + "Spin", true, false) as Node3D
-        if pivot == null or spin == null or not pivot.is_ancestor_of(spin):
+        if pivot == null or spin == null or spin.get_parent() != pivot:
             imported.free()
             push_warning("Yardman reference vehicle %s has no independent wheel rig; trying the next fallback" % asset_name)
             return false
@@ -101,20 +124,51 @@ func _try_reference_sedan(asset_name: String, scene_loader: Callable = Callable(
         imported.free()
         push_warning("Yardman reference vehicle %s has no BodyShell; trying the next fallback" % asset_name)
         return false
+    for pivot in pivots:
+        if body_shell.is_ancestor_of(pivot) or pivot.is_ancestor_of(body_shell):
+            imported.free()
+            push_warning("Yardman reference vehicle %s couples wheel and body motion; trying the next fallback" % asset_name)
+            return false
+        for other in pivots:
+            if other != pivot and pivot.is_ancestor_of(other):
+                imported.free()
+                push_warning("Yardman reference vehicle %s has dependent wheel pivots; trying the next fallback" % asset_name)
+                return false
     var bounds: AABB = _measure_mesh_bounds(imported)
-    if bounds.size.x < 1.0 or bounds.size.x > 4.0 or bounds.size.z < 2.0 or bounds.size.z > 8.0:
+    if not _finite_bounds(bounds) or bounds.size.x < 1.0 or bounds.size.x > 4.0 or bounds.size.y < 0.5 or bounds.size.y > 3.5 or bounds.size.z < 2.0 or bounds.size.z > 8.0:
         imported.free()
         push_warning("Yardman reference vehicle %s has invalid metre-scale bounds; trying the next fallback" % asset_name)
         return false
+    var measured_radius := 0.0
+    for spin in spins:
+        var tyre_bounds := _measure_mesh_bounds(spin)
+        var radius := maxf(tyre_bounds.size.y, tyre_bounds.size.z) * 0.5
+        if not _finite_bounds(tyre_bounds) or tyre_bounds.size.x < 0.02 or radius < 0.20 or radius > 0.60:
+            imported.free()
+            push_warning("Yardman reference vehicle %s has invalid wheel geometry; trying the next fallback" % asset_name)
+            return false
+        measured_radius += radius * 0.25
+    # Measure before parenting so a translated/scaled vehicle instance cannot
+    # contaminate source-local axle dimensions.
+    var axle_points: Array[Vector3] = []
+    for pivot in pivots:
+        axle_points.append(_relative_pose(pivot).origin)
+    var measured_wheelbase := axle_points[2].z - axle_points[0].z
+    var measured_track := axle_points[1].x - axle_points[0].x
+    var aligned_axles := absf(axle_points[0].z - axle_points[1].z) < 0.15 and absf(axle_points[2].z - axle_points[3].z) < 0.15
+    var correct_sides := axle_points[0].x < 0.0 and axle_points[2].x < 0.0 and axle_points[1].x > 0.0 and axle_points[3].x > 0.0
+    if measured_wheelbase < 1.8 or measured_wheelbase > 4.5 or measured_track < 1.0 or measured_track > 2.8 or not aligned_axles or not correct_sides:
+        imported.free()
+        push_warning("Yardman reference vehicle %s has invalid axle spacing; trying the next fallback" % asset_name)
+        return false
     add_child(imported)
     shell = body_shell
-    _shell_rest_position = shell.position
     front_pivots.assign([pivots[0], pivots[1]])
     wheels.assign(spins)
     geometry_bounds = bounds
-    wheelbase_m = absf(_relative_pose(pivots[0]).origin.z - _relative_pose(pivots[2]).origin.z)
-    var tyre_bounds: AABB = _measure_mesh_bounds(spins[0])
-    wheel_radius_m = clampf(maxf(tyre_bounds.size.y, tyre_bounds.size.z) * 0.5, 0.25, 0.60)
+    wheelbase_m = measured_wheelbase
+    wheel_radius_m = measured_radius
+    _capture_motion_rest_pose()
     _bind_reference_lamps(imported)
     is_reference_model = true
     reference_asset_name = asset_name
@@ -147,10 +201,16 @@ func _measure_mesh_bounds(node: Node3D) -> AABB:
     for entry in entries:
         var instance: MeshInstance3D = entry["instance"]
         var pose: Transform3D = entry["pose"]
-        var bounds: AABB = pose * instance.mesh.get_aabb()
+        var local_bounds := instance.mesh.get_aabb()
+        if not pose.is_finite() or not _finite_bounds(local_bounds):
+            return AABB(Vector3(INF, INF, INF), Vector3.ZERO)
+        var bounds: AABB = pose * local_bounds
         combined = bounds if first else combined.merge(bounds)
         first = false
     return combined
+
+func _finite_bounds(bounds: AABB) -> bool:
+    return bounds.position.is_finite() and bounds.size.is_finite() and bounds.size.x >= 0.0 and bounds.size.y >= 0.0 and bounds.size.z >= 0.0
 
 func _bind_reference_lamps(imported: Node3D) -> void:
     var entries: Array[Dictionary] = []
