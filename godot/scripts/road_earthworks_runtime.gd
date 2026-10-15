@@ -14,6 +14,7 @@ const MAX_TIE_RUN_M := 18.0
 const CUT_DITCH_THRESHOLD_M := 0.60
 const DITCH_DEPTH_M := 0.28
 const DITCH_RUN_M := 1.15
+const EXPLICIT_DRAINAGE_SUPPRESSION_RADIUS_M := 3.0
 const CUT_BENCH_THRESHOLD_M := 3.0
 const FILL_BENCH_THRESHOLD_M := 3.0
 const BENCH_WIDTH_M := 1.60
@@ -87,7 +88,11 @@ func _decorate(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
         tile_root.remove_child(existing)
         existing.queue_free()
 
-    var geometry := build_geometry(segments, tile, float(_roads.tile_size), _terrain.height_at)
+    var drainage_query := Callable()
+    var drainage := get_node_or_null("/root/RoadDrainageRuntime")
+    if drainage != null and drainage.has_method("has_mapped_channel_near"):
+        drainage_query = Callable(drainage, "has_mapped_channel_near")
+    var geometry := build_geometry(segments, tile, float(_roads.tile_size), _terrain.height_at, SAMPLE_STEP_M, drainage_query)
     var vertices: PackedVector3Array = geometry.get("vertices", PackedVector3Array())
     if vertices.is_empty():
         return
@@ -109,6 +114,7 @@ func _decorate(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
     proxy.set_meta("cut_profiles", int(geometry.get("cut_profiles", 0)))
     proxy.set_meta("fill_profiles", int(geometry.get("fill_profiles", 0)))
     proxy.set_meta("drainage_profiles", int(geometry.get("drainage_profiles", 0)))
+    proxy.set_meta("mapped_drainage_profiles", int(geometry.get("mapped_drainage_profiles", 0)))
     proxy.set_meta("bench_profiles", int(geometry.get("bench_profiles", 0)))
     proxy.set_meta("cut_bench_profiles", int(geometry.get("cut_bench_profiles", 0)))
     proxy.set_meta("fill_bench_profiles", int(geometry.get("fill_bench_profiles", 0)))
@@ -137,7 +143,7 @@ func _decorate(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
     tile_root.add_child(proxy)
 
 func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sampler: Callable,
-        sample_step_m: float = SAMPLE_STEP_M) -> Dictionary:
+        sample_step_m: float = SAMPLE_STEP_M, drainage_query: Callable = Callable()) -> Dictionary:
     var vertices := PackedVector3Array()
     var normals := PackedVector3Array()
     var colors := PackedColorArray()
@@ -147,6 +153,7 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
     var cut_profiles := 0
     var fill_profiles := 0
     var drainage_profiles := 0
+    var mapped_drainage_profiles := 0
     var bench_profiles := 0
     var cut_bench_profiles := 0
     var fill_bench_profiles := 0
@@ -154,8 +161,8 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
     if tile_size <= 0.0 or sample_step_m <= 0.0 or not is_finite(tile_size) or not is_finite(sample_step_m) or not height_sampler.is_valid():
         return {"vertices": vertices, "normals": normals, "colors": colors, "indices": indices,
             "collision_faces": collision_faces, "segments": 0, "cut_profiles": 0, "fill_profiles": 0,
-            "drainage_profiles": 0, "bench_profiles": 0, "cut_bench_profiles": 0,
-            "fill_bench_profiles": 0, "structural_skips": 0}
+            "drainage_profiles": 0, "mapped_drainage_profiles": 0, "bench_profiles": 0,
+            "cut_bench_profiles": 0, "fill_bench_profiles": 0, "structural_skips": 0}
 
     var seen: Dictionary = {}
     for segment in segments:
@@ -171,7 +178,7 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
         if seen.has(identifier):
             continue
         seen[identifier] = true
-        var sections: Array[Dictionary] = segment_sections(segment, tile, tile_size, height_sampler, sample_step_m)
+        var sections: Array[Dictionary] = segment_sections(segment, tile, tile_size, height_sampler, sample_step_m, drainage_query)
         if sections.size() < 2:
             continue
         segment_count += 1
@@ -185,6 +192,8 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
                     fill_profiles += 1
                 if profile.has("ditch"):
                     drainage_profiles += 1
+                if bool(profile.get("mapped_drainage", false)):
+                    mapped_drainage_profiles += 1
                 if profile.has("bench_inner") and profile.has("bench_outer"):
                     bench_profiles += 1
                     if kind == "cut":
@@ -196,11 +205,12 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
     return {"vertices": vertices, "normals": normals, "colors": colors, "indices": indices,
         "collision_faces": collision_faces, "segments": segment_count, "cut_profiles": cut_profiles,
         "fill_profiles": fill_profiles, "drainage_profiles": drainage_profiles,
-        "bench_profiles": bench_profiles, "cut_bench_profiles": cut_bench_profiles,
-        "fill_bench_profiles": fill_bench_profiles, "structural_skips": structural_skips}
+        "mapped_drainage_profiles": mapped_drainage_profiles, "bench_profiles": bench_profiles,
+        "cut_bench_profiles": cut_bench_profiles, "fill_bench_profiles": fill_bench_profiles,
+        "structural_skips": structural_skips}
 
 func segment_sections(segment: Array, tile: Vector2i, tile_size: float, height_sampler: Callable,
-        sample_step_m: float = SAMPLE_STEP_M) -> Array[Dictionary]:
+        sample_step_m: float = SAMPLE_STEP_M, drainage_query: Callable = Callable()) -> Array[Dictionary]:
     var result: Array[Dictionary] = []
     if segment.size() < 12 or tile_size <= 0.0 or sample_step_m <= 0.0 or not height_sampler.is_valid():
         return result
@@ -250,8 +260,8 @@ func segment_sections(segment: Array, tile: Vector2i, tile_size: float, height_s
         var deck_y := lerpf(start_y, end_y, t)
         var section := {"station": station, "center": center - tile_origin, "deck_y": deck_y,
             "right_axis": right, "half_width": half_width, "shoulder_width": shoulder}
-        var left := _side_profile(center, deck_y, right, -1.0, half_width, shoulder, tile_origin, height_sampler)
-        var right_profile := _side_profile(center, deck_y, right, 1.0, half_width, shoulder, tile_origin, height_sampler)
+        var left := _side_profile(center, deck_y, right, -1.0, half_width, shoulder, tile_origin, height_sampler, drainage_query)
+        var right_profile := _side_profile(center, deck_y, right, 1.0, half_width, shoulder, tile_origin, height_sampler, drainage_query)
         if not left.is_empty():
             section["left"] = left
         if not right_profile.is_empty():
@@ -260,7 +270,8 @@ func segment_sections(segment: Array, tile: Vector2i, tile_size: float, height_s
     return result
 
 func _side_profile(center: Vector2, deck_y: float, right_axis: Vector2, side: float,
-        half_width: float, shoulder_width: float, tile_origin: Vector2, height_sampler: Callable) -> Dictionary:
+        half_width: float, shoulder_width: float, tile_origin: Vector2, height_sampler: Callable,
+        drainage_query: Callable = Callable()) -> Dictionary:
     var shoulder_offset := half_width + shoulder_width
     var probe_offset := shoulder_offset + 6.0
     var probe_world := center + right_axis * side * probe_offset
@@ -304,16 +315,20 @@ func _side_profile(center: Vector2, deck_y: float, right_axis: Vector2, side: fl
     if kind == "cut" and delta_y >= CUT_DITCH_THRESHOLD_M:
         var ditch_offset := shoulder_offset + minf(DITCH_RUN_M, tie_run * 0.35)
         var ditch_world := center + right_axis * side * ditch_offset
-        profile["ditch"] = Vector3(ditch_world.x - tile_origin.x, deck_y - DITCH_DEPTH_M, ditch_world.y - tile_origin.y)
+        var mapped_drainage := drainage_query.is_valid() and bool(drainage_query.call(ditch_world, EXPLICIT_DRAINAGE_SUPPRESSION_RADIUS_M))
+        if mapped_drainage:
+            profile["mapped_drainage"] = true
+        else:
+            profile["ditch"] = Vector3(ditch_world.x - tile_origin.x, deck_y - DITCH_DEPTH_M, ditch_world.y - tile_origin.y)
 
     # Deep cuts and fills are not rendered as one implausible uninterrupted plane.
     # A deterministic bench breaks the slope only where the vertical delta and
-    # available run are large enough. Cut benches preserve ditch clearance.
+    # available run are large enough. Cut benches preserve drainage clearance.
     var threshold := CUT_BENCH_THRESHOLD_M if kind == "cut" else FILL_BENCH_THRESHOLD_M
-    var ditch_clearance := DITCH_RUN_M if kind == "cut" and profile.has("ditch") else 0.0
-    var minimum_bench_run := ditch_clearance + BENCH_WIDTH_M + BENCH_MIN_CLEAR_M * 2.0
+    var drainage_clearance := DITCH_RUN_M if kind == "cut" and (profile.has("ditch") or bool(profile.get("mapped_drainage", false))) else 0.0
+    var minimum_bench_run := drainage_clearance + BENCH_WIDTH_M + BENCH_MIN_CLEAR_M * 2.0
     if kind in ["cut", "fill"] and absf(delta_y) >= threshold and tie_run >= minimum_bench_run:
-        var bench_inner_run := maxf(ditch_clearance + BENCH_MIN_CLEAR_M, tie_run * 0.46)
+        var bench_inner_run := maxf(drainage_clearance + BENCH_MIN_CLEAR_M, tie_run * 0.46)
         var bench_outer_run := minf(tie_run - BENCH_MIN_CLEAR_M, bench_inner_run + BENCH_WIDTH_M)
         if bench_outer_run - bench_inner_run >= 0.75:
             var bench_center_run := (bench_inner_run + bench_outer_run) * 0.5

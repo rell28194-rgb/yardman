@@ -24,9 +24,15 @@ func _initialize() -> void:
                 "drainage channel span exceeded runtime tessellation bound")
     _require(channel_items == 3, "ditch/drain span count changed")
     _require(portal_items == 2, "explicit culvert endpoint count changed")
+    _require(runtime.records_have_channel_near(records, Vector2(14.0, 10.4), 0.25),
+        "mapped ditch proximity query missed a nearby source channel")
+    _require(not runtime.records_have_channel_near(records, Vector2(14.0, 15.0), 0.25),
+        "mapped ditch proximity query reached too far from source geometry")
+    _require(not runtime.records_have_channel_near([records[2]], Vector2(32.0, 16.0), 1.0),
+        "culvert evidence must not suppress a longitudinal cut-side ditch")
 
-    var sampler := func(x: float, _z: float) -> float:
-        return 10.0 + x * 0.01
+    var sampler := func(x: float, z: float) -> float:
+        return 10.0 + x * 0.01 + z * 0.005
     var geometry := runtime.build_geometry(plan, Vector2.ZERO, sampler)
     _require(int(geometry.channel_spans) == 3, "valid drainage channels were dropped")
     _require(int(geometry.culvert_portals) == 2, "valid culvert portals were dropped")
@@ -34,10 +40,10 @@ func _initialize() -> void:
     var normals: PackedVector3Array = geometry.normals
     var colors: PackedColorArray = geometry.colors
     var indices: PackedInt32Array = geometry.indices
-    _require(vertices.size() == 52, "expected three channel quads plus two five-quad culvert frames")
+    _require(vertices.size() == 76, "expected three visible three-quad channels plus two five-quad culvert frames")
     _require(normals.size() == vertices.size() and colors.size() == vertices.size(),
         "drainage vertex attributes are incomplete")
-    _require(indices.size() == 78, "drainage quad index count changed")
+    _require(indices.size() == 114, "drainage quad index count changed")
     for point in vertices:
         _require(is_finite(point.x) and is_finite(point.y) and is_finite(point.z),
             "drainage geometry contains non-finite coordinates")

@@ -1,7 +1,7 @@
 extends Node
 
 # Visualizes only registered Jamaica drainage evidence compiled from OSM.
-# Mapped ditch/drain centerlines get shallow terrain-following channel ribbons;
+# Mapped ditch/drain centerlines get terrain-following channel ribbons;
 # explicit culverts get portal frames only at true source-way endpoints. This
 # layer never invents drainage crossings or alters road/terrain authority.
 const MAX_SPAN_M := 5.0
@@ -11,12 +11,16 @@ const DEFAULT_DRAIN_WIDTH_M := 0.60
 const DEFAULT_CULVERT_WIDTH_M := 0.90
 const MIN_WIDTH_M := 0.25
 const MAX_WIDTH_M := 5.0
-const CHANNEL_EMBED_M := 0.10
+const CHANNEL_SURFACE_LIFT_M := 0.018
+const CHANNEL_LIP_LIFT_M := 0.032
+const MIN_LIP_WIDTH_M := 0.06
+const MAX_LIP_WIDTH_M := 0.18
 const VISIBILITY_RANGE_M := 900.0
 
 var _terrain: Node
 var _connected := false
 var _material: StandardMaterial3D
+var _record_cache: Dictionary = {}
 
 func _ready() -> void:
     set_process(true)
@@ -90,14 +94,66 @@ func _decorate(tile: Vector2i, tile_root: Node3D) -> void:
     tile_root.add_child(proxy)
 
 func records_for_tile(tile: Vector2i) -> Array:
+    var cache_key := "%d:%d" % [tile.x, tile.y]
+    if _record_cache.has(cache_key):
+        return _record_cache[cache_key]
     var path := "res://data/roads/drainage/tile_%d_%d.json" % [tile.x, tile.y]
     if not FileAccess.file_exists(path):
+        _record_cache[cache_key] = []
         return []
     var payload = JSON.parse_string(FileAccess.get_file_as_string(path))
     if not payload is Dictionary or not payload.get("drainage", null) is Array:
         push_warning("Invalid Yardman drainage tile: " + path)
+        _record_cache[cache_key] = []
         return []
-    return payload.drainage
+    var records: Array = payload.drainage
+    _record_cache[cache_key] = records
+    return records
+
+func has_mapped_channel_near(world_point: Vector2, radius_m: float, tile_size_m: float = 4096.0) -> bool:
+    if radius_m < 0.0 or tile_size_m <= 0.0 or not is_finite(radius_m) or not is_finite(tile_size_m):
+        return false
+    if not is_finite(world_point.x) or not is_finite(world_point.y):
+        return false
+    var min_tx := int(floor((world_point.x - radius_m) / tile_size_m))
+    var max_tx := int(floor((world_point.x + radius_m) / tile_size_m))
+    var min_tz := int(floor((world_point.y - radius_m) / tile_size_m))
+    var max_tz := int(floor((world_point.y + radius_m) / tile_size_m))
+    for tz in range(min_tz, max_tz + 1):
+        for tx in range(min_tx, max_tx + 1):
+            if records_have_channel_near(records_for_tile(Vector2i(tx, tz)), world_point, radius_m):
+                return true
+    return false
+
+func records_have_channel_near(records: Array, world_point: Vector2, radius_m: float) -> bool:
+    if radius_m < 0.0 or not is_finite(radius_m) or not is_finite(world_point.x) or not is_finite(world_point.y):
+        return false
+    for record in records:
+        if not record is Dictionary or str(record.get("kind", "")) not in ["ditch", "drain"]:
+            continue
+        var start_raw = record.get("start", [])
+        var end_raw = record.get("end", [])
+        if not start_raw is Array or not end_raw is Array or start_raw.size() < 2 or end_raw.size() < 2:
+            continue
+        var a := Vector2(float(start_raw[0]), float(start_raw[1]))
+        var b := Vector2(float(end_raw[0]), float(end_raw[1]))
+        if not is_finite(a.x) or not is_finite(a.y) or not is_finite(b.x) or not is_finite(b.y):
+            continue
+        var width := float(record.get("width_m", _default_width(str(record.get("kind", "ditch")))))
+        if not is_finite(width):
+            width = _default_width(str(record.get("kind", "ditch")))
+        width = clampf(width, MIN_WIDTH_M, MAX_WIDTH_M)
+        if _distance_to_segment(world_point, a, b) <= radius_m + width * 0.5:
+            return true
+    return false
+
+func _distance_to_segment(point: Vector2, a: Vector2, b: Vector2) -> float:
+    var axis := b - a
+    var length_squared := axis.length_squared()
+    if length_squared < 0.000001:
+        return point.distance_to(a)
+    var t := clampf((point - a).dot(axis) / length_squared, 0.0, 1.0)
+    return point.distance_to(a + axis * t)
 
 func placement_plan(records: Array, tile: Vector2i, tile_size: float,
         max_span_m: float = MAX_SPAN_M) -> Array[Dictionary]:
@@ -187,23 +243,55 @@ func build_geometry(plan: Array[Dictionary], tile_origin: Vector2, height_sample
         if kind == "channel":
             var a2 := Vector2(float(item.world_ax), float(item.world_az))
             var b2 := Vector2(float(item.world_bx), float(item.world_bz))
-            var y0 := float(height_sampler.call(a2.x, a2.y))
-            var y1 := float(height_sampler.call(b2.x, b2.y))
-            if not is_finite(y0) or not is_finite(y1):
-                continue
             var axis := b2 - a2
             var length := axis.length()
             if length < 0.05:
                 continue
             var width := clampf(float(item.get("width_m", DEFAULT_DITCH_WIDTH_M)), MIN_WIDTH_M, MAX_WIDTH_M)
-            var side := Vector2(-axis.y, axis.x).normalized() * (width * 0.5)
-            var depth := clampf(width * 0.22, 0.10, 0.42) + CHANNEL_EMBED_M
-            var a_left := Vector3(a2.x - tile_origin.x + side.x, y0 - depth, a2.y - tile_origin.y + side.y)
-            var a_right := Vector3(a2.x - tile_origin.x - side.x, y0 - depth, a2.y - tile_origin.y - side.y)
-            var b_left := Vector3(b2.x - tile_origin.x + side.x, y1 - depth, b2.y - tile_origin.y + side.y)
-            var b_right := Vector3(b2.x - tile_origin.x - side.x, y1 - depth, b2.y - tile_origin.y - side.y)
-            var channel_color := Color(0.22, 0.25, 0.19, 1.0) if str(item.get("channel_type", "")) == "ditch" else Color(0.20, 0.22, 0.20, 1.0)
+            var lateral := Vector2(-axis.y, axis.x).normalized()
+            var half_width := width * 0.5
+            var lip_width := clampf(width * 0.12, MIN_LIP_WIDTH_M, MAX_LIP_WIDTH_M)
+            var inner_side := lateral * half_width
+            var outer_side := lateral * (half_width + lip_width)
+            var a_left_2 := a2 + inner_side
+            var a_right_2 := a2 - inner_side
+            var b_left_2 := b2 + inner_side
+            var b_right_2 := b2 - inner_side
+            var a_outer_left_2 := a2 + outer_side
+            var a_outer_right_2 := a2 - outer_side
+            var b_outer_left_2 := b2 + outer_side
+            var b_outer_right_2 := b2 - outer_side
+            var heights := PackedFloat32Array([
+                float(height_sampler.call(a_left_2.x, a_left_2.y)),
+                float(height_sampler.call(a_right_2.x, a_right_2.y)),
+                float(height_sampler.call(b_left_2.x, b_left_2.y)),
+                float(height_sampler.call(b_right_2.x, b_right_2.y)),
+                float(height_sampler.call(a_outer_left_2.x, a_outer_left_2.y)),
+                float(height_sampler.call(a_outer_right_2.x, a_outer_right_2.y)),
+                float(height_sampler.call(b_outer_left_2.x, b_outer_left_2.y)),
+                float(height_sampler.call(b_outer_right_2.x, b_outer_right_2.y)),
+            ])
+            var valid := true
+            for height in heights:
+                if not is_finite(height):
+                    valid = false
+                    break
+            if not valid:
+                continue
+            var a_left := Vector3(a_left_2.x - tile_origin.x, heights[0] + CHANNEL_SURFACE_LIFT_M, a_left_2.y - tile_origin.y)
+            var a_right := Vector3(a_right_2.x - tile_origin.x, heights[1] + CHANNEL_SURFACE_LIFT_M, a_right_2.y - tile_origin.y)
+            var b_left := Vector3(b_left_2.x - tile_origin.x, heights[2] + CHANNEL_SURFACE_LIFT_M, b_left_2.y - tile_origin.y)
+            var b_right := Vector3(b_right_2.x - tile_origin.x, heights[3] + CHANNEL_SURFACE_LIFT_M, b_right_2.y - tile_origin.y)
+            var a_outer_left := Vector3(a_outer_left_2.x - tile_origin.x, heights[4] + CHANNEL_LIP_LIFT_M, a_outer_left_2.y - tile_origin.y)
+            var a_outer_right := Vector3(a_outer_right_2.x - tile_origin.x, heights[5] + CHANNEL_LIP_LIFT_M, a_outer_right_2.y - tile_origin.y)
+            var b_outer_left := Vector3(b_outer_left_2.x - tile_origin.x, heights[6] + CHANNEL_LIP_LIFT_M, b_outer_left_2.y - tile_origin.y)
+            var b_outer_right := Vector3(b_outer_right_2.x - tile_origin.x, heights[7] + CHANNEL_LIP_LIFT_M, b_outer_right_2.y - tile_origin.y)
+            var channel_type := str(item.get("channel_type", "ditch"))
+            var channel_color := Color(0.16, 0.19, 0.14, 1.0) if channel_type == "ditch" else Color(0.17, 0.18, 0.17, 1.0)
+            var lip_color := Color(0.27, 0.30, 0.20, 1.0) if channel_type == "ditch" else Color(0.39, 0.39, 0.37, 1.0)
             _append_quad(a_left, b_left, b_right, a_right, channel_color, vertices, normals, colors, indices)
+            _append_quad(a_outer_left, b_outer_left, b_left, a_left, lip_color, vertices, normals, colors, indices)
+            _append_quad(a_right, b_right, b_outer_right, a_outer_right, lip_color, vertices, normals, colors, indices)
             channel_spans += 1
         elif kind == "culvert_portal":
             var point := Vector2(float(item.world_x), float(item.world_z))

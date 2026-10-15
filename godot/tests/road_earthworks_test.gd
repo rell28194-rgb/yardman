@@ -58,7 +58,8 @@ func _initialize() -> void:
     _require(int(geometry.segments) == 1, "bridge/tunnel segments must not receive terrain earthworks")
     _require(int(geometry.structural_skips) == 2, "bridge/tunnel skip accounting changed")
     _require(int(geometry.cut_profiles) > 0 and int(geometry.fill_profiles) > 0, "cut/fill geometry accounting missing")
-    _require(int(geometry.drainage_profiles) > 0, "drainage geometry accounting missing")
+    _require(int(geometry.drainage_profiles) > 0, "procedural drainage geometry accounting missing")
+    _require(int(geometry.mapped_drainage_profiles) == 0, "default earthworks invented mapped drainage evidence")
     _require(int(geometry.bench_profiles) > 0, "bench geometry accounting missing")
     _require(int(geometry.cut_bench_profiles) > 0, "cut bench geometry accounting missing")
     _require(int(geometry.fill_bench_profiles) > 0, "fill bench geometry accounting missing")
@@ -70,6 +71,25 @@ func _initialize() -> void:
     _require(runtime.segment_sections(bridge, Vector2i.ZERO, 4096.0, sampler, 10.0).is_empty(), "bridge earthworks must fail closed")
     _require(runtime.segment_sections(tunnel, Vector2i.ZERO, 4096.0, sampler, 10.0).is_empty(), "tunnel earthworks must fail closed")
     _require(runtime.build_geometry([paved], Vector2i.ZERO, 0.0, sampler, 10.0).vertices.is_empty(), "invalid tile size must fail closed")
+
+    var mapped_query := func(_world_point: Vector2, _radius_m: float) -> bool:
+        return true
+    var mapped_sections: Array[Dictionary] = runtime.segment_sections(paved, Vector2i.ZERO, 4096.0, sampler, 10.0, mapped_query)
+    var mapped_cut_count := 0
+    for section: Dictionary in mapped_sections:
+        for side_name in ["left", "right"]:
+            var profile: Dictionary = section[side_name]
+            if str(profile.kind) != "cut" or float(profile.delta_y) < runtime.CUT_DITCH_THRESHOLD_M:
+                continue
+            mapped_cut_count += 1
+            _require(bool(profile.get("mapped_drainage", false)), "explicit drainage evidence was not recorded on cut profile")
+            _require(not profile.has("ditch"), "mapped drainage evidence must suppress duplicate procedural ditch")
+    _require(mapped_cut_count > 0, "test road did not produce any mapped-drainage cut profiles")
+    var mapped_geometry := runtime.build_geometry([paved], Vector2i.ZERO, 4096.0, sampler, 10.0, mapped_query)
+    _require(int(mapped_geometry.mapped_drainage_profiles) == mapped_cut_count,
+        "mapped drainage profile accounting changed")
+    _require(int(mapped_geometry.drainage_profiles) == 0,
+        "explicit mapped drainage must outrank duplicate procedural cut-side ditch geometry")
 
     var accelerating_sampler := func(_x: float, z: float) -> float:
         var dz := absf(z - 10.0)
@@ -90,8 +110,8 @@ func _initialize() -> void:
     _require(fill_geometry.vertices.size() > 0 and fill_geometry.collision_faces.size() > 0, "fill bench did not produce collidable geometry")
 
     runtime.free()
-    print("YARDMAN_ROAD_EARTHWORKS_TEST PASS sections=%d cuts=%d fills=%d drainage=%d cut_benches=%d fill_benches=%d vertices=%d" % [
-        sections.size(), cut_count, fill_count, ditch_count, cut_bench_count, fill_bench_count, vertices.size()])
+    print("YARDMAN_ROAD_EARTHWORKS_TEST PASS sections=%d cuts=%d fills=%d drainage=%d cut_benches=%d fill_benches=%d mapped=%d vertices=%d" % [
+        sections.size(), cut_count, fill_count, ditch_count, cut_bench_count, fill_bench_count, mapped_cut_count, vertices.size()])
     quit(0)
 
 func _require(condition: bool, message: String) -> void:
