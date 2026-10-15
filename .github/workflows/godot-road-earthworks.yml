@@ -8,18 +8,18 @@ on:
       - 'godot/scripts/road_earthworks_runtime.gd'
       - 'godot/scripts/road_drainage_runtime.gd'
       - 'godot/scripts/road_corridor_terrain_runtime.gd'
-      - 'godot/scripts/road_engineering_detail_runtime.gd'
       - 'godot/scripts/roadside_engineering_runtime.gd'
       - 'godot/scripts/road_hairpin_runtime.gd'
+      - 'godot/scripts/guardrail_layer.gd'
       - 'godot/scripts/retaining_wall_layer.gd'
       - 'godot/tools/build_retaining_walls.py'
       - 'godot/tests/road_earthworks_test.gd'
       - 'godot/tests/road_drainage_runtime_test.gd'
       - 'godot/tests/road_corridor_terrain_test.gd'
       - 'godot/tests/road_corridor_render_test.gd'
-      - 'godot/tests/road_engineering_detail_test.gd'
       - 'godot/tests/roadside_engineering_test.gd'
       - 'godot/tests/road_hairpin_test.gd'
+      - 'godot/tests/guardrail_layer_test.gd'
       - 'godot/tests/retaining_wall_layer_test.gd'
       - 'godot/tests/test_retaining_walls.py'
       - 'godot/project.godot'
@@ -69,14 +69,14 @@ jobs:
           timeout 120 godot --headless --path godot --script res://tests/road_drainage_runtime_test.gd 2>&1 | tee godot/build/road-drainage.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/road-drainage.log; then exit 1; fi
           grep -q 'YARDMAN_ROAD_DRAINAGE_TEST PASS' godot/build/road-drainage.log
-      - name: Test terrain-driven roadside engineering benches
+      - name: Test sourced guardrail authority
         shell: bash
         run: |
           set -euo pipefail
-          timeout 120 godot --headless --path godot --script res://tests/road_engineering_detail_test.gd 2>&1 | tee godot/build/road-engineering-detail.log
-          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/road-engineering-detail.log; then exit 1; fi
-          grep -q 'YARDMAN_ROAD_ENGINEERING_DETAIL_TEST PASS' godot/build/road-engineering-detail.log
-      - name: Test terrain-inferred retaining and safety treatment
+          timeout 120 godot --headless --path godot --script res://tests/guardrail_layer_test.gd 2>&1 | tee godot/build/guardrail-authority.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/guardrail-authority.log; then exit 1; fi
+          grep -q 'YARDMAN_GUARDRAIL_LAYER_TEST PASS' godot/build/guardrail-authority.log
+      - name: Test terrain-inferred safety authority handoff
         shell: bash
         run: |
           set -euo pipefail
@@ -112,7 +112,7 @@ jobs:
             godot/build/earthworks-import.log
             godot/build/road-earthworks.log
             godot/build/road-drainage.log
-            godot/build/road-engineering-detail.log
+            godot/build/guardrail-authority.log
             godot/build/roadside-engineering.log
             godot/build/road-hairpin.log
             godot/build/road-corridor-terrain.log
