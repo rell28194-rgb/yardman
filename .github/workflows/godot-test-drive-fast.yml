@@ -11,11 +11,13 @@ on:
       - 'godot/scripts/road_hairpin_runtime.gd'
       - 'godot/scripts/traffic_runtime.gd'
       - 'godot/scripts/pedestrian_runtime.gd'
+      - 'godot/scripts/location_tracker.gd'
       - 'godot/tests/vehicle_test.gd'
       - 'godot/tests/road_surface_test.gd'
       - 'godot/tests/road_hairpin_test.gd'
       - 'godot/tests/traffic_runtime_test.gd'
       - 'godot/tests/pedestrian_runtime_test.gd'
+      - 'godot/tests/location_tracker_test.gd'
       - 'godot/project.godot'
       - '.github/workflows/godot-test-drive-fast.yml'
   workflow_dispatch:
@@ -49,7 +51,7 @@ jobs:
           mkdir -p godot/build
           timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/fast-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/fast-import.log; then exit 1; fi
-          for TEST in vehicle road_surface road_hairpin traffic_runtime pedestrian_runtime; do
+          for TEST in vehicle road_surface road_hairpin traffic_runtime pedestrian_runtime location_tracker; do
             timeout 180 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/fast-${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/fast-${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/fast-${TEST}.log"
