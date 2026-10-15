@@ -19,6 +19,7 @@ const VISIBILITY_RANGE_M := 1300.0
 var _roads: Node
 var _connected := false
 var _material: StandardMaterial3D
+var _segments_by_tile: Dictionary = {}
 
 func _ready() -> void:
     set_process(true)
@@ -34,10 +35,46 @@ func _process(_delta: float) -> void:
     if _roads == null:
         return
     _roads.tile_content_ready.connect(_on_road_tile)
+    _roads.tile_removed.connect(_on_road_tile_removed)
     _connected = true
     set_process(false)
 
-func _on_road_tile(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
+func _on_road_tile(tile: Vector2i, _tile_root: Node3D, segments: Array) -> void:
+    _segments_by_tile[tile] = segments.duplicate(false)
+    _rebuild_neighborhood(tile)
+
+func _on_road_tile_removed(tile: Vector2i) -> void:
+    _segments_by_tile.erase(tile)
+    # Neighboring bend ownership may have depended on a segment from this tile.
+    # Rebuild loaded neighbors so stale seam aprons cannot survive an unload.
+    _rebuild_neighborhood(tile)
+
+func _road_tile_root(tile: Vector2i) -> Node3D:
+    if _roads == null:
+        return null
+    return _roads._loaded.get(_roads._tile_key(tile.x, tile.y)) as Node3D
+
+func _segments_for_neighborhood(tile: Vector2i) -> Array:
+    var combined: Array = []
+    for z in range(tile.y - 1, tile.y + 2):
+        for x in range(tile.x - 1, tile.x + 2):
+            var neighbor := Vector2i(x, z)
+            if _segments_by_tile.has(neighbor):
+                combined.append_array(_segments_by_tile[neighbor])
+    return combined
+
+func _rebuild_neighborhood(center: Vector2i) -> void:
+    if _roads == null:
+        return
+    for z in range(center.y - 1, center.y + 2):
+        for x in range(center.x - 1, center.x + 2):
+            var tile := Vector2i(x, z)
+            var tile_root := _road_tile_root(tile)
+            if tile_root == null:
+                continue
+            _build_tile(tile, tile_root, _segments_for_neighborhood(tile))
+
+func _build_tile(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
     var existing := tile_root.get_node_or_null("RoadHairpinProxy")
     if existing != null:
         tile_root.remove_child(existing)
@@ -92,6 +129,7 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float) -> Dictio
     var structural_skips := 0
     if tile_size <= 0.0 or not is_finite(tile_size):
         return _empty_geometry()
+    var seen: Dictionary = {}
     for raw in segments:
         if not raw is Array or raw.size() < 12:
             continue
@@ -105,6 +143,13 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float) -> Dictio
         var edge_id := str(segment[7])
         if edge_id.is_empty():
             continue
+        # Neighbor tiles can carry the same unclipped source segment. Keep one
+        # canonical copy so seam-aware gathering does not create duplicate bends.
+        var segment_key := "%s:%s:%s:%s:%s:%s" % [edge_id, str(segment[8]), str(segment[0]),
+            str(segment[1]), str(segment[2]), str(segment[3])]
+        if seen.has(segment_key):
+            continue
+        seen[segment_key] = true
         if not groups.has(edge_id):
             groups[edge_id] = []
         groups[edge_id].append(segment)
@@ -118,6 +163,10 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float) -> Dictio
             var second: Array = edge_segments[index + 1]
             if int(second[8]) != int(first[8]) + 1:
                 continue
+            # A seam bend may be visible to several loaded tiles. The averaged
+            # graph joint owns it deterministically so exactly one tile emits it.
+            if _bend_owner_tile(first, second, tile_size) != tile:
+                continue
             var record := bend_record(first, second, origin)
             if record.is_empty():
                 continue
@@ -128,6 +177,14 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float) -> Dictio
     return {"vertices": vertices, "normals": normals, "colors": colors, "indices": indices,
         "collision_faces": faces, "sharp_bends": sharp_bends, "hairpins": hairpins,
         "structural_skips": structural_skips}
+
+func _bend_owner_tile(first: Array, second: Array, tile_size: float) -> Vector2i:
+    if first.size() < 4 or second.size() < 2 or tile_size <= 0.0:
+        return Vector2i(2147483647, 2147483647)
+    var joint_a := Vector2(float(first[2]), float(first[3]))
+    var joint_b := Vector2(float(second[0]), float(second[1]))
+    var joint := (joint_a + joint_b) * 0.5
+    return Vector2i(int(floor(joint.x / tile_size)), int(floor(joint.y / tile_size)))
 
 func bend_record(first: Array, second: Array, tile_origin: Vector2 = Vector2.ZERO) -> Dictionary:
     if first.size() < 12 or second.size() < 12:
