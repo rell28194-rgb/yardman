@@ -1,0 +1,547 @@
+{
+  "schema": 1,
+  "created_at": "2026-10-15T15:44:50.903265+00:00",
+  "base_head": "2adbf08f5c554e0608d5c66ef5af6fcbf5b93b1d",
+  "scope": "Actual Godot 4.7.2 X11 Compatibility + Vulkan Mobile software-GPU captures of generated geometry and production shaders; not Android device, national world, recovered asset or GPU performance acceptance",
+  "repaired_gate": "Six independent median-5x5 panel material signatures and spatially masked red-hero shading replace whole-image quantized RGB-count acceptance. RGB count remains diagnostic. Exact internal resolution proof unchanged.",
+  "source_sha256": {
+    "godot/tests/render_runtime_capture_test.gd": "5254e43df6be9381ef20dcdd556be3bff45ca0a8d4f20f0c1d5fd505126e027b",
+    "godot/scripts/render_quality_manager.gd": "506054198242ca5b7ec3dc24ea47d674680c1bbbea671f4f83cfbdb924f4ed8e",
+    "godot/scripts/render_material_registry.gd": "1419dcb7d5a355f92534b4428be89e28afa9007ea04a68a851b411969fe1f498",
+    "godot/shaders/road_surface.gdshader": "fd570cf8eb9e8eb1b9f4f7eec466dc61262cb28966dfbfbee9239b10ce184cb6",
+    "godot/shaders/road_surface_gles.gdshader": "a9877d43776e0ece7952e52f940d69dd23d24c70b49a990cc4eb4766c0a5e6e2",
+    "godot/shaders/terrain_surface.gdshader": "2f4bb2bb203069c8857daac6bdeb0d70d928f2b04c792adb91640f1016243938",
+    "godot/shaders/terrain_surface_gles.gdshader": "4da938ad72a41e3758925a01bad37145ac9961d899e1ee2fbec68c0fe3526ff1",
+    "godot/shaders/water.gdshader": "61383941e399cb77858f4bbe4dce137c8368609106798824a593edce5343b26b",
+    "godot/shaders/water_gles.gdshader": "6558bd9957635e7de3e197f6b52ca2f36ae23551e5a5ad89a82a6162f7dd6e05"
+  },
+  "engine": {
+    "build": "official",
+    "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+    "hex": 263938,
+    "major": 4,
+    "minor": 7,
+    "patch": 2,
+    "status": "stable",
+    "string": "4.7.2-stable (official)",
+    "timestamp": 0
+  },
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "healthy_cases": 2,
+  "fault_cases": 36,
+  "actual_captures": 76,
+  "faults_detected": [
+    "each of six panels absent",
+    "each of six panels unshaded flat grey",
+    "each of six panels black"
+  ],
+  "diagnostic_count_false_positives": 72,
+  "final_source_healthy_verification": [
+    {
+      "method": "gl_compatibility",
+      "source_sha256": "5254e43df6be9381ef20dcdd556be3bff45ca0a8d4f20f0c1d5fd505126e027b",
+      "report": "final-source-healthy/gl_compatibility-healthy-4/render-runtime-report.json",
+      "report_sha256": "4f1047aa7dd400dced1a3cb85bf98dbf42293b530fc096c761745f430d15dfa9",
+      "captures": [
+        {
+          "dimension_image": "scale-100-dimensions.png",
+          "hero_metrics": {
+            "luma_range": 0.599945895045996,
+            "maximum_luma": 0.688021192914247,
+            "minimum_luma": 0.0880752978682518,
+            "red_pixels": 550
+          },
+          "image": "scale-100.png",
+          "internal_height": 540,
+          "internal_width": 960,
+          "metrics": {
+            "distinct_rgb_5bit": 102,
+            "maximum_luma": 0.99348784352541,
+            "minimum_luma": 0.0231709811329842
+          },
+          "output_height": 540,
+          "output_width": 960,
+          "panel_pixels": [
+            [
+              0.266666680574417,
+              0.298039227724075,
+              0.325490206480026
+            ],
+            [
+              0.705882370471954,
+              0.662745118141174,
+              0.321568638086319
+            ],
+            [
+              0.0313725508749485,
+              0.266666680574417,
+              0.388235300779343
+            ],
+            [
+              0.254901975393295,
+              0.286274522542953,
+              0.313725501298904
+            ],
+            [
+              0.952941179275513,
+              0.87058824300766,
+              0.439215689897537
+            ],
+            [
+              0.0274509806185961,
+              0.254901975393295,
+              0.376470595598221
+            ]
+          ],
+          "scale": 1.0
+        },
+        {
+          "dimension_image": "scale-070-dimensions.png",
+          "hero_metrics": {
+            "luma_range": 0.617057267907262,
+            "maximum_luma": 0.691109035867453,
+            "minimum_luma": 0.0740517679601908,
+            "red_pixels": 550
+          },
+          "image": "scale-070.png",
+          "internal_height": 378,
+          "internal_width": 672,
+          "metrics": {
+            "distinct_rgb_5bit": 269,
+            "maximum_luma": 0.99348784352541,
+            "minimum_luma": 0.0117819610159844
+          },
+          "output_height": 540,
+          "output_width": 960,
+          "panel_pixels": [
+            [
+              0.266666680574417,
+              0.298039227724075,
+              0.329411774873734
+            ],
+            [
+              0.705882370471954,
+              0.662745118141174,
+              0.321568638086319
+            ],
+            [
+              0.00784313771873713,
+              0.26274511218071,
+              0.388235300779343
+            ],
+            [
+              0.254901975393295,
+              0.286274522542953,
+              0.313725501298904
+            ],
+            [
+              0.952941179275513,
+              0.87058824300766,
+              0.439215689897537
+            ],
+            [
+              0.0,
+              0.254901975393295,
+              0.376470595598221
+            ]
+          ],
+          "scale": 0.7
+        }
+      ]
+    },
+    {
+      "method": "mobile",
+      "source_sha256": "5254e43df6be9381ef20dcdd556be3bff45ca0a8d4f20f0c1d5fd505126e027b",
+      "report": "final-source-healthy/mobile-healthy-4/render-runtime-report.json",
+      "report_sha256": "77e956c5f6ae8cf01f0c5fcf38cc7cfebb8928c86f8c52f11fac01cad3a92043",
+      "captures": [
+        {
+          "dimension_image": "scale-100-dimensions.png",
+          "hero_metrics": {
+            "luma_range": 0.592664328184724,
+            "maximum_luma": 0.669520801860094,
+            "minimum_luma": 0.0768564736753702,
+            "red_pixels": 550
+          },
+          "image": "scale-100.png",
+          "internal_height": 540,
+          "internal_width": 960,
+          "metrics": {
+            "distinct_rgb_5bit": 86,
+            "maximum_luma": 0.946192944383621,
+            "minimum_luma": 0.0201035303354263
+          },
+          "output_height": 540,
+          "output_width": 960,
+          "panel_pixels": [
+            [
+              0.541176497936249,
+              0.564705908298492,
+              0.588235318660736
+            ],
+            [
+              0.823529422283173,
+              0.800000011920929,
+              0.588235318660736
+            ],
+            [
+              0.109803922474384,
+              0.243137255311012,
+              0.317647069692612
+            ],
+            [
+              0.529411792755127,
+              0.549019634723663,
+              0.572549045085907
+            ],
+            [
+              0.952941179275513,
+              0.917647063732147,
+              0.682352960109711
+            ],
+            [
+              0.0509803928434849,
+              0.219607844948769,
+              0.294117659330368
+            ]
+          ],
+          "scale": 1.0
+        },
+        {
+          "dimension_image": "scale-070-dimensions.png",
+          "hero_metrics": {
+            "luma_range": 0.613996091619134,
+            "maximum_luma": 0.690852565294504,
+            "minimum_luma": 0.0768564736753702,
+            "red_pixels": 550
+          },
+          "image": "scale-070.png",
+          "internal_height": 378,
+          "internal_width": 672,
+          "metrics": {
+            "distinct_rgb_5bit": 235,
+            "maximum_luma": 0.967599217617512,
+            "minimum_luma": 0.0192698048949242
+          },
+          "output_height": 540,
+          "output_width": 960,
+          "panel_pixels": [
+            [
+              0.541176497936249,
+              0.564705908298492,
+              0.588235318660736
+            ],
+            [
+              0.823529422283173,
+              0.800000011920929,
+              0.588235318660736
+            ],
+            [
+              0.109803922474384,
+              0.243137255311012,
+              0.317647069692612
+            ],
+            [
+              0.529411792755127,
+              0.549019634723663,
+              0.572549045085907
+            ],
+            [
+              0.952941179275513,
+              0.917647063732147,
+              0.682352960109711
+            ],
+            [
+              0.0509803928434849,
+              0.219607844948769,
+              0.294117659330368
+            ]
+          ],
+          "scale": 0.7
+        }
+      ]
+    }
+  ],
+  "actual_captures_including_final_source_verification": 80,
+  "checkpoint": "render-runtime-material-gate-002",
+  "ci_prior_failure": {
+    "run": 38761744589,
+    "job": 116514504486,
+    "head": "b87a518c380a1b2aae4a1565572205815476d4e7",
+    "message": "Captured fixture lacks expected shading variation"
+  },
+  "false_positive_limit": "The removed RGB-count criterion alone accepted72broken captures; the separate oldsum check caughtblack panels. New per-material checks also reject missing/flat-grey panels.",
+  "cases": [
+    {
+      "method": "gl_compatibility",
+      "control": "healthy",
+      "panel": null,
+      "exit_code": 0,
+      "failures": 0
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "missing_panel",
+      "panel": 0,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "missing_panel",
+      "panel": 1,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "missing_panel",
+      "panel": 2,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "missing_panel",
+      "panel": 3,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "missing_panel",
+      "panel": 4,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "missing_panel",
+      "panel": 5,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "flat_panel",
+      "panel": 0,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "flat_panel",
+      "panel": 1,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "flat_panel",
+      "panel": 2,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "flat_panel",
+      "panel": 3,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "flat_panel",
+      "panel": 4,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "flat_panel",
+      "panel": 5,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "black_panel",
+      "panel": 0,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "black_panel",
+      "panel": 1,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "black_panel",
+      "panel": 2,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "black_panel",
+      "panel": 3,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "black_panel",
+      "panel": 4,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "gl_compatibility",
+      "control": "black_panel",
+      "panel": 5,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "healthy",
+      "panel": null,
+      "exit_code": 0,
+      "failures": 0
+    },
+    {
+      "method": "mobile",
+      "control": "missing_panel",
+      "panel": 0,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "missing_panel",
+      "panel": 1,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "missing_panel",
+      "panel": 2,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "missing_panel",
+      "panel": 3,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "missing_panel",
+      "panel": 4,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "missing_panel",
+      "panel": 5,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "flat_panel",
+      "panel": 0,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "flat_panel",
+      "panel": 1,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "flat_panel",
+      "panel": 2,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "flat_panel",
+      "panel": 3,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "flat_panel",
+      "panel": 4,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "flat_panel",
+      "panel": 5,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "black_panel",
+      "panel": 0,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "black_panel",
+      "panel": 1,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "black_panel",
+      "panel": 2,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "black_panel",
+      "panel": 3,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "black_panel",
+      "panel": 4,
+      "exit_code": 1,
+      "failures": 2
+    },
+    {
+      "method": "mobile",
+      "control": "black_panel",
+      "panel": 5,
+      "exit_code": 1,
+      "failures": 2
+    }
+  ],
+  "durable_checkpoint": {
+    "filename": "Yardman-Render-Runtime-Material-Gate-002.zip",
+    "sha256": "d28e9d85c1087f072d6ba019a3bc4ff6827094bf6a593f42da40906aabfd479b"
+  },
+  "ci_controls": "Each backend now proves missingroad, flatterrain and blackwater controlsfail; all36controls independentlyvalidatedlocally"
+}

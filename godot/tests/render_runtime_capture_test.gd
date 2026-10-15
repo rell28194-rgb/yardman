@@ -25,6 +25,11 @@ var diagnostic: SubViewport
 var report: Dictionary = {}
 var fixture_camera: Camera3D
 var panel_centres: Array[Vector3] = []
+# Optional real-render fault controls: missing_panel, flat_panel, black_panel.
+# YARDMAN_RENDER_FIXTURE_CONTROL_PANEL selects one of the six panels (0..5).
+# Every control must exit nonzero at both capture scales.
+var fixture_control := ""
+var fixture_control_panel := 4
 
 func _initialize() -> void:
     call_deferred("_run")
@@ -34,7 +39,7 @@ func _check(condition: bool, message: String) -> void:
         failures += 1
         push_error("RENDER_RUNTIME_CAPTURE_TEST: " + message)
 
-func _add_box(parent: Node3D, position: Vector3, dimensions: Vector3, material: Material) -> void:
+func _add_box(parent: Node3D, position: Vector3, dimensions: Vector3, material: Material) -> MeshInstance3D:
     var instance := MeshInstance3D.new()
     var box := BoxMesh.new()
     box.size = dimensions
@@ -42,6 +47,7 @@ func _add_box(parent: Node3D, position: Vector3, dimensions: Vector3, material: 
     instance.material_override = material
     instance.position = position
     parent.add_child(instance)
+    return instance
 
 func _make_scene() -> void:
     scene = Node3D.new()
@@ -71,7 +77,9 @@ func _make_scene() -> void:
     fixture_camera = camera
 
     var floor_material := StandardMaterial3D.new()
-    floor_material.albedo_color = Color(0.22, 0.23, 0.25)
+    # A neutral floor can masquerade as a missing grey road panel. Give the
+    # supporting stage a diagnostic hue outside every material signature.
+    floor_material.albedo_color = Color(0.22, 0.035, 0.16)
     floor_material.roughness = 0.94
     _add_box(scene, Vector3(0.0, -0.45, 0.0), Vector3(11.2, 0.3, 8.0), floor_material)
     var panels: Array = []
@@ -84,7 +92,17 @@ func _make_scene() -> void:
             material.shader = Registry.shader_for(family, "vulkan_mobile", "Quality", safe)
             if family == "road":
                 material.set_shader_parameter("wetness", 0.65)
-            _add_box(scene, Vector3((column - 1) * 3.5, -0.12, (row - 0.5) * 3.7), Vector3(3.0, 0.4, 3.0), material)
+            var panel := _add_box(scene, Vector3((column - 1) * 3.5, -0.12, (row - 0.5) * 3.7), Vector3(3.0, 0.4, 3.0), material)
+            # A single failed panel must fail even when the other five panels
+            # and shaded hero keep the whole image bright and varied.
+            if row * 3 + column == fixture_control_panel and not fixture_control.is_empty():
+                if fixture_control == "missing_panel":
+                    panel.visible = false
+                else:
+                    var broken := StandardMaterial3D.new()
+                    broken.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+                    broken.albedo_color = Color.BLACK if fixture_control == "black_panel" else Color(0.4, 0.4, 0.4)
+                    panel.material_override = broken
             panel_centres.append(Vector3((column - 1) * 3.5, 0.08, (row - 0.5) * 3.7))
             panels.append({"family": family, "variant": "safe" if safe else "high", "shader": material.shader.resource_path})
     var hero_material := StandardMaterial3D.new()
@@ -145,6 +163,57 @@ func _measure_image(image: Image) -> Dictionary:
             distinct[Vector3i(int(color.r * 31.0), int(color.g * 31.0), int(color.b * 31.0))] = true
     return {"minimum_luma": minimum, "maximum_luma": maximum, "distinct_rgb_5bit": distinct.size()}
 
+func _panel_color(image: Image, centre: Vector3) -> Color:
+    var position := fixture_camera.unproject_position(centre)
+    var red: Array[float] = []
+    var green: Array[float] = []
+    var blue: Array[float] = []
+    # A small interior patch avoids a single resampling/animation-dependent
+    # pixel becoming the oracle. Keep this away from panel borders and hero.
+    for y in range(-2, 3):
+        for x in range(-2, 3):
+            var color := image.get_pixel(clampi(roundi(position.x) + x, 0, image.get_width() - 1), clampi(roundi(position.y) + y, 0, image.get_height() - 1))
+            red.append(color.r)
+            green.append(color.g)
+            blue.append(color.b)
+    red.sort()
+    green.sort()
+    blue.sort()
+    return Color(red[12], green[12], blue[12])
+
+func _panel_has_material_signature(color: Color, family: String) -> bool:
+    # Broad fixture semantics, rather than exact backend colors: the road is
+    # neutral grey, terrain is warm earth/grass, water is blue-green. These
+    # margins accommodate GLES/Vulkan lighting and water phase differences.
+    if family == "road":
+        # The fixed blue ambient light gives the neutral asphalt a small cool
+        # bias; an unshaded flat grey or default white material must not pass.
+        return color.r > 0.12 and color.b < 0.80 and color.b - color.r > 0.025 and color.g - color.r > 0.01 and color.b - color.r < 0.18
+    if family == "terrain":
+        return color.r - color.b > 0.12 and color.g - color.b > 0.10 and color.g > 0.25
+    return color.b - color.r > 0.10 and color.g - color.r > 0.07 and color.b - color.g > 0.025
+
+func _measure_hero(image: Image) -> Dictionary:
+    var centre := fixture_camera.unproject_position(Vector3(0.0, 0.65, 0.0))
+    var edge := fixture_camera.unproject_position(Vector3(0.0, 0.65, 0.0) + fixture_camera.global_basis.x * 0.65)
+    var radius := centre.distance_to(edge)
+    var minimum := 1.0
+    var maximum := 0.0
+    var red_pixels := 0
+    for y in range(roundi(centre.y - radius), roundi(centre.y + radius) + 1, 2):
+        for x in range(roundi(centre.x - radius), roundi(centre.x + radius) + 1, 2):
+            if Vector2(x, y).distance_to(centre) > radius:
+                continue
+            var color := image.get_pixel(clampi(x, 0, image.get_width() - 1), clampi(y, 0, image.get_height() - 1))
+            # Exclude floor, panels and white specular highlights. Shaded red
+            # body pixels must independently demonstrate curved-surface light.
+            if color.r > color.g * 1.5 + 0.05 and color.r > color.b * 1.5 + 0.05:
+                red_pixels += 1
+                var luma := color.r * 0.2126 + color.g * 0.7152 + color.b * 0.0722
+                minimum = minf(minimum, luma)
+                maximum = maxf(maximum, luma)
+    return {"red_pixels": red_pixels, "minimum_luma": minimum, "maximum_luma": maximum, "luma_range": maximum - minimum}
+
 func _capture(scale: float) -> void:
     root.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
     root.scaling_3d_scale = scale
@@ -165,20 +234,25 @@ func _capture(scale: float) -> void:
     _check(image.get_size() == CAPTURE_SIZE, "3D scaling resized the final UI/output canvas")
     var metrics := _measure_image(image)
     _check(float(metrics.maximum_luma) - float(metrics.minimum_luma) > 0.2, "Captured scene lacks measurable lighting contrast")
-    _check(int(metrics.distinct_rgb_5bit) > 64, "Captured fixture lacks expected shading variation")
+    # Whole-image quantized color counts remain diagnostic only: edge sampling,
+    # water TIME and backend dithering change them without a material failure.
+    # Check the actual six materials and curved hero instead.
     var panel_pixels: Array = []
-    for centre in panel_centres:
-        var position := fixture_camera.unproject_position(centre)
-        var color := image.get_pixel(clampi(roundi(position.x), 0, image.get_width() - 1), clampi(roundi(position.y), 0, image.get_height() - 1))
+    for index in range(panel_centres.size()):
+        var color := _panel_color(image, panel_centres[index])
         panel_pixels.append([color.r, color.g, color.b])
-        _check(color.r + color.g + color.b > 0.20, "A production shader panel rendered as empty background")
+        var family: String = report.visible_shader_panels[index].family
+        _check(_panel_has_material_signature(color, family), "Production shader panel %d (%s) lost its material signature: %s" % [index, family, color])
+    var hero_metrics := _measure_hero(image)
+    _check(int(hero_metrics.red_pixels) >= 12, "Hero material is missing or lost its red identity")
+    _check(float(hero_metrics.luma_range) > 0.06, "Hero curved surface lacks measurable shading")
     var name := "scale-%03d" % roundi(scale * 100.0)
     _check(image.save_png(output_dir.path_join(name + ".png")) == OK, "Could not save scene capture")
     _check(dimensions_image.save_png(output_dir.path_join(name + "-dimensions.png")) == OK, "Could not save diagnostic capture")
     report["captures"].append({
         "scale": scale, "internal_width": measured.x, "internal_height": measured.y,
         "output_width": image.get_width(), "output_height": image.get_height(),
-        "image": name + ".png", "dimension_image": name + "-dimensions.png", "metrics": metrics, "panel_pixels": panel_pixels,
+        "image": name + ".png", "dimension_image": name + "-dimensions.png", "metrics": metrics, "panel_pixels": panel_pixels, "hero_metrics": hero_metrics,
     })
 
 func _run() -> void:
@@ -202,6 +276,12 @@ func _run() -> void:
     root.content_scale_size = Vector2i.ZERO
     root.size = CAPTURE_SIZE
     var actual_method := RenderingServer.get_current_rendering_method()
+    fixture_control = OS.get_environment("YARDMAN_RENDER_FIXTURE_CONTROL")
+    var control_panel_text := OS.get_environment("YARDMAN_RENDER_FIXTURE_CONTROL_PANEL")
+    if not control_panel_text.is_empty():
+        fixture_control_panel = control_panel_text.to_int()
+        _check(control_panel_text.is_valid_int() and fixture_control_panel >= 0 and fixture_control_panel < 6, "Invalid render fixture control panel")
+    _check(fixture_control in ["", "missing_panel", "black_panel", "flat_panel"], "Unknown render fixture negative control")
     var expected_method := OS.get_environment("YARDMAN_EXPECT_RENDER_METHOD")
     _check(not expected_method.is_empty(), "Set YARDMAN_EXPECT_RENDER_METHOD to reject silent renderer fallback")
     _check(actual_method == expected_method, "Actual renderer %s differs from required %s" % [actual_method, expected_method])
@@ -219,6 +299,8 @@ func _run() -> void:
         "engine": Engine.get_version_info(), "method": actual_method, "renderer_family": expected_family,
         "adapter": RenderingServer.get_video_adapter_name(), "display": DisplayServer.get_name(),
         "policy_scale": applied_policy_scale, "captures": [],
+        "fixture_control": fixture_control,
+        "fixture_control_panel": fixture_control_panel if not fixture_control.is_empty() else -1,
         "scope": "Actual host render of generated fixture and production shaders; not Android device or national-world acceptance",
     }
     _make_scene()

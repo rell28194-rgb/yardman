@@ -209,6 +209,24 @@ jobs:
           if [ "$render_status" -eq 124 ]; then
             echo "YARDMAN_RENDER_RUNTIME_EXIT_TIMEOUT_ACCEPTED renderer=${YARDMAN_EXPECT_RENDER_METHOD} pass_marker=1"
           fi
+      - name: Prove missing flat and black panels fail the render gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pair in missing_panel:0 flat_panel:1 black_panel:2; do
+            control=${pair%:*}
+            panel=${pair#*:}
+            log="godot/build/render-control-${control}.log"
+            set +e
+            YARDMAN_RENDER_FIXTURE_CONTROL="$control" YARDMAN_RENDER_FIXTURE_CONTROL_PANEL="$panel" YARDMAN_RENDER_CAPTURE_DIR="${YARDMAN_RENDER_CAPTURE_DIR}/controls/${control}" timeout 120 xvfb-run -a -s '-screen 0 960x540x24' godot --path godot --rendering-method "$YARDMAN_EXPECT_RENDER_METHOD" --audio-driver Dummy --script res://tests/render_runtime_capture_test.gd > "$log" 2>&1
+            control_status=$?
+            set -e
+            if [ "$control_status" -eq 0 ] || [ "$control_status" -eq 124 ]; then cat "$log"; exit 1; fi
+            if grep -E 'SCRIPT ERROR|Parse Error' "$log"; then exit 1; fi
+            grep -q "Production shader panel ${panel} .*lost its material signature" "$log"
+            grep -q 'YARDMAN_RENDER_RUNTIME_CAPTURE_TEST FAIL' "$log"
+            echo "YARDMAN_RENDER_NEGATIVE_CONTROL PASS renderer=$YARDMAN_EXPECT_RENDER_METHOD control=$control panel=$panel"
+          done
       - name: Preserve rendered evidence
         if: always()
         uses: actions/upload-artifact@v4
