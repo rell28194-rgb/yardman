@@ -3,6 +3,12 @@ extends RefCounted
 class_name YardmanReferenceAssets
 
 const ROOT := "res://assets/user_reference/"
+# These aliases are deliberate private-pack upgrades, not filename accidents.
+# Callers keep stable semantic names while the best authorized recovered source
+# can replace an older fallback without changing gameplay scripts.
+const TEXTURE_UPGRADES := {
+    "ground_rock.png": "beta2_ucaptain_mountain_terrain_albedo.ktx",
+}
 static var _textures: Dictionary = {}
 static var _scenes: Dictionary = {}
 
@@ -17,13 +23,20 @@ static func texture(filename: String) -> Texture2D:
         return null
     if _textures.has(filename):
         return _textures[filename] as Texture2D
-    var path := ROOT + filename
-    if not ResourceLoader.exists(path):
-        return null
-    var media := ResourceLoader.load(path) as Texture2D
-    if media != null:
-        _textures[filename] = media
-    return media
+    var candidates: Array[String] = []
+    var upgraded := str(TEXTURE_UPGRADES.get(filename, ""))
+    if not upgraded.is_empty():
+        candidates.append(upgraded)
+    candidates.append(filename)
+    for candidate in candidates:
+        var path := ROOT + candidate
+        if not ResourceLoader.exists(path):
+            continue
+        var media := ResourceLoader.load(path) as Texture2D
+        if media != null:
+            _textures[filename] = media
+            return media
+    return null
 
 static func scene(filename: String) -> PackedScene:
     if not _valid_name(filename, PackedStringArray(["glb", "gltf"])):
