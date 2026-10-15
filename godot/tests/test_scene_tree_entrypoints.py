@@ -6,9 +6,14 @@ from pathlib import Path
 
 
 TEST_ROOT = Path(__file__).resolve().parent
-SCENE_TREE_RE = re.compile(r"^\s*extends\s+SceneTree\b", re.MULTILINE)
-STARTUP_RE = re.compile(r"^\s*func\s+_(?:initialize|init)\s*\(", re.MULTILINE)
-RUN_RE = re.compile(r"^\s*func\s+_run\s*\(", re.MULTILINE)
+# Root SceneTree lifecycle methods are top-level GDScript functions. Requiring
+# column-zero here deliberately ignores _init() methods inside nested helper
+# classes, which are constructors rather than the script entrypoint.
+SCENE_TREE_RE = re.compile(r"^extends\s+SceneTree\b", re.MULTILINE)
+INITIALIZE_RE = re.compile(r"^func\s+_initialize\s*\(", re.MULTILINE)
+INIT_RE = re.compile(r"^func\s+_init\s*\(", re.MULTILINE)
+RUN_RE = re.compile(r"^func\s+_run\s*\(", re.MULTILINE)
+NEXT_TOP_LEVEL_FUNC_RE = re.compile(r"^func\s+", re.MULTILINE)
 SCHEDULE_RUN_RE = re.compile(r"(?:call_deferred\s*\(\s*[\"']_run[\"']|\b_run\s*\()")
 
 
@@ -23,14 +28,15 @@ class SceneTreeEntrypointContractTests(unittest.TestCase):
             if not SCENE_TREE_RE.search(source):
                 continue
             checked += 1
-            if not STARTUP_RE.search(source):
-                failures.append(f"{path.name}: extends SceneTree but has no _initialize()/_init() startup callback")
+            # Prefer the SceneTree-specific callback. _init() is accepted for
+            # older tests, but only when it is a root-level script function.
+            startup_match = INITIALIZE_RE.search(source) or INIT_RE.search(source)
+            if startup_match is None:
+                failures.append(f"{path.name}: extends SceneTree but has no root _initialize()/_init() startup callback")
                 continue
             if RUN_RE.search(source):
-                startup_match = STARTUP_RE.search(source)
-                assert startup_match is not None
                 tail = source[startup_match.end():]
-                next_func = re.search(r"^\s*func\s+", tail, re.MULTILINE)
+                next_func = NEXT_TOP_LEVEL_FUNC_RE.search(tail)
                 startup_body = tail[: next_func.start()] if next_func else tail
                 if not SCHEDULE_RUN_RE.search(startup_body):
                     failures.append(f"{path.name}: defines _run() but startup callback never schedules/calls it")
