@@ -1,0 +1,50 @@
+name: Yardman road profile compiler
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - 'godot/tools/road_profile.py'
+      - 'godot/tools/build_jamaica_roads.py'
+      - 'godot/tools/build_drainage.py'
+      - 'godot/tools/build_guardrails.py'
+      - 'godot/tests/test_road_profile.py'
+      - 'godot/tests/test_road_auxiliary_contract.py'
+      - '.github/workflows/godot-road-profile.yml'
+  pull_request:
+    paths:
+      - 'godot/tools/road_profile.py'
+      - 'godot/tools/build_jamaica_roads.py'
+      - 'godot/tools/build_drainage.py'
+      - 'godot/tools/build_guardrails.py'
+      - 'godot/tests/test_road_profile.py'
+      - 'godot/tests/test_road_auxiliary_contract.py'
+      - '.github/workflows/godot-road-profile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  road-profile-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile road engineering Python
+        run: |
+          python3 -m py_compile \
+            godot/tools/road_profile.py \
+            godot/tools/build_jamaica_roads.py \
+            godot/tools/build_drainage.py \
+            godot/tools/build_guardrails.py
+      - name: Test longitudinal profile and canonical auxiliary layers
+        run: |
+          python3 -m unittest \
+            godot.tests.test_road_profile \
+            godot.tests.test_road_auxiliary_contract \
+            -v
