@@ -11,7 +11,11 @@ func _initialize() -> void:
     call_deferred("_run")
 
 func _local_stream_ready() -> bool:
-    if scene == null or not scene.world_ready or not scene.car.is_on_floor():
+    # Production world_ready already requires the local collision footprint and
+    # spawn-settle pass. is_on_floor() is diagnostic only: it can be false on a
+    # perfectly settled CharacterBody3D between contacts and must not deadlock a
+    # visual capture gate after the world itself is ready.
+    if scene == null or not scene.world_ready:
         return false
     var world: PackedFloat64Array = scene.roads.local_to_world(scene.car.position)
     var tile: Vector2i = scene.roads.coordinates.tile_for(world[0], world[2])
@@ -98,8 +102,8 @@ func _wait_world(parish: String) -> bool:
         if _local_stream_ready():
             stable_frames += 1
             if stable_frames >= 12:
-                print("CAPTURE_TEST_READY parish=%s road_inflight=%d terrain_inflight=%d building_inflight=%d" % [
-                    parish, scene.roads.inflight_count(), scene.terrain.inflight_count(), scene.buildings.inflight_count()
+                print("CAPTURE_TEST_READY parish=%s floor=%s road_inflight=%d terrain_inflight=%d building_inflight=%d" % [
+                    parish, str(scene.car.is_on_floor()), scene.roads.inflight_count(), scene.terrain.inflight_count(), scene.buildings.inflight_count()
                 ])
                 return true
         else:
