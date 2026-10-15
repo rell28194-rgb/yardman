@@ -1,18 +1,17 @@
 shader_type spatial;
 render_mode cull_back, depth_draw_opaque;
 
-// GLES-safe ocean: no procedural multi-octave hash field or caustic pass. It
-// retains registered coast distance, moving slopes, sourced surface detail and
-// shoreline foam so fallback hardware still reads as Jamaica's coast.
 uniform vec3 ocean_color : source_color = vec3(0.028, 0.17, 0.23);
 uniform vec3 coastal_color : source_color = vec3(0.10, 0.37, 0.40);
 uniform float wave_height = 0.045;
 uniform sampler2D reference_surface : source_color, repeat_enable, filter_linear_mipmap;
 uniform sampler2D reference_foam : source_color, repeat_enable, filter_linear_mipmap;
 uniform sampler2D reference_caustics : source_color, repeat_enable, filter_linear_mipmap;
+uniform sampler2D reference_normal : repeat_enable, filter_linear_mipmap;
 uniform bool has_reference_surface = false;
 uniform bool has_reference_foam = false;
 uniform bool has_reference_caustics = false;
+uniform bool has_reference_normal = false;
 varying vec2 ocean_uv;
 varying float shore_fraction;
 
@@ -28,6 +27,11 @@ void fragment() {
     float p2 = dot(ocean_uv, vec2(-0.326, 0.946)) * 19.0 + TIME * 1.31;
     vec2 slope = vec2(0.913, 0.408) * cos(p1) * 0.040;
     slope += vec2(-0.326, 0.946) * cos(p2) * 0.023;
+    if (has_reference_normal) {
+        vec2 source_normal = texture(reference_normal,
+            ocean_uv * 2.15 + vec2(TIME * 0.0048, -TIME * 0.0032)).rg * 2.0 - 1.0;
+        slope += source_normal * 0.105 * shore_fade;
+    }
     slope *= wave_height * 8.0 * shore_fade;
     NORMAL = normalize(mat3(VIEW_MATRIX) * normalize(vec3(-slope.x, 1.0, -slope.y)));
 
