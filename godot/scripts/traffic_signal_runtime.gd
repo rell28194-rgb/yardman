@@ -15,6 +15,12 @@ var _active_right := 0
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
 
+static func _is_live_node3d(value) -> bool:
+    # `is Node3D` throws when `value` is a previously freed Object. Always
+    # validate the Object first; traffic agents and signal rigs are routinely
+    # removed during streamed parish changes/rebases.
+    return is_instance_valid(value) and value is Node3D
+
 func _process(delta: float) -> void:
     _clock += delta
     _blink_clock = fmod(_blink_clock + delta, PlayerSignals.BLINK_PERIOD_S)
@@ -45,7 +51,7 @@ func _process(delta: float) -> void:
         var identifier := str(identifier_value)
         var agent: Dictionary = agents[identifier_value]
         var body_value = agent.get("node", null)
-        if not body_value is Node3D or not is_instance_valid(body_value):
+        if not _is_live_node3d(body_value):
             _remove_rig(identifier)
             continue
         var state := desired_signal(agent, roads)
@@ -108,7 +114,7 @@ func _ensure_rig(identifier: String, body: Node3D) -> Dictionary:
     var existing: Dictionary = _rigs.get(identifier, {})
     if not existing.is_empty():
         var root_value = existing.get("root", null)
-        if root_value is Node3D and is_instance_valid(root_value) and (root_value as Node3D).get_parent() == body:
+        if _is_live_node3d(root_value) and (root_value as Node3D).get_parent() == body:
             return existing
         _remove_rig(identifier)
     var root := Node3D.new()
@@ -169,11 +175,16 @@ func _prune(agents: Dictionary) -> void:
 func _remove_rig(identifier: String) -> void:
     if not _rigs.has(identifier):
         return
-    var rig: Dictionary = _rigs[identifier]
-    var root_value = rig.get("root", null)
-    if root_value is Node and is_instance_valid(root_value):
-        (root_value as Node).queue_free()
+    # Erase first so a queued/freeing node can never remain discoverable through
+    # the runtime cache during the same streaming/rebase frame.
+    var rig_value = _rigs.get(identifier, {})
     _rigs.erase(identifier)
+    if not rig_value is Dictionary:
+        return
+    var rig: Dictionary = rig_value
+    var root_value = rig.get("root", null)
+    if is_instance_valid(root_value) and root_value is Node:
+        (root_value as Node).queue_free()
 
 func _clear_all() -> void:
     var identifiers: Array = _rigs.keys()
