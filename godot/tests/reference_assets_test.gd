@@ -73,8 +73,12 @@ func _run() -> void:
         _check(direct_grass != null, "Recovered Beta2 scrub grass missing")
         _check(References.texture("ground_grass.png") == direct_grass,
             "Terrain semantic alias did not select recovered Beta2 scrub grass source")
-        _check(References.texture("beta2_ucaptain_scrub_grass_normal.ktx") != null,
-            "Recovered Beta2 scrub-grass normal missing")
+        var direct_grass_normal := References.texture("beta2_ucaptain_scrub_grass_normal.ktx")
+        _check(direct_grass_normal != null, "Recovered Beta2 scrub-grass normal missing")
+        _check(material_a.get_shader_parameter("has_reference_grass_normal") == true,
+            "Recovered scrub-grass normal was not enabled on terrain")
+        _check(material_a.get_shader_parameter("reference_grass_normal") == direct_grass_normal,
+            "Terrain material did not bind the recovered scrub-grass normal")
         _check(ktx_textures >= 4, "Expected recovered Beta2 KTX textures were not imported")
     roads.free()
     print("YARDMAN_REFERENCE_ASSETS_TEST %s private_pack=1 verified=%d textures=%d ktx=%d materials=1 mipmaps=1" % [
