@@ -89,7 +89,8 @@
   },
   "mutation_control": {
     "passed": true,
-    "mutation": "Remove wallet-save ownership binding in isolated project",
+    "scope": "Current 53-check source in isolated project; production files unchanged",
+    "mutation": "Remove wallet-save ownership binding",
     "detected_error": "debit reached disk without ownership",
     "actual_engine": "Godot 4.7.2"
   },
@@ -131,6 +132,23 @@
       "messages": [
         "ERROR: GARAGE_PURCHASE_RECOVERY: failed save after recovery destroyed the good wallet/ownership checkpoint",
         "ERROR: GARAGE_PURCHASE_RECOVERY: save after backup recovery replaced the valid backup with corrupt data",
+        "YARDMAN_GARAGE_PURCHASE_RECOVERY_TEST FAIL checks=53"
+      ]
+    },
+    {
+      "case": "no_ownership_binding",
+      "import_exit": 0,
+      "test_exit": 1,
+      "messages": [
+        "ERROR: GARAGE_PURCHASE_RECOVERY: debit reached disk without ownership",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: restart lost money or the paid vehicle",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: recovered car was charged twice",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: missing selection file lost paid ownership",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: corrupt selection file lost paid ownership",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: refund did not persist money and ownership together",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: failed-refund restart lost the car",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: first purchase backup lacks an atomic legacy baseline",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: legacy backup recovery granted a free paid car",
         "YARDMAN_GARAGE_PURCHASE_RECOVERY_TEST FAIL checks=53"
       ]
     }
