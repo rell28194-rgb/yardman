@@ -75,6 +75,7 @@ class GeographyApkValidationTests(unittest.TestCase):
         self.assertEqual(proof["places"], 14)
         self.assertEqual(proof["place_tiles"], 1)
         self.assertEqual(proof["crs"], "EPSG:3448")
+        self.assertEqual(proof["source_sha256"], self.source_sha)
 
     def test_rejects_packaged_manifest_drift(self):
         sources = self._write_sources()
@@ -82,6 +83,28 @@ class GeographyApkValidationTests(unittest.TestCase):
         packaged["stats"]["places"] = 13
         with self.assertRaisesRegex(ValueError, "differs from compiled Jamaica source"):
             validate(self._write_apk(places=packaged), *sources)
+
+    def test_rejects_invalid_road_source_digest(self):
+        self.roads["source_sha256"] = "not-a-sha"
+        sources = self._write_sources()
+        with self.assertRaisesRegex(ValueError, "valid source SHA-256"):
+            validate(self._write_apk(), *sources)
+
+    def test_rejects_source_registration_mismatch(self):
+        self.roads["source_sha256"] = "b" * 64
+        sources = self._write_sources()
+        with self.assertRaisesRegex(ValueError, "source registration differs"):
+            validate(self._write_apk(), *sources)
+
+    def test_rejects_noncanonical_crs_even_when_all_manifests_agree(self):
+        self.roads["crs"] = "EPSG:4326"
+        places = deepcopy(self.places)
+        parishes = deepcopy(self.parishes)
+        places["crs"] = "EPSG:4326"
+        parishes["crs"] = "EPSG:4326"
+        source_paths = self._write_sources(places=places, parishes=parishes)
+        with self.assertRaisesRegex(ValueError, "canonical Jamaica Metric Grid"):
+            validate(self._write_apk(places=places, parishes=parishes), *source_paths)
 
     def test_rejects_missing_canonical_parish_even_when_source_matches(self):
         missing = deepcopy(self.parishes)
@@ -91,11 +114,25 @@ class GeographyApkValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "parish set is not canonical"):
             validate(self._write_apk(parishes=missing), *source_paths)
 
+    def test_rejects_missing_capital_anchor(self):
+        places = deepcopy(self.places)
+        places["parish_capitals"].pop("Kingston")
+        source_paths = self._write_sources(places=places)
+        with self.assertRaisesRegex(ValueError, "omitted canonical parish-capital anchors"):
+            validate(self._write_apk(places=places), *source_paths)
+
     def test_rejects_place_coverage_gap(self):
         places = deepcopy(self.places)
         places["stats"]["by_parish"].pop("St. Thomas")
         source_paths = self._write_sources(places=places)
         with self.assertRaisesRegex(ValueError, "cover exactly all fourteen parishes"):
+            validate(self._write_apk(places=places), *source_paths)
+
+    def test_rejects_unknown_place_parish(self):
+        places = deepcopy(self.places)
+        places["tiles"]["0:0"][0]["parish"] = "Unknown"
+        source_paths = self._write_sources(places=places)
+        with self.assertRaisesRegex(ValueError, "non-canonical parish"):
             validate(self._write_apk(places=places), *source_paths)
 
     def test_rejects_duplicate_geography_authority_payload(self):
