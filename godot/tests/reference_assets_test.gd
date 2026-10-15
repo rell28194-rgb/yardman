@@ -17,6 +17,37 @@ func _run() -> void:
     _check(References.texture("../outside.png") == null, "Path traversal accepted")
     _check(References.scene("script.gd") == null, "Executable reference script accepted")
     _check(References.audio("folder/sample.wav") == null, "Nested path accepted")
+
+    # Runtime media loading must fail closed on stale, ambiguous or malformed
+    # private-pack manifests. This is pure-data coverage so source-only CI can
+    # protect the contract without requiring the owner's private media.
+    var hash_a := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    var hash_b := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    var good_manifest := {
+        "format_version": 1,
+        "files": [{"path": "hero.glb", "sha256": hash_a, "bytes": 1234}],
+    }
+    _check(References.manifest_file_matches("hero.glb", good_manifest, hash_a, 1234),
+        "Exact manifest identity was rejected")
+    _check(not References.manifest_file_matches("hero.glb", good_manifest, hash_b, 1234),
+        "Stale private scene hash was accepted")
+    _check(not References.manifest_file_matches("hero.glb", good_manifest, hash_a, 1235),
+        "Stale private scene byte size was accepted")
+    _check(not References.manifest_file_matches("missing.glb", good_manifest, hash_a, 1234),
+        "Unlisted private scene was accepted")
+    var duplicate_manifest := good_manifest.duplicate(true)
+    duplicate_manifest.files.append({"path": "hero.glb", "sha256": hash_a, "bytes": 1234})
+    _check(not References.manifest_file_matches("hero.glb", duplicate_manifest, hash_a, 1234),
+        "Ambiguous duplicate private scene identity was accepted")
+    var malformed_manifest := {
+        "format_version": 1,
+        "files": [{"path": "hero.glb", "sha256": "not-a-sha256", "bytes": 1234}],
+    }
+    _check(not References.manifest_file_matches("hero.glb", malformed_manifest),
+        "Malformed private scene digest was accepted")
+    _check(not References.manifest_file_matches("hero.glb", {"format_version": 2, "files": good_manifest.files}),
+        "Unknown private-pack manifest version was accepted")
+
     _check(str(References.TEXTURE_UPGRADES.get("ground_dry_grass.png", "")) == "beta2_ucaptain_mountain_terrain_albedo.ktx",
         "Beta2 vegetated mountain surface must occupy the dry grass/earth slot")
     _check(str(References.TEXTURE_UPGRADES.get("ground_rock.png", "")) == "ground_rock_alternate.png",
@@ -38,7 +69,7 @@ func _run() -> void:
     if manifest.is_empty():
         _check(not required, "Required personal asset manifest missing")
         _check(References.texture("road_asphalt.png") == null, "Missing pack supplied a texture")
-        print("YARDMAN_REFERENCE_ASSETS_TEST %s private_pack=0 fallback=1 roadside_api=1" % ("PASS" if failures == 0 else "FAIL"))
+        print("YARDMAN_REFERENCE_ASSETS_TEST %s private_pack=0 fallback=1 roadside_api=1 manifest_guard=1" % ("PASS" if failures == 0 else "FAIL"))
         quit(failures)
         return
     var verified := 0
@@ -52,7 +83,13 @@ func _run() -> void:
         if not FileAccess.file_exists(path):
             continue
         var expected: String = str(record.get("sha256", ""))
-        _check(expected.length() == 64 and FileAccess.get_sha256(path) == expected, "File hash mismatch: " + filename)
+        var actual_sha := FileAccess.get_sha256(path)
+        var handle := FileAccess.open(path, FileAccess.READ)
+        var actual_size := int(handle.get_length()) if handle != null else -1
+        handle = null
+        _check(expected.length() == 64 and actual_sha == expected, "File hash mismatch: " + filename)
+        _check(References.manifest_file_matches(filename, manifest, actual_sha, actual_size),
+            "Runtime manifest gate rejected verified private file: " + filename)
         verified += 1
         if filename.ends_with(".png") or filename.ends_with(".ktx"):
             var texture: Texture2D = References.texture(filename)
@@ -103,6 +140,6 @@ func _run() -> void:
             "Terrain material did not bind the recovered scrub-grass normal")
         _check(ktx_textures >= 4, "Expected recovered Beta2 KTX textures were not imported")
     roads.free()
-    print("YARDMAN_REFERENCE_ASSETS_TEST %s private_pack=1 verified=%d textures=%d ktx=%d materials=1 mipmaps=1 roadside_api=1" % [
+    print("YARDMAN_REFERENCE_ASSETS_TEST %s private_pack=1 verified=%d textures=%d ktx=%d materials=1 mipmaps=1 roadside_api=1 manifest_guard=1" % [
         "PASS" if failures == 0 else "FAIL", verified, textures, ktx_textures])
     quit(failures)
