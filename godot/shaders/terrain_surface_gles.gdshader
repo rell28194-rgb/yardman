@@ -2,14 +2,15 @@ shader_type spatial;
 render_mode cull_back;
 
 // GLES-safe terrain path. Registered geometry remains identical; this variant
-// trades the high path's triplanar multi-sampling and normal detail for a small
-// fixed sample budget.
+// keeps a fixed sample budget while still accepting direct recovered detail.
 uniform sampler2D surface_noise : repeat_enable, filter_linear_mipmap;
 uniform sampler2D reference_grass : source_color, repeat_enable, filter_linear_mipmap;
 uniform sampler2D reference_dry_grass : source_color, repeat_enable, filter_linear_mipmap;
 uniform sampler2D reference_rock : source_color, repeat_enable, filter_linear_mipmap;
+uniform sampler2D reference_grass_normal : repeat_enable, filter_linear_mipmap;
 uniform bool has_reference_ground = false;
 uniform bool has_reference_rock = false;
+uniform bool has_reference_grass_normal = false;
 uniform sampler2D tunnel_portal_mask : filter_nearest, repeat_disable;
 uniform bool tunnel_portal_mask_enabled = false;
 uniform float terrain_tile_size = 4096.0;
@@ -59,4 +60,10 @@ void fragment() {
     ALBEDO = mix(mix(grass, soil, bare), rock, rocky);
     ROUGHNESS = mix(0.97, 0.90, rocky);
     SPECULAR = 0.11;
+    if (!overview && has_reference_grass_normal) {
+        vec2 grass_n = texture(reference_grass_normal, p.xz / 8.0).rg * 2.0 - 1.0;
+        float grass_weight = (1.0 - rocky) * (1.0 - bare) * (1.0 - dry * 0.22);
+        NORMAL_MAP = vec3(grass_n * 0.15 * clamp(grass_weight, 0.0, 1.0) + vec2(0.5), 1.0);
+        NORMAL_MAP_DEPTH = 0.22;
+    }
 }
