@@ -32,8 +32,28 @@ func _run() -> void:
     _check(absf(float(on_road.height_a) - 10.0) < 0.001 and absf(float(on_road.height_b) - 13.0) < 0.001,
         "Registered road-deck endpoint heights were dropped from the runtime surface index")
     _check(not stream.road_surface_at(140.0, 70.0).found, "Off-road position classified as road")
+
+    # Stacked carriageways share X/Z at bridge crossings. Elevation-aware
+    # queries must select the deck occupied by the actor, not dictionary order.
+    var upper := segment.duplicate(true)
+    upper[6] = 8
+    upper[7] = "upper:0:osm:3:osm:4"
+    upper[9] = 30.0
+    upper[10] = 30.0
+    stream._index_surface_segment(tile_index, upper)
+    var lower_surface := stream.road_surface_at(140.0, 64.0, 11.85)
+    var upper_surface := stream.road_surface_at(140.0, 64.0, 30.45)
+    var between_surfaces := stream.road_surface_at(140.0, 64.0, 20.0)
+    _check(lower_surface.found and lower_surface.surface == "paved" and str(lower_surface.edge_id).begins_with("w1:"),
+        "Elevation-aware lookup did not select the lower paved carriageway")
+    _check(upper_surface.found and upper_surface.surface == "unpaved" and str(upper_surface.edge_id).begins_with("upper:"),
+        "Elevation-aware lookup did not select the upper stacked carriageway")
+    _check(not between_surfaces.found, "Actor between stacked decks inherited road grip from a distant carriageway")
+    _check(absf(float(upper_surface.deck_y) - 30.0) < 0.001 and float(upper_surface.vertical_distance_m) < 0.5,
+        "Stacked surface query did not expose the selected deck elevation")
+
     var paths: Array[PackedVector2Array] = stream.nearby_paths(140.0, 64.0, 220.0)
-    _check(paths.size() == 1 and paths[0].size() == 2, "Nearby map paths must deduplicate all occupied cells")
+    _check(paths.size() == 2 and paths[0].size() == 2, "Nearby map paths must deduplicate occupied cells without collapsing stacked roads")
     stream._surface_indices.erase("0:0")
     _check(not stream.road_surface_at(140.0, 64.0).found, "Unloaded geometry left a stale road surface")
     _check(stream.nearby_paths(140.0, 64.0).is_empty(), "Unloaded geometry left stale radar paths")
@@ -67,5 +87,5 @@ func _run() -> void:
     tile_root.free()
     helper.free()
     stream.free()
-    print("YARDMAN_ROAD_SURFACE_TEST %s grid=128 dedup=1 unload=1 surface=1 deck_height=1 bridge_collision=1 tunnel_collision=1" % ["PASS" if failures == 0 else "FAIL"])
+    print("YARDMAN_ROAD_SURFACE_TEST %s grid=128 dedup=1 unload=1 surface=1 deck_height=1 stacked_decks=1 bridge_collision=1 tunnel_collision=1" % ["PASS" if failures == 0 else "FAIL"])
     quit(0 if failures == 0 else 1)
