@@ -1,0 +1,1 @@
+Yardman side-branch staging note: APK geography/capture validator work is isolated from the canonical Android run. Safe to delete after staging.
