@@ -45,6 +45,33 @@ func _active_vehicle_contract() -> bool:
         return false
     return true
 
+func _configure_capture_streaming() -> void:
+    # Keep Ultra materials/lighting and the production render path, but bound the
+    # capture to the local neighbourhood actually visible in a 1280x720 frame.
+    # National traversal/streaming radius is covered separately. This prevents
+    # background HLOD queues from consuming most of the renderer smoke timeout.
+    scene.roads.load_radius = 1
+    scene.roads.max_io_jobs = 4
+    scene.roads.max_segments_per_frame = 8192
+    scene.roads.geometry_budget_us = 40000
+    scene.terrain.load_radius = 1
+    scene.terrain.max_io_jobs = 4
+    scene.terrain.geometry_budget_us = 40000
+    scene.buildings.draw_distance = 450.0
+    scene.buildings.max_loaded_cells = 64
+    scene.buildings.max_io_jobs = 4
+    scene.buildings.max_buildings_per_frame = 160
+    scene.buildings.geometry_budget_us = 40000
+    scene._refresh_streamers()
+    print("YARDMAN_CAPTURE_STREAMING road_radius=%d terrain_radius=%d building_distance=%.0f road_budget_us=%d terrain_budget_us=%d building_budget_us=%d" % [
+        scene.roads.load_radius,
+        scene.terrain.load_radius,
+        scene.buildings.draw_distance,
+        scene.roads.geometry_budget_us,
+        scene.terrain.geometry_budget_us,
+        scene.buildings.geometry_budget_us
+    ])
+
 func _wait_world(parish: String) -> bool:
     # Captures need the player-facing local road/terrain/collision to be ready,
     # not every background tile in the Ultra streaming radius. Requiring global
@@ -106,6 +133,7 @@ func _run() -> void:
     root.add_child(scene)
     current_scene = scene
     scene.set_quality("Ultra")
+    _configure_capture_streaming()
     scene.touch._touch_seen = true
     var vehicle_checked := false
     for parish in ["St. Ann", "Manchester"]:
