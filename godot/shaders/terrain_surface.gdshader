@@ -7,8 +7,10 @@ uniform sampler2D surface_noise : repeat_enable, filter_linear_mipmap_anisotropi
 uniform sampler2D reference_grass : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_dry_grass : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_rock : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_grass_normal : repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool has_reference_ground = false;
 uniform bool has_reference_rock = false;
+uniform bool has_reference_grass_normal = false;
 uniform sampler2D tunnel_portal_mask : filter_nearest, repeat_disable;
 uniform bool tunnel_portal_mask_enabled = false;
 uniform float terrain_tile_size = 4096.0;
@@ -83,10 +85,17 @@ void fragment() {
     ALBEDO = color * grain;
     ROUGHNESS = mix(0.96, 0.87, rocky);
     SPECULAR = 0.14;
-    // A subtle texture normal adds surface detail without changing geography.
+    // Surface normals add material depth without moving the Jamaica terrain mesh.
+    // The recovered scrub-grass source contributes only where grass is dominant;
+    // rock/soil slopes keep their procedural signal and overview remains flat.
     if (!overview) {
         vec2 normal_xy = (detail.rg - vec2(0.5)) * (0.16 + rocky * 0.13);
+        if (has_reference_grass_normal) {
+            vec2 grass_n = texture(reference_grass_normal, p.xz / 8.0).rg * 2.0 - 1.0;
+            float grass_weight = (1.0 - rocky) * (1.0 - bare) * (1.0 - dry * 0.22);
+            normal_xy += grass_n * 0.21 * clamp(grass_weight, 0.0, 1.0);
+        }
         NORMAL_MAP = vec3(normal_xy + vec2(0.5), 1.0);
-        NORMAL_MAP_DEPTH = 0.24;
+        NORMAL_MAP_DEPTH = 0.30;
     }
 }
