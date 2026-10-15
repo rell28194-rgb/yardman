@@ -12,6 +12,7 @@ const MIN_ENGINEERED_WIDTH_M := 4.2
 const EARTHWORK_CUT_THRESHOLD_M := 2.4
 const DEEP_DROP_THRESHOLD_M := 1.8
 const RAIL_HEIGHT_M := 0.72
+const MAPPED_GUARDRAIL_SUPPRESSION_RADIUS_M := 3.0
 const VISIBILITY_RANGE_M := 1200.0
 
 var _roads: Node
@@ -75,7 +76,11 @@ func _try_build(tile: Vector2i) -> void:
     if existing != null:
         root.remove_child(existing)
         existing.queue_free()
-    var geometry := build_geometry(_segments_by_tile[tile], tile, float(_roads.tile_size), _terrain.height_at)
+    var guardrail_query := Callable()
+    var guardrails := get_node_or_null("/root/GuardRailLayer")
+    if guardrails != null and guardrails.has_method("has_mapped_guardrail_near"):
+        guardrail_query = Callable(guardrails, "has_mapped_guardrail_near")
+    var geometry := build_geometry(_segments_by_tile[tile], tile, float(_roads.tile_size), _terrain.height_at, SAMPLE_STEP_M, guardrail_query)
     var vertices: PackedVector3Array = geometry.vertices
     if vertices.is_empty():
         return
@@ -90,10 +95,11 @@ func _try_build(tile: Vector2i) -> void:
     mesh.surface_set_material(0, _engineering_material())
     var proxy := Node3D.new()
     proxy.name = "RoadsideEngineeringProxy"
-    proxy.set_meta("source", "terrain-inferred visual safety; cut faces delegated to road earthworks")
+    proxy.set_meta("source", "terrain-inferred visual safety; explicit Jamaica guardrails suppress inference; cut faces delegated to road earthworks")
     proxy.set_meta("retaining_spans", int(geometry.retaining_spans))
     proxy.set_meta("earthwork_cut_spans", int(geometry.earthwork_cut_spans))
     proxy.set_meta("safety_spans", int(geometry.safety_spans))
+    proxy.set_meta("mapped_safety_suppressed_spans", int(geometry.mapped_safety_suppressed_spans))
     proxy.set_meta("structural_skips", int(geometry.structural_skips))
     var instance := MeshInstance3D.new()
     instance.name = "RoadsideEngineeringMesh"
@@ -104,7 +110,7 @@ func _try_build(tile: Vector2i) -> void:
     root.add_child(proxy)
 
 func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sampler: Callable,
-        sample_step_m: float = SAMPLE_STEP_M) -> Dictionary:
+        sample_step_m: float = SAMPLE_STEP_M, guardrail_query: Callable = Callable()) -> Dictionary:
     var vertices := PackedVector3Array()
     var normals := PackedVector3Array()
     var colors := PackedColorArray()
@@ -112,10 +118,12 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
     var retaining_spans := 0
     var earthwork_cut_spans := 0
     var safety_spans := 0
+    var mapped_safety_suppressed_spans := 0
     var structural_skips := 0
     if tile_size <= 0.0 or sample_step_m <= 0.0 or not height_sampler.is_valid():
         return {"vertices": vertices, "normals": normals, "colors": colors, "indices": indices,
-            "retaining_spans": 0, "earthwork_cut_spans": 0, "safety_spans": 0, "structural_skips": 0}
+            "retaining_spans": 0, "earthwork_cut_spans": 0, "safety_spans": 0,
+            "mapped_safety_suppressed_spans": 0, "structural_skips": 0}
     for segment in segments:
         if not segment is Array or segment.size() < 12:
             continue
@@ -125,7 +133,7 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
             continue
         if float(segment[4]) < MIN_ENGINEERED_WIDTH_M:
             continue
-        var sections := sample_sections(segment, tile, tile_size, height_sampler, sample_step_m)
+        var sections := sample_sections(segment, tile, tile_size, height_sampler, sample_step_m, guardrail_query)
         if sections.size() < 2:
             continue
         for index in range(sections.size() - 1):
@@ -154,12 +162,15 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
                     _append_quad(pa.base, pa.top, pb.top, pb.base, Color(0.48, 0.50, 0.52, 1.0),
                         vertices, normals, colors, indices)
                     safety_spans += 1
+                elif kind == "mapped_safety":
+                    mapped_safety_suppressed_spans += 1
     return {"vertices": vertices, "normals": normals, "colors": colors, "indices": indices,
         "retaining_spans": retaining_spans, "earthwork_cut_spans": earthwork_cut_spans,
-        "safety_spans": safety_spans, "structural_skips": structural_skips}
+        "safety_spans": safety_spans, "mapped_safety_suppressed_spans": mapped_safety_suppressed_spans,
+        "structural_skips": structural_skips}
 
 func sample_sections(segment: Array, tile: Vector2i, tile_size: float, height_sampler: Callable,
-        sample_step_m: float = SAMPLE_STEP_M) -> Array[Dictionary]:
+        sample_step_m: float = SAMPLE_STEP_M, guardrail_query: Callable = Callable()) -> Array[Dictionary]:
     var result: Array[Dictionary] = []
     if segment.size() < 12 or tile_size <= 0.0 or sample_step_m <= 0.0 or not height_sampler.is_valid():
         return result
@@ -197,13 +208,14 @@ func sample_sections(segment: Array, tile: Vector2i, tile_size: float, height_sa
         var center := a + tangent * station
         var deck_y := lerpf(float(segment[9]), float(segment[10]), t)
         var section := {}
-        section["left"] = classify_side(center, deck_y, right, -1.0, half_width, shoulder, tile_origin, height_sampler)
-        section["right"] = classify_side(center, deck_y, right, 1.0, half_width, shoulder, tile_origin, height_sampler)
+        section["left"] = classify_side(center, deck_y, right, -1.0, half_width, shoulder, tile_origin, height_sampler, guardrail_query)
+        section["right"] = classify_side(center, deck_y, right, 1.0, half_width, shoulder, tile_origin, height_sampler, guardrail_query)
         result.append(section)
     return result
 
 func classify_side(center: Vector2, deck_y: float, right_axis: Vector2, side: float,
-        half_width: float, shoulder: float, tile_origin: Vector2, height_sampler: Callable) -> Dictionary:
+        half_width: float, shoulder: float, tile_origin: Vector2, height_sampler: Callable,
+        guardrail_query: Callable = Callable()) -> Dictionary:
     var probe_offset := half_width + shoulder + 6.0
     var probe_world := center + right_axis * side * probe_offset
     var terrain_y := float(height_sampler.call(probe_world.x, probe_world.y))
@@ -218,6 +230,8 @@ func classify_side(center: Vector2, deck_y: float, right_axis: Vector2, side: fl
     if delta <= -DEEP_DROP_THRESHOLD_M:
         var rail_offset := half_width + 0.18
         var rail_world := center + right_axis * side * rail_offset
+        if guardrail_query.is_valid() and bool(guardrail_query.call(rail_world, MAPPED_GUARDRAIL_SUPPRESSION_RADIUS_M)):
+            return {"kind": "mapped_safety", "terrain_delta_m": delta, "rail_world": rail_world}
         var base_y := deck_y + 0.06
         return {"kind": "safety",
             "base": Vector3(rail_world.x - tile_origin.x, base_y, rail_world.y - tile_origin.y),
