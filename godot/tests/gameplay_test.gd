@@ -118,57 +118,75 @@ func _prepare_functional_collision_tiles(scene, phase: String) -> bool:
 func _prepare_functional_road_tile(scene, phase: String) -> bool:
     if not _prepare_functional_collision_tiles(scene, phase):
         return false
-    # National gameplay needs authoritative road-tile residency and the local
-    # surface index, but it does not need to triangulate/render every carriageway
-    # polygon. Dense urban tiles (notably Kingston) can spend minutes creating
-    # ArrayMesh batches in headless CI even though renderer suites validate that
-    # work separately. Load the exact compiled tile and build the same road-surface
-    # index used by driving/radar while leaving visual mesh generation out of this
-    # functional gate.
+    # Main._collision_ready() applies the same 3x3 footprint to road residency as
+    # it does to terrain. Load every existing compiled road tile touched by that
+    # footprint, not only the tile under the actor centre. Kingston's parish anchor
+    # sits close enough to a tile seam that centre-only residency can never satisfy
+    # the production readiness contract when the adjacent road tile exists.
     var active: Node3D = scene.car if scene.player.in_vehicle else scene.player
     var world: PackedFloat64Array = scene.roads.local_to_world(active.position)
-    var tile: Vector2i = scene.roads.coordinates.tile_for(world[0], world[2])
-    var key: String = scene.roads._tile_key(tile.x, tile.y)
-    if scene.roads._loaded.has(key):
-        return true
-    var relative_path := str(scene.roads._tile_files.get(key, ""))
-    if relative_path.is_empty():
-        _check(false, "No compiled road tile covers %s at %s" % [scene.current_parish, str(tile)])
+    var center_tile: Vector2i = scene.roads.coordinates.tile_for(world[0], world[2])
+    if not scene.roads.has_tile(center_tile):
+        _check(false, "No compiled road tile covers %s at %s" % [scene.current_parish, str(center_tile)])
         return false
-    var path := "%s/%s" % [scene.roads.data_root, relative_path]
-    if not FileAccess.file_exists(path):
-        _check(false, "Compiled road tile is missing: " + path)
-        return false
-    var payload = JSON.parse_string(FileAccess.get_file_as_string(path))
-    if not payload is Dictionary or not payload.get("segments", null) is Array:
-        _check(false, "Compiled road tile is invalid: " + path)
-        return false
-    # Keep only the current functional tile resident. This preserves bounded
-    # streaming semantics while avoiding visual-node accumulation over 14 teleports.
+    var required: Dictionary = {}
+    for dx in [-5.0, 0.0, 5.0]:
+        for dz in [-5.0, 0.0, 5.0]:
+            var tile: Vector2i = scene.roads.coordinates.tile_for(float(world[0]) + dx, float(world[2]) + dz)
+            if scene.roads.has_tile(tile):
+                required[scene.roads._tile_key(tile.x, tile.y)] = tile
+
+    # Keep only the exact road footprint resident. This remains bounded to at
+    # most four 4096 m tiles while avoiding ArrayMesh construction in this
+    # functional suite; renderer/geometry suites retain visual assembly coverage.
     for loaded_key in scene.roads._loaded.keys():
         var loaded_root = scene.roads._loaded[loaded_key]
         if is_instance_valid(loaded_root):
             loaded_root.queue_free()
     scene.roads._loaded.clear()
     scene.roads._surface_indices.clear()
-    var tile_root := Node3D.new()
-    tile_root.name = "FunctionalRoadTile_%d_%d" % [tile.x, tile.y]
-    tile_root.position = scene.roads.coordinates.world_to_local(float(tile.x) * scene.roads.tile_size, float(tile.y) * scene.roads.tile_size)
-    scene.roads.add_child(tile_root)
-    scene.roads._loaded[key] = tile_root
-    var surface_index: Dictionary = {}
-    var indexed := 0
-    for segment in payload.segments:
-        if segment is Array and segment.size() >= 12:
-            scene.roads._index_surface_segment(surface_index, segment)
-            indexed += 1
-    scene.roads._surface_indices[key] = surface_index
-    print("YARDMAN_GAMEPLAY_ROAD_DATA_READY phase=%s parish=%s tile=%s segments=%d indexed=%d elapsed_ms=%d" % [
+
+    var ordered_keys: Array = required.keys()
+    ordered_keys.sort()
+    var total_segments := 0
+    var total_indexed := 0
+    for key_variant in ordered_keys:
+        var key := str(key_variant)
+        var tile: Vector2i = required[key]
+        var relative_path := str(scene.roads._tile_files.get(key, ""))
+        if relative_path.is_empty():
+            _check(false, "Compiled road footprint tile disappeared for %s at %s" % [scene.current_parish, str(tile)])
+            return false
+        var path := "%s/%s" % [scene.roads.data_root, relative_path]
+        if not FileAccess.file_exists(path):
+            _check(false, "Compiled road tile is missing: " + path)
+            return false
+        var payload = JSON.parse_string(FileAccess.get_file_as_string(path))
+        if not payload is Dictionary or not payload.get("segments", null) is Array:
+            _check(false, "Compiled road tile is invalid: " + path)
+            return false
+        var tile_root := Node3D.new()
+        tile_root.name = "FunctionalRoadTile_%d_%d" % [tile.x, tile.y]
+        tile_root.position = scene.roads.coordinates.world_to_local(float(tile.x) * scene.roads.tile_size, float(tile.y) * scene.roads.tile_size)
+        scene.roads.add_child(tile_root)
+        scene.roads._loaded[key] = tile_root
+        var surface_index: Dictionary = {}
+        var indexed := 0
+        for segment in payload.segments:
+            if segment is Array and segment.size() >= 12:
+                scene.roads._index_surface_segment(surface_index, segment)
+                indexed += 1
+        scene.roads._surface_indices[key] = surface_index
+        total_segments += payload.segments.size()
+        total_indexed += indexed
+    print("YARDMAN_GAMEPLAY_ROAD_DATA_READY phase=%s parish=%s center=%s required=%d resident=%d segments=%d indexed=%d elapsed_ms=%d" % [
         phase,
         scene.current_parish,
-        str(tile),
-        payload.segments.size(),
-        indexed,
+        str(center_tile),
+        required.size(),
+        scene.roads._loaded.size(),
+        total_segments,
+        total_indexed,
         Time.get_ticks_msec() - _started_ms
     ])
     return true
@@ -196,7 +214,7 @@ func _configure_functional_streaming(scene) -> void:
         scene.terrain.tile_ready.disconnect(terrain_decorator)
     # Refresh terrain after shrinking the radius. Exact footprint seam tiles are
     # added by _prepare_functional_collision_tiles before each readiness wait.
-    # Road tile residency is supplied synchronously by
+    # Exact road-footprint residency is supplied synchronously by
     # _prepare_functional_road_tile so the headless test never enters production
     # ArrayMesh construction.
     scene._refresh_streamers()
