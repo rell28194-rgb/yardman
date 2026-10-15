@@ -6,7 +6,10 @@ class_name YardmanVehicleVisualStyler
 # changes material presentation while dedicated meshes remain an asset gate.
 const STYLE_PRESETS := {
     "legacy_sedan": {"metallic": 0.52, "roughness": 0.27, "clearcoat_roughness": 0.18, "glass": [0.055, 0.125, 0.16], "wheel": [0.54, 0.58, 0.62]},
-    "toyota_crown": {"metallic": 0.60, "roughness": 0.20, "clearcoat_roughness": 0.12, "glass": [0.035, 0.060, 0.080], "wheel": [0.24, 0.27, 0.30]},
+    # Recovered Car Parking Crown material C_CG_color_unity is dielectric
+    # (_Metallic=0) with high paint smoothness (_Parameters.x=0.878). Keep the
+    # Yardman clearcoat pass, but do not turn the body into metallic-flake paint.
+    "toyota_crown": {"metallic": 0.0, "roughness": 0.12, "clearcoat_roughness": 0.10, "glass": [0.035, 0.060, 0.080], "wheel": [0.24, 0.27, 0.30]},
     "toyota_mark_x": {"metallic": 0.64, "roughness": 0.18, "clearcoat_roughness": 0.10, "glass": [0.045, 0.070, 0.085], "wheel": [0.62, 0.65, 0.68]},
     "port_royal_992": {"metallic": 0.68, "roughness": 0.16, "clearcoat_roughness": 0.085, "glass": [0.025, 0.045, 0.055], "wheel": [0.11, 0.12, 0.13]},
 }
