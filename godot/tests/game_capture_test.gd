@@ -3,6 +3,9 @@ extends SceneTree
 var scene
 var output_dir := ""
 
+func _initialize() -> void:
+    call_deferred("_run")
+
 func _local_stream_ready() -> bool:
     if scene == null or not scene.world_ready or not scene.car.is_on_floor():
         return false
