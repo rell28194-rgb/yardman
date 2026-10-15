@@ -13,7 +13,7 @@ func _check(condition: bool, message: String) -> void:
     push_error("PEDESTRIAN_RUNTIME_TEST: " + message)
 
 func _run() -> void:
-    var road := {"a": Vector2(0, 0), "b": Vector2(120, 0), "width_m": 8.0, "edge_id": "walk-road"}
+    var road := {"a": Vector2(0, 0), "b": Vector2(120, 0), "width_m": 8.0, "edge_id": "walk-road", "flags": 0}
     var left := Pedestrians.roadside_walk_pose(road, 0.5, 1, 1)
     var right := Pedestrians.roadside_walk_pose(road, 0.5, 1, -1)
     var reverse := Pedestrians.roadside_walk_pose(road, 0.5, -1, 1)
@@ -22,6 +22,14 @@ func _run() -> void:
     _check(absf(Vector2(left.position).y) > 4.0, "walking corridor remained inside source carriageway")
     _check(Vector2(left.position).y * Vector2(right.position).y < 0.0, "opposite roadside corridors should be on opposite sides")
     _check(Vector2(left.travel).dot(Vector2(reverse.travel)) < -0.99, "reverse pedestrian travel heading incorrect")
+    var bridge := road.duplicate(true)
+    bridge.flags = 2
+    var tunnel := road.duplicate(true)
+    tunnel.flags = 4
+    _check(Pedestrians.roadside_walk_pose(bridge, 0.5, 1, 1).is_empty(),
+        "inferred roadside corridor fabricated pedestrian support on a bridge")
+    _check(Pedestrians.roadside_walk_pose(tunnel, 0.5, 1, 1).is_empty(),
+        "inferred roadside corridor fabricated pedestrian support through a tunnel")
 
     _check(Pedestrians.density_for_hour(13.0) > Pedestrians.density_for_hour(3.0), "daytime pedestrian density should exceed overnight density")
     _check(Pedestrians.density_for_hour(18.0) > Pedestrians.density_for_hour(23.5), "evening activity should exceed late-night density")
@@ -49,7 +57,7 @@ func _run() -> void:
     _check(float(hot.near_radius) >= 60.0 and float(hot.medium_radius) >= 175.0, "thermal policy erased pedestrian simulation coverage")
 
     if failures == 0:
-        print("YARDMAN_PEDESTRIAN_RUNTIME_TEST PASS road_context=2 directions=2 density_cycle=1 weather_activity=5 simulation_lod=3")
+        print("YARDMAN_PEDESTRIAN_RUNTIME_TEST PASS road_context=2 directions=2 structure_fail_closed=2 density_cycle=1 weather_activity=5 simulation_lod=3")
         quit()
     else:
         print("YARDMAN_PEDESTRIAN_RUNTIME_TEST FAIL failures=%d" % failures)
