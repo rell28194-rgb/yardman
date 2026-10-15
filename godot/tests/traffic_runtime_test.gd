@@ -33,6 +33,16 @@ func _run() -> void:
     _check(Vector2(forward.position).y * Vector2(reverse.position).y < 0.0, "opposing Jamaica lanes should occupy opposite carriageway sides")
     _check(Vector2(forward.travel).dot(Vector2(reverse.travel)) < -0.99, "opposing travel headings are not opposite")
 
+    var elevated := arterial.duplicate(true)
+    elevated.height_a = 100.0
+    elevated.height_b = 120.0
+    _check(absf(Traffic.road_deck_height(elevated, 0.25, 7.0) - 105.0) < 0.001,
+        "traffic ignored registered road-deck elevation")
+    _check(absf(Traffic.road_deck_height(elevated, 1.5, 7.0) - 120.0) < 0.001,
+        "road-deck interpolation did not clamp to the segment")
+    _check(absf(Traffic.road_deck_height(arterial, 0.25, 7.0) - 7.0) < 0.001,
+        "legacy surface without deck metadata did not fall back to terrain")
+
     _check(Traffic.legal_direction_for({"flags": 0}, -1) == -1, "bidirectional road discarded requested reverse travel")
     _check(Traffic.legal_direction_for({"flags": 1}, -1) == 1, "forward one-way road allowed reverse travel")
     _check(Traffic.legal_direction_for({"flags": 17}, 1) == -1, "OSM oneway=-1 direction was not preserved")
@@ -113,7 +123,7 @@ func _run() -> void:
     _check(float(hot.near_radius) >= 120.0 and float(hot.medium_radius) >= 320.0, "thermal policy erased required near/medium simulation coverage")
 
     if failures == 0:
-        print("YARDMAN_TRAFFIC_RUNTIME_TEST PASS lanes=2 one_way=7 continuation=1 junction_yield=4 density_cycle=1 weather_flow=5 simulation_lod=3")
+        print("YARDMAN_TRAFFIC_RUNTIME_TEST PASS lanes=2 deck_height=3 one_way=7 continuation=1 junction_yield=4 density_cycle=1 weather_flow=5 simulation_lod=3")
         quit()
     else:
         print("YARDMAN_TRAFFIC_RUNTIME_TEST FAIL failures=%d" % failures)
