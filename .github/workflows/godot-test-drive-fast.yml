@@ -7,7 +7,15 @@ on:
     paths:
       - 'godot/scripts/startup_menu.gd'
       - 'godot/scripts/vehicle_controller.gd'
+      - 'godot/scripts/road_streamer.gd'
+      - 'godot/scripts/road_hairpin_runtime.gd'
+      - 'godot/scripts/traffic_runtime.gd'
+      - 'godot/scripts/pedestrian_runtime.gd'
       - 'godot/tests/vehicle_test.gd'
+      - 'godot/tests/road_surface_test.gd'
+      - 'godot/tests/road_hairpin_test.gd'
+      - 'godot/tests/traffic_runtime_test.gd'
+      - 'godot/tests/pedestrian_runtime_test.gd'
       - 'godot/project.godot'
       - '.github/workflows/godot-test-drive-fast.yml'
   workflow_dispatch:
@@ -34,16 +42,18 @@ jobs:
           chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
           sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
           godot --version
-      - name: Parse project and test drive code
+      - name: Parse project and test drive/runtime code
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p godot/build
           timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/fast-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/fast-import.log; then exit 1; fi
-          timeout 180 godot --headless --path godot --script res://tests/vehicle_test.gd 2>&1 | tee godot/build/fast-vehicle.log
-          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|VEHICLE_TEST:' godot/build/fast-vehicle.log; then exit 1; fi
-          grep -q 'YARDMAN_VEHICLE_TEST PASS' godot/build/fast-vehicle.log
+          for TEST in vehicle road_surface road_hairpin traffic_runtime pedestrian_runtime; do
+            timeout 180 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/fast-${TEST}.log"
+            if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/fast-${TEST}.log"; then exit 1; fi
+            grep -q 'PASS' "godot/build/fast-${TEST}.log"
+          done
       - name: Preserve fast-gate diagnostics
         if: always()
         uses: actions/upload-artifact@v4
