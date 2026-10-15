@@ -76,7 +76,48 @@ func _check_active_vehicle(scene) -> void:
         selected, controller_id, reference_name, str(private_crown_available)
     ])
 
+func _prepare_functional_collision_tiles(scene, phase: String) -> bool:
+    # Production waits for every point under the actor's 10 m x 10 m support
+    # footprint, not merely the tile containing its center. A load_radius of zero
+    # is useful for this headless functional gate, but a parish anchor can sit a
+    # few metres from a 4096 m tile seam (Kingston does). Queue exactly the real
+    # compiled terrain tiles touched by the same 3x3 footprint used by
+    # Main._collision_ready(). This preserves production collision semantics
+    # without loading a visual terrain ring or weakening readiness on devices.
+    var active: Node3D = scene.car if scene.player.in_vehicle else scene.player
+    var world: PackedFloat64Array = scene.roads.local_to_world(active.position)
+    var required: Dictionary = {}
+    for dx in [-5.0, 0.0, 5.0]:
+        for dz in [-5.0, 0.0, 5.0]:
+            var tile: Vector2i = scene.terrain.coordinates.tile_for(float(world[0]) + dx, float(world[2]) + dz)
+            var key: String = scene.terrain._tile_key(tile.x, tile.y)
+            required[key] = tile
+    var queued := 0
+    for key in required:
+        var tile: Vector2i = required[key]
+        if not scene.terrain.has_tile(tile):
+            _check(false, "No compiled terrain collision tile covers %s at %s" % [scene.current_parish, str(tile)])
+            return false
+        scene.terrain._wanted[key] = true
+        if scene.terrain._failed.has(key):
+            _check(false, "Terrain collision tile previously failed to load for %s: %s" % [scene.current_parish, str(tile)])
+            return false
+        if scene.terrain._loaded.has(key) or scene.terrain._jobs.has(key) or str(scene.terrain._building.get("key", "")) == key or scene.terrain._queue.has(key):
+            continue
+        scene.terrain._queue.append(key)
+        queued += 1
+    print("YARDMAN_GAMEPLAY_COLLISION_TILES phase=%s parish=%s required=%d queued=%d elapsed_ms=%d" % [
+        phase,
+        scene.current_parish,
+        required.size(),
+        queued,
+        Time.get_ticks_msec() - _started_ms
+    ])
+    return true
+
 func _prepare_functional_road_tile(scene, phase: String) -> bool:
+    if not _prepare_functional_collision_tiles(scene, phase):
+        return false
     # National gameplay needs authoritative road-tile residency and the local
     # surface index, but it does not need to triangulate/render every carriageway
     # polygon. Dense urban tiles (notably Kingston) can spend minutes creating
@@ -136,9 +177,9 @@ func _configure_functional_streaming(scene) -> void:
     # This suite validates national traversal, terrain/collision registration,
     # vehicle/player controls, saves and mobile input. It is not a frame-budget
     # benchmark. Keep production streaming logic and data intact while allowing
-    # the headless runner to consume only the actor's collision tile. Road visual
-    # geometry is replaced by exact compiled-tile data/index loading above; visual
-    # assembly remains covered by renderer/geometry suites.
+    # the headless runner to consume only the exact actor collision footprint.
+    # Road visual geometry is replaced by exact compiled-tile data/index loading
+    # above; visual assembly remains covered by renderer/geometry suites.
     scene.set_quality("Performance")
     scene.roads.load_radius = 0
     scene.terrain.load_radius = 0
@@ -153,9 +194,11 @@ func _configure_functional_streaming(scene) -> void:
     var terrain_decorator := Callable(scene, "_decorate_ready_terrain")
     if scene.terrain.tile_ready.is_connected(terrain_decorator):
         scene.terrain.tile_ready.disconnect(terrain_decorator)
-    # Refresh terrain after shrinking the radius. Road tile residency is supplied
-    # synchronously by _prepare_functional_road_tile so the headless test never
-    # enters production ArrayMesh construction.
+    # Refresh terrain after shrinking the radius. Exact footprint seam tiles are
+    # added by _prepare_functional_collision_tiles before each readiness wait.
+    # Road tile residency is supplied synchronously by
+    # _prepare_functional_road_tile so the headless test never enters production
+    # ArrayMesh construction.
     scene._refresh_streamers()
     print("YARDMAN_GAMEPLAY_FUNCTIONAL_STREAMING road_radius=%d terrain_radius=%d road_process=%s terrain_budget_us=%d" % [
         scene.roads.load_radius,
