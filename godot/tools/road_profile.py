@@ -17,6 +17,10 @@ def _horizontal_distance(a, b) -> float:
     return math.hypot(float(b[0]) - float(a[0]), float(b[2]) - float(a[2]))
 
 
+def _edge_length(path) -> float:
+    return sum(math.dist(a, b) for a, b in zip(path, path[1:]))
+
+
 def _smoothed_path(path, max_adjustment_m: float, passes: int, blend: float):
     original = [tuple(point) for point in path]
     if len(original) < 3:
@@ -63,35 +67,63 @@ def _percentile(sorted_values: list[float], fraction: float) -> float:
 
 
 def _grade_diagnostics(edges: dict) -> dict:
-    """Measure non-structural longitudinal grades without silently rewriting them.
+    """Measure grades and vertical grade breaks without silently rewriting them.
 
     Jamaica has genuinely steep mountain roads, so this is an evidence gate rather
-    than a blanket grade clamp. Extreme values are surfaced with an exact edge and
-    segment locator for later source/DEM inspection.
+    than a blanket grade clamp. Extreme grades and abrupt changes of grade are
+    surfaced with exact edge/segment locators for source/DEM inspection. True
+    positive-to-negative and negative-to-positive reversals are counted separately
+    as crest and sag candidates for the road-engineering pass.
     """
     grades: list[float] = []
+    grade_breaks: list[float] = []
     worst_edge = ""
     worst_segment = -1
     worst_grade = -1.0
+    worst_break_edge = ""
+    worst_break_vertex = -1
+    worst_break = -1.0
+    crest_vertices = 0
+    sag_vertices = 0
     for edge_id in sorted(edges):
         edge = edges[edge_id]
         if int(edge.get("flags", 0)) & STRUCTURAL_FLAGS:
             continue
         path = edge.get("path") or []
+        signed_grades: list[float | None] = []
         for segment_index, (a, b) in enumerate(zip(path, path[1:])):
             run = _horizontal_distance(a, b)
             if run < 0.25 or not math.isfinite(run):
+                signed_grades.append(None)
                 continue
-            rise = abs(float(b[1]) - float(a[1]))
-            grade = (rise / run) * 100.0
-            if not math.isfinite(grade):
+            rise = float(b[1]) - float(a[1])
+            signed_grade = (rise / run) * 100.0
+            if not math.isfinite(signed_grade):
                 raise ValueError(f"Non-finite road grade at {edge_id}:{segment_index}")
+            signed_grades.append(signed_grade)
+            grade = abs(signed_grade)
             grades.append(grade)
             if grade > worst_grade:
                 worst_grade = grade
                 worst_edge = str(edge_id)
                 worst_segment = segment_index
+        for vertex_index in range(1, len(path) - 1):
+            previous = signed_grades[vertex_index - 1] if vertex_index - 1 < len(signed_grades) else None
+            following = signed_grades[vertex_index] if vertex_index < len(signed_grades) else None
+            if previous is None or following is None:
+                continue
+            grade_break = abs(following - previous)
+            grade_breaks.append(grade_break)
+            if grade_break > worst_break:
+                worst_break = grade_break
+                worst_break_edge = str(edge_id)
+                worst_break_vertex = vertex_index
+            if previous > 0.0 and following < 0.0:
+                crest_vertices += 1
+            elif previous < 0.0 and following > 0.0:
+                sag_vertices += 1
     ordered = sorted(grades)
+    ordered_breaks = sorted(grade_breaks)
     return {
         "profile_grade_segments": len(ordered),
         "profile_grade_max_pct": round(max(ordered, default=0.0), 4),
@@ -101,6 +133,15 @@ def _grade_diagnostics(edges: dict) -> dict:
         "profile_grade_over_30pct_segments": sum(value > 30.0 for value in ordered),
         "profile_grade_worst_edge": worst_edge,
         "profile_grade_worst_segment": worst_segment,
+        "profile_grade_break_vertices": len(ordered_breaks),
+        "profile_grade_break_max_pct_points": round(max(ordered_breaks, default=0.0), 4),
+        "profile_grade_break_p95_pct_points": round(_percentile(ordered_breaks, 0.95), 4),
+        "profile_grade_break_over_10pp_vertices": sum(value > 10.0 for value in ordered_breaks),
+        "profile_grade_break_over_20pp_vertices": sum(value > 20.0 for value in ordered_breaks),
+        "profile_grade_break_worst_edge": worst_break_edge,
+        "profile_grade_break_worst_vertex": worst_break_vertex,
+        "profile_crest_reversal_vertices": crest_vertices,
+        "profile_sag_reversal_vertices": sag_vertices,
     }
 
 
@@ -125,6 +166,7 @@ def smooth_network_profiles(network: dict, *, max_adjustment_m: float = 0.45,
     all_adjustments = []
     smoothed_vertices = 0
     structural_edges_skipped = 0
+    edge_lengths_updated = 0
     for edge_id in sorted(edges):
         edge = edges[edge_id]
         path = edge.get("path") or []
@@ -135,6 +177,8 @@ def smooth_network_profiles(network: dict, *, max_adjustment_m: float = 0.45,
         if not adjustments:
             continue
         edge["path"] = refined
+        edge["length_m"] = round(_edge_length(refined), 3)
+        edge_lengths_updated += 1
         refined_by_edge[edge_id] = refined
         changed = [value for index, value in enumerate(adjustments)
                    if index not in (0, len(adjustments) - 1) and abs(value) > 1e-9]
@@ -181,6 +225,7 @@ def smooth_network_profiles(network: dict, *, max_adjustment_m: float = 0.45,
         "profile_surface_records_updated": updated_surface_records,
         "profile_anchors_updated": updated_anchors,
         "profile_structural_edges_skipped": structural_edges_skipped,
+        "profile_edge_lengths_updated": edge_lengths_updated,
         "profile_max_adjustment_m": round(max(absolute, default=0.0), 6),
         "profile_mean_adjustment_m": round(sum(absolute) / len(absolute), 6) if absolute else 0.0,
         "profile_adjustment_limit_m": max_adjustment_m,
