@@ -9,10 +9,81 @@ from pathlib import Path
 from validate_road_structures import validate_payloads
 
 
+DRAINAGE_PURPOSE = "explicit OSM drainage evidence for Jamaica road engineering; never road or terrain authority"
+DRAINAGE_PLACEMENT_RULE = "mapped waterway=ditch/drain plus explicit culvert-tagged waterways only; generic streams are excluded"
+DRAINAGE_KINDS = {"culvert", "ditch", "drain"}
+
+
+def _validate_packaged_drainage(archive: zipfile.ZipFile, names: set[str], source_manifest: Path,
+                                 road_manifest: dict) -> dict:
+    proof = {"drainage_features": 0, "drainage_tiles": 0, "culvert_features": 0,
+             "ditch_features": 0, "drain_features": 0}
+    drainage_source_path = source_manifest.parent / "drainage" / "manifest.json"
+    if not drainage_source_path.is_file():
+        return proof
+
+    drainage_name = "assets/data/roads/drainage/manifest.json"
+    if drainage_name not in names:
+        raise ValueError("Packaged Jamaica drainage authority is missing")
+    expected_drainage = json.loads(drainage_source_path.read_text())
+    drainage = json.loads(archive.read(drainage_name))
+    if drainage != expected_drainage:
+        raise ValueError("Packaged drainage metadata differs from compiled Jamaica source")
+    if drainage.get("crs") != road_manifest.get("crs") or drainage.get("source_sha256") != road_manifest.get("source_sha256"):
+        raise ValueError("Drainage metadata source registration differs from roads")
+    if drainage.get("purpose") != DRAINAGE_PURPOSE:
+        raise ValueError("Drainage metadata lost its evidence-only authority boundary")
+    if drainage.get("placement_rule") != DRAINAGE_PLACEMENT_RULE:
+        raise ValueError("Drainage metadata lost its explicit-only placement rule")
+
+    stats = drainage.get("stats", {})
+    by_kind = stats.get("by_kind", {})
+    if not isinstance(by_kind, dict) or set(by_kind) - DRAINAGE_KINDS:
+        raise ValueError("Drainage metadata contains an unsupported feature kind")
+    for key in ("features", "source_segments", "tile_pieces", "tiles"):
+        if int(stats.get(key, -1)) < 0:
+            raise ValueError("Drainage metadata contains an invalid statistic: " + key)
+
+    counted_records = 0
+    tiles = drainage.get("tiles", [])
+    if not isinstance(tiles, list) or int(stats.get("tiles", -1)) != len(tiles):
+        raise ValueError("Drainage tile count differs from manifest statistics")
+    for tile in tiles:
+        filename = str(tile.get("file", ""))
+        name = "assets/data/roads/drainage/" + filename
+        if not filename or name not in names:
+            raise ValueError("A Jamaica drainage tile was omitted from the APK: " + name)
+        payload = json.loads(archive.read(name))
+        if payload.get("tile") != [tile.get("x"), tile.get("z")]:
+            raise ValueError("Drainage tile coordinates disagree with manifest: " + filename)
+        records = payload.get("drainage", [])
+        if not isinstance(records, list) or len(records) != int(tile.get("records", -1)):
+            raise ValueError("Drainage tile record count disagrees with manifest: " + filename)
+        for record in records:
+            if not isinstance(record, dict) or record.get("kind") not in DRAINAGE_KINDS:
+                raise ValueError("Drainage tile contains an invalid record: " + filename)
+            if not str(record.get("source_way", "")):
+                raise ValueError("Drainage tile contains a record without source authority: " + filename)
+        counted_records += len(records)
+    if counted_records != int(stats.get("tile_pieces", -1)):
+        raise ValueError("Drainage tile-piece count differs from manifest statistics")
+
+    proof = {
+        "drainage_features": int(stats.get("features", 0)),
+        "drainage_tiles": len(tiles),
+        "culvert_features": int(by_kind.get("culvert", 0)),
+        "ditch_features": int(by_kind.get("ditch", 0)),
+        "drain_features": int(by_kind.get("drain", 0)),
+    }
+    return proof
+
+
 def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = None,
              coast_manifest: Path | None = None, buildings_manifest: Path | None = None) -> dict:
     source = json.loads(source_manifest.read_text())
     roadwork_proof = {"roadwork_features": 0, "roadwork_tiles": 0}
+    drainage_proof = {"drainage_features": 0, "drainage_tiles": 0, "culvert_features": 0,
+                      "ditch_features": 0, "drain_features": 0}
     fence_proof = {"fence_features": 0, "wire_fence_features": 0, "fence_tiles": 0}
     bus_stop_proof = {"bus_stop_features": 0, "bus_stop_tiles": 0}
     with zipfile.ZipFile(apk) as archive:
@@ -51,6 +122,7 @@ def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = N
                 "roadwork_features": int(roadworks.get("stats", {}).get("features", 0)),
                 "roadwork_tiles": len(roadworks.get("tiles", [])),
             }
+        drainage_proof = _validate_packaged_drainage(archive, names, source_manifest, manifest)
         fence_source_path = source_manifest.parent / "fences" / "manifest.json"
         if fence_source_path.is_file():
             fence_name = "assets/data/roads/fences/manifest.json"
@@ -212,7 +284,7 @@ def validate(apk: Path, source_manifest: Path, terrain_manifest: Path | None = N
             "coast_tiles": len(coast["tiles"]) if coast_manifest else 0,
             "building_tiles": len(buildings["tiles"]) if buildings_manifest else 0,
             "graph_edges": source["stats"].get("graph_edges", 0), "abis": sorted(abis),
-            **roadwork_proof, **fence_proof, **bus_stop_proof, **structure_proof}
+            **roadwork_proof, **drainage_proof, **fence_proof, **bus_stop_proof, **structure_proof}
 
 
 if __name__ == "__main__":
