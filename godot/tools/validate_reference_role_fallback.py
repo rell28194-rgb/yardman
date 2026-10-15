@@ -22,7 +22,7 @@ import zlib
 
 ERRORS = re.compile(r"SCRIPT ERROR|Parse Error|(?:^|\n)ERROR:|_CASE FAIL")
 PRELOAD = re.compile(r'''\bpreload\s*\(\s*["']res://([^"']+)["']\s*\)''')
-CASES = ("asset-absent", "original-only", "approved-alternate")
+CASES = ("asset-absent", "original-only", "approved-alternate", "tampered-alternate")
 FIXTURE = '''extends SceneTree
 const References = preload("res://scripts/reference_assets.gd")
 const Visuals = preload("res://scripts/world_visuals.gd")
@@ -52,6 +52,8 @@ func _initialize() -> void:
             check(material.get_shader_parameter(binding[0]) == References.texture(binding[1]), "ground role binding changed")
     else:
         check(selected == null, "rejected original loaded instead of procedural rock")
+        if case == "tampered-alternate":
+            check(References.texture("ground_rock_alternate.png") == null, "changed source bytes bypassed the manifest")
         check(material.get_shader_parameter("has_reference_rock") != true, "missing approved rock enabled reference sampling")
         check(material.get_shader_parameter("reference_rock") == null, "procedural fallback retained texture")
     print("YARDMAN_REFERENCE_ROLE_CASE %s case=%s" % ["PASS" if failures == 0 else "FAIL", case])
@@ -112,13 +114,24 @@ def run_case(executable: str, root: Path, sources: dict[str, bytes], case: str,
         '[rendering]\nrenderer/rendering_method="gl_compatibility"\n')
     (fixture / "fixture.gd").write_text(FIXTURE)
     controls = {} if case == "asset-absent" else {"ground_rock.png": (245, 245, 245)}
-    if case == "approved-alternate":
+    if case in ("approved-alternate", "tampered-alternate"):
         controls.update({"ground_rock_alternate.png": (90, 95, 80),
                          "ground_grass.png": (50, 100, 30), "ground_dry_grass.png": (110, 90, 45)})
+    records = []
+    reference_root = fixture / "assets/user_reference"
     for filename, color in controls.items():
         path = fixture / "assets/user_reference" / filename
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(generated_png(color))
+        payload = generated_png(color)
+        path.write_bytes(payload)
+        records.append({"path": filename, "sha256": hashlib.sha256(payload).hexdigest(), "bytes": len(payload)})
+    if records:
+        # The production loader verifies the private manifest before loading
+        # media. Generated controls must satisfy that same contract, otherwise
+        # every positive/mutation case silently becomes asset-absent coverage.
+        (reference_root / "manifest.json").write_text(json.dumps({"format_version": 1, "files": records}))
+    if case == "tampered-alternate":
+        (reference_root / "ground_rock_alternate.png").write_bytes(generated_png((200, 20, 20)))
     env = os.environ.copy()
     env.update(YARDMAN_ROLE_CASE=case, GODOT_SILENCE_ROOT_WARNING="1", XDG_DATA_HOME=str(root / "user-data"))
     command = [executable, "--headless", "--path", str(fixture)]
