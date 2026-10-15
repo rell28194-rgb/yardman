@@ -10,6 +10,7 @@ var wheels: Array[Node3D] = []
 var brake_material: StandardMaterial3D
 var reverse_material: StandardMaterial3D
 var is_reference_model := false
+var reference_asset_name := ""
 var wheelbase_m := 2.56
 var wheel_radius_m := 0.35
 var geometry_bounds := AABB(Vector3(-0.925, 0.0, -2.0), Vector3(1.85, 1.3, 4.0))
@@ -22,11 +23,17 @@ var _trim: StandardMaterial3D
 var _glass: StandardMaterial3D
 var _silver: StandardMaterial3D
 
-func build() -> void:
+func build(hero_scene_filename: String = "", scene_loader: Callable = Callable()) -> void:
     if shell != null:
         return
-    if _try_reference_sedan():
-        return
+    var candidates: Array[String] = []
+    if not hero_scene_filename.is_empty():
+        candidates.append(hero_scene_filename)
+    if not candidates.has("road_car.glb"):
+        candidates.append("road_car.glb")
+    for candidate in candidates:
+        if _try_reference_sedan(candidate, scene_loader):
+            return
     _paint = _material(Color(0.14, 0.31, 0.37), 0.52, 0.27)
     _trim = _material(Color(0.024, 0.032, 0.037), 0.15, 0.62)
     _glass = _material(Color(0.055, 0.125, 0.16), 0.40, 0.13)
@@ -67,8 +74,12 @@ func update_motion(delta: float, speed: float, steering: float, braking: float, 
     for material in _reverse_materials:
         material.emission_energy_multiplier = reverse_energy
 
-func _try_reference_sedan() -> bool:
-    var packed: PackedScene = References.scene("road_car.glb")
+func _try_reference_sedan(asset_name: String, scene_loader: Callable = Callable()) -> bool:
+    var packed: PackedScene
+    if scene_loader.is_valid():
+        packed = scene_loader.call(asset_name) as PackedScene
+    else:
+        packed = References.scene(asset_name)
     if packed == null:
         return false
     var imported := packed.instantiate() as Node3D
@@ -82,18 +93,18 @@ func _try_reference_sedan() -> bool:
         var spin := imported.find_child(wheel_name + "Spin", true, false) as Node3D
         if pivot == null or spin == null or not pivot.is_ancestor_of(spin):
             imported.free()
-            push_warning("Yardman reference sedan has no independent wheel rig; using the source fallback")
+            push_warning("Yardman reference vehicle %s has no independent wheel rig; trying the next fallback" % asset_name)
             return false
         pivots.append(pivot)
         spins.append(spin)
     if body_shell == null:
         imported.free()
-        push_warning("Yardman reference sedan has no BodyShell; using the source fallback")
+        push_warning("Yardman reference vehicle %s has no BodyShell; trying the next fallback" % asset_name)
         return false
     var bounds: AABB = _measure_mesh_bounds(imported)
     if bounds.size.x < 1.0 or bounds.size.x > 4.0 or bounds.size.z < 2.0 or bounds.size.z > 8.0:
         imported.free()
-        push_warning("Yardman reference sedan has invalid metre-scale bounds; using the source fallback")
+        push_warning("Yardman reference vehicle %s has invalid metre-scale bounds; trying the next fallback" % asset_name)
         return false
     add_child(imported)
     shell = body_shell
@@ -106,7 +117,8 @@ func _try_reference_sedan() -> bool:
     wheel_radius_m = clampf(maxf(tyre_bounds.size.y, tyre_bounds.size.z) * 0.5, 0.25, 0.60)
     _bind_reference_lamps(imported)
     is_reference_model = true
-    print("YARDMAN_REFERENCE_VEHICLE bounds_m=%s wheelbase_m=%.3f tyre_radius_m=%.3f brake_materials=%d reverse_materials=%d" % [geometry_bounds.size, wheelbase_m, wheel_radius_m, _brake_materials.size(), _reverse_materials.size()])
+    reference_asset_name = asset_name
+    print("YARDMAN_REFERENCE_VEHICLE source=%s bounds_m=%s wheelbase_m=%.3f tyre_radius_m=%.3f brake_materials=%d reverse_materials=%d" % [reference_asset_name, geometry_bounds.size, wheelbase_m, wheel_radius_m, _brake_materials.size(), _reverse_materials.size()])
     return true
 
 func _relative_pose(node: Node3D) -> Transform3D:

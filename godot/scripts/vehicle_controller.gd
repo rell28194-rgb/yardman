@@ -70,7 +70,7 @@ func _rebuild_visual() -> void:
     visual = ModelScript.new()
     visual.name = "VisualRig"
     body.add_child(visual)
-    visual.call("build")
+    visual.call("build", str(profile.get("hero_scene", "")))
     if bool(profile.get("use_visual_wheelbase", false)):
         wheelbase_m = clampf(float(visual.get("wheelbase_m")), 1.8, 4.5)
     var scale_data: Array = profile.get("visual_scale", [1.0, 1.0, 1.0])
