@@ -156,6 +156,16 @@ static func lane_pose(record: Dictionary, progress: float, direction_sign: int) 
         "length": length,
     }
 
+static func road_deck_height(record: Dictionary, progress: float, terrain_height: float) -> float:
+    var height_a_value = record.get("height_a", null)
+    var height_b_value = record.get("height_b", null)
+    if height_a_value != null and height_b_value != null:
+        var height_a := float(height_a_value)
+        var height_b := float(height_b_value)
+        if is_finite(height_a) and is_finite(height_b):
+            return lerpf(height_a, height_b, clampf(progress, 0.0, 1.0))
+    return terrain_height
+
 static func continuation_for(current: Dictionary, direction_sign: int, candidates: Dictionary) -> Dictionary:
     var a: Vector2 = current.get("a", Vector2.ZERO)
     var b: Vector2 = current.get("b", Vector2.ZERO)
@@ -459,8 +469,12 @@ func _refresh_visuals(scene: Node, roads, terrain, active_xz: Vector2) -> void:
         var agent: Dictionary = agents[identifier]
         var point: Vector2 = agent.position
         var distance := point.distance_to(active_xz)
-        var deck_y := float(terrain.height_at(point.x, point.y)) + 0.46
-        var local: Vector3 = roads.world_to_local(point.x, point.y, deck_y)
+        var terrain_y := float(terrain.height_at(point.x, point.y))
+        var deck_y := road_deck_height(agent.record, float(agent.progress), terrain_y)
+        if not is_finite(deck_y):
+            _dematerialize_agent(str(identifier))
+            continue
+        var local: Vector3 = roads.world_to_local(point.x, point.y, deck_y + 0.46)
         if distance <= near_radius and near_count < near_visual_budget:
             _materialize_agent(scene, str(identifier), agent)
             agent = agents[identifier]
