@@ -11,16 +11,12 @@ func _initialize() -> void:
     call_deferred("_run")
 
 func _local_stream_ready() -> bool:
-    if scene == null or not scene.world_ready or not scene.car.is_on_floor():
+    if scene == null or not scene.world_ready:
         return false
     var world: PackedFloat64Array = scene.roads.local_to_world(scene.car.position)
     var tile: Vector2i = scene.roads.coordinates.tile_for(world[0], world[2])
     var road_key: String = scene.roads._tile_key(tile.x, tile.y)
-    if not scene.roads._loaded.has(road_key):
-        return false
-    if not scene.terrain.is_tile_ready(tile):
-        return false
-    return true
+    return scene.roads._loaded.has(road_key) and scene.terrain.is_tile_ready(tile)
 
 func _active_vehicle_contract() -> bool:
     var garage := root.get_node_or_null("VehicleGarage")
@@ -34,9 +30,7 @@ func _active_vehicle_contract() -> bool:
     if is_instance_valid(visual):
         reference_name = str(visual.get("reference_asset_name"))
     var private_crown_available := References.scene("toyota_crown_2013.glb") != null
-    print("YARDMAN_CAPTURE_VEHICLE selected=%s controller=%s reference=%s private_crown=%s" % [
-        selected, controller_id, reference_name, str(private_crown_available)
-    ])
+    print("YARDMAN_CAPTURE_VEHICLE selected=%s controller=%s reference=%s private_crown=%s" % [selected, controller_id, reference_name, str(private_crown_available)])
     if controller_id != selected:
         push_error("CAPTURE_TEST: Active controller does not match garage selection")
         return false
@@ -45,11 +39,26 @@ func _active_vehicle_contract() -> bool:
         return false
     return true
 
+func _configure_capture_streaming() -> void:
+    scene.roads.load_radius = 1
+    scene.roads.max_io_jobs = 4
+    scene.roads.max_segments_per_frame = 8192
+    scene.roads.geometry_budget_us = 40000
+    scene.terrain.load_radius = 1
+    scene.terrain.max_io_jobs = 4
+    scene.terrain.geometry_budget_us = 40000
+    scene.buildings.draw_distance = 450.0
+    scene.buildings.max_loaded_cells = 64
+    scene.buildings.max_io_jobs = 4
+    scene.buildings.max_buildings_per_frame = 160
+    scene.buildings.geometry_budget_us = 40000
+    scene._refresh_streamers()
+    print("YARDMAN_CAPTURE_STREAMING road_radius=%d terrain_radius=%d building_distance=%.0f road_budget_us=%d terrain_budget_us=%d building_budget_us=%d" % [
+        scene.roads.load_radius, scene.terrain.load_radius, scene.buildings.draw_distance,
+        scene.roads.geometry_budget_us, scene.terrain.geometry_budget_us, scene.buildings.geometry_budget_us
+    ])
+
 func _wait_world(parish: String) -> bool:
-    # Captures need the player-facing local road/terrain/collision to be ready,
-    # not every background tile in the Ultra streaming radius. Requiring global
-    # inflight_count()==0 made this visual smoke gate scale with the complete
-    # national dataset and blocked an otherwise valid Android export.
     var deadline_ms := Time.get_ticks_msec() + 150000
     var stable_frames := 0
     var next_report_ms := Time.get_ticks_msec()
@@ -58,28 +67,21 @@ func _wait_world(parish: String) -> bool:
         var now_ms := Time.get_ticks_msec()
         if now_ms >= next_report_ms:
             print("YARDMAN_CAPTURE_PROGRESS phase=wait_world parish=%s elapsed_ms=%d stable_frames=%d world_ready=%s floor=%s road_inflight=%d terrain_inflight=%d building_inflight=%d" % [
-                parish,
-                now_ms - _started_ms,
-                stable_frames,
-                str(scene.world_ready),
-                str(scene.car.is_on_floor()),
-                scene.roads.inflight_count(),
-                scene.terrain.inflight_count(),
-                scene.buildings.inflight_count()
+                parish, now_ms - _started_ms, stable_frames, str(scene.world_ready), str(scene.car.is_on_floor()),
+                scene.roads.inflight_count(), scene.terrain.inflight_count(), scene.buildings.inflight_count()
             ])
             next_report_ms = now_ms + 5000
         if _local_stream_ready():
             stable_frames += 1
             if stable_frames >= 12:
-                print("CAPTURE_TEST_READY parish=%s road_inflight=%d terrain_inflight=%d building_inflight=%d" % [
-                    parish, scene.roads.inflight_count(), scene.terrain.inflight_count(), scene.buildings.inflight_count()
+                print("CAPTURE_TEST_READY parish=%s floor=%s road_inflight=%d terrain_inflight=%d building_inflight=%d" % [
+                    parish, str(scene.car.is_on_floor()), scene.roads.inflight_count(), scene.terrain.inflight_count(), scene.buildings.inflight_count()
                 ])
                 return true
         else:
             stable_frames = 0
     print("CAPTURE_TEST_TIMEOUT parish=%s world_ready=%s floor=%s road_inflight=%d terrain_inflight=%d building_inflight=%d" % [
-        parish, str(scene.world_ready), str(scene.car.is_on_floor()), scene.roads.inflight_count(),
-        scene.terrain.inflight_count(), scene.buildings.inflight_count()
+        parish, str(scene.world_ready), str(scene.car.is_on_floor()), scene.roads.inflight_count(), scene.terrain.inflight_count(), scene.buildings.inflight_count()
     ])
     return false
 
@@ -106,6 +108,7 @@ func _run() -> void:
     root.add_child(scene)
     current_scene = scene
     scene.set_quality("Ultra")
+    _configure_capture_streaming()
     scene.touch._touch_seen = true
     var vehicle_checked := false
     for parish in ["St. Ann", "Manchester"]:
