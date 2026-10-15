@@ -7,21 +7,21 @@ uniform float wave_height = 0.045;
 uniform sampler2D reference_surface : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_foam : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_caustics : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_normal : repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool has_reference_surface = false;
 uniform bool has_reference_foam = false;
 uniform bool has_reference_caustics = false;
+uniform bool has_reference_normal = false;
 varying vec2 ocean_uv;
 varying float shore_fraction;
 
 float wave_hash(vec2 p) {
-    // Arithmetic hash avoids precision-sensitive sine hashes at national UVs.
     vec3 h = fract(vec3(p.xyx) * 0.1031);
     h += dot(h, h.yzx + 33.33);
     return fract((h.x + h.y) * h.z);
 }
 
 vec3 wave_noise(vec2 p) {
-    // Value and analytic gradient: surface colour images are not normal maps.
     vec2 cell = floor(p);
     vec2 f = fract(p);
     vec2 u = f * f * (3.0 - 2.0 * f);
@@ -37,10 +37,7 @@ vec3 wave_noise(vec2 p) {
 
 void vertex() {
     ocean_uv = UV;
-    // Yardman owns this channel: metres from registered coast / 40. The
-    // source River's darken/opacity/foam RGB vertex channels do not apply.
     shore_fraction = COLOR.r;
-    // No displacement: streamed near/far ocean edges stay at exact sea level.
 }
 
 void fragment() {
@@ -56,11 +53,19 @@ void fragment() {
     vec3 fine = wave_noise(ocean_uv * 23.7 + vec2(TIME * 0.13, TIME * 0.081));
     float chop_filter = 1.0 - smoothstep(0.25, 0.85, length(fwidth(ocean_uv * 9.3)));
     float fine_filter = 1.0 - smoothstep(0.25, 0.85, length(fwidth(ocean_uv * 23.7)));
-    // Slowly varying swell bends wind waves; shorter irregular slopes break
-    // continuous glitter bands. Pixel footprints suppress unresolved ripples.
     vec2 slope = wind * cos(p1) * 0.038 * f1;
     slope += vec2(-0.326, 0.946) * cos(p2) * 0.025 * f2;
     slope += chop.yz * 0.18 * chop_filter + fine.yz * 0.071 * fine_filter;
+    if (has_reference_normal) {
+        // Direct Beta2 source path: the recovered uCaptain WaterBump is a
+        // 512x512 ETC1 texture with its original ten-level mip chain preserved.
+        // Two differently moving reads avoid making the source tiling obvious.
+        vec2 source_a = texture(reference_normal,
+            ocean_uv * 2.35 + vec2(TIME * 0.0061, -TIME * 0.0040)).rg * 2.0 - 1.0;
+        vec2 source_b = texture(reference_normal,
+            ocean_uv.yx * 3.65 + vec2(-TIME * 0.0035, TIME * 0.0052)).rg * 2.0 - 1.0;
+        slope += (source_a * 0.105 + source_b * 0.070) * shore_fade;
+    }
     slope *= wave_height * 8.5 * shore_fade;
     NORMAL = normalize(mat3(VIEW_MATRIX) * normalize(vec3(-slope.x, 1.0, -slope.y)));
 
@@ -68,8 +73,6 @@ void fragment() {
     vec3 water = mix(coastal_color, ocean_color, depth_tint);
     water *= 0.97 + swell.x * 0.06;
     if (has_reference_surface) {
-        // River main RGB is baked colour detail, with opaque texture alpha.
-        // Preserve the local ocean palette and use its luminance contrast.
         vec2 flow = ocean_uv * 2.1 + vec2(0.0, TIME * 0.0031);
         float detail = dot(texture(reference_surface, flow).rgb, vec3(0.2126, 0.7152, 0.0722));
         water *= 0.96 + detail * 0.18;
@@ -88,14 +91,11 @@ void fragment() {
     float surf = (1.0 - smoothstep(0.20, 1.9, shore_m))
         * smoothstep(0.22, 0.82, sin(foam_phase) * 0.5 + 0.5);
     if (has_reference_foam) {
-        // Source River explicitly reads foam red for opacity, not image alpha.
         float foam = texture(reference_foam,
             ocean_uv * 6.1 + vec2(0.0, TIME * 0.011)).r;
         surf *= 0.56 + smoothstep(0.10, 0.46, foam) * 0.64;
     }
     ALBEDO = mix(water, vec3(0.76, 0.82, 0.79), surf * 0.43);
-    // Broaden unresolved highlights toward the horizon instead of retaining
-    // bright periodic specular lines when short ripples become subpixel.
     ROUGHNESS = mix(0.31, 0.37, 1.0 - fine_filter);
     SPECULAR = 0.52;
     METALLIC = 0.0;
