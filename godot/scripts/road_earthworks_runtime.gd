@@ -2,8 +2,8 @@ extends Node
 
 # Road surfaces keep a stable longitudinal deck. This runtime supplies the missing
 # transition between that deck and Jamaica's DEM terrain: shoulders, cut/fill
-# tie-ins and cut-side drainage. Bridges and tunnels are excluded because their
-# terrain relationship is handled by the structural/portal systems.
+# tie-ins, benched mountain cuts and cut-side drainage. Bridges and tunnels are
+# excluded because their terrain relationship is handled by structural/portal systems.
 const FLAG_BRIDGE := 2
 const FLAG_TUNNEL := 4
 const SAMPLE_STEP_M := 12.0
@@ -14,6 +14,9 @@ const MAX_TIE_RUN_M := 18.0
 const CUT_DITCH_THRESHOLD_M := 0.60
 const DITCH_DEPTH_M := 0.28
 const DITCH_RUN_M := 1.15
+const CUT_BENCH_THRESHOLD_M := 3.0
+const CUT_BENCH_WIDTH_M := 1.60
+const CUT_BENCH_MIN_CLEAR_M := 0.75
 const MAX_SEGMENTS_PER_TILE := 2400
 const VISIBILITY_RANGE_M := 1600.0
 
@@ -105,6 +108,7 @@ func _decorate(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
     proxy.set_meta("cut_profiles", int(geometry.get("cut_profiles", 0)))
     proxy.set_meta("fill_profiles", int(geometry.get("fill_profiles", 0)))
     proxy.set_meta("drainage_profiles", int(geometry.get("drainage_profiles", 0)))
+    proxy.set_meta("bench_profiles", int(geometry.get("bench_profiles", 0)))
     proxy.set_meta("bridge_tunnel_skips", int(geometry.get("structural_skips", 0)))
 
     var instance := MeshInstance3D.new()
@@ -140,11 +144,12 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
     var cut_profiles := 0
     var fill_profiles := 0
     var drainage_profiles := 0
+    var bench_profiles := 0
     var structural_skips := 0
     if tile_size <= 0.0 or sample_step_m <= 0.0 or not is_finite(tile_size) or not is_finite(sample_step_m) or not height_sampler.is_valid():
         return {"vertices": vertices, "normals": normals, "colors": colors, "indices": indices,
             "collision_faces": collision_faces, "segments": 0, "cut_profiles": 0, "fill_profiles": 0,
-            "drainage_profiles": 0, "structural_skips": 0}
+            "drainage_profiles": 0, "bench_profiles": 0, "structural_skips": 0}
 
     var seen: Dictionary = {}
     for segment in segments:
@@ -174,12 +179,14 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
                     fill_profiles += 1
                 if profile.has("ditch"):
                     drainage_profiles += 1
+                if profile.has("bench_inner") and profile.has("bench_outer"):
+                    bench_profiles += 1
         _append_segment_geometry(sections, vertices, normals, colors, indices, collision_faces)
 
     return {"vertices": vertices, "normals": normals, "colors": colors, "indices": indices,
         "collision_faces": collision_faces, "segments": segment_count, "cut_profiles": cut_profiles,
         "fill_profiles": fill_profiles, "drainage_profiles": drainage_profiles,
-        "structural_skips": structural_skips}
+        "bench_profiles": bench_profiles, "structural_skips": structural_skips}
 
 func segment_sections(segment: Array, tile: Vector2i, tile_size: float, height_sampler: Callable,
         sample_step_m: float = SAMPLE_STEP_M) -> Array[Dictionary]:
@@ -249,12 +256,24 @@ func _side_profile(center: Vector2, deck_y: float, right_axis: Vector2, side: fl
     var probe_ground := float(height_sampler.call(probe_world.x, probe_world.y))
     if not is_finite(probe_ground):
         return {}
+
+    # First estimate uses a near-road probe. A second sample can expand the run if
+    # the outer terrain keeps climbing/falling, avoiding unrealistically steep tie-ins.
     var tie_run := clampf(3.0 + absf(probe_ground - deck_y) * 1.35, MIN_TIE_RUN_M, MAX_TIE_RUN_M)
     var tie_offset := shoulder_offset + tie_run
     var tie_world := center + right_axis * side * tie_offset
     var tie_ground := float(height_sampler.call(tie_world.x, tie_world.y))
     if not is_finite(tie_ground):
         return {}
+    var required_run := clampf(3.0 + absf(tie_ground - deck_y) * 1.35, MIN_TIE_RUN_M, MAX_TIE_RUN_M)
+    if required_run > tie_run + 0.25:
+        tie_run = required_run
+        tie_offset = shoulder_offset + tie_run
+        tie_world = center + right_axis * side * tie_offset
+        tie_ground = float(height_sampler.call(tie_world.x, tie_world.y))
+        if not is_finite(tie_ground):
+            return {}
+
     var delta_y := tie_ground - deck_y
     var kind := "blend"
     if delta_y > 0.25:
@@ -266,6 +285,7 @@ func _side_profile(center: Vector2, deck_y: float, right_axis: Vector2, side: fl
     var profile := {
         "kind": kind,
         "delta_y": delta_y,
+        "tie_run_m": tie_run,
         "edge": Vector3(edge_world.x - tile_origin.x, deck_y - 0.010, edge_world.y - tile_origin.y),
         "shoulder": Vector3(shoulder_world.x - tile_origin.x, deck_y - 0.035, shoulder_world.y - tile_origin.y),
         "tie": Vector3(tie_world.x - tile_origin.x, tie_ground + 0.018, tie_world.y - tile_origin.y),
@@ -274,6 +294,21 @@ func _side_profile(center: Vector2, deck_y: float, right_axis: Vector2, side: fl
         var ditch_offset := shoulder_offset + minf(DITCH_RUN_M, tie_run * 0.35)
         var ditch_world := center + right_axis * side * ditch_offset
         profile["ditch"] = Vector3(ditch_world.x - tile_origin.x, deck_y - DITCH_DEPTH_M, ditch_world.y - tile_origin.y)
+
+    # Tall mountain cuts are not rendered as one implausible uninterrupted plane.
+    # Add one deterministic horizontal bench only when the cut is deep enough and
+    # there is enough horizontal run to keep clearance from both ditch and tie toe.
+    var minimum_bench_run := DITCH_RUN_M + CUT_BENCH_WIDTH_M + CUT_BENCH_MIN_CLEAR_M * 2.0
+    if kind == "cut" and delta_y >= CUT_BENCH_THRESHOLD_M and tie_run >= minimum_bench_run:
+        var bench_inner_run := maxf(DITCH_RUN_M + CUT_BENCH_MIN_CLEAR_M, tie_run * 0.46)
+        var bench_outer_run := minf(tie_run - CUT_BENCH_MIN_CLEAR_M, bench_inner_run + CUT_BENCH_WIDTH_M)
+        if bench_outer_run - bench_inner_run >= 0.75:
+            var bench_center_run := (bench_inner_run + bench_outer_run) * 0.5
+            var bench_y := deck_y + delta_y * clampf(bench_center_run / tie_run, 0.0, 1.0)
+            var bench_inner_world := center + right_axis * side * (shoulder_offset + bench_inner_run)
+            var bench_outer_world := center + right_axis * side * (shoulder_offset + bench_outer_run)
+            profile["bench_inner"] = Vector3(bench_inner_world.x - tile_origin.x, bench_y + 0.018, bench_inner_world.y - tile_origin.y)
+            profile["bench_outer"] = Vector3(bench_outer_world.x - tile_origin.x, bench_y + 0.018, bench_outer_world.y - tile_origin.y)
     return profile
 
 func _append_segment_geometry(sections: Array[Dictionary], vertices: PackedVector3Array,
@@ -296,7 +331,12 @@ func _append_segment_geometry(sections: Array[Dictionary], vertices: PackedVecto
                 earth_color = Color(0.28, 0.32, 0.19, 1.0)
             if a.has("ditch") and b.has("ditch"):
                 _append_quad(a.shoulder, a.ditch, b.ditch, b.shoulder, Color(0.22, 0.19, 0.14, 1.0), vertices, normals, colors, indices, collision_faces)
-                _append_quad(a.ditch, a.tie, b.tie, b.ditch, earth_color, vertices, normals, colors, indices, collision_faces)
+                if a.has("bench_inner") and a.has("bench_outer") and b.has("bench_inner") and b.has("bench_outer"):
+                    _append_quad(a.ditch, a.bench_inner, b.bench_inner, b.ditch, earth_color, vertices, normals, colors, indices, collision_faces)
+                    _append_quad(a.bench_inner, a.bench_outer, b.bench_outer, b.bench_inner, Color(0.30, 0.27, 0.18, 1.0), vertices, normals, colors, indices, collision_faces)
+                    _append_quad(a.bench_outer, a.tie, b.tie, b.bench_outer, earth_color, vertices, normals, colors, indices, collision_faces)
+                else:
+                    _append_quad(a.ditch, a.tie, b.tie, b.ditch, earth_color, vertices, normals, colors, indices, collision_faces)
             else:
                 _append_quad(a.shoulder, a.tie, b.tie, b.shoulder, earth_color, vertices, normals, colors, indices, collision_faces)
 
