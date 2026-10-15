@@ -181,6 +181,7 @@ func _run() -> void:
 
     var jobs = root.get_node("JobRuntime")
     var original_wallet: int = int(jobs.wallet_jmd)
+    var original_ownership = jobs.garage_owned_ids.duplicate() if jobs.garage_owned_ids is Array else null
     jobs.wallet_jmd = 100000
     garage._owned_ids.erase("port_royal_992")
     next_scene.vehicle = replacement
@@ -209,6 +210,7 @@ func _run() -> void:
     _check(garage.purchase_vehicle("port_royal_992") and jobs.wallet_jmd == 100000 - price, "Owned vehicle was charged twice")
     _check(garage.set_selected_vehicle("toyota_crown"), "Could not restore Crown after purchase checks")
     jobs.wallet_jmd = original_wallet
+    jobs.garage_owned_ids = original_ownership
     jobs._update_ui()
     emitted.clear()
 

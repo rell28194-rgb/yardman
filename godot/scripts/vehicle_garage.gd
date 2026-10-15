@@ -5,6 +5,7 @@ signal vehicle_selected(vehicle_id: String)
 const Catalog = preload("res://scripts/vehicle_catalog.gd")
 const ModelScript = preload("res://scripts/vehicle_model.gd")
 const Styler = preload("res://scripts/vehicle_visual_styler.gd")
+const JobPersistence = preload("res://scripts/job_persistence_runtime.gd")
 const SETTINGS_PATH := "user://yardman/vehicle.json"
 
 const STARTER_VEHICLE_ID := "toyota_crown"
@@ -173,14 +174,24 @@ func purchase_vehicle(vehicle_id: String, apply_to_game: bool = true) -> bool:
         _last_selection_error = "STOP THE VEHICLE BEFORE SWITCHING"
         return false
     var price := vehicle_price_jmd(vehicle_id)
-    if price <= 0 or not _spend_wallet(price):
+    # The debit and ownership must reach the SAME atomic record. vehicle.json
+    # remains a selection/UI cache; a crash before it commits cannot lose a car.
+    if price <= 0:
         _last_selection_error = "COULD NOT COMPLETE VEHICLE PAYMENT"
         return false
     _owned_ids.append(vehicle_id)
+    if not _spend_wallet(price):
+        _owned_ids.erase(vehicle_id)
+        _last_selection_error = "COULD NOT COMPLETE VEHICLE PAYMENT"
+        return false
     if not set_selected_vehicle(vehicle_id, true, apply_to_game):
         _owned_ids.erase(vehicle_id)
         if not _refund_wallet(price):
-            _last_selection_error = "PAYMENT RECOVERY FAILED — RELOAD REQUIRED"
+            # The durable purchase still owns the vehicle. Never retain an
+            # in-memory refund which failed to reach disk or offer a second debit.
+            var runtime := get_node_or_null("/root/JobRuntime")
+            _owned_ids = normalized_owned_ids(runtime.get("garage_owned_ids"), STARTER_VEHICLE_ID)
+            _last_selection_error = "PURCHASE SAVED — SELECT YOUR VEHICLE AGAIN"
         return false
     return true
 
@@ -195,7 +206,11 @@ func _save_wallet() -> bool:
     var state = runtime.call("save_snapshot")
     if not state is Dictionary:
         return false
-    return persistence.call("write_state", _wallet_save_path(), state) == OK
+    state["garage_owned_ids"] = owned_vehicle_ids()
+    if persistence.call("write_state", _wallet_save_path(), state) != OK:
+        return false
+    runtime.set("garage_owned_ids", owned_vehicle_ids())
+    return true
 
 func _spend_wallet(amount: int) -> bool:
     if amount <= 0 or wallet_jmd() < amount:
@@ -213,9 +228,14 @@ func _refund_wallet(amount: int) -> bool:
     var runtime := get_node_or_null("/root/JobRuntime")
     if runtime == null:
         return false
-    runtime.set("wallet_jmd", wallet_jmd() + amount)
+    var balance := wallet_jmd()
+    runtime.set("wallet_jmd", balance + amount)
+    if not _save_wallet():
+        runtime.set("wallet_jmd", balance)
+        runtime.call("_update_ui")
+        return false
     runtime.call("_update_ui")
-    return _save_wallet()
+    return true
 
 func _scene_controller(scene: Node) -> Object:
     if not is_instance_valid(scene):
@@ -571,18 +591,23 @@ func _apply_from_selector() -> void:
 func _load_selection() -> void:
     _selected_id = STARTER_VEHICLE_ID
     _owned_ids = [STARTER_VEHICLE_ID]
-    if not FileAccess.file_exists(_settings_path()):
-        return
-    var file := FileAccess.open(_settings_path(), FileAccess.READ)
-    if file == null:
-        return
-    var parsed = JSON.parse_string(file.get_as_text())
-    if not parsed is Dictionary:
-        return
-    var candidate := str(parsed.get("selected_vehicle", STARTER_VEHICLE_ID))
-    if Catalog.production_ids().has(candidate):
-        _selected_id = candidate
-    _owned_ids = normalized_owned_ids(parsed.get("owned_vehicles", []), _selected_id)
+    if FileAccess.file_exists(_settings_path()):
+        var file := FileAccess.open(_settings_path(), FileAccess.READ)
+        if file != null:
+            var json := JSON.new()
+            if json.parse(file.get_as_text()) == OK and json.data is Dictionary:
+                var parsed: Dictionary = json.data
+                var candidate := str(parsed.get("selected_vehicle", STARTER_VEHICLE_ID))
+                if Catalog.production_ids().has(candidate):
+                    _selected_id = candidate
+                _owned_ids = normalized_owned_ids(parsed.get("owned_vehicles", []), _selected_id)
+    # Job persistence loads deferred, after this autoload's _ready. Read the
+    # same validated primary/backup pair here so recovery has no startup race.
+    var state := JobPersistence.read_state(_wallet_save_path())
+    if state.has("garage_owned_ids"):
+        _owned_ids = normalized_owned_ids(state["garage_owned_ids"], STARTER_VEHICLE_ID)
+        if not is_vehicle_owned(_selected_id):
+            _selected_id = STARTER_VEHICLE_ID
 
 func _settings_path() -> String:
     return SETTINGS_PATH

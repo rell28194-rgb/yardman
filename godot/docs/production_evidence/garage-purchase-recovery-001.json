@@ -1,0 +1,106 @@
+{
+  "milestone": "atomic-wallet-and-paid-vehicle-ownership",
+  "engine": "4.7.2.stable.official.ed1daf0bf",
+  "scope": "Host runtime persistence logic; no Android-device power-loss acceptance",
+  "source_sha256": {
+    "godot/scripts/job_runtime.gd": "2d595fb631a0b1e589a19e53c03375c43ef8787b5ef537e0f37ba6603732c277",
+    "godot/scripts/job_persistence_runtime.gd": "7b397683b343fb33f76f898cd0323580249ba1b1a29f80491e35497aae8c4e4c",
+    "godot/scripts/vehicle_garage.gd": "d116df073f4f9a2bf57286778f756879149de78337ef12687e0ca0566a7839b3",
+    "godot/tests/garage_purchase_recovery_test.gd": "8d501c7ca0ec3c2adac44bb9cd986e749c20627790f514f94413c5424a93f2c2"
+  },
+  "runtime_suites": {
+    "garage_purchase_recovery": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_GARAGE_PURCHASE_RECOVERY_TEST PASS checks=39"
+      ]
+    },
+    "garage": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_GARAGE_TEST PASS checks=85 vehicles=3 transaction=1 failure_rollback=1 scene_rebind=1 preview=1 pause=1 persistence=1"
+      ]
+    },
+    "garage_economy": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_GARAGE_ECONOMY_TEST PASS vehicles=3 purchase=1 ownership=1 migration=1 bridge=1 persistence=1"
+      ]
+    },
+    "job_persistence": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_JOB_PERSISTENCE_TEST PASS valid=3 checksum=3 invalid=3 express=2 ownership=6"
+      ]
+    },
+    "job_runtime": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_JOB_RUNTIME_TEST PASS anchors=1 economy=5 travel_guard=2 completion=5 offers=5 timers=2 persistence=5"
+      ]
+    },
+    "job_guidance": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_JOB_GUIDANCE_TEST PASS cardinal=4 arrived=1 metres=1 sign=1 camera_relative=1"
+      ]
+    },
+    "startup_menu": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_STARTUP_MENU_TEST PASS continue_button=1 garage_button=1 start_button=1 touch_overlay=1"
+      ]
+    },
+    "powertrain": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_POWERTRAIN_TEST PASS vehicles=3 torque_curves=1 gearing=1 final_drive=1 controller=1"
+      ]
+    },
+    "vehicle_catalog": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_VEHICLE_CATALOG_TEST PASS profiles=3 switch=1"
+      ]
+    },
+    "vehicle_camera": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_VEHICLE_CAMERA_TEST PASS vehicles=3 distinct_chase_profiles=1"
+      ]
+    },
+    "audio": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_AUDIO_TEST PASS profiles=3 voices=10 load_layers=1 transmission=1 shift_pulse=1 scrub=1 grass=1 footsteps=1 cache_reuse=1"
+      ]
+    }
+  },
+  "mutation_control": {
+    "passed": true,
+    "mutation": "Remove wallet-save ownership binding in isolated project",
+    "detected_error": "debit reached disk without ownership",
+    "actual_engine": "Godot 4.7.2"
+  },
+  "recovery_semantics": {
+    "wallet_and_paid_ownership": "single checksummed jobs.json atomic primary/backup record",
+    "vehicle_json": "selection cache, legacy ownership until first paid save",
+    "interruption_after_debit_before_selection": "paid car remains owned; previous selection can remain until owner selects it",
+    "refund_save_failure": "retain durable debit and ownership; retry selection without a second charge"
+  },
+  "open": [
+    "Android device storage and process termination evidence",
+    "Hero vehicle geometry and rendered presentation"
+  ]
+}

@@ -11,6 +11,9 @@ const CONTRACT_EXPRESS := "express"
 const EXPRESS_REWARD_MULTIPLIER := 1.35
 
 var wallet_jmd := STARTING_WALLET_JMD
+# Null keeps legacy garage saves authoritative until the first paid purchase.
+# Once present, ownership and wallet travel in the same atomic save record.
+var garage_owned_ids: Variant = null
 var active_job: Dictionary = {}
 var _offers: Array[Dictionary] = []
 var _offer_sequence := 0
@@ -237,14 +240,18 @@ func _abandon_job() -> void:
     _update_ui()
 
 func save_snapshot() -> Dictionary:
-    return {
+    var state := {
         "wallet_jmd": wallet_jmd,
         "offer_sequence": _offer_sequence,
         "active_job": active_job.duplicate(true),
     }
+    if garage_owned_ids is Array:
+        state["garage_owned_ids"] = garage_owned_ids.duplicate()
+    return state
 
 func restore_snapshot(value: Variant) -> void:
     wallet_jmd = STARTING_WALLET_JMD
+    garage_owned_ids = null
     _offer_sequence = 0
     active_job.clear()
     _offers.clear()
@@ -252,6 +259,9 @@ func restore_snapshot(value: Variant) -> void:
     if value is Dictionary:
         var state: Dictionary = value
         wallet_jmd = maxi(0, int(state.get("wallet_jmd", STARTING_WALLET_JMD)))
+        var ownership = state.get("garage_owned_ids", null)
+        if ownership is Array:
+            garage_owned_ids = ownership.duplicate()
         _offer_sequence = maxi(0, int(state.get("offer_sequence", 0)))
         var job = state.get("active_job", {})
         if job is Dictionary and _valid_persisted_job(job):

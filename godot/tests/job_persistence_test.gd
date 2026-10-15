@@ -30,6 +30,14 @@ func _run() -> void:
     invalid = state.duplicate(true)
     invalid["offer_sequence"] = INF
     _check(not Persistence.valid_state(invalid), "non-finite offer sequence was accepted")
+    for ownership in [[], ["toyota_crown", "unknown"], ["toyota_crown", "toyota_crown"], "toyota_crown", ["toyota_crown", 1]]:
+        invalid = state.duplicate(true)
+        invalid["garage_owned_ids"] = ownership
+        _check(not Persistence.valid_state(invalid), "invalid paid ownership was accepted: %s" % str(ownership))
+    var purchased := state.duplicate(true)
+    purchased["garage_owned_ids"] = ["toyota_crown", "toyota_mark_x"]
+    _check(Persistence.unwrap_state(Persistence.wrap_state(purchased)).get("garage_owned_ids") == purchased.garage_owned_ids,
+        "paid ownership did not round-trip with its wallet")
 
     var active := state.duplicate(true)
     active["active_job"] = {"origin_parish": "St. Mary", "destination_parish": "Portland", "destination_x": 1000.0, "destination_z": 2000.0, "reward_jmd": 4200, "required_travel_m": 900.0, "travelled_m": 450.0}
@@ -47,7 +55,7 @@ func _run() -> void:
     _check(not Persistence.valid_state(broken_express), "broken express countdown state was accepted")
 
     if failures == 0:
-        print("YARDMAN_JOB_PERSISTENCE_TEST PASS valid=3 checksum=3 invalid=3 express=2")
+        print("YARDMAN_JOB_PERSISTENCE_TEST PASS valid=3 checksum=3 invalid=3 express=2 ownership=6")
         quit()
     else:
         print("YARDMAN_JOB_PERSISTENCE_TEST FAIL failures=%d" % failures)

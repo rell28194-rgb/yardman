@@ -3,6 +3,7 @@ class_name YardmanJobPersistenceRuntime
 
 const SAVE_PATH := "user://yardman/jobs.json"
 const SAVE_INTERVAL := 15.0
+const VehicleCatalog = preload("res://scripts/vehicle_catalog.gd")
 var _clock := 0.0
 
 func _ready() -> void:
@@ -37,6 +38,15 @@ func _save_state() -> void:
     write_state(SAVE_PATH, state_value)
 
 static func valid_state(state: Dictionary) -> bool:
+    if state.has("garage_owned_ids"):
+        var ownership = state["garage_owned_ids"]
+        if not ownership is Array or not ownership.has("toyota_crown"):
+            return false
+        var seen: Dictionary = {}
+        for vehicle_id in ownership:
+            if not vehicle_id is String or not VehicleCatalog.production_ids().has(vehicle_id) or seen.has(vehicle_id):
+                return false
+            seen[vehicle_id] = true
     var wallet = state.get("wallet_jmd", null)
     var sequence = state.get("offer_sequence", null)
     if not (wallet is int or wallet is float) or not is_finite(float(wallet)) or int(wallet) < 0:
@@ -100,5 +110,7 @@ static func read_state(path: String) -> Dictionary:
 static func _read_valid(path: String) -> Dictionary:
     if not FileAccess.file_exists(path):
         return {}
-    var wrapper = JSON.parse_string(FileAccess.get_file_as_string(path))
-    return unwrap_state(wrapper)
+    var json := JSON.new()
+    if json.parse(FileAccess.get_file_as_string(path)) != OK:
+        return {}
+    return unwrap_state(json.data)

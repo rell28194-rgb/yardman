@@ -1,5 +1,13 @@
 extends SceneTree
 
+class TestGarage:
+    extends "res://scripts/vehicle_garage.gd"
+    var directory := ""
+    func _settings_path() -> String:
+        return directory.path_join("vehicle.json")
+    func _wallet_save_path() -> String:
+        return directory.path_join("jobs.json")
+
 class FakeVehicle:
     extends RefCounted
     var applied := ""
@@ -39,13 +47,24 @@ func _restore_file(path: String, snapshot: Dictionary) -> void:
         DirAccess.remove_absolute(absolute)
 
 func _run() -> void:
-    var garage = root.get_node_or_null("VehicleGarage")
+    var production_garage = root.get_node_or_null("VehicleGarage")
     var jobs = root.get_node_or_null("JobRuntime")
-    _check(garage != null, "VehicleGarage autoload missing")
+    _check(production_garage != null, "VehicleGarage autoload missing")
     _check(jobs != null, "JobRuntime autoload missing")
-    if garage == null or jobs == null:
+    if production_garage == null or jobs == null:
         quit(1)
         return
+
+    # Keep every generated purchase and save out of the owner's normal files.
+    var modes: Dictionary = {}
+    for child in root.get_children():
+        modes[child] = child.process_mode
+        child.process_mode = Node.PROCESS_MODE_DISABLED
+    var original_jobs: Dictionary = jobs.call("save_snapshot")
+    var garage := TestGarage.new()
+    garage.directory = "user://garage-economy-test-%d" % Time.get_ticks_usec()
+    root.add_child(garage)
+    garage.set_process(false)
 
     var ids: Array = garage.available_vehicle_ids()
     _check(ids.has("toyota_crown"), "Toyota Crown missing from garage")
@@ -61,8 +80,8 @@ func _run() -> void:
     _check(migrated.has("toyota_crown"), "ownership migration lost starter Crown")
     _check(migrated.has("port_royal_992"), "legacy selected vehicle was not grandfathered")
 
-    var settings_path := "user://yardman/vehicle.json"
-    var jobs_path := "user://yardman/jobs.json"
+    var settings_path := garage._settings_path()
+    var jobs_path := garage._wallet_save_path()
     var vehicle_before := _capture_file(settings_path)
     var jobs_before := _capture_file(jobs_path)
     var jobs_backup_before := _capture_file(jobs_path + ".bak")
@@ -107,6 +126,18 @@ func _run() -> void:
     _restore_file(jobs_path, jobs_before)
     _restore_file(jobs_path + ".bak", jobs_backup_before)
     garage.call("_load_selection")
+
+    jobs.call("restore_snapshot", original_jobs)
+    var directory := ProjectSettings.globalize_path(garage.directory)
+    garage.queue_free()
+    await process_frame
+    for entry in DirAccess.get_files_at(directory):
+        DirAccess.remove_absolute(directory.path_join(entry))
+    if DirAccess.dir_exists_absolute(directory):
+        DirAccess.remove_absolute(directory)
+    for child in modes:
+        if is_instance_valid(child):
+            child.process_mode = modes[child]
 
     print("YARDMAN_GARAGE_ECONOMY_TEST %s vehicles=%d purchase=1 ownership=1 migration=1 bridge=1 persistence=1" % ["PASS" if failures == 0 else "FAIL", ids.size()])
     quit(0 if failures == 0 else 1)
