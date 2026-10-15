@@ -2,8 +2,8 @@ extends Node
 
 # Road surfaces keep a stable longitudinal deck. This runtime supplies the missing
 # transition between that deck and Jamaica's DEM terrain: shoulders, cut/fill
-# tie-ins, benched mountain cuts and cut-side drainage. Bridges and tunnels are
-# excluded because their terrain relationship is handled by structural/portal systems.
+# tie-ins, benched mountain earthworks and cut-side drainage. Bridges and tunnels
+# are excluded because their terrain relationship is handled by structural/portal systems.
 const FLAG_BRIDGE := 2
 const FLAG_TUNNEL := 4
 const SAMPLE_STEP_M := 12.0
@@ -15,8 +15,9 @@ const CUT_DITCH_THRESHOLD_M := 0.60
 const DITCH_DEPTH_M := 0.28
 const DITCH_RUN_M := 1.15
 const CUT_BENCH_THRESHOLD_M := 3.0
-const CUT_BENCH_WIDTH_M := 1.60
-const CUT_BENCH_MIN_CLEAR_M := 0.75
+const FILL_BENCH_THRESHOLD_M := 3.0
+const BENCH_WIDTH_M := 1.60
+const BENCH_MIN_CLEAR_M := 0.75
 const MAX_SEGMENTS_PER_TILE := 2400
 const VISIBILITY_RANGE_M := 1600.0
 
@@ -109,6 +110,8 @@ func _decorate(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
     proxy.set_meta("fill_profiles", int(geometry.get("fill_profiles", 0)))
     proxy.set_meta("drainage_profiles", int(geometry.get("drainage_profiles", 0)))
     proxy.set_meta("bench_profiles", int(geometry.get("bench_profiles", 0)))
+    proxy.set_meta("cut_bench_profiles", int(geometry.get("cut_bench_profiles", 0)))
+    proxy.set_meta("fill_bench_profiles", int(geometry.get("fill_bench_profiles", 0)))
     proxy.set_meta("bridge_tunnel_skips", int(geometry.get("structural_skips", 0)))
 
     var instance := MeshInstance3D.new()
@@ -145,11 +148,14 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
     var fill_profiles := 0
     var drainage_profiles := 0
     var bench_profiles := 0
+    var cut_bench_profiles := 0
+    var fill_bench_profiles := 0
     var structural_skips := 0
     if tile_size <= 0.0 or sample_step_m <= 0.0 or not is_finite(tile_size) or not is_finite(sample_step_m) or not height_sampler.is_valid():
         return {"vertices": vertices, "normals": normals, "colors": colors, "indices": indices,
             "collision_faces": collision_faces, "segments": 0, "cut_profiles": 0, "fill_profiles": 0,
-            "drainage_profiles": 0, "bench_profiles": 0, "structural_skips": 0}
+            "drainage_profiles": 0, "bench_profiles": 0, "cut_bench_profiles": 0,
+            "fill_bench_profiles": 0, "structural_skips": 0}
 
     var seen: Dictionary = {}
     for segment in segments:
@@ -181,12 +187,17 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
                     drainage_profiles += 1
                 if profile.has("bench_inner") and profile.has("bench_outer"):
                     bench_profiles += 1
+                    if kind == "cut":
+                        cut_bench_profiles += 1
+                    elif kind == "fill":
+                        fill_bench_profiles += 1
         _append_segment_geometry(sections, vertices, normals, colors, indices, collision_faces)
 
     return {"vertices": vertices, "normals": normals, "colors": colors, "indices": indices,
         "collision_faces": collision_faces, "segments": segment_count, "cut_profiles": cut_profiles,
         "fill_profiles": fill_profiles, "drainage_profiles": drainage_profiles,
-        "bench_profiles": bench_profiles, "structural_skips": structural_skips}
+        "bench_profiles": bench_profiles, "cut_bench_profiles": cut_bench_profiles,
+        "fill_bench_profiles": fill_bench_profiles, "structural_skips": structural_skips}
 
 func segment_sections(segment: Array, tile: Vector2i, tile_size: float, height_sampler: Callable,
         sample_step_m: float = SAMPLE_STEP_M) -> Array[Dictionary]:
@@ -295,13 +306,15 @@ func _side_profile(center: Vector2, deck_y: float, right_axis: Vector2, side: fl
         var ditch_world := center + right_axis * side * ditch_offset
         profile["ditch"] = Vector3(ditch_world.x - tile_origin.x, deck_y - DITCH_DEPTH_M, ditch_world.y - tile_origin.y)
 
-    # Tall mountain cuts are not rendered as one implausible uninterrupted plane.
-    # Add one deterministic horizontal bench only when the cut is deep enough and
-    # there is enough horizontal run to keep clearance from both ditch and tie toe.
-    var minimum_bench_run := DITCH_RUN_M + CUT_BENCH_WIDTH_M + CUT_BENCH_MIN_CLEAR_M * 2.0
-    if kind == "cut" and delta_y >= CUT_BENCH_THRESHOLD_M and tie_run >= minimum_bench_run:
-        var bench_inner_run := maxf(DITCH_RUN_M + CUT_BENCH_MIN_CLEAR_M, tie_run * 0.46)
-        var bench_outer_run := minf(tie_run - CUT_BENCH_MIN_CLEAR_M, bench_inner_run + CUT_BENCH_WIDTH_M)
+    # Deep cuts and fills are not rendered as one implausible uninterrupted plane.
+    # A deterministic bench breaks the slope only where the vertical delta and
+    # available run are large enough. Cut benches preserve ditch clearance.
+    var threshold := CUT_BENCH_THRESHOLD_M if kind == "cut" else FILL_BENCH_THRESHOLD_M
+    var ditch_clearance := DITCH_RUN_M if kind == "cut" and profile.has("ditch") else 0.0
+    var minimum_bench_run := ditch_clearance + BENCH_WIDTH_M + BENCH_MIN_CLEAR_M * 2.0
+    if kind in ["cut", "fill"] and absf(delta_y) >= threshold and tie_run >= minimum_bench_run:
+        var bench_inner_run := maxf(ditch_clearance + BENCH_MIN_CLEAR_M, tie_run * 0.46)
+        var bench_outer_run := minf(tie_run - BENCH_MIN_CLEAR_M, bench_inner_run + BENCH_WIDTH_M)
         if bench_outer_run - bench_inner_run >= 0.75:
             var bench_center_run := (bench_inner_run + bench_outer_run) * 0.5
             var bench_y := deck_y + delta_y * clampf(bench_center_run / tie_run, 0.0, 1.0)
@@ -329,16 +342,21 @@ func _append_segment_geometry(sections: Array[Dictionary], vertices: PackedVecto
                 earth_color = Color(0.34, 0.25, 0.16, 1.0)
             elif kind == "fill":
                 earth_color = Color(0.28, 0.32, 0.19, 1.0)
+
+            var slope_a: Vector3 = a.shoulder
+            var slope_b: Vector3 = b.shoulder
             if a.has("ditch") and b.has("ditch"):
                 _append_quad(a.shoulder, a.ditch, b.ditch, b.shoulder, Color(0.22, 0.19, 0.14, 1.0), vertices, normals, colors, indices, collision_faces)
-                if a.has("bench_inner") and a.has("bench_outer") and b.has("bench_inner") and b.has("bench_outer"):
-                    _append_quad(a.ditch, a.bench_inner, b.bench_inner, b.ditch, earth_color, vertices, normals, colors, indices, collision_faces)
-                    _append_quad(a.bench_inner, a.bench_outer, b.bench_outer, b.bench_inner, Color(0.30, 0.27, 0.18, 1.0), vertices, normals, colors, indices, collision_faces)
-                    _append_quad(a.bench_outer, a.tie, b.tie, b.bench_outer, earth_color, vertices, normals, colors, indices, collision_faces)
-                else:
-                    _append_quad(a.ditch, a.tie, b.tie, b.ditch, earth_color, vertices, normals, colors, indices, collision_faces)
+                slope_a = a.ditch
+                slope_b = b.ditch
+
+            if a.has("bench_inner") and a.has("bench_outer") and b.has("bench_inner") and b.has("bench_outer"):
+                _append_quad(slope_a, a.bench_inner, b.bench_inner, slope_b, earth_color, vertices, normals, colors, indices, collision_faces)
+                var bench_color := Color(0.30, 0.27, 0.18, 1.0) if kind == "cut" else Color(0.27, 0.34, 0.19, 1.0)
+                _append_quad(a.bench_inner, a.bench_outer, b.bench_outer, b.bench_inner, bench_color, vertices, normals, colors, indices, collision_faces)
+                _append_quad(a.bench_outer, a.tie, b.tie, b.bench_outer, earth_color, vertices, normals, colors, indices, collision_faces)
             else:
-                _append_quad(a.shoulder, a.tie, b.tie, b.shoulder, earth_color, vertices, normals, colors, indices, collision_faces)
+                _append_quad(slope_a, a.tie, b.tie, slope_b, earth_color, vertices, normals, colors, indices, collision_faces)
 
 func _append_quad(a: Vector3, b: Vector3, c: Vector3, d: Vector3, color: Color,
         vertices: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray,
