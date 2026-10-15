@@ -11,7 +11,9 @@ on:
       - 'godot/scripts/vehicle_stance_runtime.gd'
       - 'godot/scripts/vehicle_visual_styler.gd'
       - 'godot/scripts/vehicle_visual_runtime.gd'
+      - 'godot/scripts/vehicle_garage.gd'
       - 'godot/tests/vehicle_profile_render_test.gd'
+      - 'godot/tests/garage_preview_render_test.gd'
       - '.github/workflows/vehicle-profile-render.yml'
   workflow_dispatch:
 
@@ -69,6 +71,16 @@ jobs:
             echo "YARDMAN_VEHICLE_PROFILE_RENDER_EXIT_TIMEOUT_ACCEPTED renderer=${YARDMAN_EXPECT_RENDER_METHOD} pass_marker=1"
           fi
 
+      - name: Compare actual garage preview reflections
+        shell: bash
+        env:
+          YARDMAN_GARAGE_CAPTURE_DIR: ${{ github.workspace }}/godot/build/vehicle-${{ matrix.method }}/garage
+        run: |
+          set -euo pipefail
+          timeout 180 xvfb-run -a -s '-screen 0 960x540x24' godot --path godot --rendering-method "$YARDMAN_EXPECT_RENDER_METHOD" --audio-driver Dummy --script res://tests/garage_preview_render_test.gd 2>&1 | tee godot/build/garage-preview-render.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/garage-preview-render.log; then exit 1; fi
+          grep -q 'YARDMAN_GARAGE_PREVIEW_RENDER_TEST PASS' godot/build/garage-preview-render.log
+
       - name: Preserve vehicle render evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -77,6 +89,7 @@ jobs:
           path: |
             godot/build/vehicle-*/
             godot/build/vehicle-profile-render.log
+            godot/build/garage-preview-render.log
             godot/build/vehicle-render-import.log
           if-no-files-found: warn
           retention-days: 14

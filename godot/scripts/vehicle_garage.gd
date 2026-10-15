@@ -475,8 +475,21 @@ func _build_preview_world() -> void:
     var environment := Environment.new()
     environment.background_mode = Environment.BG_COLOR
     environment.background_color = Color(0.025, 0.032, 0.040)
-    environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-    environment.ambient_light_color = Color(0.52, 0.58, 0.66)
+    # Metallic surfaces need an environment to reflect even when the visible
+    # background is a solid studio colour. Keep this small, static and local to
+    # the garage's isolated viewport rather than changing the world lighting.
+    var studio_material := ProceduralSkyMaterial.new()
+    studio_material.sky_top_color = Color(0.22, 0.24, 0.28)
+    studio_material.sky_horizon_color = Color(0.72, 0.74, 0.78)
+    studio_material.ground_bottom_color = Color(0.09, 0.10, 0.12)
+    studio_material.ground_horizon_color = Color(0.62, 0.64, 0.68)
+    var studio_sky := Sky.new()
+    studio_sky.radiance_size = Sky.RADIANCE_SIZE_128
+    studio_sky.process_mode = Sky.PROCESS_MODE_QUALITY
+    studio_sky.sky_material = studio_material
+    environment.sky = studio_sky
+    environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+    environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
     environment.ambient_light_energy = 0.75
     var world_environment := WorldEnvironment.new()
     world_environment.environment = environment
