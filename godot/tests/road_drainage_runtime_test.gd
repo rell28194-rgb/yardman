@@ -1,6 +1,16 @@
 extends SceneTree
 
 const RoadDrainage = preload("res://scripts/road_drainage_runtime.gd")
+var failures := 0
+
+class CountingDrainage:
+    extends "res://scripts/road_drainage_runtime.gd"
+    var reads: Dictionary = {}
+    func _read_tile_records(tile: Vector2i) -> Array:
+        reads[tile] = int(reads.get(tile, 0)) + 1
+        if tile.y == -1:
+            return []
+        return [{"source_way": "fixture-%d:%d" % [tile.x, tile.y], "kind": "ditch"}]
 
 func _initialize() -> void:
     var runtime := RoadDrainage.new()
@@ -59,13 +69,45 @@ func _initialize() -> void:
     _require(runtime.build_geometry(plan, Vector2.ZERO, invalid_sampler).vertices.is_empty(),
         "non-finite terrain support must fail closed")
 
+    _test_streamed_record_cache()
     runtime.free()
-    print("YARDMAN_ROAD_DRAINAGE_TEST PASS channel_spans=%d culvert_portals=%d vertices=%d" % [
+    if failures > 0:
+        quit(2)
+        return
+    print("YARDMAN_ROAD_DRAINAGE_TEST PASS channel_spans=%d culvert_portals=%d vertices=%d bounded_cache=64 lru=1 unload=1 negative_cache=1" % [
         channel_items, portal_items, vertices.size()])
     quit(0)
+
+func _test_streamed_record_cache() -> void:
+    var cache := CountingDrainage.new()
+    var hot := Vector2i.ZERO
+    var hot_records := cache.records_for_tile(hot)
+    for index in range(1, 257):
+        _require(cache.records_for_tile(hot) == hot_records, "cached source records changed during traversal")
+        cache.records_for_tile(Vector2i(index, 0))
+        _require(int(cache.record_cache_snapshot().cached_tiles) <= RoadDrainage.MAX_CACHED_TILES,
+            "national traversal retained more than the bounded tile cache")
+    _require(int(cache.reads[hot]) == 1, "frequently queried source tile was evicted instead of a cold tile")
+    _require(int(cache.record_cache_snapshot().cached_tiles) == RoadDrainage.MAX_CACHED_TILES,
+        "LRU cache failed to retain its configured working set")
+    _require(int(cache.record_cache_snapshot().evictions) == 193, "cache eviction accounting differs from traversal")
+    _require(str(cache.records_for_tile(Vector2i(1, 0))[0].source_way) == "fixture-1:0" and int(cache.reads[Vector2i(1, 0)]) == 2,
+        "evicted source tile did not reload unchanged authoritative records")
+    var missing := Vector2i(9, -1)
+    _require(cache.records_for_tile(missing).is_empty() and cache.records_for_tile(missing).is_empty(),
+        "missing source tile invented records")
+    _require(int(cache.reads[missing]) == 1, "missing source tile was reread on every proximity query")
+    cache._on_terrain_tile_removed(missing)
+    _require(cache.records_for_tile(missing).is_empty() and int(cache.reads[missing]) == 2,
+        "terrain unload did not release negative cache entry")
+    cache._on_terrain_tile_removed(hot)
+    _require(cache.records_for_tile(hot) == hot_records and int(cache.reads[hot]) == 2,
+        "terrain unload retained stale source metadata")
+    cache.free()
 
 func _require(condition: bool, message: String) -> void:
     if condition:
         return
+    failures += 1
     push_error("YARDMAN_ROAD_DRAINAGE_TEST FAIL: " + message)
     quit(2)

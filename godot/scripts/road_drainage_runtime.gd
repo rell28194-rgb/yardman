@@ -16,11 +16,15 @@ const CHANNEL_LIP_LIFT_M := 0.032
 const MIN_LIP_WIDTH_M := 0.06
 const MAX_LIP_WIDTH_M := 0.18
 const VISIBILITY_RANGE_M := 900.0
+const MAX_CACHED_TILES := 64
 
 var _terrain: Node
 var _connected := false
 var _material: StandardMaterial3D
 var _record_cache: Dictionary = {}
+var _cache_hits := 0
+var _cache_misses := 0
+var _cache_evictions := 0
 
 func _ready() -> void:
     set_process(true)
@@ -46,6 +50,9 @@ func _on_terrain_tile(tile: Vector2i) -> void:
         _decorate(tile, root)
 
 func _on_terrain_tile_removed(tile: Vector2i) -> void:
+    _record_cache.erase("%d:%d" % [tile.x, tile.y])
+    if not is_instance_valid(_terrain):
+        return
     var root := _terrain.get_node_or_null("TerrainTile_%d_%d" % [tile.x, tile.y]) as Node3D
     if root == null:
         return
@@ -96,19 +103,34 @@ func _decorate(tile: Vector2i, tile_root: Node3D) -> void:
 func records_for_tile(tile: Vector2i) -> Array:
     var cache_key := "%d:%d" % [tile.x, tile.y]
     if _record_cache.has(cache_key):
-        return _record_cache[cache_key]
+        _cache_hits += 1
+        var records: Array = _record_cache[cache_key]
+        # Dictionary insertion order supplies a bounded LRU without retaining
+        # another national list of visited/missing tiles.
+        _record_cache.erase(cache_key)
+        _record_cache[cache_key] = records
+        return records
+    _cache_misses += 1
+    var records := _read_tile_records(tile)
+    while _record_cache.size() >= MAX_CACHED_TILES:
+        _record_cache.erase(_record_cache.keys()[0])
+        _cache_evictions += 1
+    _record_cache[cache_key] = records
+    return records
+
+func record_cache_snapshot() -> Dictionary:
+    return {"cached_tiles": _record_cache.size(), "limit_tiles": MAX_CACHED_TILES,
+        "hits": _cache_hits, "misses": _cache_misses, "evictions": _cache_evictions}
+
+func _read_tile_records(tile: Vector2i) -> Array:
     var path := "res://data/roads/drainage/tile_%d_%d.json" % [tile.x, tile.y]
     if not FileAccess.file_exists(path):
-        _record_cache[cache_key] = []
         return []
     var payload = JSON.parse_string(FileAccess.get_file_as_string(path))
     if not payload is Dictionary or not payload.get("drainage", null) is Array:
         push_warning("Invalid Yardman drainage tile: " + path)
-        _record_cache[cache_key] = []
         return []
-    var records: Array = payload.drainage
-    _record_cache[cache_key] = records
-    return records
+    return payload.drainage
 
 func has_mapped_channel_near(world_point: Vector2, radius_m: float, tile_size_m: float = 4096.0) -> bool:
     if radius_m < 0.0 or tile_size_m <= 0.0 or not is_finite(radius_m) or not is_finite(tile_size_m):

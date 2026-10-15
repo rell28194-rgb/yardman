@@ -1,0 +1,48 @@
+{
+  "milestone": "bounded-drainage-cache-001",
+  "state": "TESTED",
+  "base_commit": "455e85726e501b6b54baba483e96d6140fdadf89",
+  "recorded_utc": "2026-10-15T03:36:41.453453+00:00",
+  "engine": "4.7.2.stable.official.ed1daf0bf",
+  "source_sha256": {
+    "godot/scripts/road_drainage_runtime.gd": "be376cf18cf2d1068477815bec449bcb17c36734f44c60e1352c1c917a33ee4d",
+    "godot/tests/road_drainage_runtime_test.gd": "5bd1aec807b19caf3bdc552970825bdc9415445f012517dafdc285489428b88b"
+  },
+  "behavior": {
+    "cache_limit_tiles": 64,
+    "traversal_unique_tiles": 257,
+    "traversal_cached_tiles": 64,
+    "traversal_evictions": 193,
+    "frequently_queried_tile_reads": 1,
+    "cold_tile_reloads": true,
+    "missing_tiles_cached": true,
+    "unload_releases_positive_and_negative_entries": true
+  },
+  "validation": [
+    {
+      "command": "godot --headless --path godot --script res://tests/road_drainage_runtime_test.gd",
+      "pass": true,
+      "log_sha256": "e6dcf3ff96e3369452990bfc1e87904c32a6cbfe714c61356fec73e3b81d5df2"
+    },
+    {
+      "command": "godot --headless --path godot --script res://tests/road_earthworks_test.gd",
+      "pass": true,
+      "log_sha256": "a9a2b0cdc6f97518de8e858e71e4f9ec66874bf1cf49044082cee59f7694a2e2"
+    },
+    {
+      "command": "PYTHONPATH=godot/tools python -m unittest godot.tests.test_drainage godot.tests.test_validate_apk_drainage",
+      "pass": true,
+      "tests": 9,
+      "exit": 0
+    }
+  ],
+  "invariants": [
+    "No changes to compiled drainage records, source-way IDs, coordinate placement or generated geometry",
+    "Evicted data reloads from the same registered source; loaded geometry is unaffected",
+    "Missing/invalid tile results share the same bounded budget"
+  ],
+  "limits": [
+    "This bounds retained metadata tile count, not total world memory",
+    "No Android-device memory/frame-time measurements or national traversal acceptance"
+  ]
+}
