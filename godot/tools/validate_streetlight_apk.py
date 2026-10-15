@@ -8,6 +8,8 @@ import math
 import zipfile
 from pathlib import Path
 
+from validate_geography_apk import validate as validate_national_geography
+
 PURPOSE = "visual-only explicit OSM highway=street_lamp points; OSM remains geographic authority"
 PLACEMENT_RULE = "explicit highway=street_lamp nodes only; no inferred spacing or recovered-art placement"
 APK_ROOT = "assets/data/roads/streetlights/"
@@ -74,12 +76,34 @@ def validate(apk: Path, source_manifest: Path) -> dict:
 
     if counted != expected_records:
         raise ValueError(f"Street-light feature count mismatch: packaged {counted}, manifest {expected_records}")
-    return {
+
+    # Full Android builds produce places/parishes beside roads from the exact same
+    # OSM extract. When those national sidecars are present, certify them here as
+    # part of the already mandatory APK validation path rather than allowing a
+    # green package to contain roads but silently omit parish/place truth. Focused
+    # street-light fixture workflows can still run without constructing unrelated
+    # national manifests.
+    road_manifest = source_manifest.parent.parent / "manifest.json"
+    data_root = road_manifest.parent.parent
+    places_manifest = data_root / "places" / "manifest.json"
+    parishes_manifest = data_root / "parishes" / "manifest.json"
+    geography_proof = None
+    if places_manifest.is_file() or parishes_manifest.is_file():
+        if not road_manifest.is_file() or not places_manifest.is_file() or not parishes_manifest.is_file():
+            raise ValueError("National geography sidecars are only partially present in the compiled source")
+        geography_proof = validate_national_geography(
+            apk, road_manifest, places_manifest, parishes_manifest
+        )
+
+    proof = {
         "features": counted,
         "tiles": len(expected_tiles),
         "source_sha256": expected.get("source_sha256"),
         "authority": "explicit highway=street_lamp only",
     }
+    if geography_proof is not None:
+        proof["national_geography"] = geography_proof
+    return proof
 
 
 def main() -> int:
