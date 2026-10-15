@@ -141,7 +141,11 @@ func refinement_plan(segments: Array, tile: Vector2i, tile_size: float, spacing:
         var width := float(segment[4])
         if not is_finite(width) or width < 1.0:
             continue
-        var expand := width * 0.5 + MAX_SHOULDER_M + EXCAVATION_MARGIN_M
+        var axis_start := Vector2(float(segment[0]), float(segment[1]))
+        var axis_end := Vector2(float(segment[2]), float(segment[3]))
+        if not is_finite(axis_start.x) or not is_finite(axis_start.y) or not is_finite(axis_end.x) or not is_finite(axis_end.y):
+            continue
+        var expand := width * 0.5 + clampf(width * 0.10, MIN_SHOULDER_M, MAX_SHOULDER_M) + 0.35 + EXCAVATION_MARGIN_M
         var min_x := INF
         var max_x := -INF
         var min_z := INF
@@ -167,11 +171,32 @@ func refinement_plan(segments: Array, tile: Vector2i, tile_size: float, spacing:
             for x in range(x0, x1 + 1):
                 if land_mask[z * (resolution - 1) + x] != 1:
                     continue
+                # Bounding boxes are only the broad phase. A long diagonal
+                # crossing a tile must not micro-tessellate the entire tile.
+                var cell_rect := Rect2(tile_origin + Vector2(float(x), float(z)) * spacing, Vector2.ONE * spacing)
+                if not _corridor_touches_cell(axis_start, axis_end, expand, cell_rect):
+                    continue
                 var cell_key := "%d:%d" % [x, z]
                 if not cells.has(cell_key):
                     cells[cell_key] = {"cell": Vector2i(x, z), "segments": []}
                 cells[cell_key].segments.append(segment)
     return {"cells": cells, "structural_skips": structural_skips}
+
+func _corridor_touches_cell(a: Vector2, b: Vector2, radius: float, cell: Rect2) -> bool:
+    var radius_squared := radius * radius + 0.000001
+    # Endpoint-to-rectangle distances cover short roads ending beside a cell.
+    for point in [a, b]:
+        var nearest := Vector2(clampf(point.x, cell.position.x, cell.end.x), clampf(point.y, cell.position.y, cell.end.y))
+        if point.distance_squared_to(nearest) <= radius_squared:
+            return true
+    var corners := [cell.position, Vector2(cell.end.x, cell.position.y), cell.end, Vector2(cell.position.x, cell.end.y)]
+    for index in range(4):
+        var corner: Vector2 = corners[index]
+        if corner.distance_squared_to(Geometry2D.get_closest_point_to_segment(corner, a, b)) <= radius_squared:
+            return true
+        if Geometry2D.segment_intersects_segment(a, b, corner, corners[(index + 1) % 4]) != null:
+            return true
+    return false
 
 func rebuild_land_arrays(source_mesh: ArrayMesh, heights: PackedFloat32Array, cells: Dictionary,
         tile: Vector2i, tile_size: float, spacing: float, resolution: int,
@@ -256,14 +281,175 @@ func _append_refined_cell(vertices: PackedVector3Array, normals: PackedVector3Ar
             vertices.append(Vector3(local_x, y, local_z))
             normals.append(Vector3(dx, 1.0, dz).normalized())
             colors.append(_height_color(y, Vector2(dx, dz).length()))
+    # The grid alone can interpolate a high bank across a narrow road even
+    # when all samples on its axis are below the deck. Insert the actual ribbon
+    # edges into intersecting micro-triangles; every triangle beneath a deck
+    # then lies on/below its longitudinal plane instead of spanning its bank.
+    var decks := _local_decks(segments, tile_origin)
+    var triangle_count := 0
     for iz in range(subdivisions):
         for ix in range(subdivisions):
             var a := base + iz * side + ix
             var b := a + 1
             var c := a + side
             var d := c + 1
-            indices.append_array(PackedInt32Array([a, b, c, b, d, c]))
-    return subdivisions * subdivisions * 2
+            for triangle in [[a, b, c], [b, d, c]]:
+                var points: Array = []
+                for index in triangle:
+                    var vertex: Vector3 = vertices[index]
+                    points.append(Vector2(vertex.x, vertex.z))
+                var pieces: Array = [points]
+                for deck in decks:
+                    var next_pieces: Array = []
+                    for piece in pieces:
+                        next_pieces.append_array(_partition_at_ribbon(piece, deck.polygon))
+                    pieces = next_pieces
+                if pieces.size() == 1 and pieces[0] == points:
+                    indices.append_array(PackedInt32Array(triangle))
+                    triangle_count += 1
+                    continue
+                for piece in pieces:
+                    for index in range(1, piece.size() - 1):
+                        var face := PackedVector3Array()
+                        for point in [piece[0], piece[index], piece[index + 1]]:
+                            var u := (float(point.x) - float(cell.x) * spacing) / spacing
+                            var v := (float(point.y) - float(cell.y) * spacing) / spacing
+                            var raw := _cell_height(heights, cell, u, v, resolution)
+                            var y := carved_height(raw, tile_origin.x + point.x, tile_origin.y + point.y, segments)
+                            for deck in decks:
+                                if _in_convex_polygon(point, deck.polygon):
+                                    var t := clampf((point - deck.a).dot(deck.axis) / deck.length_sq, 0.0, 1.0)
+                                    y = minf(y, lerpf(deck.y0, deck.y1, t) - DECK_CLEARANCE_M)
+                            face.append(Vector3(point.x, y, point.y))
+                        var normal := (face[2] - face[0]).cross(face[1] - face[0]).normalized()
+                        if normal.length_squared() < 0.5:
+                            continue
+                        for vertex in face:
+                            indices.append(vertices.size())
+                            vertices.append(vertex)
+                            normals.append(normal)
+                            colors.append(_height_color(vertex.y, Vector2(normal.x, normal.z).length() / maxf(normal.y, 0.001)))
+                        triangle_count += 1
+    return triangle_count
+
+func _local_decks(segments: Array, tile_origin: Vector2) -> Array:
+    var decks: Array = []
+    for segment in segments:
+        if not segment is Array or segment.size() < 12 or int(segment[6]) & (FLAG_BRIDGE | FLAG_TUNNEL):
+            continue
+        if not segment[11] is Array:
+            continue
+        var polygon: Array = []
+        for raw in segment[11]:
+            if not raw is Array or raw.size() < 3:
+                polygon.clear()
+                break
+            var point := Vector2(float(raw[0]), float(raw[2])) - tile_origin
+            if not is_finite(point.x) or not is_finite(point.y):
+                polygon.clear()
+                break
+            if polygon.is_empty() or point.distance_squared_to(polygon[-1]) > 0.00000001:
+                polygon.append(point)
+        if polygon.size() > 2 and polygon[0].distance_squared_to(polygon[-1]) < 0.00000001:
+            polygon.pop_back()
+        if polygon.size() < 3:
+            continue
+        var a := Vector2(float(segment[0]), float(segment[1])) - tile_origin
+        var axis := Vector2(float(segment[2]), float(segment[3])) - tile_origin - a
+        if axis.length_squared() < 0.0025 or not is_finite(float(segment[9])) or not is_finite(float(segment[10])):
+            continue
+        # Compiler ribbons are convex quads. Triangulating also supports a
+        # clipped/concave ribbon without excavating its convex hull.
+        var polygons: Array = []
+        var orientation := 1.0 if _polygon_area(polygon) >= 0.0 else -1.0
+        var convex := true
+        for index in range(polygon.size()):
+            var before: Vector2 = polygon[index]
+            var current: Vector2 = polygon[(index + 1) % polygon.size()]
+            var after: Vector2 = polygon[(index + 2) % polygon.size()]
+            if (current - before).cross(after - current) * orientation < -0.00001:
+                convex = false
+                break
+        if convex:
+            polygons.append(polygon)
+        else:
+            var triangulation := Geometry2D.triangulate_polygon(PackedVector2Array(polygon))
+            for cursor in range(0, triangulation.size(), 3):
+                polygons.append([polygon[triangulation[cursor]], polygon[triangulation[cursor + 1]], polygon[triangulation[cursor + 2]]])
+        for convex_polygon in polygons:
+            decks.append({"polygon": convex_polygon, "a": a, "axis": axis,
+                "length_sq": axis.length_squared(), "y0": float(segment[9]), "y1": float(segment[10])})
+    return decks
+
+func _polygon_area(points: Array) -> float:
+    var area := 0.0
+    for index in range(points.size()):
+        area += Vector2(points[index]).cross(Vector2(points[(index + 1) % points.size()]))
+    return area * 0.5
+
+func _in_convex_polygon(point: Vector2, polygon: Array) -> bool:
+    var orientation := 1.0 if _polygon_area(polygon) >= 0.0 else -1.0
+    for index in range(polygon.size()):
+        var a: Vector2 = polygon[index]
+        var b: Vector2 = polygon[(index + 1) % polygon.size()]
+        if (b - a).cross(point - a) * orientation < -0.00001:
+            return false
+    return true
+
+func _clip_half_plane(points: Array, a: Vector2, b: Vector2, sign_value: float) -> Array:
+    var result: Array = []
+    if points.is_empty():
+        return result
+    var previous: Vector2 = points[-1]
+    var previous_distance := (b - a).cross(previous - a) * sign_value
+    for current: Vector2 in points:
+        var distance := (b - a).cross(current - a) * sign_value
+        if (distance >= 0.0) != (previous_distance >= 0.0):
+            var intersection := previous.lerp(current, previous_distance / (previous_distance - distance))
+            if result.is_empty() or intersection.distance_squared_to(result[-1]) > 0.00000001:
+                result.append(intersection)
+        if distance >= 0.0 and (result.is_empty() or current.distance_squared_to(result[-1]) > 0.00000001):
+            result.append(current)
+        previous = current
+        previous_distance = distance
+    if result.size() > 2 and result[0].distance_squared_to(result[-1]) < 0.00000001:
+        result.pop_back()
+    return result if result.size() >= 3 and absf(_polygon_area(result)) > 0.000001 else []
+
+func _partition_at_ribbon(points: Array, polygon: Array) -> Array:
+    var touches := false
+    for point in points:
+        if _in_convex_polygon(point, polygon):
+            touches = true
+            break
+    if not touches:
+        for point in polygon:
+            if _in_convex_polygon(point, points):
+                touches = true
+                break
+    if not touches:
+        for index in range(points.size()):
+            for edge in range(polygon.size()):
+                if Geometry2D.segment_intersects_segment(points[index], points[(index + 1) % points.size()],
+                        polygon[edge], polygon[(edge + 1) % polygon.size()]) != null:
+                    touches = true
+                    break
+            if touches:
+                break
+    if not touches:
+        return [points]
+    # Include zero-area contacts: an adjoining triangle must receive the same
+    # boundary vertex, otherwise its unsplit edge can overhang the deck edge.
+    var pieces: Array = [points]
+    for index in range(polygon.size()):
+        var next_pieces: Array = []
+        for piece in pieces:
+            for side_sign in [-1.0, 1.0]:
+                var clipped := _clip_half_plane(piece, polygon[index], polygon[(index + 1) % polygon.size()], side_sign)
+                if not clipped.is_empty():
+                    next_pieces.append(clipped)
+        pieces = next_pieces
+    return pieces
 
 func _cell_height(heights: PackedFloat32Array, cell: Vector2i, u: float, v: float,
         resolution: int) -> float:

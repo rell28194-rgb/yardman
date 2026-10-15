@@ -1,0 +1,229 @@
+{
+  "milestone": "sparse-road-corridor-001",
+  "base_commit": "480a07b93b67db38abe4625f9e9efde2dd330f49",
+  "recorded_utc": "2026-10-15T03:27:32.688680+00:00",
+  "engine": "4.7.2.stable.official.ed1daf0bf",
+  "source_sha256": {
+    "godot/scripts/road_corridor_terrain_runtime.gd": "58cb582e4f7f1e5bc4f8467d4283336da89511da5aba3e133441804198da50bd",
+    "godot/tests/road_corridor_terrain_test.gd": "82da5f6a2f412fcd65de37593a3695304fc8c038b12496816600b30a2120a5ee",
+    "godot/tests/road_corridor_render_test.gd": "e0eb3d36a3a26ea5408f0cee040200c9e711db4064e555237df6a5c5008a52fc"
+  },
+  "runtime_tests": [
+    {
+      "test": "road_corridor_terrain",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "e5ea459eaef525ae79f2fe03c7b383b27e22c2c5341260924bf480eaa7c784e2"
+    },
+    {
+      "test": "road_earthworks",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "a9a2b0cdc6f97518de8e858e71e4f9ec66874bf1cf49044082cee59f7694a2e2"
+    },
+    {
+      "test": "road_drainage_runtime",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "a4e35dcb5a0c92f90a0b16509e4fdd2e50cbb19636aed61927842ce95cf738e2"
+    },
+    {
+      "test": "road_engineering_detail",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "68db764a39236e0983f423c780317596e9472bdc58ee6661164777874616c670"
+    },
+    {
+      "test": "roadside_engineering",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "8f33d20a548d11b5f05e857bd8f3ed8ca1051efdaa5a38c549e0ce475928f8ee"
+    },
+    {
+      "test": "road_hairpin",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "679873e7db25b966eb046b6aba5f8cb4ff5d9c6660cb9a0cc7d1854b26a330b7"
+    },
+    {
+      "test": "retaining_wall_layer",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "33f6318a82b1a41ed0848d670849596c0a77609ab04babc5c873336b27eef8ac"
+    },
+    {
+      "test": "road_surface",
+      "exit": 0,
+      "pass": true,
+      "log_sha256": "514a96455b3cb81f4b14fc70aa70f0ed9d9044817df47e6a0cf5233f4a848c7c"
+    }
+  ],
+  "sparse_fixture": {
+    "tile_size_m": 4096,
+    "base_spacing_m": 64,
+    "surrounding_refinement_spacing_m": 8,
+    "total_land_cells": 4096,
+    "old_diagonal_selected_cells": 4096,
+    "new_diagonal_selected_cells": 190,
+    "avoided_cells": 3906,
+    "old_replacement_triangles_without_boundary_fix": 524288,
+    "new_replacement_triangles_with_boundary_fix": 32504,
+    "new_total_terrain_triangles": 40316,
+    "cell_selection_reduction_percent": 95.361328125
+  },
+  "actual_renders": {
+    "gles": {
+      "before": {
+        "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+        "changed_sampled_pixels": 6750,
+        "deck_height_m": 10.0,
+        "engine": {
+          "build": "official",
+          "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+          "hex": 263938,
+          "major": 4,
+          "minor": 7,
+          "patch": 2,
+          "status": "stable",
+          "string": "4.7.2-stable (official)",
+          "timestamp": 0
+        },
+        "failures": 2,
+        "far_terrain_after_m": 15.6000003814697,
+        "far_terrain_before_m": 15.6000003814697,
+        "maximum_terrain_under_deck_m": 10.3481969833374,
+        "method": "gl_compatibility",
+        "refined_cells": 3,
+        "refinement_m": 8,
+        "road_image_samples": 26,
+        "road_width_m": 8,
+        "scope": "generated 192m cut fixture, no Jamaica geographic or Android-device acceptance",
+        "terrain_shader": "res://shaders/terrain_surface_gles.gdshader",
+        "triangles": 396,
+        "under_deck_samples": 801,
+        "visible_road_samples": 0,
+        "capture_sha256": {
+          "coarse.png": "09027710684c2fb46a6712b4e8ee15f85b7402c58c6afa4a01212a9d57f1c427",
+          "refined.png": "07ef078d781f4c7df0f5630d0f029d0e95432ccbb87e2185ceaaa4185bb3ea13"
+        }
+      },
+      "after": {
+        "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+        "changed_sampled_pixels": 7271,
+        "deck_height_m": 10.0,
+        "engine": {
+          "build": "official",
+          "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+          "hex": 263938,
+          "major": 4,
+          "minor": 7,
+          "patch": 2,
+          "status": "stable",
+          "string": "4.7.2-stable (official)",
+          "timestamp": 0
+        },
+        "failures": 0,
+        "far_terrain_after_m": 15.6000003814697,
+        "far_terrain_before_m": 15.6000003814697,
+        "maximum_terrain_under_deck_m": 9.88000011444092,
+        "method": "gl_compatibility",
+        "refined_cells": 3,
+        "refinement_m": 8,
+        "road_image_samples": 26,
+        "road_width_m": 8,
+        "scope": "generated 192m cut fixture, no Jamaica geographic or Android-device acceptance",
+        "terrain_shader": "res://shaders/terrain_surface_gles.gdshader",
+        "triangles": 584,
+        "under_deck_samples": 801,
+        "visible_road_samples": 26,
+        "capture_sha256": {
+          "coarse.png": "09027710684c2fb46a6712b4e8ee15f85b7402c58c6afa4a01212a9d57f1c427",
+          "refined.png": "eb1e4bdb8d01b6e0e857953e79d03876b5c17d81a689915827b4fdc072e76fec"
+        }
+      }
+    },
+    "vulkan": {
+      "before": {
+        "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+        "changed_sampled_pixels": 11624,
+        "deck_height_m": 10.0,
+        "engine": {
+          "build": "official",
+          "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+          "hex": 263938,
+          "major": 4,
+          "minor": 7,
+          "patch": 2,
+          "status": "stable",
+          "string": "4.7.2-stable (official)",
+          "timestamp": 0
+        },
+        "failures": 2,
+        "far_terrain_after_m": 15.6000003814697,
+        "far_terrain_before_m": 15.6000003814697,
+        "maximum_terrain_under_deck_m": 10.3481969833374,
+        "method": "mobile",
+        "refined_cells": 3,
+        "refinement_m": 8,
+        "road_image_samples": 26,
+        "road_width_m": 8,
+        "scope": "generated 192m cut fixture, no Jamaica geographic or Android-device acceptance",
+        "terrain_shader": "res://shaders/terrain_surface.gdshader",
+        "triangles": 396,
+        "under_deck_samples": 801,
+        "visible_road_samples": 0,
+        "capture_sha256": {
+          "coarse.png": "893cf4f4a80a5bda0fae6eec73287a7706ca27c6a1351623b301f11b23a19c1a",
+          "refined.png": "38094dd64f5cdb0a92f8cdae467dd38d92757ce597383a6e780bc6b89a1d546e"
+        }
+      },
+      "after": {
+        "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+        "changed_sampled_pixels": 12250,
+        "deck_height_m": 10.0,
+        "engine": {
+          "build": "official",
+          "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+          "hex": 263938,
+          "major": 4,
+          "minor": 7,
+          "patch": 2,
+          "status": "stable",
+          "string": "4.7.2-stable (official)",
+          "timestamp": 0
+        },
+        "failures": 0,
+        "far_terrain_after_m": 15.6000003814697,
+        "far_terrain_before_m": 15.6000003814697,
+        "maximum_terrain_under_deck_m": 9.88000011444092,
+        "method": "mobile",
+        "refined_cells": 3,
+        "refinement_m": 8,
+        "road_image_samples": 26,
+        "road_width_m": 8,
+        "scope": "generated 192m cut fixture, no Jamaica geographic or Android-device acceptance",
+        "terrain_shader": "res://shaders/terrain_surface.gdshader",
+        "triangles": 584,
+        "under_deck_samples": 801,
+        "visible_road_samples": 26,
+        "capture_sha256": {
+          "coarse.png": "893cf4f4a80a5bda0fae6eec73287a7706ca27c6a1351623b301f11b23a19c1a",
+          "refined.png": "abc5c0d1b0017c056bf14083b833f0d8f64db1c2b2542371bed51c312d1ad618"
+        }
+      }
+    }
+  },
+  "invariants": [
+    "Stable registered road deck and source ribbon boundaries remain authority",
+    "Road-edge vertices inserted only into intersecting micro-triangles; surrounding8m grid retained",
+    "Bridge/tunnel structural skips, partial-coast protection and no-fill-raising tests pass",
+    "Deterministic mesh arrays and area coverage; translated tile selection unchanged",
+    "Far terrain unchanged in both renderer fixtures"
+  ],
+  "limits": [
+    "Generated fixtures and software-host rendering do not establish national geographic or Android-device acceptance",
+    "Geometry counts are not frame-rate or thermal measurements",
+    "Continuous outer18m excavation contour remains sampled by8m grid; exact outer-contour meshing is a separate gap",
+    "Dense-junction clipping cost and national streaming memory/frame pacing require measurement"
+  ]
+}

@@ -16,6 +16,7 @@ on:
       - 'godot/tests/road_earthworks_test.gd'
       - 'godot/tests/road_drainage_runtime_test.gd'
       - 'godot/tests/road_corridor_terrain_test.gd'
+      - 'godot/tests/road_corridor_render_test.gd'
       - 'godot/tests/road_engineering_detail_test.gd'
       - 'godot/tests/roadside_engineering_test.gd'
       - 'godot/tests/road_hairpin_test.gd'
@@ -117,4 +118,54 @@ jobs:
             godot/build/road-corridor-terrain.log
             godot/build/retaining-wall.log
           if-no-files-found: error
+          retention-days: 30
+
+  corridor-renderers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        method: [gl_compatibility, mobile]
+    env:
+      GODOT_VERSION: '4.7.2'
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      GALLIUM_DRIVER: llvmpipe
+      YARDMAN_EXPECT_RENDER_METHOD: ${{ matrix.method }}
+      YARDMAN_RENDER_CAPTURE_DIR: ${{ github.workspace }}/godot/build/corridor-${{ matrix.method }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install renderer toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb mesa-vulkan-drivers libgl1-mesa-dri
+          wget -q "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+      - name: Import production project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/corridor-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/corridor-import.log; then exit 1; fi
+      - name: Render and probe engineered road clearance
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 180 xvfb-run -a -s '-screen 0 960x540x24' godot --path godot --rendering-method "$YARDMAN_EXPECT_RENDER_METHOD" --audio-driver Dummy --script res://tests/road_corridor_render_test.gd 2>&1 | tee godot/build/corridor-render.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/corridor-render.log; then exit 1; fi
+          grep -q 'YARDMAN_ROAD_CORRIDOR_RENDER_TEST PASS' godot/build/corridor-render.log
+      - name: Preserve road renderer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Road-Corridor-${{ matrix.method }}
+          path: |
+            godot/build/corridor-*/
+            godot/build/corridor-*.log
+          if-no-files-found: warn
           retention-days: 30
