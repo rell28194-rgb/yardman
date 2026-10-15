@@ -4,6 +4,7 @@ class_name YardmanJobPersistenceRuntime
 const SAVE_PATH := "user://yardman/jobs.json"
 const SAVE_INTERVAL := 15.0
 const VehicleCatalog = preload("res://scripts/vehicle_catalog.gd")
+const AtomicSave = preload("res://scripts/atomic_save_file.gd")
 var _clock := 0.0
 
 func _ready() -> void:
@@ -95,24 +96,7 @@ static func write_state(path: String, state: Dictionary) -> Error:
     return _commit_staged(temporary, path)
 
 static func _commit_staged(temporary: String, path: String) -> Error:
-    var error := OK
-    if FileAccess.file_exists(path):
-        if not _read_valid(path).is_empty():
-            if FileAccess.file_exists(path + ".bak"):
-                error = DirAccess.remove_absolute(path + ".bak")
-                if error != OK:
-                    return error
-            error = DirAccess.rename_absolute(path, path + ".bak")
-        else:
-            # A recovered backup is the last good checkpoint. Never replace it
-            # with the corrupt primary while installing the next valid save.
-            error = DirAccess.remove_absolute(path)
-        if error != OK:
-            return error
-    error = DirAccess.rename_absolute(temporary, path)
-    if error != OK and not _read_valid(path + ".bak").is_empty():
-        DirAccess.rename_absolute(path + ".bak", path)
-    return error
+    return AtomicSave.commit_staged(temporary, path, _read_valid)
 
 static func read_state(path: String) -> Dictionary:
     var state := _read_valid(path)

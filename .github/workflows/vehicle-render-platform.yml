@@ -31,6 +31,8 @@ on:
       - 'godot/scripts/vehicle_signal_runtime.gd'
       - 'godot/scripts/job_runtime.gd'
       - 'godot/scripts/job_persistence_runtime.gd'
+      - 'godot/scripts/atomic_save_file.gd'
+      - 'godot/scripts/save_game.gd'
       - 'godot/scripts/job_guidance_runtime.gd'
       - 'godot/scripts/shader_warmup.gd'
       - 'godot/scripts/atmosphere_fx.gd'
@@ -96,6 +98,7 @@ on:
       - 'godot/tests/garage_test.gd'
       - 'godot/tests/garage_economy_test.gd'
       - 'godot/tests/garage_purchase_recovery_test.gd'
+      - 'godot/tests/save_game_test.gd'
       - 'godot/tests/audio_test.gd'
       - '.github/workflows/vehicle-render-platform.yml'
   workflow_dispatch:
@@ -139,7 +142,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in render_quality material_variants reference_assets streaming_budget building_hlod road_visibility traffic_runtime traffic_signal traffic_pedestrian_safety traffic_visual_variety traffic_brake_light parked_vehicle pedestrian_runtime pedestrian_destination pedestrian_idle streetlight_night vehicle_headlight traffic_headlight building_night environment_audio weather_cycle vehicle_signal job_runtime job_persistence job_guidance player_locomotion startup_menu shader_warmup weather surface_dynamics vegetation_budget reflection_budget vehicle_catalog powertrain vehicle_visual vehicle_camera garage garage_economy garage_purchase_recovery audio; do
+          for TEST in render_quality material_variants reference_assets streaming_budget building_hlod road_visibility traffic_runtime traffic_signal traffic_pedestrian_safety traffic_visual_variety traffic_brake_light parked_vehicle pedestrian_runtime pedestrian_destination pedestrian_idle streetlight_night vehicle_headlight traffic_headlight building_night environment_audio weather_cycle vehicle_signal job_runtime job_persistence save_game job_guidance player_locomotion startup_menu shader_warmup weather surface_dynamics vegetation_budget reflection_budget vehicle_catalog powertrain vehicle_visual vehicle_camera garage garage_economy garage_purchase_recovery audio; do
             timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"

@@ -1,5 +1,6 @@
 extends RefCounted
 class_name YardmanSaveGame
+const AtomicSave = preload("res://scripts/atomic_save_file.gd")
 
 static func valid(snapshot: Dictionary) -> bool:
     if int(snapshot.get("schema", 0)) != 1 or str(snapshot.get("crs", "")) != "EPSG:3448":
@@ -34,16 +35,10 @@ static func save_file(path: String, snapshot: Dictionary) -> Error:
     file.close()
     if _read_valid(temporary).is_empty():
         return ERR_FILE_CORRUPT
-    if FileAccess.file_exists(path):
-        if FileAccess.file_exists(path + ".bak"):
-            DirAccess.remove_absolute(path + ".bak")
-        error = DirAccess.rename_absolute(path, path + ".bak")
-        if error != OK:
-            return error
-    error = DirAccess.rename_absolute(temporary, path)
-    if error != OK and FileAccess.file_exists(path + ".bak"):
-        DirAccess.rename_absolute(path + ".bak", path)
-    return error
+    return _commit_staged(temporary, path)
+
+static func _commit_staged(temporary: String, path: String) -> Error:
+    return AtomicSave.commit_staged(temporary, path, _read_valid)
 
 static func load_file(path: String) -> Dictionary:
     var snapshot := _read_valid(path)
@@ -52,13 +47,18 @@ static func load_file(path: String) -> Dictionary:
 static func _read_valid(path: String) -> Dictionary:
     if not FileAccess.file_exists(path):
         return {}
-    var wrapper = JSON.parse_string(FileAccess.get_file_as_string(path))
+    var json := JSON.new()
+    if json.parse(FileAccess.get_file_as_string(path)) != OK:
+        return {}
+    var wrapper = json.data
     if not wrapper is Dictionary or not wrapper.get("payload_json") is String:
         return {}
     var encoded: String = wrapper.payload_json
     if encoded.sha256_text() != str(wrapper.get("sha256", "")):
         return {}
-    var payload = JSON.parse_string(encoded)
+    if json.parse(encoded) != OK:
+        return {}
+    var payload = json.data
     if not payload is Dictionary or not valid(payload):
         return {}
     return payload

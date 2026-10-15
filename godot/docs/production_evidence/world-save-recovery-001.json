@@ -1,0 +1,102 @@
+{
+  "milestone": "shared-valid-backup-save-protocol",
+  "engine": "4.7.2.stable.official.ed1daf0bf",
+  "scope": "Host fault/recovery controls and generated EPSG:3448 save fixture; device power loss and national-world rendering not accepted",
+  "source_sha256": {
+    "godot/scripts/atomic_save_file.gd": "5839edb287a69c4696396c7c20b49bc386eebe3aaa83590b36423b3d5eebee05",
+    "godot/scripts/save_game.gd": "a9d42a96fb38aaca0afc2127b50f511c90cb1ccb8a6c954bab6c4fd603567014",
+    "godot/scripts/job_persistence_runtime.gd": "a5fb018f807469bfc03b2a065485c33dc5362fafa74cd11761f7168d0f7077c0",
+    "godot/tests/save_game_test.gd": "55413f4489750e8407f11870f0635b66ed5a9bc844e734ea6f12f5e1151956ee",
+    "godot/tests/garage_purchase_recovery_test.gd": "54b39391c1c832821914fdf0bb89a6486fad21fb7cadd34f0ee8ed8ec4c1860b"
+  },
+  "runtime_suites": {
+    "save_game": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_SAVE_GAME_TEST PASS checks=17 max_coordinate_error_m=0.000000000000"
+      ]
+    },
+    "garage_purchase_recovery": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_GARAGE_PURCHASE_RECOVERY_TEST PASS checks=53"
+      ]
+    },
+    "job_persistence": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_JOB_PERSISTENCE_TEST PASS valid=3 checksum=3 invalid=3 express=2 ownership=6"
+      ]
+    },
+    "garage": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_GARAGE_TEST PASS checks=85 vehicles=3 transaction=1 failure_rollback=1 scene_rebind=1 preview=1 pause=1 persistence=1"
+      ]
+    },
+    "garage_economy": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_GARAGE_ECONOMY_TEST PASS vehicles=3 purchase=1 ownership=1 migration=1 bridge=1 persistence=1"
+      ]
+    }
+  },
+  "independent_mutation_controls": [
+    {
+      "case": "current",
+      "suite": "save_game",
+      "import_exit": 0,
+      "test_exit": 0,
+      "messages": [
+        "YARDMAN_SAVE_GAME_TEST PASS checks=17 max_coordinate_error_m=0.000000000000"
+      ]
+    },
+    {
+      "case": "current",
+      "suite": "garage_purchase_recovery",
+      "import_exit": 0,
+      "test_exit": 0,
+      "messages": [
+        "YARDMAN_GARAGE_PURCHASE_RECOVERY_TEST PASS checks=53"
+      ]
+    },
+    {
+      "case": "old_backup_rotation",
+      "suite": "save_game",
+      "import_exit": 0,
+      "test_exit": 1,
+      "messages": [
+        "ERROR: SAVE_GAME_TEST: failed installation after recovery lost the valid world checkpoint",
+        "ERROR: SAVE_GAME_TEST: save rotated corrupt primary over valid world backup",
+        "ERROR: SAVE_GAME_TEST: missing primary did not recover prior canonical save",
+        "YARDMAN_SAVE_GAME_TEST FAIL checks=17 max_coordinate_error_m=0.000000000000"
+      ]
+    },
+    {
+      "case": "old_backup_rotation",
+      "suite": "garage_purchase_recovery",
+      "import_exit": 0,
+      "test_exit": 1,
+      "messages": [
+        "ERROR: GARAGE_PURCHASE_RECOVERY: failed save after recovery destroyed the good wallet/ownership checkpoint",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: save after backup recovery replaced the valid backup with corrupt data",
+        "YARDMAN_GARAGE_PURCHASE_RECOVERY_TEST FAIL checks=53"
+      ]
+    }
+  ],
+  "semantics": [
+    "World position and wallet saves share one atomic replacement protocol",
+    "Only schema/checksum-valid primary data may replace the backup",
+    "Corrupt primary removal preserves last good backup until staged installation succeeds",
+    "Failed staged installation recovers the valid prior checkpoint",
+    "Rejected CRS/non-finite coordinates do not alter the valid save"
+  ],
+  "open": [
+    "OS/device power-loss and filesystem synchronization evidence"
+  ]
+}
