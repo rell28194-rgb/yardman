@@ -19,6 +19,10 @@ func _init() -> void:
         [water_material, "reference_surface", "has_reference_surface", "water_surface.png"],
         [water_material, "reference_foam", "has_reference_foam", "water_foam.png"],
         [water_material, "reference_caustics", "has_reference_caustics", "water_caustics.png"],
+        # Direct owner-authorized Beta2 recovery. The KTX keeps the original
+        # uCaptain WaterBump ETC1 mip chain; public/asset-absent builds simply
+        # retain Yardman's procedural normal field.
+        [water_material, "reference_normal", "has_reference_normal", "beta2_ucaptain_water_bump.ktx"],
     ]:
         var texture: Texture2D = ReferenceAssets.texture(str(binding[3]))
         if texture != null:
@@ -40,8 +44,6 @@ func apply_render_policy(policy: Dictionary, renderer_override: String = "") -> 
 func material_variant() -> String:
     return MaterialRegistry.variant_name("water", "", _quality, _force_safe_water)
 
-# Attach below the terrain tile root. The shared parent already places this
-# sea-level tile relative to the floating origin, so rebase shifts it once.
 func instantiate_tile(tile: Vector2i, payload: Dictionary, parent_node: Node3D, tile_size: float = 4096.0) -> void:
     append_water(payload, parent_node, float(tile.x) * tile_size, float(tile.y) * tile_size)
     append_beach(payload, parent_node, float(tile.x) * tile_size, float(tile.y) * tile_size)
@@ -61,8 +63,6 @@ func append_water(payload: Dictionary, parent_node: Node3D, world_x: float, worl
     for triangle in range(0, source.size(), 3):
         var cross := (source[triangle + 1] - source[triangle]).cross(source[triangle + 2] - source[triangle])
         var order := [0, 2, 1] if cross.y > 0.0 else [0, 1, 2]
-        # Godot front faces are clockwise. Reorder the distance attribute with
-        # each vertex; changing winding must never change the coastal tint.
         for offset: int in order:
             var index: int = triangle + offset
             var vertex := source[index]
