@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import string
 import zipfile
 from pathlib import Path
 
+CANONICAL_CRS = "EPSG:3448"
 CANONICAL_PARISHES = {
     "Kingston", "St. Andrew", "St. Catherine", "Clarendon", "Manchester",
     "St. Elizabeth", "Westmoreland", "Hanover", "St. James", "Trelawny",
@@ -28,6 +30,10 @@ def _read_json(archive: zipfile.ZipFile, name: str) -> dict:
     return payload
 
 
+def _valid_sha256(value: str) -> bool:
+    return len(value) == 64 and all(character in string.hexdigits for character in value)
+
+
 def validate(apk: Path, road_manifest_path: Path, places_manifest_path: Path,
              parishes_manifest_path: Path) -> dict:
     roads = json.loads(road_manifest_path.read_text(encoding="utf-8"))
@@ -46,9 +52,13 @@ def validate(apk: Path, road_manifest_path: Path, places_manifest_path: Path,
 
         road_sha = str(roads.get("source_sha256", ""))
         road_crs = str(roads.get("crs", ""))
-        if not road_sha or places.get("source_sha256") != road_sha or parishes.get("source_sha256") != road_sha:
+        if not _valid_sha256(road_sha):
+            raise ValueError("Road manifest does not carry a valid source SHA-256")
+        if places.get("source_sha256") != road_sha or parishes.get("source_sha256") != road_sha:
             raise ValueError("Road/place/parish source registration differs")
-        if not road_crs or places.get("crs") != road_crs or parishes.get("crs") != road_crs:
+        if road_crs != CANONICAL_CRS:
+            raise ValueError("Road manifest is not registered to canonical Jamaica Metric Grid")
+        if places.get("crs") != CANONICAL_CRS or parishes.get("crs") != CANONICAL_CRS:
             raise ValueError("Road/place/parish CRS registration differs")
 
         parish_keys = set(parishes.get("parishes", {}))
@@ -106,8 +116,8 @@ def validate(apk: Path, road_manifest_path: Path, places_manifest_path: Path,
         "parishes": 14,
         "places": counted_places,
         "place_tiles": len(tiles),
-        "source_sha256": road_sha,
-        "crs": road_crs,
+        "source_sha256": road_sha.lower(),
+        "crs": CANONICAL_CRS,
     }
 
 
