@@ -368,6 +368,7 @@ func _index_surface_segment(index: Dictionary, segment: Array) -> void:
                 index[cell][identifier] = {"a": Vector2(float(segment[0]), float(segment[1])),
                     "b": Vector2(float(segment[2]), float(segment[3])), "width_m": float(segment[4]),
                     "class_id": int(segment[5]), "flags": int(segment[6]), "edge_id": str(segment[7]),
+                    "height_a": float(segment[9]), "height_b": float(segment[10]),
                     "speed_limit_mps": segment[15] if segment.size() > 15 else null}
 
 func _nearby_surface_segments(x: float, z: float, radius: float) -> Dictionary:
