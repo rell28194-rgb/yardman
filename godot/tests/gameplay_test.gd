@@ -76,23 +76,75 @@ func _check_active_vehicle(scene) -> void:
         selected, controller_id, reference_name, str(private_crown_available)
     ])
 
+func _prepare_functional_road_tile(scene, phase: String) -> bool:
+    # National gameplay needs authoritative road-tile residency and the local
+    # surface index, but it does not need to triangulate/render every carriageway
+    # polygon. Dense urban tiles (notably Kingston) can spend minutes creating
+    # ArrayMesh batches in headless CI even though renderer suites validate that
+    # work separately. Load the exact compiled tile and build the same road-surface
+    # index used by driving/radar while leaving visual mesh generation out of this
+    # functional gate.
+    var active: Node3D = scene.car if scene.player.in_vehicle else scene.player
+    var world: PackedFloat64Array = scene.roads.local_to_world(active.position)
+    var tile: Vector2i = scene.roads.coordinates.tile_for(world[0], world[2])
+    var key: String = scene.roads._tile_key(tile.x, tile.y)
+    if scene.roads._loaded.has(key):
+        return true
+    var relative_path := str(scene.roads._tile_files.get(key, ""))
+    if relative_path.is_empty():
+        _check(false, "No compiled road tile covers %s at %s" % [scene.current_parish, str(tile)])
+        return false
+    var path := "%s/%s" % [scene.roads.data_root, relative_path]
+    if not FileAccess.file_exists(path):
+        _check(false, "Compiled road tile is missing: " + path)
+        return false
+    var payload = JSON.parse_string(FileAccess.get_file_as_string(path))
+    if not payload is Dictionary or not payload.get("segments", null) is Array:
+        _check(false, "Compiled road tile is invalid: " + path)
+        return false
+    # Keep only the current functional tile resident. This preserves bounded
+    # streaming semantics while avoiding visual-node accumulation over 14 teleports.
+    for loaded_key in scene.roads._loaded.keys():
+        var loaded_root = scene.roads._loaded[loaded_key]
+        if is_instance_valid(loaded_root):
+            loaded_root.queue_free()
+    scene.roads._loaded.clear()
+    scene.roads._surface_indices.clear()
+    var tile_root := Node3D.new()
+    tile_root.name = "FunctionalRoadTile_%d_%d" % [tile.x, tile.y]
+    tile_root.position = scene.roads.coordinates.world_to_local(float(tile.x) * scene.roads.tile_size, float(tile.y) * scene.roads.tile_size)
+    scene.roads.add_child(tile_root)
+    scene.roads._loaded[key] = tile_root
+    var surface_index: Dictionary = {}
+    var indexed := 0
+    for segment in payload.segments:
+        if segment is Array and segment.size() >= 12:
+            scene.roads._index_surface_segment(surface_index, segment)
+            indexed += 1
+    scene.roads._surface_indices[key] = surface_index
+    print("YARDMAN_GAMEPLAY_ROAD_DATA_READY phase=%s parish=%s tile=%s segments=%d indexed=%d elapsed_ms=%d" % [
+        phase,
+        scene.current_parish,
+        str(tile),
+        payload.segments.size(),
+        indexed,
+        Time.get_ticks_msec() - _started_ms
+    ])
+    return true
+
 func _configure_functional_streaming(scene) -> void:
     # This suite validates national traversal, terrain/collision registration,
     # vehicle/player controls, saves and mobile input. It is not a frame-budget
     # benchmark. Keep production streaming logic and data intact while allowing
-    # the headless runner to consume only the actor's collision tile and build it
-    # aggressively. Visual/HLOD radius and frame pacing have separate renderer and
-    # streaming suites and must not make this national functional gate quadratic.
+    # the headless runner to consume only the actor's collision tile. Road visual
+    # geometry is replaced by exact compiled-tile data/index loading above; visual
+    # assembly remains covered by renderer/geometry suites.
     scene.set_quality("Performance")
     scene.roads.load_radius = 0
     scene.terrain.load_radius = 0
-    scene.roads.max_io_jobs = 4
-    scene.roads.max_segments_per_frame = 65536
-    scene.roads.geometry_budget_us = 100000
+    scene.roads.set_process(false)
     scene.terrain.max_io_jobs = 4
     scene.terrain.geometry_budget_us = 100000
-    # Building and roadside art are covered by render/geometry suites. They are
-    # deliberately excluded here so visual assembly cannot mask a traversal bug.
     scene.buildings.set_process(false)
     scene.buildings.reference_facades_enabled = false
     var road_decorator := Callable(scene, "_decorate_tile")
@@ -101,14 +153,14 @@ func _configure_functional_streaming(scene) -> void:
     var terrain_decorator := Callable(scene, "_decorate_ready_terrain")
     if scene.terrain.tile_ready.is_connected(terrain_decorator):
         scene.terrain.tile_ready.disconnect(terrain_decorator)
-    # Force-refresh after shrinking the radius so any queue produced by Main._ready
-    # is replaced before the first awaited frame starts worker jobs.
+    # Refresh terrain after shrinking the radius. Road tile residency is supplied
+    # synchronously by _prepare_functional_road_tile so the headless test never
+    # enters production ArrayMesh construction.
     scene._refresh_streamers()
-    print("YARDMAN_GAMEPLAY_FUNCTIONAL_STREAMING road_radius=%d terrain_radius=%d road_segments_per_frame=%d road_budget_us=%d terrain_budget_us=%d" % [
+    print("YARDMAN_GAMEPLAY_FUNCTIONAL_STREAMING road_radius=%d terrain_radius=%d road_process=%s terrain_budget_us=%d" % [
         scene.roads.load_radius,
         scene.terrain.load_radius,
-        scene.roads.max_segments_per_frame,
-        scene.roads.geometry_budget_us,
+        str(scene.roads.is_processing()),
         scene.terrain.geometry_budget_us
     ])
 
@@ -129,6 +181,9 @@ func _run() -> void:
     current_scene = scene
     _check(current_scene == scene, "Production main scene was not activated as SceneTree.current_scene")
     _configure_functional_streaming(scene)
+    if not _prepare_functional_road_tile(scene, "initial"):
+        quit(1)
+        return
     if not (await _wait_ready(scene, "initial")):
         quit(1)
         return
@@ -138,6 +193,9 @@ func _run() -> void:
         var parish_name := str(parish)
         print("YARDMAN_GAMEPLAY_PROGRESS phase=parish_begin parish=%s elapsed_ms=%d" % [parish_name, Time.get_ticks_msec() - _started_ms])
         scene.goto_parish(parish_name)
+        if not _prepare_functional_road_tile(scene, "parish_stream"):
+            quit(1)
+            return
         if not (await _wait_ready(scene, "parish_stream")):
             quit(1)
             return
@@ -148,6 +206,9 @@ func _run() -> void:
         _check(scene.terrain._loaded.size() <= 25, "Terrain residency exceeds the configured bounded ring")
         print("YARDMAN_GAMEPLAY_PROGRESS phase=parish_ready parish=%s elapsed_ms=%d" % [parish_name, Time.get_ticks_msec() - _started_ms])
     scene.goto_parish("St. Mary")
+    if not _prepare_functional_road_tile(scene, "st_mary_gameplay"):
+        quit(1)
+        return
     if not (await _wait_ready(scene, "st_mary_gameplay")):
         quit(1)
         return
@@ -191,6 +252,9 @@ func _run() -> void:
     scene._rebase(float(destination[0]), float(destination[2]))
     scene._settle_spawn = true
     scene._refresh_streamers()
+    if not _prepare_functional_road_tile(scene, "parked_remote_stream"):
+        quit(1)
+        return
     if not (await _wait_ready(scene, "parked_remote_stream")):
         quit(1)
         return
@@ -200,6 +264,9 @@ func _run() -> void:
     for field in ["easting", "northing", "elevation"]:
         _check(absf(float(frozen[field]) - float(parked[field])) < 0.001, "Distant parked car changed " + field)
     scene.goto_parish("St. Mary")
+    if not _prepare_functional_road_tile(scene, "return_st_mary"):
+        quit(1)
+        return
     if not (await _wait_ready(scene, "return_st_mary")):
         quit(1)
         return
