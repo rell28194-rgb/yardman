@@ -1,0 +1,40 @@
+{
+  "milestone": "source-backed-toyota-crown-2013-recovery",
+  "state": "ACTIVE",
+  "source_game": "Car Parking Multiplayer4.9.11/code200485",
+  "source_engine": "Unity2022.3.62f2; UnityFS Addressables",
+  "catalog_identity": "218 toyota crown 2013",
+  "prefab": "Assets/_Car Parking/Art/Cars/Prefabs/cars/car218.prefab",
+  "prefab_path_id": "971294726078792621",
+  "game_object_path_id": "1436938617790870712",
+  "source_checkpoint_sha256": "0f98953fea7fe1eb08276935389f31c9cc4809418e2fec1aa74f4eae72142286",
+  "technical_recovery": {
+    "mesh_objects_exported": 79,
+    "aggregate_vertices_across_variants": 82820,
+    "aggregate_triangles_across_variants": 90181,
+    "all_meshes_finite_nonempty": true,
+    "source_animation_clips_preserved_in_bundle": 20,
+    "source_lod_prefabs": [
+      "b218",
+      "b218_LOD",
+      "L1_body",
+      "L2_body"
+    ]
+  },
+  "open": [
+    "Stock variant and faithful hierarchy assembly",
+    "External material/texture dependency reconstruction",
+    "Correct scale/orientation/wheel rig",
+    "Actual Compatibility and VulkanMobile rendering",
+    "Fallback comparison",
+    "Driving/garage integration",
+    "Bounded LOD/streaming/performance"
+  ],
+  "limits": [
+    "Aggregate counts are NOT accepted LOD0 counts",
+    "No Godot visual/Android-device/family acceptance claimed",
+    "Source meshes/textures remain private; not committed",
+    "This family is actual Crown; existing ToyotaChaserV remains distinct",
+    "MarkX dedicated geometry remains unresolved"
+  ]
+}

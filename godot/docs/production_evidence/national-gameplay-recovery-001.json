@@ -1,0 +1,60 @@
+{
+  "milestone": "full-national-gameplay-after-save-repair",
+  "runtime": {
+    "suite": "full_national_gameplay",
+    "runtime_source": "a1ab0aa4a376a802a6c5bda58e502f4e029ba933",
+    "dataset_source": "validated CI38704430553/5c896f8; all30 compiler files unchanged",
+    "timeout_s": 600,
+    "exit": 0,
+    "elapsed_s": 39.452,
+    "passed": true
+  },
+  "runtime_source_files_verified_identical": 112,
+  "runtime_source_tree_sha256": "cd5411184efd5999875a1babf42a35b6bbf1d12069442fa5108b3c9f4bb43324",
+  "registered_dataset": {
+    "status": "READY_FOR_IGNORED_LOCAL_DATA_REUSE",
+    "source_head": "5c896f8de0f8132070c1fb6889f2a16c76442481",
+    "workflow_run": 38704430553,
+    "artifact_id": 11959115465,
+    "artifact_sha256": "636ae81d3057654f72b460e8f45cd5d73e2f6d84e99b72235de5151a09c711da",
+    "apk_sha256": "e8ad2aff95b619c6d097bada1e12a3c9ff6743859de1b43ae6db20706f18dde9",
+    "restored_files": 15124,
+    "restored_bytes": 1109608912,
+    "crs": "EPSG:3448",
+    "horizontal_units": "metres, X east and Z south",
+    "vertical_units": "metres, no rescaling performed",
+    "road_tiles": 713,
+    "terrain_tiles": 2537,
+    "coast_tiles": 2537,
+    "building_tiles": 716,
+    "graph_nodes": 101538,
+    "graph_edges": 120294,
+    "buildings": 1023151,
+    "places": 2261,
+    "place_tiles": 513,
+    "parishes": 14,
+    "terrain_resolution": 65,
+    "terrain_sample_spacing_m": 64.0,
+    "terrain_tile_size_m": 4096.0,
+    "terrain_vertical_datum": "EGM2008",
+    "existing_compiler_files_identical": 30,
+    "validation": [
+      {
+        "name": "topology",
+        "exit": 0,
+        "output": "YARDMAN_ROAD_TOPOLOGY_PASS {\"anchor_components\": 1, \"components\": 83, \"core_components\": 3, \"directed_unreachable\": [], \"largest_edge_ratio\": 0.998911, \"near_misses\": 0}\n"
+      },
+      {
+        "name": "packaged_data",
+        "exit": 0,
+        "output": "YARDMAN_APK_VALIDATION_PASS {\"apk_bytes\": 340146245, \"road_tiles\": 713, \"coast_tiles\": 2537, \"building_tiles\": 716, \"graph_edges\": 120294, \"abis\": [\"arm64-v8a\"], \"roadwork_features\": 50, \"roadwork_tiles\": 92, \"drainage_features\": 619, \"drainage_tiles\": 137, \"culvert_features\": 323, \"ditch_features\": 94, \"drain_features\": 202, \"fence_features\": 429, \"wire_fence_features\": 31, \"fence_tiles\": 64, \"bus_stop_features\": 503, \"bus_stop_tiles\": 81, \"bridge_edges\": 913, \"profiled_tunnel_edges\": 96, \"tunnel_corridor_tiles\": 46, \"tunnel_shell_segments\": 142, \"tunnel_source_ways\": 93, \"tunnel_portals\": 186, \"portal_tiles\": 46}\n"
+      }
+    ],
+    "limitations": [
+      "Dataset reuse only; no new Android/device/runtime/art acceptance",
+      "Not a private reference-media restore",
+      "No geography regenerated, replaced or minimized"
+    ]
+  },
+  "scope": "Actual Godot4.7.2 host headless gameplay on exact registered national data; not Android-device or rendered national art acceptance"
+}
