@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import math
 import zipfile
 from pathlib import Path
+
+from validate_geography_apk import validate as validate_national_geography
 
 PURPOSE = "visual-only explicit OSM highway=street_lamp points; OSM remains geographic authority"
 PLACEMENT_RULE = "explicit highway=street_lamp nodes only; no inferred spacing or recovered-art placement"
@@ -35,7 +38,10 @@ def validate(apk: Path, source_manifest: Path) -> dict:
         corrupt = archive.testzip()
         if corrupt:
             raise ValueError("Corrupt APK entry: " + corrupt)
-        names = set(archive.namelist())
+        entry_counts = Counter(archive.namelist())
+        if any(count != 1 for name, count in entry_counts.items() if name.startswith(APK_ROOT)):
+            raise ValueError("Duplicate street-light ZIP entry")
+        names = set(entry_counts)
         manifest_name = APK_ROOT + "manifest.json"
         if manifest_name not in names:
             raise ValueError("Packaged Jamaica street-light manifest is missing")
@@ -74,12 +80,37 @@ def validate(apk: Path, source_manifest: Path) -> dict:
 
     if counted != expected_records:
         raise ValueError(f"Street-light feature count mismatch: packaged {counted}, manifest {expected_records}")
-    return {
+
+    # Full Android builds produce places/parishes beside roads from the exact same
+    # OSM extract. When those national sidecars are present, certify them here as
+    # part of the already mandatory APK validation path rather than allowing a
+    # green package to contain roads but silently omit parish/place truth. Focused
+    # street-light fixture workflows can still run without constructing unrelated
+    # national manifests.
+    road_manifest = source_manifest.parent.parent / "manifest.json"
+    data_root = road_manifest.parent.parent
+    places_manifest = data_root / "places" / "manifest.json"
+    parishes_manifest = data_root / "parishes" / "manifest.json"
+    geography_proof = None
+    if places_manifest.is_file() or parishes_manifest.is_file():
+        if not road_manifest.is_file() or not places_manifest.is_file() or not parishes_manifest.is_file():
+            raise ValueError("National geography sidecars are only partially present in the compiled source")
+        roads = json.loads(road_manifest.read_text(encoding="utf-8"))
+        if expected.get("source_sha256") != roads.get("source_sha256"):
+            raise ValueError("Street-light source registration differs from national roads")
+        geography_proof = validate_national_geography(
+            apk, road_manifest, places_manifest, parishes_manifest
+        )
+
+    proof = {
         "features": counted,
         "tiles": len(expected_tiles),
         "source_sha256": expected.get("source_sha256"),
         "authority": "explicit highway=street_lamp only",
     }
+    if geography_proof is not None:
+        proof["national_geography"] = geography_proof
+    return proof
 
 
 def main() -> int:
