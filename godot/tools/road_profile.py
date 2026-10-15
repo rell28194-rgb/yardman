@@ -11,6 +11,7 @@ import math
 
 
 STRUCTURAL_FLAGS = 2 | 4
+SIGNIFICANT_GRADE_BREAK_PP = 10.0
 
 
 def _horizontal_distance(a, b) -> float:
@@ -66,6 +67,61 @@ def _percentile(sorted_values: list[float], fraction: float) -> float:
     return sorted_values[lower] * (1.0 - weight) + sorted_values[upper] * weight
 
 
+def _profile_samples(path):
+    """Return horizontal stationing and signed percent grades for one final path."""
+    stations = [0.0]
+    signed_grades: list[float | None] = []
+    for segment_index, (a, b) in enumerate(zip(path, path[1:])):
+        run = _horizontal_distance(a, b)
+        stations.append(stations[-1] + (run if math.isfinite(run) else 0.0))
+        if run < 0.25 or not math.isfinite(run):
+            signed_grades.append(None)
+            continue
+        rise = float(b[1]) - float(a[1])
+        grade = (rise / run) * 100.0
+        if not math.isfinite(grade):
+            raise ValueError(f"Non-finite road grade at segment {segment_index}")
+        signed_grades.append(grade)
+    return stations, signed_grades
+
+
+def _vertical_transition_candidates(path, min_grade_break_pp: float = SIGNIFICANT_GRADE_BREAK_PP) -> list[dict]:
+    """Persist deterministic evidence locations for later vertical-curve engineering.
+
+    Reversals are always retained because they are potential crest/sag locations.
+    Same-direction changes are retained only when the change exceeds the evidence
+    threshold. This does not change deck geometry; downstream engineering can use
+    the records to decide where a vertical curve or source review is warranted.
+    """
+    if not math.isfinite(min_grade_break_pp) or min_grade_break_pp < 0.0:
+        raise ValueError("min_grade_break_pp must be finite and non-negative")
+    stations, signed_grades = _profile_samples(path)
+    candidates: list[dict] = []
+    for vertex_index in range(1, len(path) - 1):
+        incoming = signed_grades[vertex_index - 1] if vertex_index - 1 < len(signed_grades) else None
+        outgoing = signed_grades[vertex_index] if vertex_index < len(signed_grades) else None
+        if incoming is None or outgoing is None:
+            continue
+        grade_break = abs(outgoing - incoming)
+        if incoming > 0.0 and outgoing < 0.0:
+            kind = "crest"
+        elif incoming < 0.0 and outgoing > 0.0:
+            kind = "sag"
+        elif grade_break > min_grade_break_pp:
+            kind = "grade_break"
+        else:
+            continue
+        candidates.append({
+            "kind": kind,
+            "vertex_index": vertex_index,
+            "station_m": round(stations[vertex_index], 3),
+            "incoming_grade_pct": round(incoming, 4),
+            "outgoing_grade_pct": round(outgoing, 4),
+            "grade_break_pct_points": round(grade_break, 4),
+        })
+    return candidates
+
+
 def _grade_diagnostics(edges: dict) -> dict:
     """Measure grades and vertical grade breaks without silently rewriting them.
 
@@ -90,17 +146,10 @@ def _grade_diagnostics(edges: dict) -> dict:
         if int(edge.get("flags", 0)) & STRUCTURAL_FLAGS:
             continue
         path = edge.get("path") or []
-        signed_grades: list[float | None] = []
-        for segment_index, (a, b) in enumerate(zip(path, path[1:])):
-            run = _horizontal_distance(a, b)
-            if run < 0.25 or not math.isfinite(run):
-                signed_grades.append(None)
+        _stations, signed_grades = _profile_samples(path)
+        for segment_index, signed_grade in enumerate(signed_grades):
+            if signed_grade is None:
                 continue
-            rise = float(b[1]) - float(a[1])
-            signed_grade = (rise / run) * 100.0
-            if not math.isfinite(signed_grade):
-                raise ValueError(f"Non-finite road grade at {edge_id}:{segment_index}")
-            signed_grades.append(signed_grade)
             grade = abs(signed_grade)
             grades.append(grade)
             if grade > worst_grade:
@@ -172,6 +221,7 @@ def smooth_network_profiles(network: dict, *, max_adjustment_m: float = 0.45,
         path = edge.get("path") or []
         if int(edge.get("flags", 0)) & STRUCTURAL_FLAGS:
             structural_edges_skipped += 1
+            edge.pop("vertical_transitions", None)
             continue
         refined, adjustments = _smoothed_path(path, max_adjustment_m, passes, blend)
         if not adjustments:
@@ -185,6 +235,24 @@ def smooth_network_profiles(network: dict, *, max_adjustment_m: float = 0.45,
         smoothed_vertices += len(changed)
         all_adjustments.extend(changed)
         edge["elevation_profile"] = "DEM + bounded longitudinal smoothing; endpoints preserved"
+
+    transition_counts = {"crest": 0, "sag": 0, "grade_break": 0}
+    transition_total = 0
+    transition_edges = 0
+    for edge_id in sorted(edges):
+        edge = edges[edge_id]
+        if int(edge.get("flags", 0)) & STRUCTURAL_FLAGS:
+            edge.pop("vertical_transitions", None)
+            continue
+        candidates = _vertical_transition_candidates(edge.get("path") or [])
+        if candidates:
+            edge["vertical_transitions"] = candidates
+            transition_edges += 1
+            transition_total += len(candidates)
+            for candidate in candidates:
+                transition_counts[candidate["kind"]] += 1
+        else:
+            edge.pop("vertical_transitions", None)
 
     # Surface records store the graph edge id and path-local segment index.
     # Update only deck centreline Y. Polygon Y remains raw terrain evidence.
@@ -226,6 +294,12 @@ def smooth_network_profiles(network: dict, *, max_adjustment_m: float = 0.45,
         "profile_anchors_updated": updated_anchors,
         "profile_structural_edges_skipped": structural_edges_skipped,
         "profile_edge_lengths_updated": edge_lengths_updated,
+        "profile_vertical_transition_edges": transition_edges,
+        "profile_vertical_transition_candidates": transition_total,
+        "profile_vertical_transition_crests": transition_counts["crest"],
+        "profile_vertical_transition_sags": transition_counts["sag"],
+        "profile_vertical_transition_grade_breaks": transition_counts["grade_break"],
+        "profile_vertical_transition_threshold_pp": SIGNIFICANT_GRADE_BREAK_PP,
         "profile_max_adjustment_m": round(max(absolute, default=0.0), 6),
         "profile_mean_adjustment_m": round(sum(absolute) / len(absolute), 6) if absolute else 0.0,
         "profile_adjustment_limit_m": max_adjustment_m,
