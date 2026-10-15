@@ -6,6 +6,7 @@ on:
       - codex/godot-polish-002
     paths:
       - 'godot/scripts/road_earthworks_runtime.gd'
+      - 'godot/scripts/road_drainage_runtime.gd'
       - 'godot/scripts/road_corridor_terrain_runtime.gd'
       - 'godot/scripts/road_engineering_detail_runtime.gd'
       - 'godot/scripts/roadside_engineering_runtime.gd'
@@ -13,6 +14,7 @@ on:
       - 'godot/scripts/retaining_wall_layer.gd'
       - 'godot/tools/build_retaining_walls.py'
       - 'godot/tests/road_earthworks_test.gd'
+      - 'godot/tests/road_drainage_runtime_test.gd'
       - 'godot/tests/road_corridor_terrain_test.gd'
       - 'godot/tests/road_engineering_detail_test.gd'
       - 'godot/tests/roadside_engineering_test.gd'
@@ -59,6 +61,13 @@ jobs:
           timeout 120 godot --headless --path godot --script res://tests/road_earthworks_test.gd 2>&1 | tee godot/build/road-earthworks.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/road-earthworks.log; then exit 1; fi
           grep -q 'YARDMAN_ROAD_EARTHWORKS_TEST PASS' godot/build/road-earthworks.log
+      - name: Test explicit Jamaica drainage runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/road_drainage_runtime_test.gd 2>&1 | tee godot/build/road-drainage.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/road-drainage.log; then exit 1; fi
+          grep -q 'YARDMAN_ROAD_DRAINAGE_TEST PASS' godot/build/road-drainage.log
       - name: Test terrain-driven roadside engineering benches
         shell: bash
         run: |
@@ -101,6 +110,7 @@ jobs:
           path: |
             godot/build/earthworks-import.log
             godot/build/road-earthworks.log
+            godot/build/road-drainage.log
             godot/build/road-engineering-detail.log
             godot/build/roadside-engineering.log
             godot/build/road-hairpin.log

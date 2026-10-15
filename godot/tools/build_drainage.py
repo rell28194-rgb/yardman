@@ -167,6 +167,11 @@ def extract_drainage(features, transformer, origin, tile_size: float) -> dict:
                         "end": [round(end[0], 3), round(end[2], 3)],
                         "layer": str(tags.get("layer", "0")),
                     }
+                    if kind == "culvert":
+                        # Only true source-way endpoints are portals. Tile seams and
+                        # interior polyline vertices must never manufacture openings.
+                        record["portal_start"] = bool(segment_index == 0 and math.dist(start, a) <= 1e-6)
+                        record["portal_end"] = bool(segment_index == len(points) - 2 and math.dist(end, b) <= 1e-6)
                     if width_m is not None:
                         record["width_m"] = width_m
                         record["width_source"] = width_source

@@ -51,7 +51,11 @@ class DrainageCompilerTests(unittest.TestCase):
         self.assertEqual(by_source["w30"]["kind"], "culvert")
         self.assertEqual(by_source["w30"]["width_m"], 0.8)
         self.assertEqual(by_source["w30"]["layer"], "-1")
+        self.assertTrue(by_source["w30"]["portal_start"])
+        self.assertTrue(by_source["w30"]["portal_end"])
         self.assertEqual(by_source["w50"]["kind"], "culvert")
+        self.assertTrue(by_source["w50"]["portal_start"])
+        self.assertTrue(by_source["w50"]["portal_end"])
         self.assertNotIn("w40", by_source)
 
     def test_generic_stream_is_not_road_drainage_evidence(self):
@@ -60,15 +64,21 @@ class DrainageCompilerTests(unittest.TestCase):
         self.assertEqual(drainage_kind({"waterway": "ditch"}), "ditch")
         self.assertEqual(drainage_kind({"waterway": "drain"}), "drain")
 
-    def test_tile_seams_are_deterministic(self):
+    def test_tile_seams_do_not_become_culvert_portals(self):
         features = [{
-            "type": "Feature", "id": "w60", "properties": {"waterway": "ditch"},
+            "type": "Feature", "id": "w60", "properties": {"waterway": "stream", "tunnel": "culvert"},
             "geometry": {"type": "LineString", "coordinates": [[60.0, 5.0], [70.0, 5.0]]},
         }]
         result = extract_drainage(features, IdentityTransformer(), (0.0, 0.0), 64.0)
         self.assertEqual(result["stats"]["tile_pieces"], 2)
-        self.assertEqual(result["tiles"][(0, 0)][0]["end"], [64.0, 5.0])
-        self.assertEqual(result["tiles"][(1, 0)][0]["start"], [64.0, 5.0])
+        left = result["tiles"][(0, 0)][0]
+        right = result["tiles"][(1, 0)][0]
+        self.assertEqual(left["end"], [64.0, 5.0])
+        self.assertEqual(right["start"], [64.0, 5.0])
+        self.assertTrue(left["portal_start"])
+        self.assertFalse(left["portal_end"])
+        self.assertFalse(right["portal_start"])
+        self.assertTrue(right["portal_end"])
 
     def test_duplicate_source_ids_fail_closed(self):
         feature = {
