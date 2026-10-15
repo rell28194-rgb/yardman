@@ -19,6 +19,8 @@ func _run() -> void:
     _check(References.audio("folder/sample.wav") == null, "Nested path accepted")
     _check(str(References.TEXTURE_UPGRADES.get("ground_rock.png", "")) == "beta2_ucaptain_mountain_terrain_albedo.ktx",
         "Beta2 mountain texture upgrade mapping changed")
+    _check(str(References.TEXTURE_UPGRADES.get("ground_grass.png", "")) == "beta2_ucaptain_scrub_grass_albedo.ktx",
+        "Beta2 scrub-grass texture upgrade mapping changed")
     var manifest: Dictionary = References.manifest()
     var required := OS.get_environment("YARDMAN_REQUIRE_REFERENCE") == "1"
     if manifest.is_empty():
@@ -67,7 +69,13 @@ func _run() -> void:
         _check(direct_mountain != null, "Recovered Beta2 mountain terrain missing")
         _check(References.texture("ground_rock.png") == direct_mountain,
             "Terrain semantic alias did not select recovered Beta2 mountain source")
-        _check(ktx_textures >= 2, "Expected recovered Beta2 KTX textures were not imported")
+        var direct_grass := References.texture("beta2_ucaptain_scrub_grass_albedo.ktx")
+        _check(direct_grass != null, "Recovered Beta2 scrub grass missing")
+        _check(References.texture("ground_grass.png") == direct_grass,
+            "Terrain semantic alias did not select recovered Beta2 scrub grass source")
+        _check(References.texture("beta2_ucaptain_scrub_grass_normal.ktx") != null,
+            "Recovered Beta2 scrub-grass normal missing")
+        _check(ktx_textures >= 4, "Expected recovered Beta2 KTX textures were not imported")
     roads.free()
     print("YARDMAN_REFERENCE_ASSETS_TEST %s private_pack=1 verified=%d textures=%d ktx=%d materials=1 mipmaps=1" % [
         "PASS" if failures == 0 else "FAIL", verified, textures, ktx_textures])
