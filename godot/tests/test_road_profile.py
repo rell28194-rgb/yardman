@@ -48,6 +48,9 @@ class RoadProfileTests(unittest.TestCase):
         self.assertAlmostEqual(network["anchor_roads"]["Kingston"]["road_position"][1], 11.55, places=6)
         self.assertEqual(stats["profile_smoothed_vertices"], 1)
         self.assertEqual(stats["profile_structural_edges_skipped"], 1)
+        self.assertEqual(stats["profile_edge_lengths_updated"], 1)
+        expected_length = round(sum(math.dist(a, b) for a, b in zip(path, path[1:])), 3)
+        self.assertEqual(network["edges"]["road"]["length_m"], expected_length)
         self.assertAlmostEqual(stats["profile_max_adjustment_m"], 0.45, places=6)
         self.assertEqual(stats["profile_grade_segments"], 2)
         self.assertAlmostEqual(stats["profile_grade_max_pct"], 15.5, places=4)
@@ -55,6 +58,10 @@ class RoadProfileTests(unittest.TestCase):
         self.assertEqual(stats["profile_grade_over_20pct_segments"], 0)
         self.assertEqual(stats["profile_grade_worst_edge"], "road")
         self.assertIn(stats["profile_grade_worst_segment"], (0, 1))
+        self.assertEqual(stats["profile_grade_break_vertices"], 1)
+        self.assertAlmostEqual(stats["profile_grade_break_max_pct_points"], 31.0, places=4)
+        self.assertEqual(stats["profile_crest_reversal_vertices"], 1)
+        self.assertEqual(stats["profile_sag_reversal_vertices"], 0)
 
     def test_grade_diagnostics_surface_extreme_non_structural_segments(self):
         network = {
@@ -82,6 +89,33 @@ class RoadProfileTests(unittest.TestCase):
         self.assertEqual(stats["profile_grade_worst_edge"], "mountain")
         self.assertEqual(stats["profile_grade_worst_segment"], 0)
         self.assertEqual(stats["profile_structural_edges_skipped"], 1)
+        self.assertEqual(stats["profile_grade_break_vertices"], 0)
+
+    def test_vertical_grade_breaks_locate_crest_and_sag_candidates(self):
+        path = [
+            (0.0, 0.0, 0.0),
+            (10.0, 2.0, 0.0),
+            (20.0, 0.0, 0.0),
+            (30.0, -1.0, 0.0),
+            (40.0, 1.0, 0.0),
+        ]
+        network = {
+            "edges": {"ridge": {"id": "ridge", "flags": 0, "path": list(path)}},
+            "tiles": {},
+            "anchor_roads": {},
+            "stats": {},
+        }
+        stats = smooth_network_profiles(network, max_adjustment_m=0.0)
+        self.assertEqual(network["edges"]["ridge"]["path"], path)
+        self.assertEqual(stats["profile_grade_break_vertices"], 3)
+        self.assertAlmostEqual(stats["profile_grade_break_max_pct_points"], 40.0, places=4)
+        self.assertAlmostEqual(stats["profile_grade_break_p95_pct_points"], 39.0, places=4)
+        self.assertEqual(stats["profile_grade_break_over_10pp_vertices"], 2)
+        self.assertEqual(stats["profile_grade_break_over_20pp_vertices"], 2)
+        self.assertEqual(stats["profile_grade_break_worst_edge"], "ridge")
+        self.assertEqual(stats["profile_grade_break_worst_vertex"], 1)
+        self.assertEqual(stats["profile_crest_reversal_vertices"], 1)
+        self.assertEqual(stats["profile_sag_reversal_vertices"], 1)
 
     def test_invalid_policy_fails_closed(self):
         network = self._network()
@@ -105,6 +139,7 @@ class RoadProfileTests(unittest.TestCase):
         self.assertEqual(stats["profile_grade_segments"], 1)
         self.assertAlmostEqual(stats["profile_grade_max_pct"], 20.0, places=4)
         self.assertEqual(stats["profile_grade_over_20pct_segments"], 0)
+        self.assertEqual(stats["profile_grade_break_vertices"], 0)
 
 
 if __name__ == "__main__":
