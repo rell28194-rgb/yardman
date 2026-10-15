@@ -43,9 +43,22 @@ func _initialize() -> void:
     _require(int(geometry.retaining_spans) == 0, "DEM-only geometry must not contain inferred retaining spans")
     _require(int(geometry.earthwork_cut_spans) == 4, "cut delegation span count changed")
     _require(int(geometry.safety_spans) == 4, "safety span count changed")
+    _require(int(geometry.mapped_safety_suppressed_spans) == 0, "unsourced run was incorrectly suppressed")
     _require(int(geometry.structural_skips) == 2, "bridge/tunnel authority must suppress inferred roadside treatment")
     _require(geometry.vertices.size() == 16, "only four safety quads should be rendered by roadside engineering")
     _require(geometry.indices.size() == 24, "safety quads were not triangulated deterministically")
+
+    # Explicit OSM guard-rail authority must suppress the inferred visual rail on
+    # the drop side while leaving cut delegation untouched.
+    var mapped_guardrail := func(_world_point: Vector2, radius_m: float) -> bool:
+        _require(is_equal_approx(radius_m, runtime.MAPPED_GUARDRAIL_SUPPRESSION_RADIUS_M),
+            "roadside guardrail query radius changed unexpectedly")
+        return true
+    var mapped := runtime.build_geometry([road], Vector2i.ZERO, 4096.0, sampler, 10.0, mapped_guardrail)
+    _require(int(mapped.earthwork_cut_spans) == 4, "mapped guardrail query interfered with cut delegation")
+    _require(int(mapped.safety_spans) == 0, "inferred safety rail duplicated explicit guardrail authority")
+    _require(int(mapped.mapped_safety_suppressed_spans) == 4, "explicit guardrail suppression count changed")
+    _require(mapped.vertices.is_empty(), "explicit guardrail authority should leave no duplicate inferred rail geometry")
 
     var flat_sampler := func(_x: float, _z: float) -> float:
         return 10.2
@@ -66,8 +79,8 @@ func _initialize() -> void:
         "narrow tracks must fail closed instead of receiving highway-scale engineering")
 
     runtime.free()
-    print("YARDMAN_ROADSIDE_ENGINEERING_TEST PASS delegated_cuts=%d retaining=%d safety=%d vertices=%d" % [
-        delegated_cuts, retaining, safety, geometry.vertices.size()])
+    print("YARDMAN_ROADSIDE_ENGINEERING_TEST PASS delegated_cuts=%d retaining=%d safety=%d mapped_suppressed=%d vertices=%d" % [
+        delegated_cuts, retaining, safety, int(mapped.mapped_safety_suppressed_spans), geometry.vertices.size()])
     quit(0)
 
 func _require(condition: bool, message: String) -> void:
