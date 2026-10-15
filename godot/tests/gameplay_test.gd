@@ -1,6 +1,7 @@
 extends SceneTree
 
 const SaveScript = preload("res://scripts/save_game.gd")
+const References = preload("res://scripts/reference_assets.gd")
 var failures := 0
 
 func _initialize() -> void:
@@ -21,6 +22,25 @@ func _wait_ready(scene) -> void:
             return
     _check(false, "Terrain/physics did not become ready in " + scene.current_parish)
 
+func _check_active_vehicle(scene) -> void:
+    var garage := root.get_node_or_null("VehicleGarage")
+    _check(garage != null, "VehicleGarage autoload is unavailable")
+    if garage == null:
+        return
+    var selected := str(garage.call("selected_vehicle_id"))
+    var controller_id := str(scene.vehicle.get("vehicle_id"))
+    _check(controller_id == selected, "Active controller did not receive garage selection: selected=%s controller=%s" % [selected, controller_id])
+    var visual = scene.vehicle.get("visual")
+    var reference_name := ""
+    if is_instance_valid(visual):
+        reference_name = str(visual.get("reference_asset_name"))
+    var private_crown_available := References.scene("toyota_crown_2013.glb") != null
+    if private_crown_available and selected == "toyota_crown":
+        _check(reference_name == "toyota_crown_2013.glb", "Manifest-verified private Crown is present but gameplay substituted another vehicle")
+    print("YARDMAN_GAMEPLAY_VEHICLE selected=%s controller=%s reference=%s private_crown=%s" % [
+        selected, controller_id, reference_name, str(private_crown_available)
+    ])
+
 func _run() -> void:
     # National gameplay requires the registered compiler outputs. A source-only
     # checkout must fail clearly before waiting on terrain which cannot load.
@@ -38,6 +58,7 @@ func _run() -> void:
     current_scene = scene
     _check(current_scene == scene, "Production main scene was not activated as SceneTree.current_scene")
     await _wait_ready(scene)
+    _check_active_vehicle(scene)
     _check(scene.roads.manifest.parish_anchors.size() == 14, "All fourteen parishes must be addressable")
     for parish in scene.roads.manifest.parish_anchors:
         scene.goto_parish(str(parish))
@@ -141,7 +162,7 @@ func _run() -> void:
         scene.set_quality(quality, {"trees": 99, "road_radius": 1, "terrain_radius": 1})
         _check(scene.visuals.quality == quality, "Quality selection failed")
     _check(int(scene.visuals.settings().trees) == 99, "Custom density was ignored")
-    print("YARDMAN_GAMEPLAY_TEST %s parishes=14 walk=1 drive=1 enter_exit=1 save_backup=1 multitouch=1 current_scene=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_GAMEPLAY_TEST %s parishes=14 walk=1 drive=1 enter_exit=1 save_backup=1 multitouch=1 current_scene=1 vehicle_selection=1" % ("PASS" if failures == 0 else "FAIL"))
     if current_scene == scene:
         current_scene = null
     scene.queue_free()
