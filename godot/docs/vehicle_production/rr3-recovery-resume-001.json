@@ -1,0 +1,42 @@
+{
+  "checkpoint": "rr3-recovery-resume-001",
+  "source": "com.ea.games.r3_row_xclipse",
+  "outer_beta2": {
+    "required_outer_parts_first": 83,
+    "required_outer_parts_last": 200,
+    "required_outer_parts_count": 118,
+    "standard_outer_part_bytes": 52428800,
+    "max_outer_bytes_for_required_range": 6186598400,
+    "first_rr3_pack_offset": 4307473099,
+    "last_rr3_pack_offset": 10473360639,
+    "last_rr3_pack_size": 324001,
+    "note": "Do not redownload Beta2 parts 1-82 or 201-232 for RR3 vehicle inventory; the RR3 packed members occupy outer parts 83-200."
+  },
+  "rr3_split_archive": {
+    "parts": 246,
+    "logical_bytes": 6165950862,
+    "standard_part_bytes": 25165824,
+    "standard_part_count": 245,
+    "tail_part_bytes": 323982,
+    "first_part_sha256": "9d91a0fa764f492fecd4a0b73a378dfb09608ea3d5d81ba152cd342222ab8407",
+    "tail_part_sha256": "3fda833115117cd44b6e0594433a9349e5e671cef7d947c7602837c0c6d437b6"
+  },
+  "inner_7z": {
+    "file_count": 1,
+    "file": "com.ea.games.r3_row_xclipse.zip",
+    "packed_bytes": 6165950692,
+    "unpacked_bytes": 6310079877,
+    "pack_offset": 32,
+    "compression_method": "LZMA2",
+    "solid_stream": true,
+    "next_header_offset": 6165950692,
+    "next_header_bytes": 138
+  },
+  "inventory_status": "vehicle_inventory_pending_sequential_solid_stream_decode",
+  "constraints": {
+    "porsche": "exclude Porsche media/branding/fidelity after inventory decode",
+    "runtime_integration": "deferred to main Android optimization lane",
+    "apk_packaging": "not owned by vehicle decode lane"
+  },
+  "next_action": "Materialize only Beta2 outer parts 83-200, extract the 246 RR3 split members with decode_sparse_7z.py, concatenate them, stream-decode the single LZMA2 member, then inventory the resulting ZIP before selecting any RR3 vehicle components."
+}
