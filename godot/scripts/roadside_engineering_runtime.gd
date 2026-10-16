@@ -19,6 +19,10 @@ var _roads: Node
 var _terrain: Node
 var _connected := false
 var _segments_by_tile: Dictionary = {}
+# Geometry is stable for the lifetime of a loaded road tile. Cache the compact
+# result after the first terrain-ready build so terrain collision/visual residency
+# can cycle without repeating DEM sampling or retaining duplicate road payloads.
+var _geometry_by_tile: Dictionary = {}
 var _material: StandardMaterial3D
 
 func _ready() -> void:
@@ -43,11 +47,13 @@ func _process(_delta: float) -> void:
     set_process(false)
 
 func _on_road_tile(tile: Vector2i, _tile_root: Node3D, segments: Array) -> void:
+    _geometry_by_tile.erase(tile)
     _segments_by_tile[tile] = segments.duplicate(false)
     _try_build(tile)
 
 func _on_road_tile_removed(tile: Vector2i) -> void:
     _segments_by_tile.erase(tile)
+    _geometry_by_tile.erase(tile)
 
 func _on_terrain_tile(tile: Vector2i) -> void:
     _try_build(tile)
@@ -67,7 +73,9 @@ func _road_tile_root(tile: Vector2i) -> Node3D:
     return _roads._loaded.get(_roads._tile_key(tile.x, tile.y)) as Node3D
 
 func _try_build(tile: Vector2i) -> void:
-    if _terrain == null or not _terrain.is_tile_ready(tile) or not _segments_by_tile.has(tile):
+    if _terrain == null or not _terrain.is_tile_ready(tile):
+        return
+    if not _geometry_by_tile.has(tile) and not _segments_by_tile.has(tile):
         return
     var root := _road_tile_root(tile)
     if root == null:
@@ -76,11 +84,19 @@ func _try_build(tile: Vector2i) -> void:
     if existing != null:
         root.remove_child(existing)
         existing.queue_free()
-    var guardrail_query := Callable()
-    var guardrails := get_node_or_null("/root/GuardRailLayer")
-    if guardrails != null and guardrails.has_method("has_mapped_guardrail_near"):
-        guardrail_query = Callable(guardrails, "has_mapped_guardrail_near")
-    var geometry := build_geometry(_segments_by_tile[tile], tile, float(_roads.tile_size), _terrain.height_at, SAMPLE_STEP_M, guardrail_query)
+    var geometry: Dictionary
+    if _geometry_by_tile.has(tile):
+        geometry = _geometry_by_tile[tile]
+    else:
+        var guardrail_query := Callable()
+        var guardrails := get_node_or_null("/root/GuardRailLayer")
+        if guardrails != null and guardrails.has_method("has_mapped_guardrail_near"):
+            guardrail_query = Callable(guardrails, "has_mapped_guardrail_near")
+        geometry = build_geometry(_segments_by_tile[tile], tile, float(_roads.tile_size), _terrain.height_at, SAMPLE_STEP_M, guardrail_query)
+        _geometry_by_tile[tile] = geometry
+        # The generated geometry now contains everything needed to restore this
+        # visual proxy. Drop the duplicate source segment array immediately.
+        _segments_by_tile.erase(tile)
     var vertices: PackedVector3Array = geometry.vertices
     if vertices.is_empty():
         return
@@ -148,19 +164,12 @@ func build_geometry(segments: Array, tile: Vector2i, tile_size: float, height_sa
                 if kind != str(pb.get("kind", "none")):
                     continue
                 if kind == "earthwork_cut":
-                    # Geometry is intentionally owned by road_earthworks_runtime.gd.
-                    # Counting the delegated span keeps diagnostics explicit while
-                    # preventing a second, contradictory hard retaining structure.
                     earthwork_cut_spans += 1
                 elif kind == "retaining":
-                    # Legacy compatibility only. classify_side no longer infers this
-                    # from DEM height alone; sourced retaining_wall_layer owns walls.
-                    _append_quad(pa.base, pa.top, pb.top, pb.base, Color(0.43, 0.39, 0.33, 1.0),
-                        vertices, normals, colors, indices)
+                    _append_quad(pa.base, pa.top, pb.top, pb.base, Color(0.43, 0.39, 0.33, 1.0), vertices, normals, colors, indices)
                     retaining_spans += 1
                 elif kind == "safety":
-                    _append_quad(pa.base, pa.top, pb.top, pb.base, Color(0.48, 0.50, 0.52, 1.0),
-                        vertices, normals, colors, indices)
+                    _append_quad(pa.base, pa.top, pb.top, pb.base, Color(0.48, 0.50, 0.52, 1.0), vertices, normals, colors, indices)
                     safety_spans += 1
                 elif kind == "mapped_safety":
                     mapped_safety_suppressed_spans += 1
@@ -223,9 +232,6 @@ func classify_side(center: Vector2, deck_y: float, right_axis: Vector2, side: fl
         return {"kind": "none"}
     var delta := terrain_y - deck_y
     if delta >= EARTHWORK_CUT_THRESHOLD_M:
-        # A high DEM cut proves that the road needs earthworks, not that a hard
-        # retaining wall exists. The soft cut/bench/ditch runtime owns this shape;
-        # only explicit retaining-wall source data may create the hard wall layer.
         return {"kind": "earthwork_cut", "terrain_delta_m": delta}
     if delta <= -DEEP_DROP_THRESHOLD_M:
         var rail_offset := half_width + 0.18
