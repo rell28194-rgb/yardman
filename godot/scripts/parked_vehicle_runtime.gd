@@ -82,12 +82,7 @@ static func budget_for(quality: String, thermal_stage: int) -> Dictionary:
             medium_distance = 500.0
     var stage := clampi(thermal_stage, 0, 5)
     var factor: float = float([1.0, 0.96, 0.88, 0.78, 0.66, 0.56][stage])
-    return {
-        "max_parked": maxi(4, int(round(float(count) * factor))),
-        "near_visuals": maxi(2, int(round(float(near) * factor))),
-        "near_radius": maxf(105.0, near_distance * lerpf(0.82, 1.0, factor)),
-        "medium_radius": maxf(290.0, medium_distance * lerpf(0.80, 1.0, factor)),
-    }
+    return {"max_parked": maxi(4, int(round(float(count) * factor))), "near_visuals": maxi(2, int(round(float(near) * factor))), "near_radius": maxf(105.0, near_distance * lerpf(0.82, 1.0, factor)), "medium_radius": maxf(290.0, medium_distance * lerpf(0.80, 1.0, factor))}
 
 static func parked_pose(record: Dictionary, progress: float, side_sign: int) -> Dictionary:
     var a: Vector2 = record.get("a", Vector2.ZERO)
@@ -102,12 +97,18 @@ static func parked_pose(record: Dictionary, progress: float, side_sign: int) -> 
     var normal := Vector2(-tangent.y, tangent.x) * float(1 if side_sign >= 0 else -1)
     var width := maxf(3.0, float(record.get("width_m", 6.5)))
     var shoulder_offset := width * 0.5 + 1.12
-    return {
-        "position": center + normal * shoulder_offset,
-        "heading": atan2(-tangent.x, -tangent.y) + (0.0 if side_sign >= 0 else PI),
-        "shoulder_offset": shoulder_offset,
-        "length": length,
-    }
+    return {"position": center + normal * shoulder_offset, "heading": atan2(-tangent.x, -tangent.y) + (0.0 if side_sign >= 0 else PI), "shoulder_offset": shoulder_offset, "length": length, "progress": t}
+
+static func _compiled_deck_height(record: Dictionary, progress: float) -> float:
+    var a_value = record.get("height_a", null)
+    var b_value = record.get("height_b", null)
+    if a_value == null or b_value == null:
+        return NAN
+    var a := float(a_value)
+    var b := float(b_value)
+    if not is_finite(a) or not is_finite(b):
+        return NAN
+    return lerpf(a, b, clampf(progress, 0.0, 1.0))
 
 func _reconcile(roads, active_xz: Vector2) -> void:
     var records_value = roads.call("_nearby_surface_segments", active_xz.x, active_xz.y, minf(medium_radius, 500.0))
@@ -120,7 +121,6 @@ func _reconcile(roads, active_xz: Vector2) -> void:
             _destroy(str(identifier))
     if parked.size() >= max_parked:
         return
-
     var keys: Array = records.keys()
     keys.sort()
     for key in keys:
@@ -131,7 +131,6 @@ func _reconcile(roads, active_xz: Vector2) -> void:
             continue
         var edge_id := str(record.get("edge_id", key))
         var seed := absi(edge_id.hash())
-        # Deterministic sparse occupancy: roughly one candidate in four roads.
         if seed % 4 != 0:
             continue
         var side := 1 if ((seed >> 3) & 1) == 0 else -1
@@ -145,13 +144,7 @@ func _reconcile(roads, active_xz: Vector2) -> void:
         var point: Vector2 = pose.position
         if point.distance_to(active_xz) < 32.0:
             continue
-        parked[identifier] = {
-            "record": record.duplicate(true),
-            "position": point,
-            "heading": float(pose.heading),
-            "node": null,
-            "model": null,
-        }
+        parked[identifier] = {"record": record.duplicate(true), "progress": float(pose.progress), "position": point, "heading": float(pose.heading), "node": null, "model": null}
 
 func _refresh_visuals(scene: Node, roads, terrain, active_xz: Vector2) -> void:
     if _proxy == null or _proxy.multimesh == null:
@@ -164,8 +157,13 @@ func _refresh_visuals(scene: Node, roads, terrain, active_xz: Vector2) -> void:
         var entry: Dictionary = parked[identifier]
         var point: Vector2 = entry.position
         var distance := point.distance_to(active_xz)
-        var deck_y := float(terrain.height_at(point.x, point.y)) + 0.46
-        var local: Vector3 = roads.world_to_local(point.x, point.y, deck_y)
+        var deck_y := _compiled_deck_height(entry.record, float(entry.get("progress", 0.5)))
+        if not is_finite(deck_y):
+            deck_y = float(terrain.height_at(point.x, point.y))
+        if not is_finite(deck_y):
+            _dematerialize(str(identifier))
+            continue
+        var local: Vector3 = roads.world_to_local(point.x, point.y, deck_y + 0.46)
         if distance <= near_radius and near_count < near_visual_budget:
             _materialize(scene, str(identifier), entry)
             entry = parked[identifier]
@@ -257,10 +255,4 @@ func _clear_scene_state() -> void:
     _last_medium = 0
 
 func runtime_snapshot() -> Dictionary:
-    return {
-        "parked": parked.size(),
-        "near_full": _last_near,
-        "medium_hlod": _last_medium,
-        "quality": _quality,
-        "thermal_stage": _thermal_stage,
-    }
+    return {"parked": parked.size(), "near_full": _last_near, "medium_hlod": _last_medium, "quality": _quality, "thermal_stage": _thermal_stage}
