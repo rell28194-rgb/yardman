@@ -1,5 +1,5 @@
 {
-  "format_version": 2,
+  "format_version": 3,
   "lane": "codex/vehicle-production-001",
   "base_owner_build_source": "71199ca05ca16084637872927e7b27973a72da0a",
   "owner_feedback_date": "2026-10-16",
@@ -25,9 +25,10 @@
       "promotion_gate": "No active vehicle is production-complete until both Beta1 and Beta2 have been searched for that vehicle/component family and the selected cross-library source set is recorded."
     },
     "crown007": {
-      "status": "done_frozen_owner_accepted",
-      "active_work": false,
-      "rule": "Do not spend vehicle-lane time rebuilding, re-auditing or polishing Crown007 unless the owner explicitly reopens it."
+      "status": "accepted_current_state_deprioritized",
+      "priority": "reference_not_primary_focus",
+      "active_work": "opportunistic_and_shared_fleet_improvements_only",
+      "rule": "Crown007 is in a good accepted state and is the current quality reference. Do not treat it as permanently finished. Do not spend the main vehicle-production budget polishing it while other cars are missing. Apply shared material, LOD, wheel, damage, memory or pipeline improvements when they materially benefit Crown without displacing fleet expansion."
     },
     "porsche": {
       "authorized": false,
@@ -52,11 +53,11 @@
       "id": "toyota_crown",
       "display_name": "Toyota Crown",
       "candidate": "Crown007",
-      "status": "done_frozen_owner_accepted",
-      "active_work": false,
+      "status": "accepted_current_state_deprioritized",
+      "priority": "reference_not_primary_focus",
       "owner_visual_acceptance_date": "2026-10-16",
       "rights_status": "owner-authorized Toyota source; private media",
-      "note": "Reference-quality baseline only. No further lane time unless owner reopens Crown."
+      "remaining_work_policy": "Keep current accepted state stable. Permit opportunistic/shared-fleet improvements, later LOD/material/wheel/damage/performance refinement, and regression fixes. Do not hold back production of the rest of the roster for Crown polish."
     },
     {
       "id": "toyota_chaser_v_candidate",
