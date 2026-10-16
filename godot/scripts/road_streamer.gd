@@ -18,6 +18,12 @@ var refresh_interval := 0.25
 var max_io_jobs := 2
 var max_segments_per_frame := 384
 var geometry_budget_us := 2500
+# Physical residency is distance-shaped, not a permanent square of 4 km tiles.
+# The far-island terrain/HLOD systems carry the horizon beyond this bubble.
+var stream_distance_m := 2400.0
+var prediction_seconds := 7.0
+var prediction_max_m := 700.0
+var stream_refresh_m := 192.0
 var manifest: Dictionary = {}
 var coordinates = CoordinatesScript.new()
 var graph = GraphScript.new()
@@ -25,6 +31,7 @@ var generation := 0
 var _refresh_clock := 0.0
 var _last_tile := Vector2i(999999, 999999)
 var _last_radius := -1
+var _last_stream_anchor := Vector2(INF, INF)
 var _tile_files: Dictionary = {}
 var _loaded: Dictionary = {}
 var _wanted: Dictionary = {}
@@ -116,40 +123,104 @@ func _key_tile(key: String) -> Vector2i:
     var parts := key.split(":")
     return Vector2i(int(parts[0]), int(parts[1]))
 
-func _target_tile() -> Vector2i:
+func _target_world_xz() -> Vector2:
     if target == null:
-        return Vector2i.ZERO
+        return Vector2.ZERO
     var world: PackedFloat64Array = coordinates.local_to_world(target.global_position)
-    return coordinates.tile_for(world[0], world[2])
+    return Vector2(float(world[0]), float(world[2]))
+
+func _target_tile() -> Vector2i:
+    var world := _target_world_xz()
+    return coordinates.tile_for(world.x, world.y)
+
+func _predicted_world_xz(current_world: Vector2) -> Vector2:
+    if target == null:
+        return current_world
+    var velocity := Vector3.ZERO
+    if target is CharacterBody3D:
+        velocity = (target as CharacterBody3D).velocity
+    elif target.has_method("get_velocity"):
+        var candidate = target.call("get_velocity")
+        if candidate is Vector3:
+            velocity = candidate
+    var horizontal := Vector2(velocity.x, velocity.z)
+    if not horizontal.is_finite() or horizontal.length_squared() < 0.01:
+        return current_world
+    var lead := horizontal * prediction_seconds
+    if lead.length() > prediction_max_m:
+        lead = lead.normalized() * prediction_max_m
+    return current_world + lead
+
+static func _distance_squared_to_tile(point: Vector2, tile: Vector2i, tile_size_m: float) -> float:
+    var minimum := Vector2(float(tile.x) * tile_size_m, float(tile.y) * tile_size_m)
+    var maximum := minimum + Vector2.ONE * tile_size_m
+    var closest := Vector2(clampf(point.x, minimum.x, maximum.x), clampf(point.y, minimum.y, maximum.y))
+    return point.distance_squared_to(closest)
 
 func _refresh_tiles(force: bool) -> void:
     if target == null or _tile_files.is_empty():
         return
-    var current := _target_tile()
-    if not force and current == _last_tile and load_radius == _last_radius:
+    var world := _target_world_xz()
+    var current := coordinates.tile_for(world.x, world.y)
+    var anchor_moved := not _last_stream_anchor.is_finite() or world.distance_squared_to(_last_stream_anchor) >= stream_refresh_m * stream_refresh_m
+    if not force and current == _last_tile and load_radius == _last_radius and not anchor_moved:
         return
     generation += 1
     _last_tile = current
     _last_radius = load_radius
+    _last_stream_anchor = world
+    var predicted := _predicted_world_xz(world)
+    var distance_limit := clampf(stream_distance_m, 600.0, tile_size * maxf(1.0, float(load_radius) + 0.15))
+    var distance_squared := distance_limit * distance_limit
+    var prefetch_limit := clampf(maxf(480.0, prediction_max_m * 0.85), 480.0, tile_size * 0.45)
+    var prefetch_squared := prefetch_limit * prefetch_limit
+
     _wanted.clear()
     _queue.clear()
     for dz in range(-load_radius, load_radius + 1):
         for dx in range(-load_radius, load_radius + 1):
-            var key := _tile_key(current.x + dx, current.y + dz)
-            if _tile_files.has(key):
-                _wanted[key] = true
-                if not _loaded.has(key) and not _jobs.has(key) and str(_building.get("key", "")) != key and not _failed.has(key):
-                    _queue.append(key)
+            var tile := current + Vector2i(dx, dz)
+            var key := _tile_key(tile.x, tile.y)
+            if not _tile_files.has(key):
+                continue
+            var resident := tile == current or _distance_squared_to_tile(world, tile, tile_size) <= distance_squared
+            var predicted_resident := _distance_squared_to_tile(predicted, tile, tile_size) <= prefetch_squared
+            if not resident and not predicted_resident:
+                continue
+            _wanted[key] = true
+            if not _loaded.has(key) and not _jobs.has(key) and str(_building.get("key", "")) != key and not _failed.has(key):
+                _queue.append(key)
+
+    # Prefer the tile the player is in, then the predicted travel corridor, then
+    # remaining visible neighbors. This turns high speed into look-ahead rather
+    # than a boundary-crossing load spike.
     _queue.sort_custom(func(a: String, b: String) -> bool:
-        return _key_tile(a).distance_squared_to(current) < _key_tile(b).distance_squared_to(current))
-    for key in _loaded.keys():
-        var tile := _key_tile(str(key))
-        if maxi(absi(tile.x - current.x), absi(tile.y - current.y)) > load_radius + 1:
-            _loaded[key].queue_free()
-            _loaded.erase(key)
-            _surface_indices.erase(key)
-            tile_removed.emit(tile)
-    if not _building.is_empty() and not _wanted.has(_building.key):
+        var ta := _key_tile(a)
+        var tb := _key_tile(b)
+        if ta == current:
+            return true
+        if tb == current:
+            return false
+        var pa := _distance_squared_to_tile(predicted, ta, tile_size)
+        var pb := _distance_squared_to_tile(predicted, tb, tile_size)
+        if not is_equal_approx(pa, pb):
+            return pa < pb
+        return _distance_squared_to_tile(world, ta, tile_size) < _distance_squared_to_tile(world, tb, tile_size))
+
+    # No hidden +1 tile ring: at 4 km per tile that hysteresis could retain up
+    # to 25 full road/terrain tiles. Predictive prefetch is the warm cache.
+    for key_value in _loaded.keys():
+        var key := str(key_value)
+        if _wanted.has(key):
+            continue
+        var tile := _key_tile(key)
+        var root = _loaded[key]
+        if root is Node:
+            (root as Node).queue_free()
+        _loaded.erase(key)
+        _surface_indices.erase(key)
+        tile_removed.emit(tile)
+    if not _building.is_empty() and not _wanted.has(str(_building.get("key", ""))):
         _building.root.free()
         _building.clear()
 
@@ -473,6 +544,19 @@ func has_tile(tile: Vector2i) -> bool:
 
 func is_world_position_ready(x: float, z: float) -> bool:
     return is_tile_ready(coordinates.tile_for(x, z))
+
+func runtime_snapshot() -> Dictionary:
+    return {
+        "loaded_tiles": _loaded.size(),
+        "wanted_tiles": _wanted.size(),
+        "queued_tiles": _queue.size(),
+        "io_jobs": _jobs.size(),
+        "building_tile": 0 if _building.is_empty() else 1,
+        "stream_distance_m": stream_distance_m,
+        "prediction_seconds": prediction_seconds,
+        "prediction_max_m": prediction_max_m,
+        "target_tile": _last_tile,
+    }
 
 func queued_count() -> int:
     return _queue.size() + (0 if _building.is_empty() else 1)
