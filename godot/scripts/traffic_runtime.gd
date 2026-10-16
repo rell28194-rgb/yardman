@@ -60,7 +60,6 @@ func _physics_process(delta: float) -> void:
     _simulation_clock += delta
     _visual_clock += delta
 
-    # Population discovery and weather reads are chunk/interval work, not frame work.
     if _spawn_clock >= 1.0:
         _spawn_clock = 0.0
         _update_weather_factors()
@@ -77,7 +76,6 @@ func _physics_process(delta: float) -> void:
 
 static func _chunk_for_world(point: Vector2) -> Vector2i:
     return Vector2i(floori(point.x / AI_CHUNK_SIZE_M), floori(point.y / AI_CHUNK_SIZE_M))
-
 
 func apply_render_policy(active: Dictionary) -> void:
     _quality = str(active.get("quality", "Balanced"))
@@ -170,18 +168,11 @@ static func lane_pose(record: Dictionary, progress: float, direction_sign: int) 
     var travel := tangent * float(direction)
     var t := clampf(progress, 0.0, 1.0)
     var center := a.lerp(b, t)
-    # Jamaica drives on the left. Offset to the left of the current travel
-    # direction while staying inside the source carriageway width.
     var left := Vector2(travel.y, -travel.x)
     var width := maxf(3.0, float(record.get("width_m", 6.5)))
     var lane_offset := minf(width * 0.23, maxf(1.15, width * 0.34))
     var point := center + left * lane_offset
-    return {
-        "position": point,
-        "travel": travel,
-        "heading": atan2(-travel.x, -travel.y),
-        "length": length,
-    }
+    return {"position": point, "travel": travel, "heading": atan2(-travel.x, -travel.y), "length": length}
 
 static func road_deck_height(record: Dictionary, progress: float, terrain_height: float) -> float:
     var height_a_value = record.get("height_a", null)
@@ -192,6 +183,17 @@ static func road_deck_height(record: Dictionary, progress: float, terrain_height
         if is_finite(height_a) and is_finite(height_b):
             return lerpf(height_a, height_b, clampf(progress, 0.0, 1.0))
     return terrain_height
+
+static func record_deck_height(record: Dictionary, progress: float) -> float:
+    var height_a_value = record.get("height_a", null)
+    var height_b_value = record.get("height_b", null)
+    if height_a_value == null or height_b_value == null:
+        return NAN
+    var height_a := float(height_a_value)
+    var height_b := float(height_b_value)
+    if not is_finite(height_a) or not is_finite(height_b):
+        return NAN
+    return lerpf(height_a, height_b, clampf(progress, 0.0, 1.0))
 
 static func continuation_for(current: Dictionary, direction_sign: int, candidates: Dictionary) -> Dictionary:
     var a: Vector2 = current.get("a", Vector2.ZERO)
@@ -267,13 +269,7 @@ static func junction_options(current: Dictionary, direction_sign: int, candidate
         var alignment := tangent.dot(travel)
         if alignment < -0.25:
             continue
-        options.append({
-            "record": candidate,
-            "direction": candidate_direction,
-            "distance": distance,
-            "alignment": alignment,
-            "edge_id": str(candidate.get("edge_id", key)),
-        })
+        options.append({"record": candidate, "direction": candidate_direction, "distance": distance, "alignment": alignment, "edge_id": str(candidate.get("edge_id", key))})
     return options
 
 static func road_priority(record: Dictionary) -> float:
@@ -281,8 +277,7 @@ static func road_priority(record: Dictionary) -> float:
     var width := clampf(float(record.get("width_m", 6.5)), 3.0, 20.0)
     return 100.0 - float(class_id) * 8.0 + width * 0.35
 
-static func should_yield_at_junction(identifier: String, current: Dictionary, direction_sign: int,
-        endpoint: Vector2, population: Dictionary, radius_m: float = 18.0) -> bool:
+static func should_yield_at_junction(identifier: String, current: Dictionary, direction_sign: int, endpoint: Vector2, population: Dictionary, radius_m: float = 18.0) -> bool:
     var a: Vector2 = current.get("a", Vector2.ZERO)
     var b: Vector2 = current.get("b", Vector2.ZERO)
     var my_travel := (b - a).normalized() * float(1 if direction_sign >= 0 else -1)
@@ -340,17 +335,13 @@ func _reconcile_population(scene: Node, roads, terrain, active_xz: Vector2) -> v
     var density := density_for_hour(hour) * _weather_density_factor
     var target := clampi(int(round(float(max_agents) * density)), 4, max_agents)
     var far_target := statistical_population_for(max_agents, hour, _weather_density_factor)
-
     for identifier in agents.keys():
         var agent: Dictionary = agents[identifier]
-        var point: Vector2 = agent.get("position", Vector2.ZERO)
-        if point.distance_to(active_xz) > despawn_radius:
+        if Vector2(agent.get("position", Vector2.ZERO)).distance_to(active_xz) > despawn_radius:
             _destroy_agent(str(identifier))
-
     if agents.size() >= target:
         _far_statistical = maxi(0, far_target - agents.size())
         return
-
     var keys: Array = records.keys()
     keys.sort()
     for key in keys:
@@ -379,18 +370,7 @@ func _reconcile_population(scene: Node, roads, terrain, active_xz: Vector2) -> v
         var speed_limit_value = record.get("speed_limit_mps", null)
         var target_speed := float(speed_limit_value) if speed_limit_value != null else _default_speed(int(record.get("class_id", 0)))
         target_speed = clampf(target_speed * (0.82 + float(seed % 13) * 0.012), 6.0, 24.0)
-        agents[identifier] = {
-            "id": identifier,
-            "record": record.duplicate(true),
-            "direction": direction,
-            "progress": progress,
-            "position": point,
-            "heading": float(pose.heading),
-            "speed": target_speed * 0.72 * _weather_speed_factor,
-            "target_speed": target_speed,
-            "node": null,
-            "model": null,
-        }
+        agents[identifier] = {"id": identifier, "record": record.duplicate(true), "direction": direction, "progress": progress, "position": point, "heading": float(pose.heading), "speed": target_speed * 0.72 * _weather_speed_factor, "target_speed": target_speed, "node": null, "model": null}
     _far_statistical = maxi(0, far_target - agents.size())
 
 func _default_speed(class_id: int) -> float:
@@ -426,7 +406,6 @@ func _advance_agents(delta: float, roads, terrain, active_xz: Vector2) -> void:
             target_speed = 0.0
         elif nearest_ahead < 16.0:
             target_speed *= clampf((nearest_ahead - 6.0) / 10.0, 0.12, 1.0)
-
         var endpoint := Vector2(record.b if direction >= 0 else record.a)
         var endpoint_fraction := 1.0 - float(agent.progress) if direction >= 0 else float(agent.progress)
         var endpoint_distance := maxf(0.0, endpoint_fraction * float(pose.length))
@@ -442,7 +421,6 @@ func _advance_agents(delta: float, roads, terrain, active_xz: Vector2) -> void:
                     if endpoint_distance <= 16.0 and should_yield_at_junction(str(identifier), record, direction, endpoint, agents):
                         target_speed = 0.0
                         _last_yielding += 1
-
         var speed := move_toward(float(agent.speed), target_speed, delta * (4.6 if target_speed < float(agent.speed) else 2.2))
         var progress := float(agent.progress) + float(direction) * speed * delta / maxf(float(pose.length), 0.1)
         if progress > 1.0 or progress < 0.0:
@@ -496,8 +474,9 @@ func _refresh_visuals(scene: Node, roads, terrain, active_xz: Vector2) -> void:
         var agent: Dictionary = agents[identifier]
         var point: Vector2 = agent.position
         var distance := point.distance_to(active_xz)
-        var terrain_y := float(terrain.height_at(point.x, point.y))
-        var deck_y := road_deck_height(agent.record, float(agent.progress), terrain_y)
+        var deck_y := record_deck_height(agent.record, float(agent.progress))
+        if not is_finite(deck_y):
+            deck_y = float(terrain.height_at(point.x, point.y))
         if not is_finite(deck_y):
             _dematerialize_agent(str(identifier))
             continue
@@ -511,7 +490,7 @@ func _refresh_visuals(scene: Node, roads, terrain, active_xz: Vector2) -> void:
                 node.rotation.y = float(agent.heading)
                 var model := agent.model as YardmanVehicleModel
                 if model != null:
-                    model.update_motion(get_physics_process_delta_time(), float(agent.speed), 0.0, 0.0, false, true, 0.0, 0.0)
+                    model.update_motion(VISUAL_STEP_S, float(agent.speed), 0.0, 0.0, false, true, 0.0, 0.0)
             near_count += 1
         else:
             _dematerialize_agent(str(identifier))
@@ -602,15 +581,4 @@ func _clear_scene_state() -> void:
     _weather_density_factor = 1.0
 
 func runtime_snapshot() -> Dictionary:
-    return {
-        "agents": agents.size(),
-        "near_full": _last_near,
-        "medium_hlod": _last_medium,
-        "far_statistical": _far_statistical,
-        "yielding": _last_yielding,
-        "quality": _quality,
-        "thermal_stage": _thermal_stage,
-        "near_budget": near_visual_budget,
-        "weather_speed_factor": _weather_speed_factor,
-        "weather_density_factor": _weather_density_factor,
-    }
+    return {"agents": agents.size(), "near_full": _last_near, "medium_hlod": _last_medium, "far_statistical": _far_statistical, "yielding": _last_yielding, "quality": _quality, "thermal_stage": _thermal_stage, "near_budget": near_visual_budget, "weather_speed_factor": _weather_speed_factor, "weather_density_factor": _weather_density_factor}
