@@ -17,6 +17,16 @@ const TEXTURE_UPGRADES := {
 # The original ground_rock.png contains snow. If its approved dry-rock
 # replacement is absent, leave the shader's procedural rock active.
 const STRICT_TEXTURE_UPGRADES := ["ground_rock.png"]
+# Durable private-build recovery path. The owner Crown was already validated
+# and exported successfully in run 38841581231. CI may recover the exact
+# Godot-imported scene from that authenticated artifact when the temporary
+# external source-pack URL has expired.
+const RECOVERED_SCENE_CACHE := {
+    "toyota_crown_2013.glb": {
+        "path": "res://.godot/imported/toyota_crown_2013.glb-6ec01e928ae54ac12e5bc0f6ba8bd627.scn",
+        "sha256": "7babf2e065a18e02f2fc215b011bcfea359851991c1f0700ea571e5c7365c385",
+    },
+}
 static var _textures: Dictionary = {}
 static var _scenes: Dictionary = {}
 
@@ -112,15 +122,33 @@ static func scene(filename: String) -> PackedScene:
     if _scenes.has(filename):
         return _scenes[filename] as PackedScene
     var path := ROOT + filename
-    if not ResourceLoader.exists(path):
-        return null
-    if not _media_matches_manifest(filename, path):
+    if ResourceLoader.exists(path) and _media_matches_manifest(filename, path):
+        var media := ResourceLoader.load(path) as PackedScene
+        if media != null:
+            _scenes[filename] = media
+        return media
+
+    # Source-pack URLs are intentionally not a permanent dependency of owner
+    # builds. If the exact verified import cache has been recovered from the
+    # prior successful private APK artifact, accept only the pinned cache hash
+    # and the same manifest identity; never fall through to a different car.
+    var recovery = RECOVERED_SCENE_CACHE.get(filename, {})
+    if recovery is Dictionary and not recovery.is_empty():
+        var recovered_path := str(recovery.get("path", ""))
+        var expected_hash := str(recovery.get("sha256", "")).to_lower()
+        var payload := manifest()
+        if ResourceLoader.exists(recovered_path) and FileAccess.file_exists(recovered_path) \
+                and _valid_sha256(expected_hash) \
+                and FileAccess.get_sha256(recovered_path).to_lower() == expected_hash \
+                and manifest_file_matches(filename, payload):
+            var recovered := ResourceLoader.load(recovered_path) as PackedScene
+            if recovered != null:
+                _scenes[filename] = recovered
+                return recovered
+
+    if ResourceLoader.exists(path):
         push_warning("Yardman reference scene %s is not the manifest-verified private asset; refusing it" % filename)
-        return null
-    var media := ResourceLoader.load(path) as PackedScene
-    if media != null:
-        _scenes[filename] = media
-    return media
+    return null
 
 static func audio(filename: String, loop: bool = false) -> AudioStream:
     if not _valid_name(filename, PackedStringArray(["wav", "ogg"])):
