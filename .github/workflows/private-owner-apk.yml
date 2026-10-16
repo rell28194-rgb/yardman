@@ -2,7 +2,7 @@ name: Yardman Owner APK Now
 
 on:
   push:
-    branches: [codex/private-apk-now]
+    branches: [codex/private-apk-now, codex/android-performance-owner-001]
     paths:
       - '.github/workflows/private-owner-apk.yml'
       - 'godot/**'
