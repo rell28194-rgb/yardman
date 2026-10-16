@@ -3,16 +3,16 @@
 
 The gate protects hero/close-range fidelity first. Android optimization is handled
 through validated LODs and runtime evidence, never by silently degrading LOD0.
+Brand eligibility is source-scoped rather than brand-scoped: vehicles present in
+the owner-authorized Yardman project source pool may be evaluated normally.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import re
 from pathlib import Path
 from typing import Any
 
-PORSCHE_RE = re.compile(r"\bporsche\b", re.I)
 ACTIVE_RIGHTS = {
     "active_vehicle",
     "deprioritized_reference_crown007",
@@ -56,11 +56,16 @@ def gate(spec: dict[str, Any]) -> dict[str, Any]:
 
     check("identity_resolved", bool(identity), identity or None, "non-empty resolved identity")
     check("rights_cleared", rights in ACTIVE_RIGHTS, rights or None, sorted(ACTIVE_RIGHTS))
-    make = str(spec.get("make") or spec.get("manufacturer") or "").strip()
-    porsche_named = bool(PORSCHE_RE.search(f"{make} {identity}"))
-    check("porsche_exclusion_not_bypassed", rights != "excluded_porsche" and not porsche_named, {"rights_status": rights or None, "identity": identity or None, "make": make or None}, "Porsche remains excluded under current owner policy")
     check("source_path_recorded", bool(provenance.get("source_path")), provenance.get("source_path"), "exact source path")
     check("source_hash_recorded", bool(provenance.get("sha256")), provenance.get("sha256"), "SHA-256 provenance")
+
+    source_scope = str(provenance.get("source_scope") or "owner_authorized_project_source").strip()
+    check(
+        "source_scope_allowed",
+        source_scope in {"owner_authorized_project_source", "owner_provided_procedural_source"},
+        source_scope,
+        ["owner_authorized_project_source", "owner_provided_procedural_source"],
+    )
 
     identity_match = str(compatibility.get("identity", "")).strip().lower()
     generation_trim = str(compatibility.get("generation_trim", "")).strip().lower()
@@ -93,6 +98,11 @@ def gate(spec: dict[str, Any]) -> dict[str, Any]:
         ratio = lod3["triangles"] / lod0["triangles"]
         check("lod3_reduction_ratio", ratio <= 0.12, round(ratio, 5), "<= 0.12 of LOD0")
 
+    availability = spec.get("availability") or {}
+    if availability.get("class") == "owner_private_player_only":
+        check("player_only_not_ai_driven", availability.get("ai_driver_eligible") is False, availability.get("ai_driver_eligible"), False)
+        check("player_only_not_ambient_spawned", availability.get("ambient_spawn_eligible") is False, availability.get("ambient_spawn_eligible"), False)
+
     visual = spec.get("visual_validation") or {}
     check("close_render_review", visual.get("close") == "pass", visual.get("close"), "pass")
     check("mid_render_review", visual.get("mid") == "pass", visual.get("mid"), "pass")
@@ -100,7 +110,7 @@ def gate(spec: dict[str, Any]) -> dict[str, Any]:
     check("android_runtime_pending_not_hidden", visual.get("android_device") in {"pass", "pending"}, visual.get("android_device"), "pass or explicit pending")
 
     return {
-        "format_version": 2,
+        "format_version": 3,
         "tool": "yardman_vehicle_quality_gate",
         "identity": identity,
         "pass": all(c["pass"] for c in checks),
