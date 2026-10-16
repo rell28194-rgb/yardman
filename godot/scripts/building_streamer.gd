@@ -174,10 +174,13 @@ func _process(delta: float) -> void:
         _refresh_clock = 0.0
         var world: PackedFloat64Array = coordinates.local_to_world(target.global_position)
         update_world(world[0], world[2])
+        # Collision activation tracks the same 5 Hz world-position update.
+        # Scanning every loaded building cell at render-frame frequency only
+        # repeated identical work and could cause unnecessary CPU pressure.
+        _refresh_collision()
     _poll_jobs()
     _prepare_geometry()
     _start_jobs()
-    _refresh_collision()
 
 func _exit_tree() -> void:
     for job in _jobs.values():
