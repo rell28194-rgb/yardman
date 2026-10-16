@@ -3,8 +3,8 @@
 
 Consumes the completed Beta1+Car Parking+RR3 crossmatch and a validated RR3
 recovery checkpoint. Already recovered RR3 directories are removed, explicit
-no-match results are preserved, and motorsport variants remain component-
-reference-only unless an exact model/generation/trim gate later promotes them.
+no-match results are preserved, and exact motorsport variants remain eligible
+as player-only private-garage vehicles while staying excluded from AI traffic.
 """
 from __future__ import annotations
 
@@ -45,14 +45,14 @@ def recovered_ids(recovery: dict[str, Any]) -> set[str]:
     return out
 
 
-def score(source_id: str, status: str) -> tuple[int, str]:
+def score(source_id: str, status: str) -> tuple[int, str, str]:
     if MOTORSPORT_RE.search(source_id):
-        return 30, "component_reference_only"
+        return 75, "player_only_vehicle_candidate_and_component_reference", "owner_private_player_only"
     if "strong_" in status or "exact_" in status:
-        return 100, "body_and_component_candidate"
+        return 100, "body_and_component_candidate", "normal_vehicle_candidate"
     if "generation" in status or "trim" in status:
-        return 80, "generation_gate_body_candidate"
-    return 60, "component_candidate"
+        return 80, "generation_gate_body_candidate", "normal_vehicle_candidate"
+    return 60, "component_candidate", "normal_vehicle_candidate"
 
 
 def build(fusion: dict[str, Any], recovery: dict[str, Any]) -> dict[str, Any]:
@@ -82,17 +82,24 @@ def build(fusion: dict[str, Any], recovery: dict[str, Any]) -> dict[str, Any]:
             # allow stale historical rights overlays to add one to a recovery queue.
             if PORSCHE_RE.search(identity) or PORSCHE_RE.search(source_id):
                 continue
-            priority, intended_use = score(source_id, status)
+            priority, intended_use, availability_class = score(source_id, status)
+            motorsport = availability_class == "owner_private_player_only"
             queue.append(
                 {
                     "identity": identity,
                     "rr3_vehicle": source_id,
                     "priority": priority,
                     "intended_use": intended_use,
+                    "availability_class": availability_class,
+                    "player_selectable": True,
+                    "ai_driver_eligible": not motorsport,
+                    "ambient_spawn_eligible": not motorsport,
                     "crossmatch_status": status,
                     "promotion_gate": (
-                        "exact model/generation/trim compatibility required; motorsport "
-                        "or later-generation shells must not substitute for road bodies"
+                        "exact motorsport variant may ship as its own player-only vehicle after the normal quality/physics gate; "
+                        "it must not substitute for the road body and must not enter AI/ambient pools"
+                        if motorsport
+                        else "exact model/generation/trim compatibility required; later-generation shells must not substitute for road bodies"
                     ),
                 }
             )
@@ -106,8 +113,8 @@ def build(fusion: dict[str, Any], recovery: dict[str, Any]) -> dict[str, Any]:
     )
 
     return {
-        "format_version": 1,
-        "checkpoint": "rr3-recovery-queue-003",
+        "format_version": 2,
+        "checkpoint": "rr3-recovery-queue-004",
         "source": fusion.get("checkpoint", "rr3-crossmatch"),
         "recovery_source": recovery.get("checkpoint", "rr3-recovery"),
         "policy": {
@@ -117,6 +124,12 @@ def build(fusion: dict[str, Any], recovery: dict[str, Any]) -> dict[str, Any]:
             "quality": (
                 "high-detail LOD0; optimize via LOD/runtime, not hero-vehicle degradation"
             ),
+            "quantity": (
+                "no artificial fleet cap; keep every distinct validated vehicle that passes the same quality gate"
+            ),
+            "motorsport_variants": (
+                "player-only private-garage candidates; excluded from AI and ambient traffic"
+            ),
         },
         "already_recovered_rr3_vehicle_directories": sorted(recovered),
         "queue": queue,
@@ -124,15 +137,15 @@ def build(fusion: dict[str, Any], recovery: dict[str, Any]) -> dict[str, Any]:
         "summary": {
             "already_recovered": len(recovered),
             "queued": len(queue),
-            "body_or_generation_candidates": sum(
+            "normal_vehicle_candidates": sum(
                 1
                 for row in queue
-                if row["intended_use"] != "component_reference_only"
+                if row["availability_class"] == "normal_vehicle_candidate"
             ),
-            "component_reference_only": sum(
+            "player_only_motorsport_vehicle_candidates": sum(
                 1
                 for row in queue
-                if row["intended_use"] == "component_reference_only"
+                if row["availability_class"] == "owner_private_player_only"
             ),
             "verified_no_match_identities": len(no_match),
         },
