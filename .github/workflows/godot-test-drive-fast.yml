@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - codex/godot-polish-002
+      - codex/android-performance-owner-001
     paths:
       - 'godot/scripts/startup_menu.gd'
       - 'godot/scripts/vehicle_controller.gd'
