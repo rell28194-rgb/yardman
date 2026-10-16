@@ -43,7 +43,7 @@ func _process(delta: float) -> void:
     var budget := budget_for(quality, thermal_stage, renderer)
     var night := NightPolicy.night_factor(hour)
     var fraction := effective_lit_fraction(hour, budget)
-    var material_id := material.get_instance_id() if material is ShaderMaterial else 0
+    var material_id: int = material.get_instance_id() if material is ShaderMaterial else 0
     # Quantize only the continuously changing twilight term. The lit-fraction
     # policy itself is already piecewise, so there is no reason to rewrite the
     # same three shader uniforms several times per second for hours of game time.
