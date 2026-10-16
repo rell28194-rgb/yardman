@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Build the Yardman whole-fleet Beta1+Beta2 source-fusion matrix.
 
-Identity matches and source-search completion are intentionally separate. A source
-may be exhaustively inventoried without every Yardman identity having been mapped
-against it. That distinction prevents false "no match" claims while allowing
-finished identity searches to move into component selection.
+Identity matches, source inventory completion, rights state, and per-identity
+search completion are deliberately separate. Historical policy decisions can be
+superseded by a later owner-authorized rights overlay without rewriting the
+underlying source evidence.
 """
 from __future__ import annotations
 
@@ -34,16 +34,29 @@ def rights_state(identity: str, porsche_authorized: bool = False) -> str:
     return "active_vehicle"
 
 
+def _remove_catalog_id(
+    resolved: dict[str, list[dict[str, Any]]], catalog_id: int
+) -> None:
+    for identity in list(resolved):
+        resolved[identity] = [
+            row for row in resolved[identity] if row.get("catalog_id") != catalog_id
+        ]
+        if not resolved[identity]:
+            del resolved[identity]
+
+
 def collect_beta1(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    result: dict[str, dict[str, Any]] = defaultdict(lambda: {
-        "source": "CarX Drift",
-        "source_variants": 0,
-        "source_units": [],
-        "best_object_record_count": 0,
-        "interior_available": False,
-        "camera_points_available": False,
-        "engine_node_available": False,
-    })
+    result: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {
+            "source": "CarX Drift",
+            "source_variants": 0,
+            "source_units": [],
+            "best_object_record_count": 0,
+            "interior_available": False,
+            "camera_points_available": False,
+            "engine_node_available": False,
+        }
+    )
     vehicles = manifest.get("sources", {}).get("carx_drift", {}).get("vehicles", [])
     for vehicle in vehicles:
         identity = normalized_identity(vehicle.get("identity"))
@@ -59,7 +72,8 @@ def collect_beta1(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
             record["interior_available"] or vehicle.get("has_interior", False)
         )
         record["camera_points_available"] = bool(
-            record["camera_points_available"] or vehicle.get("has_camera_points", False)
+            record["camera_points_available"]
+            or vehicle.get("has_camera_points", False)
         )
         record["engine_node_available"] = bool(
             record["engine_node_available"] or vehicle.get("has_engine_node", False)
@@ -74,6 +88,7 @@ def collect_car_parking(
     manifest: dict[str, Any],
     seed: dict[str, Any] | None = None,
     evidence: dict[str, Any] | None = None,
+    rights_refresh: dict[str, Any] | None = None,
     porsche_authorized: bool = False,
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
     resolved: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -96,12 +111,14 @@ def collect_car_parking(
             continue
         if isinstance(catalog_id, int):
             unresolved_ids.discard(catalog_id)
-        resolved[identity].append({
-            "catalog_id": catalog_id,
-            "bundle_path": vehicle.get("bundle_path"),
-            "identity_status": vehicle.get("identity_status"),
-            "evidence": "full_fleet_migration_manifest",
-        })
+        resolved[identity].append(
+            {
+                "catalog_id": catalog_id,
+                "bundle_path": vehicle.get("bundle_path"),
+                "identity_status": vehicle.get("identity_status"),
+                "evidence": "full_fleet_migration_manifest",
+            }
+        )
 
     if seed:
         for vehicle in seed.get("exact_identities", []) or []:
@@ -118,7 +135,7 @@ def collect_car_parking(
                 "evidence": vehicle.get("evidence", "carparking_identity_seed"),
             }
             if not any(
-                x.get("catalog_id") == catalog_id for x in resolved[identity]
+                row.get("catalog_id") == catalog_id for row in resolved[identity]
             ):
                 resolved[identity].append(record)
 
@@ -126,7 +143,9 @@ def collect_car_parking(
     parse_complete = False
     historical_excluded_porsche = 0
     if evidence:
-        evidence_counts = dict(evidence.get("counts", {}) or evidence.get("decode", {}) or {})
+        evidence_counts = dict(
+            evidence.get("counts", {}) or evidence.get("decode", {}) or {}
+        )
         for vehicle in evidence.get("vehicles", []) or []:
             catalog_id = vehicle.get("catalog_id")
             if not isinstance(catalog_id, int):
@@ -134,40 +153,83 @@ def collect_car_parking(
             identity = normalized_identity(vehicle.get("identity"))
             status = str(vehicle.get("identity_status", ""))
             if identity:
-                for existing_identity in list(resolved):
-                    resolved[existing_identity] = [
-                        r
-                        for r in resolved[existing_identity]
-                        if r.get("catalog_id") != catalog_id
-                    ]
-                    if not resolved[existing_identity]:
-                        del resolved[existing_identity]
-                resolved[identity].append({
-                    "catalog_id": catalog_id,
-                    "bundle_path": vehicle.get("bundle_path")
-                    or manifest_by_id.get(catalog_id, {}).get("bundle_path"),
-                    "identity_status": status,
-                    "rights_status": rights_state(identity, porsche_authorized),
-                    "evidence": "exact_carparking_unityfs_bundle_decode",
-                })
+                _remove_catalog_id(resolved, catalog_id)
+                resolved[identity].append(
+                    {
+                        "catalog_id": catalog_id,
+                        "bundle_path": vehicle.get("bundle_path")
+                        or manifest_by_id.get(catalog_id, {}).get("bundle_path"),
+                        "identity_status": status,
+                        "rights_status": rights_state(identity, porsche_authorized),
+                        "evidence": "exact_carparking_unityfs_bundle_decode",
+                    }
+                )
                 unresolved_ids.discard(catalog_id)
             elif status.startswith("conflict_") or status.startswith("unresolved"):
                 unresolved_ids.add(catalog_id)
 
-        current_bundles = int(
-            evidence_counts.get("current_car_bundles", 0)
-            or evidence_counts.get("current_car_bundles", 0)
-            or 0
-        )
+        current_bundles = int(evidence_counts.get("current_car_bundles", 0) or 0)
         parse_errors = int(
             evidence_counts.get("unityfs_parse_errors", 0)
             or evidence_counts.get("unityfs_parse_failures", 0)
             or 0
         )
-        parse_complete = current_bundles == len(manifest_by_id) and parse_errors == 0
+        parse_complete = (
+            current_bundles == len(manifest_by_id) and parse_errors == 0
+        )
         historical_excluded_porsche = int(
             evidence_counts.get("excluded_porsche", 0) or 0
         )
+
+    refreshed_porsche_ids: set[int] = set()
+    expected_refresh_ids: set[int] = set()
+    if rights_refresh:
+        expected_refresh_ids = {
+            int(value)
+            for value in rights_refresh.get("historical_excluded_catalog_ids", [])
+            if isinstance(value, int)
+        }
+        for vehicle in rights_refresh.get("refreshed", []) or []:
+            catalog_id = vehicle.get("catalog_id")
+            identity = normalized_identity(vehicle.get("normalized_identity"))
+            if not isinstance(catalog_id, int) or not identity:
+                continue
+            _remove_catalog_id(resolved, catalog_id)
+            resolved[identity].append(
+                {
+                    "catalog_id": catalog_id,
+                    "bundle_path": vehicle.get("bundle_path")
+                    or manifest_by_id.get(catalog_id, {}).get("bundle_path"),
+                    "identity_status": vehicle.get("identity_status"),
+                    "rights_status": vehicle.get(
+                        "rights_status",
+                        rights_state(identity, porsche_authorized),
+                    ),
+                    "generation_status": vehicle.get("generation_status"),
+                    "decision": vehicle.get("decision"),
+                    "exact_bundle_model_directories": vehicle.get(
+                        "exact_bundle_model_directories", []
+                    ),
+                    "audio_evidence": vehicle.get("audio_evidence", []),
+                    "evidence": rights_refresh.get(
+                        "checkpoint", "carparking_porsche_rights_refresh"
+                    ),
+                }
+            )
+            unresolved_ids.discard(catalog_id)
+            if PORSCHE_RE.search(identity):
+                refreshed_porsche_ids.add(catalog_id)
+
+    porsche_refresh_complete = bool(
+        porsche_authorized
+        and expected_refresh_ids
+        and expected_refresh_ids <= refreshed_porsche_ids
+    )
+    porsche_refresh_required = bool(
+        porsche_authorized
+        and historical_excluded_porsche
+        and not porsche_refresh_complete
+    )
 
     return dict(resolved), {
         "resolved_identities": len(resolved),
@@ -178,9 +240,10 @@ def collect_car_parking(
         ),
         "historical_excluded_porsche": historical_excluded_porsche,
         "porsche_authorized": porsche_authorized,
-        "porsche_refresh_required": bool(
-            porsche_authorized and historical_excluded_porsche
-        ),
+        "porsche_refresh_loaded": bool(rights_refresh),
+        "porsche_refreshed_catalog_ids": sorted(refreshed_porsche_ids),
+        "porsche_refresh_complete": porsche_refresh_complete,
+        "porsche_refresh_required": porsche_refresh_required,
         "conflict_review_required": int(
             evidence_counts.get("conflict_review_required", 0) or 0
         ),
@@ -231,12 +294,14 @@ def collect_rr3_crossmatch(
             continue
         searched.add(identity)
         for source_id in row.get("rr3_matches", []) or []:
-            resolved[identity].append({
-                "source_id": source_id,
-                "match_status": row.get("rr3_status"),
-                "recovery": row.get("recovery"),
-                "evidence": evidence.get("checkpoint", "rr3_crossmatch"),
-            })
+            resolved[identity].append(
+                {
+                    "source_id": source_id,
+                    "match_status": row.get("rr3_status"),
+                    "recovery": row.get("recovery"),
+                    "evidence": evidence.get("checkpoint", "rr3_crossmatch"),
+                }
+            )
 
     source_state = evidence.get("source_state", {}) or {}
     inventory_complete = bool(evidence.get("rr3_search_complete", False)) and (
@@ -255,6 +320,7 @@ def build(
     manifest: dict[str, Any],
     carparking_seed: dict[str, Any] | None = None,
     carparking_evidence: dict[str, Any] | None = None,
+    carparking_rights_refresh: dict[str, Any] | None = None,
     rr3_crossmatch: dict[str, Any] | None = None,
     porsche_authorized: bool = False,
 ) -> dict[str, Any]:
@@ -263,6 +329,7 @@ def build(
         manifest,
         carparking_seed,
         carparking_evidence,
+        carparking_rights_refresh,
         porsche_authorized,
     )
     rr3_manifest, rr3_manifest_summary = collect_rr3_manifest(manifest)
@@ -300,7 +367,9 @@ def build(
         row = {
             "identity": identity,
             "rights_status": state,
-            "beta1": beta1.get(identity, {"status": "exact_identity_not_resolved"}),
+            "beta1": beta1.get(
+                identity, {"status": "exact_identity_not_resolved"}
+            ),
             "beta2": {
                 "car_parking": car_parking.get(identity, []),
                 "real_racing_3": rr3.get(identity, []),
@@ -316,7 +385,9 @@ def build(
             excluded.append(row)
             continue
         if state == "deprioritized_reference_crown007":
-            row["promotion_status"] = "accepted_current_state_detail_improvements_continue"
+            row[
+                "promotion_status"
+            ] = "accepted_current_state_detail_improvements_continue"
             row["remaining_work"] = (
                 "shared fleet improvements may apply later without blocking fleet expansion"
             )
@@ -332,7 +403,7 @@ def build(
         active.append(row)
 
     return {
-        "format_version": 7,
+        "format_version": 8,
         "policy": {
             "scope": "full_fleet_parallel_source_fusion",
             "crown007": "accepted_current_state_deprioritized_not_complete",
@@ -355,6 +426,7 @@ def build(
             "car_parking": cp_summary,
             "car_parking_seed_loaded": bool(carparking_seed),
             "car_parking_bundle_evidence_loaded": bool(carparking_evidence),
+            "car_parking_rights_refresh_loaded": bool(carparking_rights_refresh),
             "real_racing_3": {
                 "manifest": rr3_manifest_summary,
                 "crossmatch": rr3_match_summary,
@@ -371,6 +443,7 @@ def main() -> int:
     parser.add_argument("migration_manifest", type=Path)
     parser.add_argument("--carparking-seed", type=Path)
     parser.add_argument("--carparking-evidence", type=Path)
+    parser.add_argument("--carparking-rights-refresh", type=Path)
     parser.add_argument("--rr3-crossmatch", type=Path)
     parser.add_argument("--porsche-authorized", action="store_true")
     parser.add_argument("--output", type=Path)
@@ -387,6 +460,11 @@ def main() -> int:
         if args.carparking_evidence
         else None
     )
+    rights_refresh = (
+        json.loads(args.carparking_rights_refresh.read_text(encoding="utf-8"))
+        if args.carparking_rights_refresh
+        else None
+    )
     rr3 = (
         json.loads(args.rr3_crossmatch.read_text(encoding="utf-8"))
         if args.rr3_crossmatch
@@ -397,6 +475,7 @@ def main() -> int:
         manifest,
         seed,
         evidence,
+        rights_refresh,
         rr3,
         args.porsche_authorized,
     )
