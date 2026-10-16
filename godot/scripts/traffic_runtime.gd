@@ -23,6 +23,12 @@ var _quality := "Balanced"
 var _thermal_stage := 0
 var _weather_speed_factor := 1.0
 var _weather_density_factor := 1.0
+var _simulation_clock := 0.0
+var _visual_clock := 0.0
+var _active_chunk := Vector2i(2147483647, 2147483647)
+const AI_CHUNK_SIZE_M := 256.0
+const SIMULATION_STEP_S := 0.05
+const VISUAL_STEP_S := 0.05
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -44,13 +50,34 @@ func _physics_process(delta: float) -> void:
     var active_world: PackedFloat64Array = roads.local_to_world(active.global_position)
     var active_xz := Vector2(float(active_world[0]), float(active_world[2]))
 
-    _update_weather_factors()
+    var chunk := _chunk_for_world(active_xz)
+    var chunk_changed := chunk != _active_chunk
+    if chunk_changed:
+        _active_chunk = chunk
+        _spawn_clock = 999.0
+
     _spawn_clock += delta
+    _simulation_clock += delta
+    _visual_clock += delta
+
+    # Population discovery and weather reads are chunk/interval work, not frame work.
     if _spawn_clock >= 1.0:
         _spawn_clock = 0.0
+        _update_weather_factors()
         _reconcile_population(scene, roads, terrain, active_xz)
-    _advance_agents(delta, roads, terrain, active_xz)
-    _refresh_visuals(scene, roads, terrain, active_xz)
+
+    if _simulation_clock >= SIMULATION_STEP_S:
+        var step := minf(_simulation_clock, SIMULATION_STEP_S * 2.0)
+        _simulation_clock = 0.0
+        _advance_agents(step, roads, terrain, active_xz)
+
+    if _visual_clock >= VISUAL_STEP_S:
+        _visual_clock = 0.0
+        _refresh_visuals(scene, roads, terrain, active_xz)
+
+static func _chunk_for_world(point: Vector2) -> Vector2i:
+    return Vector2i(floori(point.x / AI_CHUNK_SIZE_M), floori(point.y / AI_CHUNK_SIZE_M))
+
 
 func apply_render_policy(active: Dictionary) -> void:
     _quality = str(active.get("quality", "Balanced"))
