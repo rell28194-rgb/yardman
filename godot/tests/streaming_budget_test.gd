@@ -13,10 +13,10 @@ class FakeRoads:
 class FakeTerrain:
     extends Node
     signal tile_ready(tile: Vector2i)
-    var ready := true
+    var tile_is_ready := true
 
     func is_tile_ready(_tile: Vector2i) -> bool:
-        return ready
+        return tile_is_ready
 
     func height_at(_x: float, _z: float) -> float:
         return 31.0
