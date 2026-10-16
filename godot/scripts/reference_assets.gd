@@ -3,6 +3,12 @@ extends RefCounted
 class_name YardmanReferenceAssets
 
 const ROOT := "res://assets/user_reference/"
+# The reset branch has one owner vehicle only. Keep the old runtime call site
+# stable while replacing its generic road-car art with the accepted Crown007.
+const SCENE_UPGRADES := {
+    "road_car.glb": "toyota_crown_2013.glb",
+}
+const CROWN_CACHE_PATH := "res://.godot/imported/toyota_crown_2013.glb-6ec01e928ae54ac12e5bc0f6ba8bd627.scn"
 static var _textures: Dictionary = {}
 static var _scenes: Dictionary = {}
 
@@ -28,10 +34,16 @@ static func scene(filename: String) -> PackedScene:
         return null
     if _scenes.has(filename):
         return _scenes[filename] as PackedScene
-    var path := ROOT + filename
-    if not ResourceLoader.exists(path):
-        return null
-    var media := ResourceLoader.load(path) as PackedScene
+    var resolved := str(SCENE_UPGRADES.get(filename, filename))
+    var path := ROOT + resolved
+    var media: PackedScene = null
+    if ResourceLoader.exists(path):
+        media = ResourceLoader.load(path) as PackedScene
+    elif resolved == "toyota_crown_2013.glb" and ResourceLoader.exists(CROWN_CACHE_PATH):
+        # Owner APK CI can recover the exact hash-pinned Godot import from the
+        # previously accepted Crown build when the temporary source-pack URL
+        # has expired. The workflow verifies the cache digest before import.
+        media = ResourceLoader.load(CROWN_CACHE_PATH) as PackedScene
     if media != null:
         _scenes[filename] = media
     return media
