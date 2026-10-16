@@ -107,7 +107,7 @@ static func _read_overview(path: String, coast_path: String, width: int, depth: 
         return payload
     if payload.heights.size() != width * depth:
         return {"error": "Wrong overview terrain sample count"}
-    var coast := CoastGeometryScript.read_overview(coast_path, width, depth)
+    var coast := CoastGeometryScript.read_overview_land_only(coast_path, width, depth)
     if coast.has("error"):
         return coast
     payload.coast = coast
@@ -311,6 +311,7 @@ func _prepare_far() -> void:
         _far_root = Node3D.new()
         _far_root.name = "IslandOverviewLOD"
         add_child(_far_root)
+        _make_far_ocean()
         _far_build = {"heights": payload.heights, "coast": payload.coast, "row": 0, "column": 0,
             "phase": 0, "land_cursor": 0, "water_cursor": 0, "groups": {}, "group_keys": [], "assemble_cursor": 0,
             "origin_x": coordinates.render_origin_x, "origin_y": coordinates.render_origin_y, "origin_z": coordinates.render_origin_z}
@@ -332,20 +333,13 @@ func _prepare_far() -> void:
             1:
                 var land: PackedVector3Array = _far_build.coast.land
                 if int(_far_build.land_cursor) >= land.size():
-                    _far_build.phase = 2
-                    continue
-                var cursor: int = _far_build.land_cursor
-                _append_far_land(land[cursor], land[cursor + 1], land[cursor + 2], overview)
-                _far_build.land_cursor += 3
-            2:
-                var water: PackedVector3Array = _far_build.coast.water
-                if int(_far_build.water_cursor) >= water.size():
                     _far_build.group_keys = _far_build.groups.keys()
                     _far_build.group_keys.sort()
                     _far_build.phase = 3
                     continue
-                _append_far_water(int(_far_build.water_cursor), overview)
-                _far_build.water_cursor += 3
+                var cursor: int = _far_build.land_cursor
+                _append_far_land(land[cursor], land[cursor + 1], land[cursor + 2], overview)
+                _far_build.land_cursor += 3
             3:
                 if int(_far_build.assemble_cursor) >= _far_build.group_keys.size():
                     _far_build.clear()
@@ -355,6 +349,41 @@ func _prepare_far() -> void:
                 _assemble_far_sector(key)
                 _far_build.groups.erase(key)
                 _far_build.assemble_cursor += 1
+
+func _make_far_ocean() -> void:
+    if _far_root == null:
+        return
+    var overview: Dictionary = manifest.get("overview", {})
+    if overview.is_empty():
+        return
+    var spacing_m := float(overview.get("spacing", 512.0))
+    var width := int(overview.get("width", 0))
+    var depth := int(overview.get("depth", 0))
+    if width < 2 or depth < 2 or spacing_m <= 0.0:
+        return
+    var extent := Vector2(float(width - 1) * spacing_m, float(depth - 1) * spacing_m)
+    # Margin keeps ocean to the horizon even when the camera sits near an island
+    # edge. One quad replaces millions of far-water source vertices.
+    var margin := 64000.0
+    var mesh := PlaneMesh.new()
+    mesh.size = extent + Vector2.ONE * margin * 2.0
+    mesh.subdivide_width = 0
+    mesh.subdivide_depth = 0
+    if coastline != null:
+        mesh.material = coastline.water_material
+    var instance := MeshInstance3D.new()
+    instance.name = "FarOceanHorizon"
+    instance.mesh = mesh
+    instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    var origin_x := float(overview.get("origin_x", 0.0))
+    var origin_z := float(overview.get("origin_z", 0.0))
+    var center_world := Vector2(origin_x, origin_z) + extent * 0.5
+    instance.position = Vector3(
+        center_world.x - float(coordinates.render_origin_x),
+        -0.12 - float(coordinates.render_origin_y),
+        center_world.y - float(coordinates.render_origin_z)
+    )
+    _far_root.add_child(instance)
 
 func _far_group(tile: Vector2i) -> Dictionary:
     var key := _tile_key(tile.x, tile.y)
