@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
+PORSCHE_RE = re.compile(r"\bporsche\b", re.I)
 ACTIVE_RIGHTS = {
     "active_vehicle",
     "deprioritized_reference_crown007",
@@ -54,7 +56,9 @@ def gate(spec: dict[str, Any]) -> dict[str, Any]:
 
     check("identity_resolved", bool(identity), identity or None, "non-empty resolved identity")
     check("rights_cleared", rights in ACTIVE_RIGHTS, rights or None, sorted(ACTIVE_RIGHTS))
-    check("porsche_exclusion_not_bypassed", rights != "excluded_porsche", rights or None, "Porsche remains excluded under current owner policy")
+    make = str(spec.get("make") or spec.get("manufacturer") or "").strip()
+    porsche_named = bool(PORSCHE_RE.search(f"{make} {identity}"))
+    check("porsche_exclusion_not_bypassed", rights != "excluded_porsche" and not porsche_named, {"rights_status": rights or None, "identity": identity or None, "make": make or None}, "Porsche remains excluded under current owner policy")
     check("source_path_recorded", bool(provenance.get("source_path")), provenance.get("source_path"), "exact source path")
     check("source_hash_recorded", bool(provenance.get("sha256")), provenance.get("sha256"), "SHA-256 provenance")
 
