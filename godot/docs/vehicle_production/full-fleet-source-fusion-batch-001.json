@@ -1,5 +1,5 @@
 {
-  "format_version": 2,
+  "format_version": 3,
   "policy": {
     "scope": "full_fleet_parallel_source_fusion",
     "crown007": "accepted_current_state_deprioritized_not_complete",
@@ -17,12 +17,20 @@
     },
     "beta2_car_parking": {
       "queued_bundles": 237,
-      "resolved_identity": 1
+      "resolved_non_porsche": 227,
+      "excluded_porsche": 8,
+      "conflict_review_required": 1,
+      "unresolved": 1,
+      "identity_checkpoint": "carparking-full-fleet-decode-002",
+      "catalog_sha256": "4bacdddca1c11ed8d3ba9697c90c06424e616eb2ca32af09191c5183694963b9",
+      "open_identity_gates": [21, 122]
     },
     "beta2_real_racing_3": {
       "logical_bytes": 6165950862,
       "split_parts": 246,
-      "status": "source_container_confirmed_car_inventory_pending"
+      "status": "source_container_confirmed_sequential_solid_stream_inventory_pending",
+      "resume_checkpoint": "rr3-recovery-resume-001",
+      "required_beta2_outer_parts": "83-200"
     }
   },
   "batch_rule": {
