@@ -1,13 +1,17 @@
 {
-  "checkpoint": "rr3-recovery-queue-003",
-  "format_version": 1,
+  "checkpoint": "rr3-recovery-queue-004",
+  "format_version": 2,
   "source": "beta1-beta2-rr3-fusion-batch-003",
   "recovery_source": "rr3-random-access-recovery-002",
   "policy": {
     "porsche": "excluded",
     "crown007": "accepted/deprioritized; shared improvements only",
     "private_media_public_git": false,
-    "quality": "high-detail LOD0; optimize via LOD/runtime, not hero-vehicle degradation"
+    "quality": "high-detail LOD0; optimize via LOD/runtime, not hero-vehicle degradation",
+    "quantity": "no artificial fleet cap; every distinct validated vehicle may be retained when it passes the same quality gate",
+    "motorsport_variants": "promote as exact player-only private-garage vehicles when validated; never substitute their road-car counterparts",
+    "ai_driver_eligibility_for_player_only": false,
+    "ambient_spawn_for_player_only": false
   },
   "already_recovered_rr3_vehicle_directories": [
     "1989_mazda_mx5",
@@ -32,56 +36,81 @@
       "rr3_vehicle": "2014_audi_r8spyder",
       "priority": 80,
       "intended_use": "generation_gate_body_candidate",
+      "availability_class": "normal_vehicle_candidate",
       "crossmatch_status": "model_family_candidates_generation_gate_required",
       "promotion_gate": "exact model/generation/trim compatibility required; Spyder body must not be substituted for a coupe without an exact target match"
     },
     {
       "identity": "AudiR8",
       "rr3_vehicle": "2012_audi_r8_lms",
-      "priority": 30,
-      "intended_use": "component_reference_only",
-      "crossmatch_status": "model_family_candidates_generation_gate_required",
-      "promotion_gate": "motorsport shell is not a road-body substitute; recover only defensible reusable component/reference evidence"
+      "priority": 75,
+      "intended_use": "player_only_vehicle_candidate_and_component_reference",
+      "availability_class": "owner_private_player_only",
+      "player_selectable": true,
+      "ai_driver_eligible": false,
+      "ambient_spawn_eligible": false,
+      "crossmatch_status": "exact_motorsport_variant_recovered",
+      "promotion_gate": "may ship as its own Audi R8 LMS race variant after normal quality/physics validation; must never be substituted for the road R8 and must never enter AI or ambient traffic pools"
     },
     {
       "identity": "AudiR8",
       "rr3_vehicle": "2018_audi_r8_gt4",
-      "priority": 30,
-      "intended_use": "component_reference_only",
-      "crossmatch_status": "model_family_candidates_generation_gate_required",
-      "promotion_gate": "GT4 shell is not a road-body substitute; recover only defensible reusable component/reference evidence"
+      "priority": 75,
+      "intended_use": "player_only_vehicle_candidate_and_component_reference",
+      "availability_class": "owner_private_player_only",
+      "player_selectable": true,
+      "ai_driver_eligible": false,
+      "ambient_spawn_eligible": false,
+      "crossmatch_status": "exact_motorsport_variant_recovered",
+      "promotion_gate": "may ship as its own Audi R8 GT4 race variant after normal quality/physics validation; must never be substituted for the road R8 and must never enter AI or ambient traffic pools"
     },
     {
       "identity": "BMW_M4",
       "rr3_vehicle": "2017_bmw_m4_dtm",
-      "priority": 30,
-      "intended_use": "component_reference_only",
-      "crossmatch_status": "road_model_candidate_plus_motorsport_variants_generation_gate_required",
-      "promotion_gate": "DTM geometry must remain separate from the road car; component/reference recovery only"
+      "priority": 75,
+      "intended_use": "player_only_vehicle_candidate_and_component_reference",
+      "availability_class": "owner_private_player_only",
+      "player_selectable": true,
+      "ai_driver_eligible": false,
+      "ambient_spawn_eligible": false,
+      "crossmatch_status": "exact_motorsport_variant_recovered",
+      "promotion_gate": "may ship as its own BMW M4 DTM race variant after normal quality/physics validation; DTM geometry stays separate from the road M4 and never enters AI or ambient traffic pools"
     },
     {
       "identity": "BMW_M4",
       "rr3_vehicle": "2018_bmw_m4_gt4",
-      "priority": 30,
-      "intended_use": "component_reference_only",
-      "crossmatch_status": "road_model_candidate_plus_motorsport_variants_generation_gate_required",
-      "promotion_gate": "GT4 geometry must remain separate from the road car; component/reference recovery only"
+      "priority": 75,
+      "intended_use": "player_only_vehicle_candidate_and_component_reference",
+      "availability_class": "owner_private_player_only",
+      "player_selectable": true,
+      "ai_driver_eligible": false,
+      "ambient_spawn_eligible": false,
+      "crossmatch_status": "exact_motorsport_variant_recovered",
+      "promotion_gate": "may ship as its own BMW M4 GT4 race variant after normal quality/physics validation; GT4 geometry stays separate from the road M4 and never enters AI or ambient traffic pools"
     },
     {
       "identity": "BMW_M4",
       "rr3_vehicle": "2021_bmw_m4_gt3",
-      "priority": 30,
-      "intended_use": "component_reference_only",
-      "crossmatch_status": "road_model_candidate_plus_motorsport_variants_generation_gate_required",
-      "promotion_gate": "GT3 geometry must remain separate from the road car; component/reference recovery only"
+      "priority": 80,
+      "intended_use": "player_only_vehicle_candidate_and_component_reference",
+      "availability_class": "owner_private_player_only",
+      "player_selectable": true,
+      "ai_driver_eligible": false,
+      "ambient_spawn_eligible": false,
+      "crossmatch_status": "exact_motorsport_variant_recovered",
+      "promotion_gate": "may ship as its own BMW M4 GT3 race variant after normal quality/physics validation; GT3 geometry stays separate from the road M4 and never enters AI or ambient traffic pools"
     },
     {
       "identity": "MercedesC63",
       "rr3_vehicle": "2017_mercedes_c63_dtm",
-      "priority": 30,
-      "intended_use": "component_reference_only",
-      "crossmatch_status": "road_generation_candidate_plus_motorsport_variant_review_required",
-      "promotion_gate": "DTM geometry must remain separate from the road car; component/reference recovery only"
+      "priority": 75,
+      "intended_use": "player_only_vehicle_candidate_and_component_reference",
+      "availability_class": "owner_private_player_only",
+      "player_selectable": true,
+      "ai_driver_eligible": false,
+      "ambient_spawn_eligible": false,
+      "crossmatch_status": "exact_motorsport_variant_recovered",
+      "promotion_gate": "may ship as its own Mercedes C63 DTM race variant after normal quality/physics validation; DTM geometry stays separate from the road C63 and never enters AI or ambient traffic pools"
     }
   ],
   "verified_no_match_identities": [
@@ -98,9 +127,9 @@
   ],
   "summary": {
     "already_recovered": 15,
-    "queued": 7,
-    "body_or_generation_candidates": 1,
-    "component_reference_only": 6,
+    "queued_or_recovered_followup": 7,
+    "normal_vehicle_candidates": 1,
+    "player_only_motorsport_vehicle_candidates": 6,
     "verified_no_match_identities": 10
   },
   "execution": {
@@ -108,6 +137,6 @@
     "queue_builder": "godot/tools/vehicle_production/build_rr3_recovery_queue.py",
     "validation": "inner ZIP uncompressed size + CRC32 per file; record SHA-256 for recovered files",
     "media_destination": "private workspace only",
-    "post_recovery": "feed exact source paths/hashes and defensible components into fleet fusion; run vehicle quality gate before any promotion"
+    "post_recovery": "build each exact motorsport variant as its own high-detail vehicle where applicable; expose player-only variants in the private garage after quality/physics validation; exclude them from AI/ambient selection; run the same vehicle quality gate before promotion"
   }
 }
