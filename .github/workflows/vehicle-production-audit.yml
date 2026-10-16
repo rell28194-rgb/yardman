@@ -1,0 +1,115 @@
+name: Yardman Vehicle Production Audit
+
+on:
+  push:
+    branches: [codex/vehicle-production-001]
+    paths:
+      - '.github/workflows/vehicle-production-audit.yml'
+      - 'godot/tools/vehicle_production/**'
+      - 'godot/docs/vehicle_production/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PRIVATE_PACK_SHA256: '39a6556e905a995df0556dfe9e47d4077f9d6cfb2daa1c82c86ce6c4541d0452'
+
+jobs:
+  audit-private-vehicles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore exact Crown007 owner-build private pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACK=/tmp/Yardman-Personal-Reference-Assets-Crown007.zip
+          URL='https://sdmntpritalynorth.oaiusercontent.com/files/00000000-2958-8246-be6b-5ff90cc9506a/raw?se=2026-10-16T02%3A44%3A19Z&sp=r&sv=2026-02-06&sr=b&scid=1382d81d-12e1-5c77-85c6-c8b639a271c4&skoid=9b9c502c-68d7-438f-bea0-600feb684c90&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-15T23%3A42%3A33Z&ske=2026-10-16T23%3A42%3A33Z&sks=b&skv=2026-02-06&sig=StY9aUs4jS3Nn%2BFbmW%2BPplnzm2umCVUkpnuL3Rm6LkA%3D'
+          rm -f "$PACK"
+          for attempt in 1 2 3 4 5 6; do
+            if curl --http1.1 --fail --location --retry 2 --retry-all-errors --retry-delay 1 --continue-at - "$URL" -o "$PACK"; then
+              break
+            fi
+            sleep 1
+          done
+          echo "$PRIVATE_PACK_SHA256  $PACK" | sha256sum -c -
+          mkdir -p /tmp/yardman-vehicle-pack
+          unzip -q "$PACK" -d /tmp/yardman-vehicle-pack
+          test -s /tmp/yardman-vehicle-pack/manifest.json
+          test -s /tmp/yardman-vehicle-pack/toyota_crown_2013.glb
+          test -s /tmp/yardman-vehicle-pack/road_car.glb
+
+      - name: Strict Crown007 production audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build/vehicle-production
+          python godot/tools/vehicle_production/audit_glb.py \
+            /tmp/yardman-vehicle-pack/toyota_crown_2013.glb \
+            --require-rig --max-triangles 120000 --max-materials 16 --max-textures 16 \
+            --output godot/build/vehicle-production/crown007-lod0.json
+          python godot/tools/vehicle_production/validate_lod_chain.py \
+            --lod0 godot/build/vehicle-production/crown007-lod0.json \
+            --output godot/build/vehicle-production/crown007-lod-chain.json
+
+      - name: Audit recovered Toyota Chaser V candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python godot/tools/vehicle_production/audit_glb.py \
+            /tmp/yardman-vehicle-pack/road_car.glb \
+            --require-rig --max-triangles 60000 --max-materials 24 --max-textures 24 \
+            --output godot/build/vehicle-production/toyota-chaser-v-source.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('godot/build/vehicle-production/toyota-chaser-v-source.json')
+          report = json.loads(p.read_text())
+          metrics = report['metrics']
+          promotion = {
+              'format_version': 1,
+              'vehicle_id': 'toyota_chaser_v_candidate',
+              'source_asset': 'road_car.glb',
+              'identity_rule': 'Toyota Chaser V; do not relabel as Mark X',
+              'production_promotion_pass': metrics['triangles'] <= 60000 and metrics['materials_referenced'] <= 16 and metrics['rig_contract']['pass'],
+              'gates': {
+                  'triangles_lod0_under_60000': metrics['triangles'] <= 60000,
+                  'materials_at_or_under_16': metrics['materials_referenced'] <= 16,
+                  'yardman_rig_contract': metrics['rig_contract']['pass'],
+                  'lod1_present': False,
+                  'lod2_present': False,
+                  'lod3_present': False,
+                  'dual_renderer_visual_acceptance': False,
+                  'android_device_acceptance': False,
+              },
+              'metrics': metrics,
+          }
+          Path('godot/build/vehicle-production/toyota-chaser-v-promotion.json').write_text(json.dumps(promotion, indent=2, sort_keys=True) + '\n')
+          print(json.dumps(promotion, indent=2, sort_keys=True))
+          PY
+
+      - name: Assert Porsche exclusion remains explicit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          roster = json.loads(Path('godot/docs/vehicle_production/roster-2026-10-16.json').read_text())
+          assert roster['policy']['porsche']['authorized'] is False
+          p = next(v for v in roster['vehicles'] if v['id'] == 'port_royal_992')
+          assert p['status'] == 'frozen_fictional_no_porsche_source_work'
+          print('YARDMAN_PORSCHE_EXCLUSION_PASS')
+          PY
+
+      - name: Upload vehicle-production evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Vehicle-Production-Audit
+          path: godot/build/vehicle-production/*.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
