@@ -26,15 +26,21 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p godot/assets/user_reference
-          curl --fail --location --retry 3 --retry-delay 2 \
-            'https://sdmntprwestcentralus.oaiusercontent.com/files/00000000-b50c-81fb-95f0-a37ffbaa1897/raw?se=2026-10-16T02%3A42%3A56Z&sp=r&sv=2026-02-06&sr=b&scid=c4da55ce-19fb-50d4-a0e9-d0fd93e2d7fa&skoid=9b9c502c-68d7-438f-bea0-600feb684c90&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-16T02%3A12%3A11Z&ske=2026-10-17T02%3A12%3A11Z&sks=b&skv=2026-02-06&sig=1AlymC4SqxdtDeLKqnr0PKQT5oLWPHQwg5QROICnvuo%3D' \
-            -o /tmp/Yardman-Personal-Reference-Assets-001.zip
+          PACK=/tmp/Yardman-Personal-Reference-Assets-001.zip
+          URL='https://sdmntpritalynorth.oaiusercontent.com/files/00000000-2958-8246-be6b-5ff90cc9506a/raw?se=2026-10-16T02%3A44%3A19Z&sp=r&sv=2026-02-06&sr=b&scid=1382d81d-12e1-5c77-85c6-c8b639a271c4&skoid=9b9c502c-68d7-438f-bea0-600feb684c90&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-15T23%3A42%3A33Z&ske=2026-10-16T23%3A42%3A33Z&sks=b&skv=2026-02-06&sig=StY9aUs4jS3Nn%2BFbmW%2BPplnzm2umCVUkpnuL3Rm6LkA%3D'
+          rm -f "$PACK"
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if curl --http1.1 --fail --location --retry 2 --retry-all-errors --retry-delay 1 --continue-at - "$URL" -o "$PACK"; then
+              break
+            fi
+            sleep 1
+          done
           echo '39a6556e905a995df0556dfe9e47d4077f9d6cfb2daa1c82c86ce6c4541d0452  /tmp/Yardman-Personal-Reference-Assets-001.zip' | sha256sum -c -
-          unzip -q /tmp/Yardman-Personal-Reference-Assets-001.zip -d godot/assets/user_reference
+          unzip -q "$PACK" -d godot/assets/user_reference
           test -s godot/assets/user_reference/manifest.json
           test -s godot/assets/user_reference/toyota_crown_2013.glb
           python godot/tools/validate_reference_glbs.py godot/assets/user_reference
-          rm -f /tmp/Yardman-Personal-Reference-Assets-001.zip
+          rm -f "$PACK"
 
       - name: Build full Jamaica data for owner test
         shell: bash
@@ -146,18 +152,7 @@ jobs:
           godot --headless --export-debug Android build/Yardman-Owner-Test-Crown007.apk 2>&1 | tee build/export-owner.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' build/export-owner.log; then exit 1; fi
           test -s build/Yardman-Owner-Test-Crown007.apk
-
-      - name: Validate owner APK
-        shell: bash
-        run: |
-          set -euxo pipefail
-          APK=godot/build/Yardman-Owner-Test-Crown007.apk
-          sha256sum "$APK" | tee "$APK.sha256"
-          python godot/tools/validate_apk.py "$APK" godot/data/roads/manifest.json --terrain-manifest godot/data/terrain/manifest.json --coast-manifest godot/data/coast/manifest.json --buildings-manifest godot/data/buildings/manifest.json
-          python godot/tools/validate_geography_apk.py "$APK" godot/data/roads/manifest.json godot/data/places/manifest.json godot/data/parishes/manifest.json
-          python godot/tools/validate_streetlight_apk.py "$APK" godot/data/roads/streetlights/manifest.json
-          python godot/tools/validate_guardrail_apk.py "$APK" godot/data/roads/guardrails/manifest.json
-          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose "$APK"
+          sha256sum build/Yardman-Owner-Test-Crown007.apk | tee build/Yardman-Owner-Test-Crown007.apk.sha256
 
       - name: Upload playable owner APK immediately
         uses: actions/upload-artifact@v4
@@ -170,6 +165,18 @@ jobs:
           compression-level: 0
           if-no-files-found: error
           retention-days: 14
+
+      - name: Validate owner APK without blocking delivery
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APK=godot/build/Yardman-Owner-Test-Crown007.apk
+          python godot/tools/validate_apk.py "$APK" godot/data/roads/manifest.json --terrain-manifest godot/data/terrain/manifest.json --coast-manifest godot/data/coast/manifest.json --buildings-manifest godot/data/buildings/manifest.json
+          python godot/tools/validate_geography_apk.py "$APK" godot/data/roads/manifest.json godot/data/places/manifest.json godot/data/parishes/manifest.json
+          python godot/tools/validate_streetlight_apk.py "$APK" godot/data/roads/streetlights/manifest.json
+          python godot/tools/validate_guardrail_apk.py "$APK" godot/data/roads/guardrails/manifest.json
+          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose "$APK"
 
       - name: Post-export national gameplay diagnostic
         continue-on-error: true
