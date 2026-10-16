@@ -1,0 +1,138 @@
+{
+  "checkpoint": "rr3-random-access-recovery-001",
+  "source": "Beta2/com.ea.games.r3_row_xclipse",
+  "wrapper": {
+    "split_parts": 246,
+    "logical_bytes": 6165950862,
+    "lzma2_packed_bytes": 6165950692,
+    "inner_zip_bytes": 6310079877,
+    "first_split_sha256": "9d91a0fa764f492fecd4a0b73a378dfb09608ea3d5d81ba152cd342222ab8407",
+    "tail_split_sha256": "3fda833115117cd44b6e0594433a9349e5e671cef7d947c7602837c0c6d437b6"
+  },
+  "random_access": {
+    "lzma2_dictionary_reset_segments": 24,
+    "final_reset_packed_offset": 6043996989,
+    "final_reset_unpacked_offset": 6174015488,
+    "final_segment_packed_bytes": 121953703,
+    "final_segment_unpacked_bytes": 136064389,
+    "final_segment_sha256": "d1826a4d7d4a988752a969bc4e92a87ec7102633d600fa0388dd994e1ce30842",
+    "method": "parse LZMA2 framing without full decompression; decode the final dictionary-reset window to read ZIP64 central directory; decode only reset windows containing requested vehicle entries"
+  },
+  "zip64_inventory": {
+    "entry_count": 46814,
+    "central_directory_offset": 6300326719,
+    "central_directory_bytes": 9753060,
+    "vehicle_directory_count": 547,
+    "vehicle_root": "com.ea.games.r3_row_xclipse/com.ea.games.r3_row/files/.depot/vehicles/"
+  },
+  "validated_vehicle_recovery": [
+    {
+      "rr3_vehicle": "2012_lexus_lfa",
+      "files": 33,
+      "uncompressed_bytes": 7366745,
+      "reset_segment": 14,
+      "cross_source": {
+        "beta1": "LexusLFA",
+        "car_parking": "catalog 7 / Lexus LFA",
+        "match": "strong triple-source identity match"
+      }
+    },
+    {
+      "rr3_vehicle": "2008_mitsubishi_evolution_x",
+      "files": 29,
+      "uncompressed_bytes": 13360081,
+      "reset_segment": 13,
+      "cross_source": {
+        "beta1": "MitsubishiEvoX",
+        "car_parking": "catalog 12 / Lancer EvolutionX",
+        "match": "strong triple-source identity match"
+      }
+    },
+    {
+      "rr3_vehicle": "2006_nissan_350z",
+      "files": 31,
+      "uncompressed_bytes": 6660082,
+      "reset_segment": 13,
+      "cross_source": {
+        "beta1": "Nissan350z",
+        "car_parking": "catalog 145 / 350z",
+        "match": "strong triple-source identity match"
+      }
+    },
+    {
+      "rr3_vehicle": "2010_bmw_m3gts",
+      "files": 26,
+      "uncompressed_bytes": 6381238,
+      "reset_segment": 13,
+      "cross_source": {
+        "beta1": "BMW_M3_E92_GTS",
+        "car_parking": "catalog 56 / m3e92",
+        "match": "strong generation/trim candidate; retain exact-generation gate before component promotion"
+      }
+    },
+    {
+      "rr3_vehicle": "1995_nissan_skyline_r33",
+      "files": 26,
+      "uncompressed_bytes": 11761808,
+      "reset_segment": 13,
+      "cross_source": {
+        "beta1": "SkylineR33",
+        "car_parking": "catalog 213 / Nissan Skyline R33",
+        "match": "generation match; RR3 also has 1997 R33 so variant selection remains open"
+      }
+    },
+    {
+      "rr3_vehicle": "1997_nissan_skyline_r33",
+      "files": 32,
+      "uncompressed_bytes": 11502514,
+      "reset_segment": 13,
+      "cross_source": {
+        "beta1": "SkylineR33",
+        "car_parking": "catalog 213 / Nissan Skyline R33",
+        "match": "generation match; compare 1995 vs 1997 source before choosing components"
+      }
+    },
+    {
+      "rr3_vehicle": "2009_honda_s2000_gt",
+      "files": 32,
+      "uncompressed_bytes": 11043161,
+      "reset_segment": 13,
+      "cross_source": {
+        "beta1": "HondaS2000",
+        "car_parking": "catalog 47 / Honda S2000",
+        "match": "same model family; GT variant requires trim/body compatibility review"
+      }
+    }
+  ],
+  "validated_batch_totals": {
+    "vehicle_families": 7,
+    "files": 209,
+    "uncompressed_bytes": 68075629,
+    "all_inner_zip_crc_checks": "PASS"
+  },
+  "negative_identity_evidence": {
+    "entire_zip_name_search": {
+      "mark_x": 0,
+      "markx": 0,
+      "mark x": 0,
+      "grx120": 0,
+      "grx130": 0,
+      "toyota_mark": 0,
+      "chaser": 0,
+      "altezza": 0,
+      "supra": 0,
+      "silvia_s13": 0,
+      "evo9": 0,
+      "evolution_ix": 0
+    },
+    "ae86": "one driver animation path exists, but no RR3 vehicle directory named AE86 was found",
+    "mark_x_status": "no explicit Toyota Mark X / GRX120 / GRX130 identity in any of the 46,814 ZIP paths; do not substitute Mark II, Chaser, Crown, Lexus or another Toyota"
+  },
+  "policy": {
+    "private_vehicle_media_public_git": false,
+    "git_contains": "decoder plus metadata/provenance only",
+    "component_rule": "RR3 recovery is source evidence, not automatic promotion; generation/trim compatibility must be explicit",
+    "crown007": "current quality reference and deprioritized, not complete",
+    "runtime_integration": "deferred to main Android optimization lane"
+  }
+}
