@@ -100,7 +100,7 @@ static func normalized_owned_ids(value: Variant, selected_id: String) -> Array[S
     return result
 
 func is_vehicle_owned(vehicle_id: String) -> bool:
-    return _owned_ids.has(vehicle_id)
+    return Catalog.production_ids().has(vehicle_id) if SANDBOX_MODE else _owned_ids.has(vehicle_id)
 
 func wallet_jmd() -> int:
     var runtime := get_node_or_null("/root/JobRuntime")
@@ -547,8 +547,11 @@ func _refresh_preview() -> void:
     var preview_id := _preview_id()
     var data := Catalog.profile(preview_id)
     var top_kmh := float(data.max_forward_mps) * 3.6
-    var ownership_text := "OWNED" if is_vehicle_owned(preview_id) else "PRICE: J$%d" % vehicle_price_jmd(preview_id)
-    _info.text = "%s\n%s • %s\n%s • WALLET J$%d\n\nMass: %.0f kg\nWheelbase: %.2f m\nTrack: %.2f m\nTop speed: %.0f km/h" % [
+    var ownership_text := "SANDBOX • AVAILABLE" if SANDBOX_MODE else ("OWNED" if is_vehicle_owned(preview_id) else "PRICE: J$%d" % vehicle_price_jmd(preview_id))
+    _info.text = ("%s\n%s • %s\n%s\n\nMass: %.0f kg\nWheelbase: %.2f m\nTrack: %.2f m\nTop speed: %.0f km/h" if SANDBOX_MODE else "%s\n%s • %s\n%s • WALLET J$%d\n\nMass: %.0f kg\nWheelbase: %.2f m\nTrack: %.2f m\nTop speed: %.0f km/h") % ([
+        str(data.display_name), str(data.manufacturer), str(data.drivetrain), ownership_text,
+        float(data.mass_kg), float(data.wheelbase_m), float(data.track_width_m), top_kmh
+    ] if SANDBOX_MODE else [
         str(data.display_name), str(data.manufacturer), str(data.drivetrain), ownership_text, wallet_jmd(),
         float(data.mass_kg), float(data.wheelbase_m), float(data.track_width_m), top_kmh
     ]
@@ -584,7 +587,7 @@ func _refresh_action_state() -> void:
     if is_vehicle_owned(preview_id):
         _apply_button.disabled = false
         _apply_button.text = "USE THIS VEHICLE"
-        _status.text = "CURRENT VEHICLE" if preview_id == _selected_id else "OWNED • READY TO SWITCH"
+        _status.text = "CURRENT VEHICLE" if preview_id == _selected_id else ("SANDBOX • READY TO SWITCH" if SANDBOX_MODE else "OWNED • READY TO SWITCH")
         return
     var price := vehicle_price_jmd(preview_id)
     var balance := wallet_jmd()
