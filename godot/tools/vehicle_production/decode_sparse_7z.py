@@ -3,7 +3,8 @@
 
 Supports the subset used by recovered Yardman sources: COPY, LZMA and LZMA2
 single-coder folders, encoded headers, file-name tables, and one-substream folders.
-This lets recovery inspect sparse logical archives without py7zr or 7z.
+Large members are decoded incrementally so RR3's multi-gigabyte solid stream does
+not need to be resident in memory.
 """
 from __future__ import annotations
 
@@ -15,6 +16,8 @@ K_END=0x00; K_HEADER=0x01; K_ARCHIVE_PROPERTIES=0x02; K_ADDITIONAL_STREAMS=0x03;
 K_PACK_INFO=0x06; K_UNPACK_INFO=0x07; K_SUBSTREAMS_INFO=0x08; K_SIZE=0x09; K_CRC=0x0A; K_FOLDER=0x0B; K_CODERS_UNPACK_SIZE=0x0C; K_NUM_UNPACK_STREAM=0x0D
 K_EMPTY_STREAM=0x0E; K_NAME=0x11; K_ENCODED_HEADER=0x17
 SIG=b"7z\xbc\xaf'\x1c"
+STREAM_THRESHOLD=64*1024*1024
+DEFAULT_CHUNK=8*1024*1024
 
 class Reader:
     def __init__(self,data:bytes): self.f=io.BytesIO(data)
@@ -106,16 +109,48 @@ def lzma2_dict(prop:int):
     if prop==40: return 0xffffffff
     return (2 | (prop & 1)) << (prop//2 + 11)
 
-def decode_folder(data:bytes,f:dict[str,Any],expected:int):
+def coder_filter(f:dict[str,Any]):
     if len(f['coders'])!=1 or f['total_in']!=1 or f['total_out']!=1: raise NotImplementedError('multi-coder folder')
     c=f['coders'][0]; method=c['method']; props=c['props']
-    if method==b'\x21': filt={'id':lzma.FILTER_LZMA2,'dict_size':lzma2_dict(props[0])}
-    elif method==b'\x03\x01\x01':
+    if method==b'\x21': return method,{'id':lzma.FILTER_LZMA2,'dict_size':lzma2_dict(props[0])}
+    if method==b'\x03\x01\x01':
         p=props[0]; lc=p%9; rem=p//9; lp=rem%5; pb=rem//5
-        filt={'id':lzma.FILTER_LZMA1,'dict_size':struct.unpack('<I',props[1:5])[0],'lc':lc,'lp':lp,'pb':pb}
-    elif method==b'\x00': return data[:expected]
-    else: raise NotImplementedError(('coder',method.hex(),props.hex()))
+        return method,{'id':lzma.FILTER_LZMA1,'dict_size':struct.unpack('<I',props[1:5])[0],'lc':lc,'lp':lp,'pb':pb}
+    if method==b'\x00': return method,None
+    raise NotImplementedError(('coder',method.hex(),props.hex()))
+
+def decode_folder(data:bytes,f:dict[str,Any],expected:int):
+    method,filt=coder_filter(f)
+    if method==b'\x00': return data[:expected]
     return lzma.LZMADecompressor(format=lzma.FORMAT_RAW,filters=[filt]).decompress(data,max_length=expected if expected else -1)
+
+def stream_decode(src,offset:int,packed_size:int,f:dict[str,Any],expected:int,dest:Path,chunk_size:int=DEFAULT_CHUNK,expected_crc:int|None=None):
+    method,filt=coder_filter(f); dest.parent.mkdir(parents=True,exist_ok=True)
+    remaining=packed_size; written=0; crc=0
+    dec=None if method==b'\x00' else lzma.LZMADecompressor(format=lzma.FORMAT_RAW,filters=[filt])
+    src.seek(offset)
+    with dest.open('wb') as out:
+        while remaining:
+            block=src.read(min(chunk_size,remaining))
+            if not block: raise EOFError(('packed stream truncated',remaining))
+            remaining-=len(block)
+            raw=block if dec is None else dec.decompress(block)
+            if raw:
+                out.write(raw); written+=len(raw); crc=zlib.crc32(raw,crc)
+            if written>expected: raise ValueError(('decoded-size overflow',expected,written))
+        if dec is not None:
+            while not dec.eof and not dec.needs_input:
+                raw=dec.decompress(b'')
+                if not raw: break
+                out.write(raw); written+=len(raw); crc=zlib.crc32(raw,crc)
+    crc &= 0xffffffff
+    if written!=expected:
+        dest.unlink(missing_ok=True); raise ValueError(('decoded-size mismatch',expected,written))
+    if dec is not None and not dec.eof:
+        dest.unlink(missing_ok=True); raise ValueError('compressed stream ended before LZMA end marker')
+    if expected_crc is not None and crc!=expected_crc:
+        dest.unlink(missing_ok=True); raise ValueError(('folder CRC mismatch',hex(expected_crc),hex(crc)))
+    return {'unpacked_size':written,'crc32':f'{crc:08x}','chunk_size':chunk_size}
 
 def read_signature(path:Path):
     with path.open('rb') as f: h=f.read(32)
@@ -189,23 +224,30 @@ def inspect(path:Path):
         result['streams']={'pack_pos':main['pack_pos'],'pack_count':len(main['pack_sizes']),'folder_count':len(main['folders']),'pack_sizes':main['pack_sizes'],'unpack_sizes':[x[-1] if x else 0 for x in main['unpack_sizes']],'pack_offsets':pack_offsets(main),'methods':[f['coders'][0]['method'].hex() if len(f['coders'])==1 else 'complex' for f in main['folders']]}
     return result
 
-def extract_file(path:Path,index:int,dest:Path):
+def extract_file(path:Path,index:int,dest:Path,chunk_size:int=DEFAULT_CHUNK):
     header,_,_=decoded_header(path); parsed=parse_files_header(header); main=parsed['main']
     mapping=file_stream_map(parsed); stream=mapping[index]
     if stream is None: raise IsADirectoryError(parsed['names'][index])
     if main['num_substreams'] and main['num_substreams'][stream]!=1: raise NotImplementedError('multiple substreams per folder')
     offsets=pack_offsets(main); psize=main['pack_sizes'][stream]; expected=main['unpack_sizes'][stream][-1]
-    with path.open('rb') as f: f.seek(offsets[stream]); packed=f.read(psize)
-    raw=decode_folder(packed,main['folders'][stream],expected)
-    if len(raw)!=expected: raise ValueError(('decoded-size mismatch',expected,len(raw)))
-    dest.parent.mkdir(parents=True,exist_ok=True); dest.write_bytes(raw)
-    return {'file_index':index,'file_name':parsed['names'][index],'stream':stream,'pack_offset':offsets[stream],'pack_size':psize,'unpacked_size':expected,'output':str(dest)}
+    folder_crc=main['folder_crcs'][stream] if stream<len(main['folder_crcs']) else None
+    if psize>=STREAM_THRESHOLD or expected>=STREAM_THRESHOLD:
+        with path.open('rb') as f: stats=stream_decode(f,offsets[stream],psize,main['folders'][stream],expected,dest,chunk_size,folder_crc)
+        mode='streaming'
+    else:
+        with path.open('rb') as f: f.seek(offsets[stream]); packed=f.read(psize)
+        raw=decode_folder(packed,main['folders'][stream],expected)
+        if len(raw)!=expected: raise ValueError(('decoded-size mismatch',expected,len(raw)))
+        if folder_crc is not None and (zlib.crc32(raw)&0xffffffff)!=folder_crc: raise ValueError('folder CRC mismatch')
+        dest.parent.mkdir(parents=True,exist_ok=True); dest.write_bytes(raw)
+        stats={'unpacked_size':len(raw),'crc32':f'{zlib.crc32(raw)&0xffffffff:08x}'}; mode='memory'
+    return {'file_index':index,'file_name':parsed['names'][index],'stream':stream,'pack_offset':offsets[stream],'pack_size':psize,'unpacked_size':expected,'output':str(dest),'mode':mode,**stats}
 
 def main():
     parser=argparse.ArgumentParser(); parser.add_argument('archive',type=Path)
     sub=parser.add_subparsers(dest='command',required=True)
     ins=sub.add_parser('inspect'); ins.add_argument('--output',type=Path)
-    ext=sub.add_parser('extract'); group=ext.add_mutually_exclusive_group(required=True); group.add_argument('--index',type=int); group.add_argument('--name'); ext.add_argument('--output',type=Path,required=True)
+    ext=sub.add_parser('extract'); group=ext.add_mutually_exclusive_group(required=True); group.add_argument('--index',type=int); group.add_argument('--name'); ext.add_argument('--output',type=Path,required=True); ext.add_argument('--chunk-mib',type=int,default=8)
     args=parser.parse_args()
     if args.command=='inspect':
         result=inspect(args.archive); text=json.dumps(result,indent=2)+"\n"
@@ -215,6 +257,7 @@ def main():
     if args.name is not None:
         try: idx=parsed['names'].index(args.name)
         except ValueError: raise SystemExit(f'archive member not found: {args.name}')
-    print(json.dumps(extract_file(args.archive,idx,args.output),indent=2)); return 0
+    if args.chunk_mib<1: raise SystemExit('--chunk-mib must be >= 1')
+    print(json.dumps(extract_file(args.archive,idx,args.output,args.chunk_mib*1024*1024),indent=2)); return 0
 
 if __name__=='__main__': raise SystemExit(main())
