@@ -1,0 +1,39 @@
+{
+  "format_version": 1,
+  "checkpoint": "vehicle-source-use-policy-001",
+  "owner_instruction_date": "2026-10-16",
+  "scope": "Yardman vehicle and reusable asset production",
+  "authorization_basis": "owner-provided project source material and owner-provided procedural sources",
+  "allowed_from_project_sources": [
+    "vehicle exterior geometry",
+    "vehicle interior geometry",
+    "wheels tires and brakes",
+    "glass lamps trim and underbody components",
+    "textures materials UV evidence and shaders",
+    "vehicle rigs animations and attachment points",
+    "engine exhaust intake transmission turbo tire road wind impact and mechanical audio",
+    "vehicle VFX and reusable technical vehicle components",
+    "garage and vehicle-presentation components when they do not import a source-game world/map",
+    "owner-provided procedural generation scripts and geometry scaffolds"
+  ],
+  "excluded_from_ingestion": [
+    "source-game maps",
+    "source-game terrain/world layouts",
+    "source-game road networks as replacement geography",
+    "source-game settlement/world geography"
+  ],
+  "outside_asset_rule": "Do not introduce third-party assets from outside the owner-provided Yardman source pool unless the owner explicitly approves that source.",
+  "brand_policy": {
+    "brand_filter": "none",
+    "porsche": "active when present in owner-authorized project sources",
+    "tesla": "active when present in owner-authorized project sources"
+  },
+  "quality_policy": {
+    "quantity": "no artificial fleet cap",
+    "lod0": "preserve highest justified close-range fidelity",
+    "optimization": "use LOD, streaming, residency, pooling and AI eligibility controls rather than degrading player-facing hero assets",
+    "motorsport_variants": "may ship as exact player-selectable vehicles; keep out of ambient/AI traffic when marked player-only"
+  },
+  "provenance": "Every promoted asset must retain exact source/procedural provenance and must pass the normal identity, generation/trim, visual, physics, audio and Android gates.",
+  "private_media_public_git": false
+}
