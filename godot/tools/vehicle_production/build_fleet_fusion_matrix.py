@@ -2,9 +2,9 @@
 """Build the Yardman whole-fleet Beta1+Beta2 source-fusion matrix.
 
 Identity matches, source inventory completion, rights state, and per-identity
-search completion are deliberately separate. Historical policy decisions can be
-superseded by a later owner-authorized rights overlay without rewriting the
-underlying source evidence.
+search completion are deliberately separate. Brand eligibility is source-scoped:
+assets already present in the owner-authorized Yardman project source pool may be
+evaluated normally. Source-game maps/world geography remain excluded.
 """
 from __future__ import annotations
 
@@ -26,11 +26,11 @@ def normalized_identity(value: Any) -> str:
     return text
 
 
-def rights_state(identity: str, porsche_authorized: bool = False) -> str:
+def rights_state(identity: str, porsche_authorized: bool = True) -> str:
+    """Return current production state; legacy flag is intentionally ignored."""
+    del porsche_authorized
     if CROWN_RE.search(identity):
         return "deprioritized_reference_crown007"
-    if PORSCHE_RE.search(identity) and not porsche_authorized:
-        return "excluded_porsche"
     return "active_vehicle"
 
 
@@ -89,8 +89,9 @@ def collect_car_parking(
     seed: dict[str, Any] | None = None,
     evidence: dict[str, Any] | None = None,
     rights_refresh: dict[str, Any] | None = None,
-    porsche_authorized: bool = False,
+    porsche_authorized: bool = True,
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
+    del porsche_authorized
     resolved: dict[str, list[dict[str, Any]]] = defaultdict(list)
     manifest_vehicles = (
         manifest.get("sources", {})
@@ -116,6 +117,7 @@ def collect_car_parking(
                 "catalog_id": catalog_id,
                 "bundle_path": vehicle.get("bundle_path"),
                 "identity_status": vehicle.get("identity_status"),
+                "rights_status": rights_state(identity),
                 "evidence": "full_fleet_migration_manifest",
             }
         )
@@ -132,6 +134,7 @@ def collect_car_parking(
                 "bundle_path": vehicle.get("bundle_path")
                 or manifest_by_id.get(catalog_id, {}).get("bundle_path"),
                 "identity_status": vehicle.get("identity_status"),
+                "rights_status": rights_state(identity),
                 "evidence": vehicle.get("evidence", "carparking_identity_seed"),
             }
             if not any(
@@ -160,7 +163,7 @@ def collect_car_parking(
                         "bundle_path": vehicle.get("bundle_path")
                         or manifest_by_id.get(catalog_id, {}).get("bundle_path"),
                         "identity_status": status,
-                        "rights_status": rights_state(identity, porsche_authorized),
+                        "rights_status": rights_state(identity),
                         "evidence": "exact_carparking_unityfs_bundle_decode",
                     }
                 )
@@ -174,9 +177,7 @@ def collect_car_parking(
             or evidence_counts.get("unityfs_parse_failures", 0)
             or 0
         )
-        parse_complete = (
-            current_bundles == len(manifest_by_id) and parse_errors == 0
-        )
+        parse_complete = current_bundles == len(manifest_by_id) and parse_errors == 0
         historical_excluded_porsche = int(
             evidence_counts.get("excluded_porsche", 0) or 0
         )
@@ -201,10 +202,7 @@ def collect_car_parking(
                     "bundle_path": vehicle.get("bundle_path")
                     or manifest_by_id.get(catalog_id, {}).get("bundle_path"),
                     "identity_status": vehicle.get("identity_status"),
-                    "rights_status": vehicle.get(
-                        "rights_status",
-                        rights_state(identity, porsche_authorized),
-                    ),
+                    "rights_status": rights_state(identity),
                     "generation_status": vehicle.get("generation_status"),
                     "decision": vehicle.get("decision"),
                     "exact_bundle_model_directories": vehicle.get(
@@ -212,7 +210,7 @@ def collect_car_parking(
                     ),
                     "audio_evidence": vehicle.get("audio_evidence", []),
                     "evidence": rights_refresh.get(
-                        "checkpoint", "carparking_porsche_rights_refresh"
+                        "checkpoint", "carparking_historical_rights_refresh"
                     ),
                 }
             )
@@ -221,14 +219,7 @@ def collect_car_parking(
                 refreshed_porsche_ids.add(catalog_id)
 
     porsche_refresh_complete = bool(
-        porsche_authorized
-        and expected_refresh_ids
-        and expected_refresh_ids <= refreshed_porsche_ids
-    )
-    porsche_refresh_required = bool(
-        porsche_authorized
-        and historical_excluded_porsche
-        and not porsche_refresh_complete
+        expected_refresh_ids and expected_refresh_ids <= refreshed_porsche_ids
     )
 
     return dict(resolved), {
@@ -239,11 +230,12 @@ def collect_car_parking(
             evidence_counts.get("current_car_bundles", 0) or 0
         ),
         "historical_excluded_porsche": historical_excluded_porsche,
-        "porsche_authorized": porsche_authorized,
+        "porsche_authorized": True,
         "porsche_refresh_loaded": bool(rights_refresh),
         "porsche_refreshed_catalog_ids": sorted(refreshed_porsche_ids),
         "porsche_refresh_complete": porsche_refresh_complete,
-        "porsche_refresh_required": porsche_refresh_required,
+        "porsche_refresh_required": False,
+        "current_brand_filter": "none",
         "conflict_review_required": int(
             evidence_counts.get("conflict_review_required", 0) or 0
         ),
@@ -322,15 +314,16 @@ def build(
     carparking_evidence: dict[str, Any] | None = None,
     carparking_rights_refresh: dict[str, Any] | None = None,
     rr3_crossmatch: dict[str, Any] | None = None,
-    porsche_authorized: bool = False,
+    porsche_authorized: bool = True,
 ) -> dict[str, Any]:
+    del porsche_authorized
+
     beta1 = collect_beta1(manifest)
     car_parking, cp_summary = collect_car_parking(
         manifest,
         carparking_seed,
         carparking_evidence,
         carparking_rights_refresh,
-        porsche_authorized,
     )
     rr3_manifest, rr3_manifest_summary = collect_rr3_manifest(manifest)
     rr3_match, rr3_searched, rr3_match_summary = collect_rr3_crossmatch(
@@ -350,15 +343,8 @@ def build(
     active, deprioritized, excluded = [], [], []
 
     for identity in identities:
-        state = rights_state(identity, porsche_authorized)
+        state = rights_state(identity)
         cp_search_complete = cp_summary["parse_complete"]
-        if (
-            PORSCHE_RE.search(identity)
-            and porsche_authorized
-            and cp_summary["porsche_refresh_required"]
-        ):
-            cp_search_complete = False
-
         rr3_search_complete = bool(
             identity in rr3_searched
             or rr3_manifest_summary["inventory_complete"]
@@ -380,10 +366,6 @@ def build(
             },
         }
 
-        if state == "excluded_porsche":
-            row["promotion_status"] = "excluded_rights"
-            excluded.append(row)
-            continue
         if state == "deprioritized_reference_crown007":
             row[
                 "promotion_status"
@@ -403,19 +385,22 @@ def build(
         active.append(row)
 
     return {
-        "format_version": 8,
+        "format_version": 9,
         "policy": {
             "scope": "full_fleet_parallel_source_fusion",
+            "source_use_policy": "godot/docs/vehicle_production/source-use-policy-001.json",
+            "brand_filter": "none",
+            "porsche": "active_when_present_in_owner_authorized_project_sources",
+            "tesla": "active_when_present_in_owner_authorized_project_sources",
+            "source_game_maps_world_geography": "excluded",
+            "outside_third_party_assets": "require_explicit_owner_approval",
+            "quantity": "no_artificial_fleet_cap_quality_gate_still_required",
             "crown007": "accepted_current_state_deprioritized_not_complete",
-            "porsche": (
-                "owner_authorized_exact_generation_gate_required"
-                if porsche_authorized
-                else "excluded_until_authorized"
-            ),
             "promotion_rule": (
                 "Search Beta1 and both Beta2 vehicle sources for every active vehicle. "
                 "Track inventory completion separately from per-identity matching. Record "
-                "verified no-match evidence; never fabricate an identity from an unrelated donor."
+                "verified no-match evidence; never fabricate an identity from an unrelated donor. "
+                "Exact identity/generation/trim compatibility remains mandatory for body promotion."
             ),
         },
         "summary": {
@@ -445,7 +430,11 @@ def main() -> int:
     parser.add_argument("--carparking-evidence", type=Path)
     parser.add_argument("--carparking-rights-refresh", type=Path)
     parser.add_argument("--rr3-crossmatch", type=Path)
-    parser.add_argument("--porsche-authorized", action="store_true")
+    parser.add_argument(
+        "--porsche-authorized",
+        action="store_true",
+        help="legacy compatibility flag; current source-use policy has no brand filter",
+    )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
