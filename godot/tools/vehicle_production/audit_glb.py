@@ -83,6 +83,20 @@ def triangle_count(doc: dict[str, Any], primitive: dict[str, Any]) -> int:
     return 0
 
 
+def mesh_metrics(doc: dict[str, Any]) -> list[dict[str, int]]:
+    result: list[dict[str, int]] = []
+    for mesh in doc.get("meshes", []):
+        triangles = 0
+        positions = 0
+        primitives = 0
+        for primitive in mesh.get("primitives", []):
+            primitives += 1
+            triangles += triangle_count(doc, primitive)
+            positions += accessor_count(doc, (primitive.get("attributes") or {}).get("POSITION"))
+        result.append({"triangles": triangles, "position_vertices": positions, "primitives": primitives})
+    return result
+
+
 def collect_metrics(doc: dict[str, Any], path: Path) -> dict[str, Any]:
     meshes = doc.get("meshes", [])
     nodes = doc.get("nodes", [])
@@ -91,23 +105,39 @@ def collect_metrics(doc: dict[str, Any], path: Path) -> dict[str, Any]:
     textures = doc.get("textures", [])
     samplers = doc.get("samplers", [])
 
-    triangles = 0
-    position_vertices = 0
+    unique_triangles = 0
+    unique_position_vertices = 0
     index_bytes = 0
     vertex_bytes = 0
     primitive_count = 0
     used_materials: set[int] = set()
-    for mesh in meshes:
+    per_mesh = mesh_metrics(doc)
+    for mesh_index, mesh in enumerate(meshes):
+        unique_triangles += per_mesh[mesh_index]["triangles"]
+        unique_position_vertices += per_mesh[mesh_index]["position_vertices"]
+        primitive_count += per_mesh[mesh_index]["primitives"]
         for primitive in mesh.get("primitives", []):
-            primitive_count += 1
-            triangles += triangle_count(doc, primitive)
             attrs = primitive.get("attributes") or {}
-            position_vertices += accessor_count(doc, attrs.get("POSITION"))
             index_bytes += accessor_byte_estimate(doc, primitive.get("indices"))
             for accessor_index in attrs.values():
                 vertex_bytes += accessor_byte_estimate(doc, accessor_index)
             if isinstance(primitive.get("material"), int):
                 used_materials.add(int(primitive["material"]))
+
+    scene_triangles = 0
+    scene_position_vertices = 0
+    mesh_instance_count = 0
+    invalid_mesh_refs = 0
+    for node in nodes:
+        mesh_index = node.get("mesh")
+        if not isinstance(mesh_index, int):
+            continue
+        if mesh_index < 0 or mesh_index >= len(per_mesh):
+            invalid_mesh_refs += 1
+            continue
+        mesh_instance_count += 1
+        scene_triangles += per_mesh[mesh_index]["triangles"]
+        scene_position_vertices += per_mesh[mesh_index]["position_vertices"]
 
     node_names = {str(node.get("name", "")) for node in nodes}
     missing_rig = [name for name in REQUIRED_RIG_NODES if name not in node_names]
@@ -118,9 +148,15 @@ def collect_metrics(doc: dict[str, Any], path: Path) -> dict[str, Any]:
         "bytes": path.stat().st_size,
         "nodes": len(nodes),
         "meshes": len(meshes),
+        "mesh_instances": mesh_instance_count,
+        "invalid_mesh_references": invalid_mesh_refs,
         "mesh_primitives": primitive_count,
-        "triangles": triangles,
-        "position_vertices_across_primitives": position_vertices,
+        "triangles": scene_triangles,
+        "scene_instance_triangles": scene_triangles,
+        "unique_mesh_triangles": unique_triangles,
+        "position_vertices_across_primitives": scene_position_vertices,
+        "scene_instance_position_vertices": scene_position_vertices,
+        "unique_mesh_position_vertices": unique_position_vertices,
         "materials": len(materials),
         "materials_referenced": len(used_materials),
         "material_names": material_names,
@@ -144,9 +180,10 @@ def policy_result(metrics: dict[str, Any], args: argparse.Namespace) -> dict[str
     def check(name: str, ok: bool, actual: Any, limit: Any) -> None:
         checks.append({"name": name, "pass": bool(ok), "actual": actual, "limit": limit})
 
-    check("triangle_cap", metrics["triangles"] <= args.max_triangles, metrics["triangles"], args.max_triangles)
+    check("triangle_cap", metrics["scene_instance_triangles"] <= args.max_triangles, metrics["scene_instance_triangles"], args.max_triangles)
     check("material_cap", metrics["materials_referenced"] <= args.max_materials, metrics["materials_referenced"], args.max_materials)
     check("texture_cap", metrics["textures"] <= args.max_textures, metrics["textures"], args.max_textures)
+    check("mesh_references_valid", metrics["invalid_mesh_references"] == 0, metrics["invalid_mesh_references"], 0)
     if args.require_rig:
         check("yardman_rig_contract", metrics["rig_contract"]["pass"], metrics["rig_contract"]["missing_nodes"], "none missing")
     return {"pass": all(c["pass"] for c in checks), "checks": checks}
