@@ -1,5 +1,5 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "lane": "codex/vehicle-production-001",
   "base_owner_build_source": "71199ca05ca16084637872927e7b27973a72da0a",
   "owner_feedback_date": "2026-10-16",
@@ -8,6 +8,27 @@
     "production_runtime": "godot/",
     "android_first_class": true,
     "private_media_not_committed": true,
+    "fleet_scope": "all recoverable vehicles, not one-at-a-time hero work",
+    "source_fusion": {
+      "required_for_every_active_vehicle": true,
+      "rule": "Search and exploit both Beta1 and Beta2 for every active vehicle. Choose the strongest legally usable body, interior, wheels, tyres, lights, glass, materials, textures, rigging, damage parts and LOD source from either library; combine complementary components when provenance and fit are valid. Do not stop after finding one usable source in one beta.",
+      "beta1_roles": [
+        "CarX Drift vehicle bodies/interiors/parts/materials",
+        "Mechanic vehicle/part candidates",
+        "CarX Highway and Gangstar vehicle candidates where recovered and verified"
+      ],
+      "beta2_roles": [
+        "Car Parking Multiplayer vehicle bodies/parts/interiors/wheels/materials",
+        "Real Racing 3 vehicle/LOD/material/audio reference and recoverable source where authorized",
+        "other Beta2 vehicle-support assets when provenance is verified"
+      ],
+      "promotion_gate": "No active vehicle is production-complete until both Beta1 and Beta2 have been searched for that vehicle/component family and the selected cross-library source set is recorded."
+    },
+    "crown007": {
+      "status": "done_frozen_owner_accepted",
+      "active_work": false,
+      "rule": "Do not spend vehicle-lane time rebuilding, re-auditing or polishing Crown007 unless the owner explicitly reopens it."
+    },
     "porsche": {
       "authorized": false,
       "rule": "Do not recover, reproduce, badge, brand, or increase Porsche/992 fidelity. Keep Porsche source media excluded unless owner rights status changes."
@@ -31,93 +52,56 @@
       "id": "toyota_crown",
       "display_name": "Toyota Crown",
       "candidate": "Crown007",
-      "source": "Car Parking Multiplayer 4.9.11 / catalog 218 / source-authored b218 stock-body family",
-      "rights_status": "owner-authorized Toyota source; private media",
-      "status": "owner_visual_accepted_private_test",
+      "status": "done_frozen_owner_accepted",
+      "active_work": false,
       "owner_visual_acceptance_date": "2026-10-16",
-      "lods": {
-        "LOD0": {
-          "state": "available",
-          "body_triangles": 81559,
-          "glb_triangles": 82327,
-          "body_vertices": 74501,
-          "glb_bytes": 3926676,
-          "materials": 10,
-          "embedded_images": 2,
-          "rig": "BodyShell plus four independent wheel pivots and four Spin nodes"
-        },
-        "LOD1": {
-          "state": "source_family_recovered_not_promoted",
-          "triangles": 8364,
-          "note": "Requires production scene assembly, lamp/material validation and transition evidence before integration."
-        },
-        "LOD2": {
-          "state": "rejected_for_normal_visible_use",
-          "triangles": 3396,
-          "note": "Recovered source L2 is a shadow/proxy representation; do not use as normal visible medium-distance body. Build a source-supported visual LOD2."
-        },
-        "LOD3": {
-          "state": "missing",
-          "target_triangles_max": 4000
-        }
-      },
-      "textures": {
-        "known_embedded_image_count": 2,
-        "exact_source_external_material_dependencies": "still requires closure"
-      },
-      "wheel_status": "production rig works; exact source stock rim147 and tyre dependency remain unresolved",
-      "damage_readiness": "not accepted; source moving-panel animation retarget remains open",
-      "android_suitability": "conditional: LOD0 is suitable only for close/player/showroom range; complete LOD2/LOD3 and unload policy before broad traffic use",
-      "evidence": [
-        "Yardman-Crown007-Candidate-Pack-014.json",
-        "Yardman-Crown007-Independent-Verification-015.json",
-        "Yardman-Crown-Rim147-Dependency-Audit-016.json",
-        "owner build 38841581231"
-      ]
+      "rights_status": "owner-authorized Toyota source; private media",
+      "note": "Reference-quality baseline only. No further lane time unless owner reopens Crown."
     },
     {
       "id": "toyota_chaser_v_candidate",
       "display_name": "Toyota Chaser V",
       "asset": "road_car.glb",
-      "source": "existing recovered private reference pack; exact upstream package provenance must be carried forward from the recovery ledger before promotion",
-      "rights_status": "owner reports Toyota/other intended brands authorized; Porsche exception does not apply",
-      "status": "production_candidate_do_not_relabel_as_mark_x",
-      "lods": {
-        "LOD0": {
-          "state": "existing_recovered_mesh",
+      "status": "active_full_source_fusion",
+      "rights_status": "owner-authorized non-Porsche vehicle",
+      "beta1": {
+        "source": "CarX Drift / ToyotaChaserV",
+        "known": {
           "triangles": 32067,
           "vertices": 27886,
           "materials": 17,
           "bounds_m": [1.957, 1.344, 4.831],
           "wheelbase_m": 2.673
         },
-        "LOD1": {"state": "missing", "target_triangles_max": 24000},
-        "LOD2": {"state": "missing", "target_triangles_max": 10000},
-        "LOD3": {"state": "missing", "target_triangles_max": 3000}
+        "material_recovery": "PaintStitches alpha/depth/normal-map behavior recovered; broader close-view cleanup remains useful"
       },
-      "textures": {"state": "audit_required"},
-      "wheel_status": "runtime accepts the existing reference-sedan rig when present; dedicated candidate rig audit required before promotion",
-      "damage_readiness": "not audited",
-      "android_suitability": "promising geometry scale for LOD0 but material count 17 exceeds the lane default cap of 16; consolidate before production promotion",
-      "next_work": [
-        "run dependency-free GLB audit on private road_car.glb",
-        "preserve exact Toyota Chaser V identity",
-        "consolidate materials without flattening glass/lamp/paint roles",
-        "derive intentional LOD1/LOD2/LOD3 assets and validate transitions",
-        "render independently in Compatibility and Vulkan Mobile before integration"
-      ]
+      "beta2": {
+        "status": "mandatory_search_and_component_match",
+        "sources": ["Car Parking Multiplayer", "Real Racing 3"],
+        "targets": ["matching body alternative", "interior", "wheel/tyre set", "glass", "lamps", "paint/material stack", "LOD family", "damage/body parts"]
+      },
+      "rule": "Do not relabel as Mark X. Build the final Chaser from the best compatible Beta1+Beta2 component set, then author missing LODs."
     },
     {
       "id": "toyota_mark_x",
       "display_name": "Toyota Mark X",
-      "status": "unresolved_no_verified_source_hero",
+      "status": "active_identity_and_source_fusion",
       "rights_status": "owner-authorized Toyota source",
-      "rule": "Do not substitute Toyota Chaser V or Toyota Mark 2 and do not cosmetically relabel another vehicle as Mark X."
+      "beta1": {
+        "status": "searched_no_verified_MarkX_yet",
+        "warning": "Toyota Mark 2 and Toyota Chaser V are distinct vehicles and are not Mark X substitutes."
+      },
+      "beta2": {
+        "status": "mandatory_catalog_identity_search",
+        "sources": ["Car Parking Multiplayer", "Real Racing 3"]
+      },
+      "rule": "Do not promote until exact Mark X identity is verified; once found, still search the other beta for complementary parts/materials/LODs."
     },
     {
       "id": "port_royal_992",
       "display_name": "Port Royal 992",
       "status": "frozen_fictional_no_porsche_source_work",
+      "active_work": false,
       "rights_status": "Porsche excluded",
       "rule": "No Porsche source asset, branding, badge, body-faithful reproduction, or fidelity escalation in this lane."
     }
