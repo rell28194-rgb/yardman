@@ -62,6 +62,30 @@ static func _read_payload(root: String, suffix: String, expected_mask_size: int)
 static func read_tile(root: String, tile: Vector2i, terrain_resolution: int = 65) -> Dictionary:
     return _read_payload(root, "%d_%d" % [tile.x, tile.y], (terrain_resolution - 1) * (terrain_resolution - 1))
 
+static func read_overview_land_only(root: String, width: int, depth: int) -> Dictionary:
+    # The far horizon needs the registered land mask/coastal triangles, but not
+    # the full-resolution national ocean triangle soup or per-vertex shore
+    # distance field. Near streamed tiles retain the exact sourced water.
+    var mask_path := root + "/overview_mask.bin"
+    if not FileAccess.file_exists(mask_path):
+        return {"error": "Missing overview coastline mask"}
+    var mask := FileAccess.get_file_as_bytes(mask_path)
+    if mask.size() != (width - 1) * (depth - 1):
+        return {"error": "Invalid overview coastline mask size"}
+    for value in mask:
+        if value > 2:
+            return {"error": "Unknown overview coastline cell classification"}
+    var land := _read_geometry(root + "/overview_land.bin", 3)
+    if land.has("error"):
+        return land
+    return {
+        "mask": mask,
+        "land": land.vertices,
+        "water": PackedVector3Array(),
+        "shore_distance": PackedFloat32Array(),
+        "beach": PackedVector3Array(),
+    }
+
 static func read_overview(root: String, width: int, depth: int) -> Dictionary:
     var mask_path := root + "/overview_mask.bin"
     if not FileAccess.file_exists(mask_path):
