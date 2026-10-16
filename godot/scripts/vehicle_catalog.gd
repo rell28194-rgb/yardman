@@ -54,7 +54,7 @@ const VEHICLES := {
         "shift_time_s": 0.31, "shift_torque_factor": 0.38, "kickdown_throttle": 0.78, "launch_free_rev_fraction": 0.30, "rpm_response": 9.4,
         "gear_speed_mps": [8.5, 17.0, 28.0, 41.0, 54.0], "rpm_per_mps": [380.0, 232.0, 168.0, 126.0, 96.0, 78.0],
         "idle_rpm": 720.0, "redline_rpm": 6600.0, "throttle_rpm_boost": 470.0,
-        "paint_rgb": [0.055, 0.070, 0.090], "audio_profile": "crown_v6", "camera_distance_m": 8.1,
+        "paint_rgb": [0.055, 0.070, 0.090], "audio_profile": "crown_v6", "camera_distance_m": 7.2,
     },
     "toyota_mark_x": {
         "id": "toyota_mark_x", "manufacturer": "Toyota", "display_name": "Toyota Mark X", "drivetrain": "RWD", "hero_scene": "",
