@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Build a whole-fleet Yardman Beta1+Beta2 source-fusion matrix.
 
-This planner is deliberately fleet-wide. It does not promote a vehicle merely
-because one usable source exists. Every active identity remains blocked until
-both Beta1 and Beta2 source families have been searched and the chosen component
-set is recorded. Crown007 is accepted in its current state and deprioritized,
-not permanently complete. Porsche identities are excluded.
+The planner is fleet-wide. A vehicle is not promoted merely because one usable
+source exists. Recovered Car Parking identity seeds can be overlaid onto the
+older migration manifest as decoding advances. Crown007 is accepted in its
+current state and deprioritized, not permanently complete. Porsche is excluded.
 """
 from __future__ import annotations
 
@@ -64,21 +63,42 @@ def collect_beta1(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return dict(result)
 
 
-def collect_car_parking(manifest: dict[str, Any]) -> tuple[dict[str, list[dict[str, Any]]], int]:
+def collect_car_parking(
+    manifest: dict[str, Any], seed: dict[str, Any] | None = None
+) -> tuple[dict[str, list[dict[str, Any]]], int]:
     resolved: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    unresolved = 0
+    unresolved_ids: set[int] = set()
     vehicles = manifest.get("sources", {}).get("car_parking_multiplayer", {}).get("vehicles", [])
     for vehicle in vehicles:
+        catalog_id = vehicle.get("catalog_id")
         identity = normalized_identity(vehicle.get("identity"))
         if not identity:
-            unresolved += 1
+            if isinstance(catalog_id, int):
+                unresolved_ids.add(catalog_id)
             continue
         resolved[identity].append({
-            "catalog_id": vehicle.get("catalog_id"),
+            "catalog_id": catalog_id,
             "bundle_path": vehicle.get("bundle_path"),
             "identity_status": vehicle.get("identity_status"),
+            "evidence": "full_fleet_migration_manifest",
         })
-    return dict(resolved), unresolved
+
+    if seed:
+        for vehicle in seed.get("exact_identities", []) or []:
+            identity = normalized_identity(vehicle.get("identity"))
+            catalog_id = vehicle.get("catalog_id")
+            if not identity or not isinstance(catalog_id, int):
+                continue
+            unresolved_ids.discard(catalog_id)
+            record = {
+                "catalog_id": catalog_id,
+                "bundle_path": vehicle.get("bundle_path"),
+                "identity_status": vehicle.get("identity_status"),
+                "evidence": vehicle.get("evidence", "carparking_identity_seed"),
+            }
+            if not any(x.get("catalog_id") == catalog_id for x in resolved[identity]):
+                resolved[identity].append(record)
+    return dict(resolved), len(unresolved_ids)
 
 
 def collect_rr3(manifest: dict[str, Any]) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
@@ -99,15 +119,15 @@ def collect_rr3(manifest: dict[str, Any]) -> tuple[dict[str, list[dict[str, Any]
     return dict(resolved), summary
 
 
-def build(manifest: dict[str, Any]) -> dict[str, Any]:
+def build(manifest: dict[str, Any], carparking_seed: dict[str, Any] | None = None) -> dict[str, Any]:
     beta1 = collect_beta1(manifest)
-    car_parking, cp_unresolved = collect_car_parking(manifest)
+    car_parking, cp_unresolved = collect_car_parking(manifest, carparking_seed)
     rr3, rr3_summary = collect_rr3(manifest)
 
     identities = sorted(set(beta1) | set(car_parking) | set(rr3), key=str.casefold)
-    active = []
-    deprioritized = []
-    excluded = []
+    active: list[dict[str, Any]] = []
+    deprioritized: list[dict[str, Any]] = []
+    excluded: list[dict[str, Any]] = []
     for identity in identities:
         state = rights_state(identity)
         row = {
@@ -117,8 +137,8 @@ def build(manifest: dict[str, Any]) -> dict[str, Any]:
             "beta2": {
                 "car_parking": car_parking.get(identity, []),
                 "real_racing_3": rr3.get(identity, []),
-                "car_parking_search_complete_for_identity": bool(car_parking.get(identity)),
-                "real_racing_3_search_complete_for_identity": bool(rr3.get(identity)),
+                "car_parking_identity_resolved": bool(car_parking.get(identity)),
+                "real_racing_3_identity_resolved": bool(rr3.get(identity)),
             },
         }
         if state == "excluded_porsche":
@@ -130,17 +150,12 @@ def build(manifest: dict[str, Any]) -> dict[str, Any]:
             row["remaining_work"] = "opportunistic/shared-fleet improvements allowed; do not block fleet expansion"
             deprioritized.append(row)
             continue
-        beta2_complete = (
-            row["beta2"]["car_parking_search_complete_for_identity"]
-            and row["beta2"]["real_racing_3_search_complete_for_identity"]
-        )
-        row["promotion_status"] = (
-            "component_selection_ready" if beta2_complete else "blocked_until_both_beta2_sources_searched"
-        )
+        beta2_complete = row["beta2"]["car_parking_identity_resolved"] and row["beta2"]["real_racing_3_identity_resolved"]
+        row["promotion_status"] = "component_selection_ready" if beta2_complete else "continue_beta2_decode_and_component_search"
         active.append(row)
 
     return {
-        "format_version": 2,
+        "format_version": 3,
         "policy": {
             "scope": "full_fleet_parallel_source_fusion",
             "crown007": "accepted_current_state_deprioritized_not_complete",
@@ -153,7 +168,8 @@ def build(manifest: dict[str, Any]) -> dict[str, Any]:
             "excluded_identities": len(excluded),
             "beta1_resolved_identities": len(beta1),
             "car_parking_resolved_identities": len(car_parking),
-            "car_parking_unresolved_bundles": cp_unresolved,
+            "car_parking_unresolved_bundle_ids": cp_unresolved,
+            "car_parking_seed_loaded": bool(carparking_seed),
             "real_racing_3": rr3_summary,
         },
         "active": active,
@@ -165,11 +181,13 @@ def build(manifest: dict[str, Any]) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("migration_manifest", type=Path)
+    parser.add_argument("--carparking-seed", type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
     manifest = json.loads(args.migration_manifest.read_text(encoding="utf-8"))
-    result = build(manifest)
+    seed = json.loads(args.carparking_seed.read_text(encoding="utf-8")) if args.carparking_seed else None
+    result = build(manifest, seed)
     text = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
