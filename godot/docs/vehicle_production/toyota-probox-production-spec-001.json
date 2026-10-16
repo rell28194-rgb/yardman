@@ -1,0 +1,132 @@
+{
+  "format_version": 1,
+  "checkpoint": "toyota-probox-production-spec-001",
+  "identity": "Toyota Probox",
+  "make": "Toyota",
+  "rights_status": "active_vehicle",
+  "status": "procedural_dimensional_scaffold_only",
+  "production_ready": false,
+  "source_policy": "godot/docs/vehicle_production/source-use-policy-001.json",
+  "provenance": {
+    "source_scope": "owner_provided_procedural_source",
+    "source_path": "godot/tools/vehicle_production/generate_toyota_probox_blender.py",
+    "git_blob_sha": "9a069c457f578256d113632c2e44fbae27f4dc57",
+    "sha256": null,
+    "note": "SHA-256 is intentionally not fabricated; fill from the exported/generated production artifact before promotion."
+  },
+  "dimensional_baseline": {
+    "length_m": 4.195,
+    "width_m": 1.695,
+    "height_target_m": 1.51,
+    "wheelbase_scaffold_m": 2.5,
+    "wheel_radius_m": 0.31,
+    "wheel_width_m": 0.2,
+    "coordinate_system": {
+      "width": "X",
+      "longitudinal": "Y",
+      "up": "Z",
+      "front": "+Y"
+    }
+  },
+  "signature_features": [
+    "sloped front nose",
+    "vertical rear tailgate",
+    "upright wagon greenhouse",
+    "commercial unpainted bumper baseline",
+    "commercial steel-wheel baseline"
+  ],
+  "availability": {
+    "class": "normal_vehicle_candidate",
+    "player_selectable": true,
+    "ai_driver_eligible": true,
+    "ambient_spawn_eligible": true
+  },
+  "compatibility": {
+    "identity": "exact",
+    "generation_trim": "pending"
+  },
+  "detail": {
+    "exterior_body": {
+      "present": false,
+      "evidence": "procedural scaffold only; final exterior source fusion pending"
+    },
+    "interior_cabin": {
+      "present": false,
+      "evidence": "production cabin/dashboard/seats/steering pending"
+    },
+    "lighting": {
+      "present": false,
+      "evidence": "headlight blocks are placement scaffolds, not production lamps"
+    },
+    "glass": {
+      "present": false,
+      "evidence": "greenhouse block is a proportion scaffold, not production glass geometry"
+    },
+    "wheels": {
+      "present": false,
+      "evidence": "cylinders define wheel anchors only"
+    },
+    "brakes": {
+      "present": false,
+      "evidence": "production brake geometry pending"
+    },
+    "silhouette": {
+      "present": true,
+      "evidence": "owner-provided procedural nose, roofline, tailgate and dimensional anchors"
+    },
+    "proportions": {
+      "present": true,
+      "evidence": "4.195 m length, 1.695 m width, ~1.51 m height target and 2.50 m wheelbase scaffold"
+    },
+    "materials_uv": {
+      "present": false,
+      "evidence": "procedural placeholder materials only; production UV/material set pending"
+    },
+    "underbody": {
+      "present": false,
+      "evidence": "visible production underbody pending"
+    }
+  },
+  "audio": {
+    "status": "source_fusion_pending",
+    "allowed_inputs": [
+      "engine",
+      "exhaust",
+      "intake",
+      "transmission",
+      "tire",
+      "road",
+      "wind",
+      "impact",
+      "mechanical"
+    ]
+  },
+  "lods": {
+    "lod0": {},
+    "lod1": {},
+    "lod2": {},
+    "lod3": {}
+  },
+  "visual_validation": {
+    "close": "pending",
+    "mid": "pending",
+    "far": "pending",
+    "android_device": "pending"
+  },
+  "required_before_production": [
+    "resolve exact Probox generation/trim target",
+    "fuse authorized source exterior detail without breaking dimensional anchors",
+    "build production cabin/interior",
+    "replace placeholder glass and lamps",
+    "replace wheel cylinders with production wheels tires and brakes",
+    "add visible underbody detail where expected",
+    "author coherent UV/material set",
+    "attach source-backed vehicle audio",
+    "rig steering wheels suspension and attachment points",
+    "build LOD0 through LOD3 while preserving hero LOD0",
+    "pass close mid and far visual review",
+    "pass physics/audio/runtime validation on Android"
+  ],
+  "quality_gate": "godot/tools/vehicle_production/vehicle_quality_gate.py",
+  "quality_gate_expected_now": "fail_by_design_until_production_evidence_exists"
+}
