@@ -547,14 +547,17 @@ func _refresh_preview() -> void:
     var preview_id := _preview_id()
     var data := Catalog.profile(preview_id)
     var top_kmh := float(data.max_forward_mps) * 3.6
-    var ownership_text := "SANDBOX • AVAILABLE" if SANDBOX_MODE else ("OWNED" if is_vehicle_owned(preview_id) else "PRICE: J$%d" % vehicle_price_jmd(preview_id))
-    _info.text = ("%s\n%s • %s\n%s\n\nMass: %.0f kg\nWheelbase: %.2f m\nTrack: %.2f m\nTop speed: %.0f km/h" if SANDBOX_MODE else "%s\n%s • %s\n%s • WALLET J$%d\n\nMass: %.0f kg\nWheelbase: %.2f m\nTrack: %.2f m\nTop speed: %.0f km/h") % ([
-        str(data.display_name), str(data.manufacturer), str(data.drivetrain), ownership_text,
-        float(data.mass_kg), float(data.wheelbase_m), float(data.track_width_m), top_kmh
-    ] if SANDBOX_MODE else [
-        str(data.display_name), str(data.manufacturer), str(data.drivetrain), ownership_text, wallet_jmd(),
-        float(data.mass_kg), float(data.wheelbase_m), float(data.track_width_m), top_kmh
-    ]
+    if SANDBOX_MODE:
+        _info.text = "%s\n%s • %s\nSANDBOX • AVAILABLE\n\nMass: %.0f kg\nWheelbase: %.2f m\nTrack: %.2f m\nTop speed: %.0f km/h" % [
+            str(data.display_name), str(data.manufacturer), str(data.drivetrain),
+            float(data.mass_kg), float(data.wheelbase_m), float(data.track_width_m), top_kmh
+        ]
+    else:
+        var ownership_text := "OWNED" if is_vehicle_owned(preview_id) else "PRICE: J$%d" % vehicle_price_jmd(preview_id)
+        _info.text = "%s\n%s • %s\n%s • WALLET J$%d\n\nMass: %.0f kg\nWheelbase: %.2f m\nTrack: %.2f m\nTop speed: %.0f km/h" % [
+            str(data.display_name), str(data.manufacturer), str(data.drivetrain), ownership_text, wallet_jmd(),
+            float(data.mass_kg), float(data.wheelbase_m), float(data.track_width_m), top_kmh
+        ]
     _refresh_action_state()
     # Candidate changes while hidden update the text/selection only. GPU work
     # and model allocation start when the garage is actually opened.
