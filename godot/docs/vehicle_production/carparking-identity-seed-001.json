@@ -1,0 +1,47 @@
+{
+  "format_version": 1,
+  "source": "Car Parking Multiplayer 4.9.11 / code 200485 recovered Beta2 Addressables",
+  "catalog_sha256": "4bacdddca1c11ed8d3ba9697c90c06424e616eb2ca32af09191c5183694963b9",
+  "internal_id_count": 16707,
+  "policy": {
+    "exact_identity": "Exact numeric model directories are resolved identity evidence.",
+    "grouped_identity": "Range directory 251-255 Altezza_Lexus is not per-ID identity proof.",
+    "porsche": "excluded"
+  },
+  "exact_identities": [
+    {"catalog_id":7,"identity":"Lexus LFA","identity_status":"resolved_from_saved_addressables_model_directory","bundle_path":"assets/aa/Android/car7_assets_all_fb745ed621b3331917170bdb3fa58b58.bundle","rights_status":"owner_authorized_non_porsche","evidence":"Yardman-Toyota-MarkX-CarParking-Audit-001.zip"},
+    {"catalog_id":49,"identity":"toyota supra 1998","identity_status":"resolved_from_saved_addressables_model_directory","bundle_path":"assets/aa/Android/car49_assets_all_12bf01d9369a345e5f15db75f9c9fce0.bundle","rights_status":"owner_authorized_non_porsche","evidence":"Yardman-Toyota-MarkX-CarParking-Audit-001.zip"},
+    {"catalog_id":120,"identity":"Toyota Camry","identity_status":"resolved_from_saved_addressables_model_directory","bundle_path":"assets/aa/Android/car120_assets_all_fc3b70f628524862018edd6418738269.bundle","rights_status":"owner_authorized_non_porsche","evidence":"Yardman-Toyota-MarkX-CarParking-Audit-001.zip"},
+    {"catalog_id":134,"identity":"Toyota Mark 2","identity_status":"resolved_from_saved_addressables_model_directory","bundle_path":"assets/aa/Android/car134_assets_all_3bbabea13768c0d696d1f69436e1c0ba.bundle","rights_status":"owner_authorized_non_porsche","evidence":"Yardman-Toyota-MarkX-CarParking-Audit-001.zip"},
+    {"catalog_id":139,"identity":"ford crown","identity_status":"resolved_from_saved_addressables_model_directory","bundle_path":"assets/aa/Android/car139_assets_all_2f9c8d09dd57fca0371ba88a86bf2b1b.bundle","rights_status":"owner_authorized_non_porsche","evidence":"Yardman-Toyota-MarkX-CarParking-Audit-001.zip"},
+    {"catalog_id":150,"identity":"Toyota Supra 2020","identity_status":"resolved_from_saved_addressables_model_directory","bundle_path":"assets/aa/Android/car150_assets_all_bfc5d59dad625f76bc709c9834e1d509.bundle","rights_status":"owner_authorized_non_porsche","evidence":"Yardman-Toyota-MarkX-CarParking-Audit-001.zip"},
+    {"catalog_id":209,"identity":"lexus_IS_F2008","identity_status":"resolved_from_saved_addressables_model_directory","bundle_path":"assets/aa/Android/car209_assets_all_89bac8cc95b0b8846284ea829d51c904.bundle","rights_status":"owner_authorized_non_porsche","evidence":"Yardman-Toyota-MarkX-CarParking-Audit-001.zip"},
+    {"catalog_id":214,"identity":"Toyota chaser 100","identity_status":"resolved_from_saved_addressables_model_directory","bundle_path":"assets/aa/Android/car214_assets_all_bc2ca9dafdb6358ccba238b2a28c0183.bundle","rights_status":"owner_authorized_non_porsche","evidence":"Yardman-Toyota-MarkX-CarParking-Audit-001.zip"},
+    {"catalog_id":218,"identity":"toyota crown 2013","identity_status":"resolved_from_saved_addressables_model_directory","bundle_path":"assets/aa/Android/car218_assets_all_d4ba3b7b9cc2fe8cf36e70e81edaae6c.bundle","rights_status":"owner_authorized_non_porsche","evidence":"Yardman-Toyota-MarkX-CarParking-Audit-001.zip"},
+    {"catalog_id":231,"identity":"toyota land cruiser ls80","identity_status":"resolved_from_saved_addressables_model_directory","bundle_path":"assets/aa/Android/car231_assets_all_de01876d70b59ce1302ec2bec7a24d59.bundle","rights_status":"owner_authorized_non_porsche","evidence":"Yardman-Toyota-MarkX-CarParking-Audit-001.zip"},
+    {"catalog_id":245,"identity":"Toyota Yaris GR 2021","identity_status":"resolved_from_saved_addressables_model_directory","bundle_path":"assets/aa/Android/car245_assets_all_1daa4e6bffaec2b8a39ac6564c6c49b4.bundle","rights_status":"owner_authorized_non_porsche","evidence":"Yardman-Toyota-MarkX-CarParking-Audit-001.zip"},
+    {"catalog_id":259,"identity":"Toyota Fortuner","identity_status":"resolved_from_saved_addressables_model_directory","bundle_path":"assets/aa/Android/car259_assets_all_8e4030e11d89eed75e757ec585a0b127.bundle","rights_status":"owner_authorized_non_porsche","evidence":"Yardman-Toyota-MarkX-CarParking-Audit-001.zip"},
+    {"catalog_id":262,"identity":"Toyota Celica gt4 st205","identity_status":"resolved_from_saved_addressables_model_directory","bundle_path":"assets/aa/Android/car262_assets_all_996fdc435fbcffa9fb7ee50fabfc4833.bundle","rights_status":"owner_authorized_non_porsche","evidence":"Yardman-Toyota-MarkX-CarParking-Audit-001.zip"},
+    {"catalog_id":264,"identity":"Toyota Camry XV80 2025","identity_status":"resolved_from_saved_addressables_model_directory","bundle_path":"assets/aa/Android/car264_assets_all_79cbd9d72ea6edaab2377d6cb58d8f54.bundle","rights_status":"owner_authorized_non_porsche","evidence":"Yardman-Toyota-MarkX-CarParking-Audit-001.zip"}
+  ],
+  "grouped_directories": [
+    {
+      "catalog_range":[251,255],
+      "identity_family":"Altezza_Lexus",
+      "identity_status":"grouped_directory_requires_per_id_resolution",
+      "bundle_paths":{
+        "251":"assets/aa/Android/car251_assets_all_5c514fa6cc523846cb967f8de6debf99.bundle",
+        "252":"assets/aa/Android/car252_assets_all_39d0ac5489605f560e2a6e7c01a5b374.bundle",
+        "253":"assets/aa/Android/car253_assets_all_ca450542955ccaedb3953b505caeaa4b.bundle",
+        "254":"assets/aa/Android/car254_assets_all_2c73a3d78be830eb260d76fd96805da0.bundle",
+        "255":"assets/aa/Android/car255_assets_all_cdce13eec6419639f052e07f6d524cfc.bundle"
+      },
+      "evidence":"Yardman-Toyota-MarkX-CarParking-Audit-001.zip"
+    }
+  ],
+  "mark_x": {
+    "named_identity_found": false,
+    "searched_terms":["Toyota Mark X","Mark X","MarkX","Mark_X","GRX120","GRX130"],
+    "note":"Toyota Mark 2 (134) and Toyota chaser 100 (214) are not Mark X substitutes."
+  }
+}
