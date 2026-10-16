@@ -1,0 +1,31 @@
+{
+  "checkpoint": "multi-source-reconstruction-001",
+  "purpose": "Build high-fidelity target vehicles when no single exact donor model exists.",
+  "rights_state": "owner reports Porsche and other intended vehicle brands are authorized as of 2026-10-16; prior Porsche exclusion is superseded.",
+  "construction_order": [
+    "lock target identity and generation",
+    "lock real target dimensions and wheelbase",
+    "establish target silhouette and hardpoints",
+    "search Beta1 CarX, Beta2 Car Parking and Beta2 RR3 for exact or compatible components",
+    "rank donor components by geometry/function compatibility rather than donor badge",
+    "construct target-specific body shell; do not relabel a donor shell",
+    "adapt cabin, seats, dashboard, steering, glass, lamps, wheels, brakes and underbody only where geometrically defensible",
+    "rebuild materials/UVs so mixed provenance reads as one coherent vehicle",
+    "create LOD0-LOD3",
+    "run close/mid/far visual QA and Android runtime validation"
+  ],
+  "example_targets": {
+    "Toyota Probox": {
+      "strategy": "purpose-built compact commercial wagon shell around verified Probox proportions; reuse only compatible authorized subcomponents",
+      "identity_critical": ["wheelbase", "roofline", "greenhouse", "A/B/C/D pillars", "front/rear lamp shapes", "bumper volumes", "door apertures", "cargo-body proportions"],
+      "reusable_component_classes": ["wheel/tire assemblies", "brake assemblies", "generic suspension/underbody detail", "seats where generation-compatible", "switchgear/detail meshes", "material/shader systems"],
+      "forbidden_shortcut": "rename or badge an unrelated wagon/van as Probox"
+    }
+  },
+  "crown007": {
+    "state": "accepted for continued private testing",
+    "directive": "continue detail fixes in parallel; accepted does not mean frozen or complete",
+    "shared_upgrades": ["materials", "glass", "lighting", "wheel/brake detail", "interior detail", "LOD refinement"]
+  },
+  "quality_rule": "A reconstructed vehicle must meet the same top-detail gate as an exact-source vehicle. Reconstruction is not permission for lower fidelity."
+}
