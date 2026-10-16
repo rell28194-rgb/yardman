@@ -4,7 +4,8 @@
 This planner is deliberately fleet-wide. It does not promote a vehicle merely
 because one usable source exists. Every active identity remains blocked until
 both Beta1 and Beta2 source families have been searched and the chosen component
-set is recorded. Crown007 is frozen/done. Porsche identities are excluded.
+set is recorded. Crown007 is accepted in its current state and deprioritized,
+not permanently complete. Porsche identities are excluded.
 """
 from __future__ import annotations
 
@@ -30,7 +31,7 @@ def rights_state(identity: str) -> str:
     if PORSCHE_RE.search(identity):
         return "excluded_porsche"
     if CROWN_RE.search(identity):
-        return "frozen_done_crown007"
+        return "deprioritized_reference_crown007"
     return "owner_authorized_non_porsche"
 
 
@@ -105,7 +106,7 @@ def build(manifest: dict[str, Any]) -> dict[str, Any]:
 
     identities = sorted(set(beta1) | set(car_parking) | set(rr3), key=str.casefold)
     active = []
-    frozen = []
+    deprioritized = []
     excluded = []
     for identity in identities:
         state = rights_state(identity)
@@ -124,9 +125,10 @@ def build(manifest: dict[str, Any]) -> dict[str, Any]:
             row["promotion_status"] = "excluded"
             excluded.append(row)
             continue
-        if state == "frozen_done_crown007":
-            row["promotion_status"] = "frozen_done"
-            frozen.append(row)
+        if state == "deprioritized_reference_crown007":
+            row["promotion_status"] = "accepted_current_state_deprioritized"
+            row["remaining_work"] = "opportunistic/shared-fleet improvements allowed; do not block fleet expansion"
+            deprioritized.append(row)
             continue
         beta2_complete = (
             row["beta2"]["car_parking_search_complete_for_identity"]
@@ -138,16 +140,16 @@ def build(manifest: dict[str, Any]) -> dict[str, Any]:
         active.append(row)
 
     return {
-        "format_version": 1,
+        "format_version": 2,
         "policy": {
             "scope": "full_fleet_parallel_source_fusion",
-            "crown007": "frozen_done_no_active_work",
+            "crown007": "accepted_current_state_deprioritized_not_complete",
             "porsche": "excluded",
             "promotion_rule": "Every active vehicle must use a recorded Beta1+Beta2 search before production promotion; do not stop at the first usable source.",
         },
         "summary": {
             "active_identities": len(active),
-            "frozen_done_identities": len(frozen),
+            "deprioritized_reference_identities": len(deprioritized),
             "excluded_identities": len(excluded),
             "beta1_resolved_identities": len(beta1),
             "car_parking_resolved_identities": len(car_parking),
@@ -155,7 +157,7 @@ def build(manifest: dict[str, Any]) -> dict[str, Any]:
             "real_racing_3": rr3_summary,
         },
         "active": active,
-        "frozen_done": frozen,
+        "deprioritized_reference": deprioritized,
         "excluded": excluded,
     }
 
