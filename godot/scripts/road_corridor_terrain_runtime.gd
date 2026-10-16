@@ -23,6 +23,9 @@ var _segments_by_tile: Dictionary = {}
 var _original_mesh_by_tile: Dictionary = {}
 var _pending_tiles: Dictionary = {}
 var _integration_clock := 0.0
+var _refinement_count := 0
+var _last_refinement_us := 0
+var _max_refinement_us := 0
 
 func _ready() -> void:
     set_process(true)
@@ -58,7 +61,12 @@ func _process(delta: float) -> void:
         # Keep transiently unavailable work queued. Terrain, coast and height
         # payloads can become ready on different frames; dropping the request
         # here could leave a loaded road corridor permanently unrefined.
+        var started_us := Time.get_ticks_usec()
         if _try_refine(tile):
+            var elapsed_us := int(Time.get_ticks_usec() - started_us)
+            _refinement_count += 1
+            _last_refinement_us = elapsed_us
+            _max_refinement_us = maxi(_max_refinement_us, elapsed_us)
             _pending_tiles.erase(tile)
             processed += 1
 
@@ -177,8 +185,7 @@ func refinement_plan(segments: Array, tile: Vector2i, tile_size: float, spacing:
         var x0 := clampi(int(floor((min_x - expand) / spacing)), 0, resolution - 2); var x1 := clampi(int(floor((max_x + expand) / spacing)), 0, resolution - 2); var z0 := clampi(int(floor((min_z - expand) / spacing)), 0, resolution - 2); var z1 := clampi(int(floor((max_z + expand) / spacing)), 0, resolution - 2)
         for z in range(z0, z1 + 1):
             for x in range(x0, x1 + 1):
-                if land_mask[z * (resolution - 1) + x] != 1: continue
-                var cell_rect := Rect2(tile_origin + Vector2(float(x), float(z)) * spacing, Vector2.ONE * spacing)
+                if land_mask[z * (resolution - 1) + x] != 1: continue                var cell_rect := Rect2(tile_origin + Vector2(float(x), float(z)) * spacing, Vector2.ONE * spacing)
                 if not _corridor_touches_cell(axis_start, axis_end, expand, cell_rect): continue
                 var cell_key := "%d:%d" % [x, z]                if not cells.has(cell_key): cells[cell_key] = {"cell": Vector2i(x, z), "segments": []}
                 cells[cell_key].segments.append(segment)
@@ -357,8 +364,7 @@ func _replace_collision(tile_root: Node3D, arrays: Array) -> void:
     for index in indices: faces.append(vertices[int(index)])
     if faces.is_empty(): return
     var shape := ConcavePolygonShape3D.new(); shape.backface_collision = true; shape.set_faces(faces)
-    var collider := CollisionShape3D.new(); collider.shape = shape
-    var body := StaticBody3D.new(); body.name = "RoadAwareTerrainCollision"; body.collision_layer = 0; body.collision_mask = 0; body.add_child(collider)
+    var collider := CollisionShape3D.new(); collider.shape = shape    var body := StaticBody3D.new(); body.name = "RoadAwareTerrainCollision"; body.collision_layer = 0; body.collision_mask = 0; body.add_child(collider)
     # Stage the replacement before retiring the previous terrain collider. This    # avoids a scene-tree interval with no terrain body at all. TerrainPhysicsRuntime
     # remains the authority that decides whether this tile is physically active.
     tile_root.add_child(body)
@@ -376,7 +382,14 @@ func _replace_collision(tile_root: Node3D, arrays: Array) -> void:
         old_body.queue_free()
 
 func runtime_snapshot() -> Dictionary:
-    return {"pending_refinements": _pending_tiles.size(), "tracked_road_tiles": _segments_by_tile.size(), "refined_tiles": _original_mesh_by_tile.size()}
+    return {
+        "pending_refinements": _pending_tiles.size(),
+        "tracked_road_tiles": _segments_by_tile.size(),
+        "refined_tiles": _original_mesh_by_tile.size(),
+        "refinement_count": _refinement_count,
+        "last_refinement_ms": float(_last_refinement_us) / 1000.0,
+        "max_refinement_ms": float(_max_refinement_us) / 1000.0,
+    }
 
 func _height_color(height: float, slope: float) -> Color:
     if height < 2.0: return Color(0.38, 0.43, 0.25)

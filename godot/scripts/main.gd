@@ -393,6 +393,9 @@ func _sample_runtime_performance(delta: float) -> void:
     var pedestrians := get_node_or_null("/root/PedestrianRuntime")
     if pedestrians != null and pedestrians.has_method("runtime_snapshot"):
         snapshot["pedestrians"] = pedestrians.call("runtime_snapshot")
+    var road_corridor := get_node_or_null("/root/RoadCorridorTerrainRuntime")
+    if road_corridor != null and road_corridor.has_method("runtime_snapshot"):
+        snapshot["road_corridor"] = road_corridor.call("runtime_snapshot")
     _last_performance_snapshot = snapshot
 
 func _collision_ready(x: float, z: float) -> bool:
