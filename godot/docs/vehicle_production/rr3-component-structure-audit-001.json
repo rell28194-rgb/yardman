@@ -1,0 +1,97 @@
+{
+  "checkpoint": "rr3-component-structure-audit-001",
+  "format_version": 1,
+  "source_format": {
+    "container": "JSR-184 / M3G",
+    "signature": "AB 4A 53 52 31 38 34 BB 0D 0A 1A 0A",
+    "section_checksum": "Adler-32 over section header plus encoded payload, verified",
+    "object_framing": "1-byte object type + little-endian uint32 payload length",
+    "note": "mesh object counts below are M3G Mesh objects, not triangle counts"
+  },
+  "interpretation": {
+    "exterior_lods": "Files *_a.m3g through *_h.m3g contain embedded LOD_A through LOD_H object labels respectively; this is explicit source evidence of an eight-level exterior LOD ladder.",
+    "interior": "*_int_a.m3g and *_int_b.m3g contain dedicated interior geometry with LOD_A_INT_* labels.",
+    "shared": "*_shared.m3g contains shared high-detail components such as brake calipers, bonnet-camera pieces, emissive light glows and exhaust glow where present.",
+    "far_lods": "LOD_G and LOD_H collapse to one Mesh object in every audited vehicle, making the recovered source inherently useful for Android far-distance representation.",
+    "damage": "Embedded source labels explicitly include damage/scratch, broken-glass, detachable door/hood/boot/bumper and related component variants; do not flatten these into a single static body during conversion."
+  },
+  "vehicles": [
+    {
+      "rr3_vehicle": "2012_lexus_lfa",
+      "source_files": 33,
+      "source_bytes": 7366745,
+      "m3g_object_totals_across_a_h_interior_shared_frontend": 2920,
+      "m3g_mesh_objects": 362,
+      "unique_lod_labels": 330,
+      "exterior_mesh_objects_by_lod": {"A":68,"B":42,"C":36,"D":29,"E":27,"F":25,"G":1,"H":1},
+      "interior_mesh_objects": {"A":44,"B":43},
+      "shared_mesh_objects": 43,
+      "frontend_mesh_objects": 3,
+      "feature_label_counts": {"damage_or_scratches":18,"doors":42,"hood_or_bonnet":21,"glass_or_windows":110,"brakes":26,"lights":56,"exhaust":4,"interior":55},
+      "component_direction": "strong triple-source candidate; RR3 provides an authoritative multi-LOD exterior/interior/detail ladder to compare against Beta1 and Car Parking rather than a replacement chosen by file size alone"
+    },
+    {
+      "rr3_vehicle": "2008_mitsubishi_evolution_x",
+      "source_files": 29,
+      "source_bytes": 13360081,
+      "m3g_object_totals_across_a_h_interior_shared": 3254,
+      "m3g_mesh_objects": 404,
+      "unique_lod_labels": 375,
+      "exterior_mesh_objects_by_lod": {"A":90,"B":53,"C":37,"D":30,"E":26,"F":25,"G":1,"H":1},
+      "interior_mesh_objects": {"A":49,"B":46},
+      "shared_mesh_objects": 46,
+      "feature_label_counts": {"damage_or_scratches":40,"doors":51,"hood_or_bonnet":21,"boot_or_trunk":22,"glass_or_windows":102,"brakes":28,"lights":59,"exhaust":8,"interior":66},
+      "component_direction": "strong triple-source candidate; RR3 is especially rich in LOD-A, damage and interior components and should be treated as a first-class component donor pending conversion/render checks"
+    },
+    {
+      "rr3_vehicle": "2006_nissan_350z",
+      "source_files": 31,
+      "source_bytes": 6660082,
+      "m3g_object_totals_across_a_h_interior_shared": 2989,
+      "m3g_mesh_objects": 371,
+      "unique_lod_labels": 343,
+      "exterior_mesh_objects_by_lod": {"A":78,"B":48,"C":37,"D":32,"E":29,"F":27,"G":1,"H":1},
+      "interior_mesh_objects": {"A":37,"B":37},
+      "shared_mesh_objects": 44,
+      "feature_label_counts": {"damage_or_scratches":28,"doors":56,"hood_or_bonnet":15,"boot_or_trunk":38,"glass_or_windows":107,"brakes":26,"lights":58,"exhaust":4,"interior":46},
+      "component_direction": "strong triple-source candidate; preserve the explicit A-H LOD chain and detachable/damage labels during conversion"
+    },
+    {
+      "rr3_vehicle": "1995_nissan_skyline_r33",
+      "source_files": 26,
+      "source_bytes": 11761808,
+      "m3g_object_totals_across_a_h_interior_shared": 3142,
+      "m3g_mesh_objects": 390,
+      "unique_lod_labels": 360,
+      "exterior_mesh_objects_by_lod": {"A":96,"B":50,"C":34,"D":29,"E":25,"F":24,"G":1,"H":1},
+      "interior_mesh_objects": {"A":43,"B":43},
+      "shared_mesh_objects": 44,
+      "feature_label_counts": {"damage_or_scratches":48,"doors":55,"hood_or_bonnet":26,"boot_or_trunk":14,"glass_or_windows":98,"brakes":20,"lights":51,"exhaust":7,"interior":56},
+      "component_direction": "retain as one exact R33-generation candidate; highest audited LOD-A mesh-object count but year/variant choice remains open"
+    },
+    {
+      "rr3_vehicle": "1997_nissan_skyline_r33",
+      "source_files": 32,
+      "source_bytes": 11502514,
+      "m3g_object_totals_across_a_h_interior_shared": 3166,
+      "m3g_mesh_objects": 393,
+      "unique_lod_labels": 364,
+      "exterior_mesh_objects_by_lod": {"A":88,"B":53,"C":37,"D":30,"E":27,"F":27,"G":1,"H":1},
+      "interior_mesh_objects": {"A":43,"B":43},
+      "shared_mesh_objects": 43,
+      "feature_label_counts": {"damage_or_scratches":43,"doors":54,"hood_or_bonnet":20,"boot_or_trunk":22,"glass_or_windows":104,"brakes":26,"lights":57,"exhaust":7,"interior":57},
+      "component_direction": "retain beside 1995 source; slightly lower LOD-A mesh-object count but richer color/livery set and later R33 variant; choose only after visual/generation review"
+    }
+  ],
+  "next": [
+    "Use godot/tools/vehicle_production/inspect_rr3_m3g.py to produce repeatable structural metrics for additional RR3 candidates.",
+    "Implement geometry conversion for the JSR-184 VertexArray/VertexBuffer/TriangleStripArray/Mesh subset actually present in RR3 vehicle files.",
+    "Do not promote RR3 components merely because their source structure is richer; compare exact generation, proportions, render result and Android cost against Beta1 and Car Parking."
+  ],
+  "policy": {
+    "private_vehicle_media_public_git": false,
+    "crown007": "quality reference and deprioritized, not complete",
+    "porsche": "owner-authorized with exact generation/trim gate",
+    "mark_x": "no identity substitution"
+  }
+}
