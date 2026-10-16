@@ -9,25 +9,32 @@ var _last_active := -1
 var _last_dormant := -1
 var _last_tile := Vector2i(2147483647, 2147483647)
 var _last_residency_signature := ""
+var _force_refresh := true
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
 
 func _process(delta: float) -> void:
     _clock += delta
-    if _clock < REFRESH_INTERVAL_S:
+    if not _force_refresh and _clock < REFRESH_INTERVAL_S:
         return
     _clock = 0.0
     _refresh_physics_residency()
+
+func invalidate_residency() -> void:
+    _force_refresh = true
+    _clock = REFRESH_INTERVAL_S
 
 func _refresh_physics_residency() -> void:
     var scene := get_tree().current_scene
     if scene == null:
         _last_residency_signature = ""
+        _force_refresh = true
         return
     var terrain = scene.get("terrain")
     if terrain == null or terrain.target == null:
         _last_residency_signature = ""
+        _force_refresh = true
         return
     var world: PackedFloat64Array = terrain.coordinates.local_to_world(terrain.target.global_position)
     if world.size() < 3:
@@ -40,31 +47,23 @@ func _refresh_physics_residency() -> void:
         return
     var loaded: Dictionary = loaded_value
 
-    # Collision state only changes when the player crosses the warm boundary,
-    # terrain residency changes, or a loaded tile swaps its terrain collider.
-    # Include the current StaticBody3D instance IDs so a road-corridor collision
-    # replacement cannot inherit a stale disabled state until the next tile move.
+    # The expensive collision walk is only needed when residency changes. Road
+    # corridor collider swaps explicitly invalidate this runtime, so there is no
+    # reason to traverse every loaded tile's children eight times per second just
+    # to rediscover the same StaticBody3D instance IDs.
     var loaded_keys: Array[String] = []
-    var collider_keys: Array[String] = []
     for key_value in loaded.keys():
-        var key := str(key_value)
-        loaded_keys.append(key)
-        var root = loaded[key_value]
-        if not root is Node:
-            continue
-        for child in (root as Node).get_children():
-            if child is StaticBody3D:
-                collider_keys.append("%s:%d" % [key, (child as StaticBody3D).get_instance_id()])
+        loaded_keys.append(str(key_value))
     loaded_keys.sort()
-    collider_keys.sort()
     var wanted_keys: Array[String] = []
     for tile_value in wanted.keys():
         var tile: Vector2i = tile_value
         wanted_keys.append("%d:%d" % [tile.x, tile.y])
     wanted_keys.sort()
-    var signature := "%d:%d|%s|%s|%s" % [current.x, current.y, ",".join(wanted_keys), ",".join(loaded_keys), ",".join(collider_keys)]
-    if signature == _last_residency_signature:
+    var signature := "%d:%d|%s|%s" % [current.x, current.y, ",".join(wanted_keys), ",".join(loaded_keys)]
+    if not _force_refresh and signature == _last_residency_signature:
         return
+    _force_refresh = false
     _last_residency_signature = signature
 
     var active := 0
@@ -138,4 +137,5 @@ func runtime_snapshot() -> Dictionary:
         "terrain_collision_dormant": maxi(_last_dormant, 0),
         "active_tile": _last_tile,
         "boundary_warm_m": BOUNDARY_WARM_M,
+        "forced_refresh_pending": _force_refresh,
     }
