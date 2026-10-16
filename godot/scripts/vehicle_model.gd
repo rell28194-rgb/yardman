@@ -41,7 +41,10 @@ func build(hero_scene_filename: String = "", scene_loader: Callable = Callable()
             return
         set_meta("yardman_requested_hero_scene", hero_scene_filename)
         set_meta("yardman_hero_asset_missing_or_invalid", true)
-        push_error("Yardman dedicated vehicle asset %s is unavailable or invalid; refusing cross-model fallback" % hero_scene_filename)
+        # Source-only/public builds intentionally omit private hero media. Keep
+        # the identity failure explicit in metadata without poisoning otherwise
+        # playable CI/test builds as a hard engine error.
+        push_warning("Yardman dedicated vehicle asset %s is unavailable or invalid; refusing cross-model fallback" % hero_scene_filename)
     elif _try_reference_sedan("road_car.glb", scene_loader):
         return
     _paint = _material(Color(0.14, 0.31, 0.37), 0.52, 0.27)
