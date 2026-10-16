@@ -61,14 +61,12 @@ func _on_road_tile_removed(tile: Vector2i) -> void:
 func _on_terrain_tile(tile: Vector2i) -> void:
     _try_build(tile)
 
-func _on_terrain_tile_removed(tile: Vector2i) -> void:
-    var tile_root := _road_tile_root(tile)
-    if tile_root == null:
-        return
-    var existing := tile_root.get_node_or_null("RoadEarthworksProxy")
-    if existing != null:
-        tile_root.remove_child(existing)
-        existing.queue_free()
+func _on_terrain_tile_removed(_tile: Vector2i) -> void:
+    # Earthworks are owned by the road tile after construction. Do not destroy
+    # them just because the terrain tile cycles; that forced a full 4 km road
+    # segment payload to stay resident solely so identical geometry could be
+    # rebuilt later.
+    pass
 
 func _road_tile_root(tile: Vector2i) -> Node3D:
     if _roads == null:
@@ -83,6 +81,11 @@ func _try_build(tile: Vector2i) -> void:
     if tile_root == null:
         return
     _decorate(tile, tile_root, _segments_by_tile[tile])
+    # The generated mesh/collision is now authoritative for this resident road
+    # tile. Release the parsed national road arrays immediately; they are much
+    # larger than the compact runtime geometry and were a major RAM residency
+    # multiplier when several 4 km tiles were loaded.
+    _segments_by_tile.erase(tile)
 
 func _vertical_transitions_for_edge(edge_id: String) -> Array:
     if _roads == null:
@@ -432,3 +435,9 @@ func _earth_material() -> StandardMaterial3D:
     _material.metallic = 0.0
     _material.cull_mode = BaseMaterial3D.CULL_DISABLED
     return _material
+
+func runtime_snapshot() -> Dictionary:
+    return {
+        "pending_source_tiles": _segments_by_tile.size(),
+        "connected": _connected,
+    }
