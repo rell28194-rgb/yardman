@@ -223,7 +223,7 @@ def main() -> int:
         "decoded": decoded,
     }
     if args.inventory:
-        report["inventory"] = inventory_zip(args.output_zip, args.inventory)
+        report["inventory"] = inventory_zip(args.output_zip, args.inventory, args.verify_zip_crc)
     text = json.dumps(report, indent=2) + "\n"
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
