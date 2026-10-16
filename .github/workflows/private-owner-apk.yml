@@ -93,12 +93,12 @@ jobs:
           mkdir -p godot/build
           python godot/tools/validate_asset_milestone.py --output godot/build/asset_milestone_report.json
           wget -q https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf -O /tmp/jamaica.osm.pbf
-          python godot/tools/build_jamaica_roads.py /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096 --skip-auxiliary
-          python godot/tools/build_terrain.py /tmp/yardman-dem godot/data/roads/manifest.json godot/data/terrain --acquire
-          python godot/tools/build_jamaica_roads.py /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096 --terrain godot/data/terrain
-          python godot/tools/build_fences.py /tmp/jamaica.osm.pbf godot/data/roads/fences --tile-size 4096
-          python godot/tools/build_streetlights.py /tmp/jamaica.osm.pbf godot/data/roads/streetlights --tile-size 4096
-          python godot/tools/build_guardrails.py /tmp/jamaica.osm.pbf godot/data/roads/guardrails --tile-size 4096
+          python godot/tools/build_jamaica_roads.py /tmp/jamaica.osm.pbf godot/data/roads --tile-size 2048 --skip-auxiliary
+          python godot/tools/build_terrain.py /tmp/yardman-dem godot/data/roads/manifest.json godot/data/terrain --acquire --resolution 33
+          python godot/tools/build_jamaica_roads.py /tmp/jamaica.osm.pbf godot/data/roads --tile-size 2048 --terrain godot/data/terrain
+          python godot/tools/build_fences.py /tmp/jamaica.osm.pbf godot/data/roads/fences --tile-size 2048
+          python godot/tools/build_streetlights.py /tmp/jamaica.osm.pbf godot/data/roads/streetlights --tile-size 2048
+          python godot/tools/build_guardrails.py /tmp/jamaica.osm.pbf godot/data/roads/guardrails --tile-size 2048
           python godot/tools/build_road_structures.py godot/data/roads
           python godot/tools/build_tunnel_portals.py godot/data/roads
           python godot/tools/validate_road_structures.py godot/data/roads
