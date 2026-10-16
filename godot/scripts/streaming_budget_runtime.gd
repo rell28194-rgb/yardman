@@ -5,11 +5,11 @@ class_name YardmanStreamingBudgetRuntime
 # sustained mobile pressure. Budgets are derived from the selected quality
 # baseline each time, so thermal recovery is reversible rather than destructive.
 const BASELINES := {
-    "Performance": {"road_radius": 1, "terrain_radius": 1, "building_distance": 450.0, "building_cells": 64},
-    "Balanced": {"road_radius": 1, "terrain_radius": 1, "building_distance": 650.0, "building_cells": 64},
-    "Quality": {"road_radius": 2, "terrain_radius": 2, "building_distance": 1100.0, "building_cells": 144},
-    "Ultra": {"road_radius": 3, "terrain_radius": 2, "building_distance": 1450.0, "building_cells": 192},
-    "Custom": {"road_radius": 1, "terrain_radius": 1, "building_distance": 650.0, "building_cells": 64},
+    "Performance": {"road_radius": 1, "terrain_radius": 1, "road_distance": 900.0, "road_prediction": 850.0, "building_distance": 450.0, "building_cells": 48},
+    "Balanced": {"road_radius": 1, "terrain_radius": 1, "road_distance": 1200.0, "road_prediction": 1000.0, "building_distance": 650.0, "building_cells": 56},
+    "Quality": {"road_radius": 2, "terrain_radius": 2, "road_distance": 2100.0, "road_prediction": 1200.0, "building_distance": 1100.0, "building_cells": 112},
+    "Ultra": {"road_radius": 3, "terrain_radius": 2, "road_distance": 3000.0, "road_prediction": 1400.0, "building_distance": 1450.0, "building_cells": 160},
+    "Custom": {"road_radius": 1, "terrain_radius": 1, "road_distance": 1200.0, "road_prediction": 1000.0, "building_distance": 650.0, "building_cells": 56},
 }
 
 var _last_signature := ""
@@ -24,8 +24,10 @@ static func budget_for(quality: String, thermal_stage: int, custom: Dictionary =
     if name == "Custom":
         base["road_radius"] = clampi(int(custom.get("road_radius", base.road_radius)), 1, 3)
         base["terrain_radius"] = clampi(int(custom.get("terrain_radius", base.terrain_radius)), 1, 2)
+        base["road_distance"] = clampf(float(custom.get("road_distance", base.road_distance)), 700.0, 3400.0)
+        base["road_prediction"] = clampf(float(custom.get("road_prediction", base.road_prediction)), 500.0, 1600.0)
         base["building_distance"] = clampf(float(custom.get("building_distance", base.building_distance)), 256.0, 1800.0)
-        base["building_cells"] = clampi(int(custom.get("building_cells", base.building_cells)), 32, 224)
+        base["building_cells"] = clampi(int(custom.get("building_cells", base.building_cells)), 24, 192)
 
     var stage := clampi(thermal_stage, 0, 5)
     var distance_factor: float = float([1.0, 0.96, 0.92, 0.82, 0.68, 0.55][stage])
@@ -43,13 +45,17 @@ static func budget_for(quality: String, thermal_stage: int, custom: Dictionary =
     return {
         "road_radius": clampi(road_radius, 1, 3),
         "terrain_radius": clampi(terrain_radius, 1, 2),
+        "road_distance": maxf(650.0, float(base.road_distance) * distance_factor),
+        # Prediction is intentionally not reduced as aggressively as draw/residency
+        # distance: under pressure we still prepare the direction of travel early.
+        "road_prediction": maxf(500.0, float(base.road_prediction) * maxf(0.78, distance_factor)),
         "building_distance": maxf(320.0, float(base.building_distance) * distance_factor),
-        "building_cells": maxi(32, int(round(float(base.building_cells) * cell_factor))),
-        "road_geometry_us": maxi(850, int(round(1800.0 * geometry_factor))),
-        "terrain_geometry_us": maxi(850, int(round(1800.0 * geometry_factor))),
-        "building_geometry_us": maxi(650, int(round(1200.0 * geometry_factor))),
-        "road_segments_per_frame": maxi(96, int(round(256.0 * geometry_factor))),
-        "building_records_per_frame": maxi(6, int(round(14.0 * geometry_factor))),
+        "building_cells": maxi(24, int(round(float(base.building_cells) * cell_factor))),
+        "road_geometry_us": maxi(700, int(round(1500.0 * geometry_factor))),
+        "terrain_geometry_us": maxi(750, int(round(1600.0 * geometry_factor))),
+        "building_geometry_us": maxi(550, int(round(1000.0 * geometry_factor))),
+        "road_segments_per_frame": maxi(72, int(round(208.0 * geometry_factor))),
+        "building_records_per_frame": maxi(5, int(round(12.0 * geometry_factor))),
         "io_jobs": 1 if name in ["Performance", "Balanced", "Custom"] or stage >= 2 else 2,
         "thermal_stage": stage,
         "quality": name,
@@ -77,10 +83,14 @@ func apply_render_policy(active: Dictionary) -> void:
     var buildings = scene.get("buildings")
     var road_radius_changed := false
     var terrain_radius_changed := false
+    var road_distance_changed := false
 
     if roads != null:
         road_radius_changed = int(roads.get("load_radius")) != int(budget.road_radius)
+        road_distance_changed = not is_equal_approx(float(roads.get("stream_distance_m")), float(budget.road_distance)) or not is_equal_approx(float(roads.get("prediction_max_m")), float(budget.road_prediction))
         roads.set("load_radius", int(budget.road_radius))
+        roads.set("stream_distance_m", float(budget.road_distance))
+        roads.set("prediction_max_m", float(budget.road_prediction))
         roads.set("geometry_budget_us", int(budget.road_geometry_us))
         roads.set("max_segments_per_frame", int(budget.road_segments_per_frame))
         roads.set("max_io_jobs", int(budget.io_jobs))
@@ -97,7 +107,7 @@ func apply_render_policy(active: Dictionary) -> void:
         buildings.set("max_buildings_per_frame", int(budget.building_records_per_frame))
         buildings.set("max_io_jobs", int(budget.io_jobs))
 
-    if road_radius_changed and roads != null and roads.has_method("_refresh_tiles"):
+    if (road_radius_changed or road_distance_changed) and roads != null and roads.has_method("_refresh_tiles"):
         roads.call("_refresh_tiles", true)
     if terrain_radius_changed and terrain != null and terrain.has_method("_refresh_tiles"):
         terrain.call("_refresh_tiles", true)
