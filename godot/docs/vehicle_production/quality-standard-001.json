@@ -3,22 +3,34 @@
   "scope": "all active non-Porsche production vehicles",
   "owner_target": "top quality detail",
   "principles": {
-    "close_range": "LOD0 preserves source-backed exterior, cabin, lights, glass, wheels and brake detail; mobile optimization must not be achieved by degrading the hero vehicle.",
-    "distance": "LOD1-LOD3 progressively remove invisible/small geometry and expensive material work while preserving silhouette, wheel placement, glazing and lighting readability.",
+    "close_range": "LOD0 preserves source-backed exterior, cabin, lights, glass, wheels, brakes, silhouette, proportions and material/UV detail; mobile optimization must not be achieved by degrading the hero vehicle.",
+    "identity": "Exact identity plus model/generation/trim compatibility must be explicit before body promotion. Family matches, race variants and later generations remain evidence only until compatibility is resolved.",
+    "distance": "LOD1-LOD3 progressively remove invisible/small geometry and expensive material work while preserving silhouette, proportions, wheel placement, glazing and lighting readability.",
     "provenance": "Every promoted component records exact source path and SHA-256 evidence. Ambiguous family/generation matches remain review-required.",
-    "rights": "Porsche is excluded. Crown007 remains accepted/deprioritized and may inherit shared fleet improvements without blocking fleet expansion.",
+    "rights": "Porsche is excluded under the current owner directive. Crown007 remains accepted/deprioritized and may inherit shared fleet improvements without blocking fleet expansion.",
     "runtime": "Android-device performance remains an explicit acceptance item and may be pending; it must never be silently represented as passed."
   },
+  "required_compatibility_evidence": [
+    "identity",
+    "generation_trim"
+  ],
   "required_detail_evidence": [
     "exterior_body",
     "interior_cabin",
     "lighting",
     "glass",
     "wheels",
-    "brakes"
+    "brakes",
+    "silhouette",
+    "proportions",
+    "materials_uv"
+  ],
+  "conditional_detail_evidence": [
+    "underbody_when_declared_or_visible"
   ],
   "required_lod_chain": ["lod0", "lod1", "lod2", "lod3"],
   "lod_policy": {
+    "lod0_hero_detail_preserved_required": true,
     "strictly_decreasing_triangle_counts": true,
     "lod3_max_fraction_of_lod0": 0.12,
     "note": "No universal LOD0 triangle cap is used as a quality proxy. LOD0 fidelity and actual Android measurements decide whether further optimization is necessary."
@@ -30,8 +42,8 @@
     "android_device": "required before final runtime promotion"
   },
   "source_state": {
-    "car_parking": "237 bundles decoded; 227 non-Porsche resolved; 8 Porsche excluded; IDs 21 and 122 remain gated",
+    "car_parking": "current 237-bundle catalog decode available; unresolved/conflict identities remain gated and rights policy is applied separately from source evidence",
     "beta1_carx": "cross-source identity/source-unit matching active",
-    "rr3": "sequential solid-stream inventory pending; Beta2 outer parts 83-200 are the required recovery range"
+    "rr3": "ZIP64 inventory complete at 46,814 paths / 547 vehicle directories; exact directory search complete; validated random-access vehicle recovery is active"
   }
 }
