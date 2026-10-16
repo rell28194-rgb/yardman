@@ -1,0 +1,86 @@
+{
+  "checkpoint": "rr3-queued-recovery-005",
+  "status": "six_additional_queued_directories_binary_recovery_validated",
+  "source": "Beta2/com.ea.games.r3_row_xclipse",
+  "recovered": {
+    "vehicles": 6,
+    "files": 173,
+    "uncompressed_bytes": 58414787,
+    "reset_segments": [14, 15, 16, 17]
+  },
+  "source_split_recovery": {
+    "parts": "147-189",
+    "part_count": 43,
+    "unpacked_bytes": 1082130432,
+    "outer_beta2_volumes": "153-173",
+    "method": "decode each exact outer 7z LZMA2 member by pack offset/size; then decode only required inner RR3 reset segments"
+  },
+  "vehicles": [
+    {
+      "vehicle": "2012_audi_r8_lms",
+      "reset_segment": 14,
+      "files": 28,
+      "uncompressed_bytes": 6608514,
+      "segment_sha256": "03f2624d1195159544fbd5cff067be5671cbb77e370bd880b64a9c09560c2a84",
+      "file_manifest_sha256": "2d3b499735cdebda99dd071e7459db448aa31bf9a05e657574ded8da48f8bc27",
+      "validation": "all files size+CRC32 PASS; SHA-256 recorded"
+    },
+    {
+      "vehicle": "2014_audi_r8spyder",
+      "reset_segment": 15,
+      "files": 35,
+      "uncompressed_bytes": 7760742,
+      "segment_sha256": "9ce5204c6693b8c2ed0b05dd2bfc00b27de19b583540bf1d959bfcdeb2d7ef4d",
+      "file_manifest_sha256": "1281b99cfdb4265a210cbb72d47b5c9a1e7234ba868cbbcc4c8bdf8a7db0d1f5",
+      "validation": "all files size+CRC32 PASS; SHA-256 recorded"
+    },
+    {
+      "vehicle": "2017_bmw_m4_dtm",
+      "reset_segment": 16,
+      "files": 28,
+      "uncompressed_bytes": 10788006,
+      "segment_sha256": "473d69be6d536738209b53ebea7ea7b4a5a2b4f918b890acac979f1bdf1a9c83",
+      "file_manifest_sha256": "596d5fe65d2a0aa8243b7bb4e2dd7cd01808227ef779c9d12c98dd81ca0b9153",
+      "validation": "all files size+CRC32 PASS; SHA-256 recorded"
+    },
+    {
+      "vehicle": "2017_mercedes_c63_dtm",
+      "reset_segment": 16,
+      "files": 27,
+      "uncompressed_bytes": 9308565,
+      "segment_sha256": "473d69be6d536738209b53ebea7ea7b4a5a2b4f918b890acac979f1bdf1a9c83",
+      "file_manifest_sha256": "b011b84393f59d36753ddc32f5f78f74dd80f69a7e74991e6096bf37b5153065",
+      "validation": "all files size+CRC32 PASS; SHA-256 recorded"
+    },
+    {
+      "vehicle": "2018_audi_r8_gt4",
+      "reset_segment": 17,
+      "files": 28,
+      "uncompressed_bytes": 12491127,
+      "segment_sha256": "4252fd7e3605bb606bbd82ded38c2ad6a0e419bffb6a3933746fe595323a6ac1",
+      "file_manifest_sha256": "df3f2b078087e673a072b55ac078f74c072a49c1b2f4b55751eac7c0994346d5",
+      "validation": "all files size+CRC32 PASS; SHA-256 recorded"
+    },
+    {
+      "vehicle": "2018_bmw_m4_gt4",
+      "reset_segment": 17,
+      "files": 27,
+      "uncompressed_bytes": 11457833,
+      "segment_sha256": "4252fd7e3605bb606bbd82ded38c2ad6a0e419bffb6a3933746fe595323a6ac1",
+      "file_manifest_sha256": "957d928028615479fdd10463e79517386c525852bb25b8d3e229ff0ecb02661e",
+      "validation": "all files size+CRC32 PASS; SHA-256 recorded"
+    }
+  ],
+  "private_detailed_manifest": {
+    "filename": "Yardman-RR3-Queued-Recovery-004.json",
+    "sha256": "efa500818ee04857421b49f34f6e03f3a41908274e4aae122ed3ac27f36adb9a",
+    "public_git": false
+  },
+  "policy": {
+    "porsche": "excluded",
+    "motorsport_variants": "component/reference evidence only; never substitute race shell for road body",
+    "r8_spyder": "generation/body candidate only; coupe substitution forbidden without exact compatibility",
+    "quality": "exact source path/hash retained privately; fleet quality gate still required before promotion"
+  },
+  "next": "Fuse recovered components with Beta1 and Car Parking evidence; promote only generation/trim-compatible road geometry and source-backed reusable components."
+}
