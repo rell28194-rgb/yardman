@@ -43,6 +43,10 @@ var _car_world := PackedFloat64Array()
 var _decoration_records: Dictionary = {}
 var _radar_clock := 0.0
 var _surface_clock := 0.0
+var _daylight_clock := 999.0
+var _audio_clock := 0.0
+const DAYLIGHT_UPDATE_INTERVAL := 0.10
+const AUDIO_CONTROL_INTERVAL := 1.0 / 30.0
 var _preferences_loaded := false
 var _app_active := true
 
@@ -329,15 +333,22 @@ func _physics_process(delta: float) -> void:
     _message_time = maxf(0.0, _message_time - delta)
     if not blocked:
         day_hour = fmod(day_hour + delta / 120.0, 24.0)
-    visuals.update_daylight(day_hour, environment)
+    _daylight_clock += delta
+    if _daylight_clock >= DAYLIGHT_UPDATE_INTERVAL:
+        _daylight_clock = 0.0
+        visuals.update_daylight(day_hour, environment)
     var can_interact: bool = player.can_exit_vehicle() if player.in_vehicle else player.can_enter_vehicle()
     var speed: float = absf(vehicle.speed_mps) * 3.6 if player.in_vehicle else Vector2(player.velocity.x, player.velocity.z).length() * 3.6
     hud.set_status({"parish": current_parish, "speed_kmh": speed, "driving": player.in_vehicle,
         "ready": ready, "can_interact": can_interact, "message": _message if _message_time > 0.0 else "",
         "heading": camera_yaw, "gear": vehicle.gear_label(), "time_hour": day_hour})
-    game_audio.update_state(delta, {"driving": player.in_vehicle, "speed_mps": vehicle.speed_mps,
-        "rpm": vehicle.engine_rpm, "on_road": vehicle.on_road, "walk_speed": speed / 3.6,
-        "ready": ready, "menu_open": blocked, "throttle": throttle})
+    _audio_clock += delta
+    if _audio_clock >= AUDIO_CONTROL_INTERVAL:
+        var audio_step := _audio_clock
+        _audio_clock = 0.0
+        game_audio.update_state(audio_step, {"driving": player.in_vehicle, "speed_mps": vehicle.speed_mps,
+            "rpm": vehicle.engine_rpm, "on_road": vehicle.on_road, "walk_speed": speed / 3.6,
+            "ready": ready, "menu_open": blocked, "throttle": throttle})
     _radar_clock += delta
     if _radar_clock >= 0.5:
         _radar_clock = 0.0

@@ -66,7 +66,7 @@ func _process(delta: float) -> void:
     if _clock >= UPDATE_INTERVAL:
         _clock = 0.0
         _update_location()
-    _apply_cached_label()
+        _apply_cached_label()
 
 func _apply_cached_label() -> void:
     if _last_label.is_empty():

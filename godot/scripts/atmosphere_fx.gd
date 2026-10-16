@@ -32,6 +32,8 @@ var _rain_target := 0.0
 var _particle_budget := 900
 var _clock := 0.0
 var _surface_clock := 0.0
+var _visual_clock := 999.0
+const VISUAL_UPDATE_INTERVAL := 0.05
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -73,25 +75,30 @@ func _resolve_scene_nodes() -> void:
 
 func _process(delta: float) -> void:
     _update_weather_state(delta)
+    var scene := get_tree().current_scene
+    _surface_clock += delta
+    if _surface_clock >= 0.10:
+        _surface_clock = 0.0
+        _apply_surface_weather(scene)
     if _root == null or not is_instance_valid(_root):
         return
     if _camera == null or not is_instance_valid(_camera):
         _resolve_scene_nodes()
         return
-    _clock = fmod(_clock + delta, 100000.0)
-    var scene := get_tree().current_scene
+    _visual_clock += delta
+    if _visual_clock < VISUAL_UPDATE_INTERVAL:
+        return
+    var visual_step := _visual_clock
+    _visual_clock = 0.0
+    _clock = fmod(_clock + visual_step, 100000.0)
     var hour := 10.0
     if scene != null:
         var value = scene.get("day_hour")
         if value is float or value is int:
             hour = float(value)
     _update_celestial(hour)
-    _update_clouds(delta)
+    _update_clouds(visual_step)
     _update_weather_visuals()
-    _surface_clock += delta
-    if _surface_clock >= 0.10:
-        _surface_clock = 0.0
-        _apply_surface_weather(scene)
 
 func set_weather(mode: String, immediate: bool = false) -> bool:
     var normalized := mode.to_lower()
