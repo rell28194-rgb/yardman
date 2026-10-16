@@ -272,9 +272,17 @@ func _reconcile_population(scene: Node, roads, terrain, active_xz: Vector2) -> v
         if pose.is_empty(): continue
         var point: Vector2 = pose.position
         if point.distance_to(active_xz) < 55.0 or point.distance_to(active_xz) > spawn_radius: continue
-        var terrain_height := float(terrain.height_at(point.x, point.y)); var deck_y := road_deck_height(record, progress, terrain_height)
+        # Compiled road deck elevations are authoritative for traffic. Avoid a
+        # terrain lookup for every spawn candidate unless the road record is an
+        # older/fallback record without valid endpoint heights.
+        var deck_y := record_deck_height(record, progress)
+        if not is_finite(deck_y):
+            deck_y = float(terrain.height_at(point.x, point.y))
         if not is_finite(deck_y): continue
-        agents[identifier] = {"record": record.duplicate(true), "direction": direction, "progress": progress, "position": point, "heading": float(pose.heading), "speed": 7.0 + float(seed % 80) * 0.12, "target_speed": 9.0 + float(seed % 70) * 0.14, "node": null, "model": null}
+        # Agent simulation never mutates the road record itself. A shallow copy
+        # keeps the record alive after streamer dictionary churn without copying
+        # its polygon/metadata payload for every ambient vehicle.
+        agents[identifier] = {"record": record.duplicate(false), "direction": direction, "progress": progress, "position": point, "heading": float(pose.heading), "speed": 7.0 + float(seed % 80) * 0.12, "target_speed": 9.0 + float(seed % 70) * 0.14, "node": null, "model": null}
 
 func _advance_agents(delta: float, roads, _terrain, active_xz: Vector2) -> void:
     _last_yielding = 0
