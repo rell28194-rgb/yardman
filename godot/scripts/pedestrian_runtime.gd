@@ -218,7 +218,7 @@ func _reconcile_population(scene: Node, roads, active_xz: Vector2) -> void:
         if point.distance_to(active_xz) < 18.0:
             continue
         var base_speed := 1.05 + float(seed % 35) * 0.012
-        agents[identifier] = {"id": identifier, "record": record.duplicate(true), "direction": direction, "side": side, "progress": progress, "position": point, "heading": float(pose.heading), "speed": base_speed, "node": null, "rig": {}, "gait": float(seed % 628) / 100.0}
+        agents[identifier] = {"id": identifier, "record": record, "direction": direction, "side": side, "progress": progress, "position": point, "heading": float(pose.heading), "speed": base_speed, "node": null, "rig": {}, "gait": float(seed % 628) / 100.0}
     _far_statistical = maxi(0, far_target - agents.size())
 
 func _advance_agents(delta: float, roads, active_xz: Vector2) -> void:
@@ -256,8 +256,7 @@ func _advance_agents(delta: float, roads, active_xz: Vector2) -> void:
                 progress = 0.015 if direction >= 0 else 0.985
             pose = roadside_walk_pose(record, progress, direction, side)
             if pose.is_empty():
-                _destroy_agent(str(identifier))
-                continue
+                _destroy_agent(str(identifier))                continue
         point = Vector2(pose.position)
         agent.record = record
         agent.direction = direction
