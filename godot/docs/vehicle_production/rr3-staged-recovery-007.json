@@ -1,0 +1,59 @@
+{
+  "checkpoint": "rr3-staged-recovery-007",
+  "source": "Beta2/com.ea.games.r3_row_xclipse",
+  "status": "validated_exact_inner_split_volumes_201_through_246",
+  "correction": {
+    "invalid_method_rejected": "raw contiguous outer-byte copying",
+    "reason": "RR3 split members are individually LZMA2-compressed outer 7z streams; raw outer bytes are not authoritative inner split bytes",
+    "authoritative_method": "parse outer 7z metadata from sparse logical archive, then decode each RR3 member from its exact pack offset/pack size"
+  },
+  "outer_archive": {
+    "logical_bytes": 12127043787,
+    "files": 488,
+    "rr3_members": 246,
+    "materialized_for_tail": [1, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 232],
+    "rr3_member_201": {
+      "file_index": 374,
+      "outer_stream": 373,
+      "pack_offset": 9340847372,
+      "pack_size": 25166868,
+      "unpacked_bytes": 25165824,
+      "method": "LZMA2",
+      "properties_hex": "1a"
+    },
+    "rr3_member_246": {
+      "file_index": 419,
+      "outer_stream": 418,
+      "pack_offset": 10473360639,
+      "pack_size": 324001,
+      "unpacked_bytes": 323982,
+      "method": "LZMA2",
+      "properties_hex": "1a"
+    }
+  },
+  "recovered_tail": {
+    "first_part": 201,
+    "last_part": 246,
+    "parts": 46,
+    "unpacked_bytes": 1132786062,
+    "part_201_sha256": "ceed84880f7023d57767aca563ab8149a2a79340961d8839dbfd2b7885effef7",
+    "part_246_sha256": "3fda833115117cd44b6e0594433a9349e5e671cef7d947c7602837c0c6d437b6",
+    "known_tail_sha256_match": true
+  },
+  "zip64_validation": {
+    "final_lzma2_reset_segment_unpacked_bytes": 136064389,
+    "final_lzma2_reset_segment_sha256": "d1826a4d7d4a988752a969bc4e92a87ec7102633d600fa0388dd994e1ce30842",
+    "zip_entries": 46814,
+    "central_directory_bytes": 9753060,
+    "central_directory_offset": 6300326719,
+    "rr3_vehicle_directories": 547,
+    "result": "PASS"
+  },
+  "policy": {
+    "private_vehicle_media_public_git": false,
+    "porsche": "excluded",
+    "crown007": "accepted/deprioritized; shared fleet improvements may apply",
+    "runtime_integration": "deferred to main Android optimization lane"
+  },
+  "next": "Use the validated ZIP64 directory to resolve required reset segments for queued non-Porsche vehicle/component recovery, then CRC32/SHA-256 validate each extracted inner ZIP member before fleet promotion."
+}
