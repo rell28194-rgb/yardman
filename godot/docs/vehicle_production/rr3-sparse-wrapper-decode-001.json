@@ -1,0 +1,45 @@
+{
+  "format_version": 1,
+  "checkpoint": "rr3-sparse-wrapper-decode-001",
+  "source": "Beta2/com.ea.games.r3_row_xclipse",
+  "strategy": "decode only required outer split volumes and sparse-map them into the logical outer archive; no full 12.1GB reconstruction",
+  "outer_archive": {
+    "logical_bytes": 12127043787,
+    "decoded_file_count": 488,
+    "pack_streams": 487,
+    "rr3_first_member": {
+      "outer_file_index": 174,
+      "outer_stream": 173,
+      "pack_offset": 4307473099,
+      "pack_size": 25167031,
+      "unpacked_size": 25165824,
+      "sha256": "9d91a0fa764f492fecd4a0b73a378dfb09608ea3d5d81ba152cd342222ab8407"
+    },
+    "rr3_last_member": {
+      "outer_file_index": 419,
+      "outer_stream": 418,
+      "pack_offset": 10473360639,
+      "pack_size": 324001,
+      "unpacked_size": 323982,
+      "sha256": "3fda833115117cd44b6e0594433a9349e5e671cef7d947c7602837c0c6d437b6"
+    }
+  },
+  "rr3_wrapper": {
+    "logical_bytes": 6165950862,
+    "signature_version": [0, 4],
+    "next_header_offset": 6165950692,
+    "next_header_size": 138,
+    "file_count": 1,
+    "member": "com.ea.games.r3_row_xclipse.zip",
+    "compression": "LZMA2",
+    "packed_bytes": 6165950692,
+    "unpacked_bytes": 6310079877,
+    "status": "wrapper metadata decoded; inner ZIP inventory requires sequential decode of the single solid LZMA2 stream"
+  },
+  "download_avoidance": {
+    "outer_parts_materialized": [1, 83, 200, 232],
+    "outer_parts_total": 232,
+    "note": "edge/header decode avoided reconstructing or downloading the complete outer archive"
+  },
+  "next": "stream-decode the RR3 LZMA2 member as source volumes become available, then read the ZIP central directory and emit exact vehicle inventory"
+}
