@@ -23,6 +23,7 @@ var _quality := "Balanced"
 var _thermal_stage := 0
 var _weather_speed_factor := 1.0
 var _weather_density_factor := 1.0
+var _visual_pool: Array[AnimatableBody3D] = []
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -496,12 +497,8 @@ func _refresh_visuals(scene: Node, roads, terrain, active_xz: Vector2) -> void:
     _last_near = near_count
     _last_medium = proxy_count
 
-func _materialize_agent(scene: Node, identifier: String, agent: Dictionary) -> void:
-    if agent.get("node", null) is AnimatableBody3D and is_instance_valid(agent.node):
-        return
+func _create_visual(scene: Node) -> AnimatableBody3D:
     var body := AnimatableBody3D.new()
-    body.name = "Traffic_" + identifier.replace(":", "_").replace("/", "_")
-    body.collision_layer = 1
     body.collision_mask = 0
     body.sync_to_physics = true
     var shape := BoxShape3D.new()
@@ -515,6 +512,36 @@ func _materialize_agent(scene: Node, identifier: String, agent: Dictionary) -> v
     model.build()
     body.add_child(model)
     scene.add_child(body)
+    return body
+
+func _acquire_visual(scene: Node) -> AnimatableBody3D:
+    while not _visual_pool.is_empty():
+        var body: AnimatableBody3D = _visual_pool.pop_back()
+        if is_instance_valid(body):
+            if body.get_parent() != scene:
+                body.reparent(scene)
+            body.visible = true
+            body.collision_layer = 1
+            return body
+    var body := _create_visual(scene)
+    body.visible = true
+    body.collision_layer = 1
+    return body
+
+func _release_visual(body: AnimatableBody3D) -> void:
+    if not is_instance_valid(body):
+        return
+    body.collision_layer = 0
+    body.visible = false
+    if not _visual_pool.has(body):
+        _visual_pool.append(body)
+
+func _materialize_agent(scene: Node, identifier: String, agent: Dictionary) -> void:
+    if agent.get("node", null) is AnimatableBody3D and is_instance_valid(agent.node):
+        return
+    var body := _acquire_visual(scene)
+    body.name = "Traffic_" + identifier.replace(":", "_").replace("/", "_")
+    var model := body.get_node_or_null("TrafficVisual") as YardmanVehicleModel
     agent.node = body
     agent.model = model
     agents[identifier] = agent
@@ -524,8 +551,8 @@ func _dematerialize_agent(identifier: String) -> void:
         return
     var agent: Dictionary = agents[identifier]
     var node = agent.get("node", null)
-    if node is Node and is_instance_valid(node):
-        (node as Node).queue_free()
+    if node is AnimatableBody3D and is_instance_valid(node):
+        _release_visual(node)
     agent.node = null
     agent.model = null
     agents[identifier] = agent
@@ -563,6 +590,10 @@ func _clear_scene_state() -> void:
     for identifier in agents.keys():
         _dematerialize_agent(str(identifier))
     agents.clear()
+    for body: AnimatableBody3D in _visual_pool:
+        if is_instance_valid(body):
+            body.queue_free()
+    _visual_pool.clear()
     if _proxy != null and is_instance_valid(_proxy):
         _proxy.queue_free()
     _proxy = null
