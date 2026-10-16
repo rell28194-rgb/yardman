@@ -1,10 +1,10 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "checkpoint": "toyota-probox-production-spec-001",
   "identity": "Toyota Probox",
   "make": "Toyota",
   "rights_status": "active_vehicle",
-  "status": "procedural_dimensional_scaffold_only",
+  "status": "procedural_dimensional_scaffold_active_source_fusion_search_open",
   "production_ready": false,
   "source_policy": "godot/docs/vehicle_production/source-use-policy-001.json",
   "provenance": {
@@ -12,7 +12,39 @@
     "source_path": "godot/tools/vehicle_production/generate_toyota_probox_blender.py",
     "git_blob_sha": "9a069c457f578256d113632c2e44fbae27f4dc57",
     "sha256": null,
-    "note": "SHA-256 is intentionally not fabricated; fill from the exported/generated production artifact before promotion."
+    "note": "SHA-256 is intentionally not fabricated; fill from the generated/exported production artifact before promotion."
+  },
+  "source_search": {
+    "status": "no_exact_recovered_source_identity_in_current_durable_metadata; exhaustive_binary_alias_search_still_open",
+    "jamaica_target_roster": {
+      "present": true,
+      "evidence": "JAMAICA_VEHICLE_CANDIDATE_ROSTER.md lists Toyota Probox under Toyota Vans & Commercial",
+      "classification": "target-roster evidence only; not source-media evidence"
+    },
+    "carx_highway": {
+      "searched_evidence": "godot/docs/vehicle_production/fleet-source-discovery-001.json named vehicle identity anchors",
+      "exact_probox_identity_resolved": false,
+      "note": "Named-anchor evidence contains multiple Toyota identities but no Probox. This is not claimed to be a complete binary alias search."
+    },
+    "car_parking_multiplayer": {
+      "searched_evidence": [
+        "godot/docs/vehicle_production/carparking-identity-seed-001.json",
+        "godot/docs/vehicle_production/carparking-full-fleet-decode-002.json"
+      ],
+      "exact_probox_identity_resolved": false,
+      "note": "Current durable exact-identity evidence resolves several Toyota models but not Probox. Do not substitute Camry, Crown, Mark 2, Chaser, Fortuner, Yaris, Altezza or another Toyota body."
+    },
+    "real_racing_3": {
+      "inventory_state": "46814 ZIP entries / 547 vehicle directories known complete",
+      "exact_probox_identity_resolved_in_current_durable_crossmatch": false,
+      "note": "Current durable crossmatch/recovery checkpoints do not contain a Probox match. Re-run an exact alias search against the complete central-directory path set before declaring a definitive RR3 no-match."
+    },
+    "library_exact_term_search": {
+      "terms": ["probox", "toyota_probox", "toyota probox"],
+      "result_classification": "hits were Jamaica target/reference roster material, not recovered source media",
+      "no_binary_no_match_claim": true
+    },
+    "allowed_fallback": "continue owner-provided procedural Probox scaffold and use only compatible generic/shared technical components until exact Probox source evidence is recovered"
   },
   "dimensional_baseline": {
     "length_m": 4.195,
@@ -48,7 +80,7 @@
   "detail": {
     "exterior_body": {
       "present": false,
-      "evidence": "procedural scaffold only; final exterior source fusion pending"
+      "evidence": "procedural scaffold only; final exterior source fusion/original detail pass pending"
     },
     "interior_cabin": {
       "present": false,
@@ -99,7 +131,8 @@
       "wind",
       "impact",
       "mechanical"
-    ]
+    ],
+    "rule": "generic/shared vehicle audio may fill technical layers only when compatible; do not label another model's distinctive engine recording as exact Probox evidence"
   },
   "lods": {
     "lod0": {},
@@ -115,13 +148,14 @@
   },
   "required_before_production": [
     "resolve exact Probox generation/trim target",
-    "fuse authorized source exterior detail without breaking dimensional anchors",
+    "complete exact alias search against recoverable source inventories",
+    "fuse exact authorized source exterior detail if found; otherwise author original detail without breaking dimensional anchors",
     "build production cabin/interior",
     "replace placeholder glass and lamps",
     "replace wheel cylinders with production wheels tires and brakes",
     "add visible underbody detail where expected",
     "author coherent UV/material set",
-    "attach source-backed vehicle audio",
+    "attach compatible source-backed vehicle audio",
     "rig steering wheels suspension and attachment points",
     "build LOD0 through LOD3 while preserving hero LOD0",
     "pass close mid and far visual review",
