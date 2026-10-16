@@ -177,8 +177,7 @@ func refinement_plan(segments: Array, tile: Vector2i, tile_size: float, spacing:
         var expand := width * 0.5 + clampf(width * 0.10, MIN_SHOULDER_M, MAX_SHOULDER_M) + 0.35 + EXCAVATION_MARGIN_M
         var min_x := INF; var max_x := -INF; var min_z := INF; var max_z := -INF
         for raw_point in polygon:
-            if not raw_point is Array or raw_point.size() < 3: continue
-            var local_x := float(raw_point[0]) - tile_origin.x; var local_z := float(raw_point[2]) - tile_origin.y
+            if not raw_point is Array or raw_point.size() < 3: continue            var local_x := float(raw_point[0]) - tile_origin.x; var local_z := float(raw_point[2]) - tile_origin.y
             if not is_finite(local_x) or not is_finite(local_z): continue
             min_x = minf(min_x, local_x); max_x = maxf(max_x, local_x); min_z = minf(min_z, local_z); max_z = maxf(max_z, local_z)
         if not is_finite(min_x): continue
@@ -357,11 +356,15 @@ func carved_height(raw_height: float, world_x: float, world_z: float, segments: 
     return result
 
 func _replace_collision(tile_root: Node3D, arrays: Array) -> void:
-    var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-    var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+    var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]    var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
     if vertices.is_empty() or indices.is_empty(): return
     var faces := PackedVector3Array()
-    for index in indices: faces.append(vertices[int(index)])
+    faces.resize(indices.size())
+    for face_index in range(indices.size()):
+        var vertex_index := int(indices[face_index])
+        if vertex_index < 0 or vertex_index >= vertices.size():
+            return
+        faces[face_index] = vertices[vertex_index]
     if faces.is_empty(): return
     var shape := ConcavePolygonShape3D.new(); shape.backface_collision = true; shape.set_faces(faces)
     var collider := CollisionShape3D.new(); collider.shape = shape    var body := StaticBody3D.new(); body.name = "RoadAwareTerrainCollision"; body.collision_layer = 0; body.collision_mask = 0; body.add_child(collider)
