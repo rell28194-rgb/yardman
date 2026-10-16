@@ -1,0 +1,33 @@
+{
+  "checkpoint": "rr3-staged-recovery-006",
+  "source": "Beta2/com.ea.games.r3_row_xclipse",
+  "status": "staged_exact_inner_split_volumes_001_through_200",
+  "rr3_inner": {
+    "split_parts_total": 246,
+    "staged_parts": 200,
+    "staged_unpacked_bytes": 5033164800,
+    "first_part_sha256": "9d91a0fa764f492fecd4a0b73a378dfb09608ea3d5d81ba152cd342222ab8407",
+    "last_part_sha256": "d76fd12b36ae298b7cf70350df6afc1a809a847fb02d9bbe302aef64058d417d",
+    "full_part_hash_manifest": "/Projects/Jamaica Game/Codex Handoff/Beta2 Inspection/Yardman-RR3-Inner-Hashes-001-200.json"
+  },
+  "outer_source": {
+    "materialized_range": "beta2.7z.083 through beta2.7z.179",
+    "source_folder": "/Google Drive/Yardman beta/Beta2",
+    "duplicate_zero_byte_entries_ignored": [176,177,178,179],
+    "method": "sparse-map exact non-zero outer volumes into authoritative outer 7z logical offsets, then decode only fully-covered RR3 members"
+  },
+  "wrapper": {
+    "member": "com.ea.games.r3_row_xclipse.zip",
+    "compression": "LZMA2 solid stream",
+    "packed_bytes": 6165950692,
+    "unpacked_bytes": 6310079877,
+    "inventory_state": "pending_remaining_46_inner_split_parts_then_sequential_decode"
+  },
+  "policy": {
+    "private_media_public_git": false,
+    "git_contains": "hash/provenance/decode evidence only",
+    "crown007": "accepted current state and deprioritized, not complete",
+    "fleet": "continue RR3 inventory and Beta1/Beta2 source fusion fleet-wide"
+  },
+  "next": "resume at RR3 inner part 201; finish through part 246, then run split-aware sequential decoder and inventory the resulting ZIP"
+}
