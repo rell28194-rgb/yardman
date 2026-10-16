@@ -1,13 +1,20 @@
 {
-  "format_version": 3,
+  "format_version": 4,
   "policy": {
     "scope": "full_fleet_parallel_source_fusion",
+    "source_use_policy": "godot/docs/vehicle_production/source-use-policy-001.json",
+    "brand_filter": "none",
     "crown007": "accepted_current_state_deprioritized_not_complete",
     "crown007_rule": "Keep Crown stable as the quality reference, allow opportunistic/shared-fleet improvements, but do not let Crown polish block getting the rest of the roster into production.",
-    "porsche": "excluded",
-    "beta1_requirement": "use all recoverable Beta1 vehicle/part/material sources",
+    "porsche": "active from owner-authorized project sources; exact model/generation/trim evidence remains mandatory",
+    "tesla": "active when present in owner-authorized project sources",
+    "source_game_world_content": "excluded",
+    "outside_asset_rule": "explicit owner approval required before introducing any source outside the Yardman project source pool",
+    "beta1_requirement": "use all recoverable Beta1 vehicle/part/material/texture/audio sources",
     "beta2_requirement": "for every active vehicle, search Car Parking Multiplayer and Real Racing 3 before promotion",
-    "selection": "do not stop at first usable source; combine strongest compatible body/interior/wheels/materials/LOD/damage parts across Beta1 and Beta2"
+    "selection": "do not stop at first usable source; combine strongest compatible body/interior/wheels/materials/LOD/damage/audio parts across authorized sources without generation relabeling",
+    "quantity": "no artificial fleet cap; quality and runtime gates apply per distinct vehicle",
+    "motorsport": "exact motorsport variants may be full player-only vehicles while remaining excluded from AI/ambient traffic when marked player-only"
   },
   "source_state": {
     "beta1_carx_drift": {
@@ -17,33 +24,51 @@
     },
     "beta2_car_parking": {
       "queued_bundles": 237,
-      "resolved_non_porsche": 227,
-      "excluded_porsche": 8,
+      "decoded_current_car_bundles": 237,
+      "unityfs_parse_failures": 0,
+      "historical_excluded_porsche_records": 8,
+      "current_brand_exclusions": 0,
       "conflict_review_required": 1,
       "unresolved": 1,
       "identity_checkpoint": "carparking-full-fleet-decode-002",
+      "rights_refresh_checkpoint": "carparking-porsche-rights-refresh-001",
       "catalog_sha256": "4bacdddca1c11ed8d3ba9697c90c06424e616eb2ca32af09191c5183694963b9",
       "open_identity_gates": [21, 122]
     },
     "beta2_real_racing_3": {
       "logical_bytes": 6165950862,
       "split_parts": 246,
-      "status": "source_container_confirmed_sequential_solid_stream_inventory_pending",
-      "resume_checkpoint": "rr3-recovery-resume-001",
-      "required_beta2_outer_parts": "83-200"
+      "zip_entries": 46814,
+      "vehicle_directories": 547,
+      "status": "zip64_inventory_complete_random_access_recovery_validated",
+      "validated_vehicle_directories": 22,
+      "validated_files": 657,
+      "validated_uncompressed_bytes": 234993731,
+      "recovery_method": "dictionary-reset-window random access with per-member size CRC32 and SHA-256 evidence"
+    },
+    "owner_procedural_sources": {
+      "status": "active",
+      "toyota_probox": {
+        "generator": "godot/tools/vehicle_production/generate_toyota_probox_blender.py",
+        "production_spec": "godot/docs/vehicle_production/toyota-probox-production-spec-001.json",
+        "state": "dimensional_scaffold_only_not_production_ready"
+      }
     }
   },
   "batch_rule": {
     "parallelism": "process identities in batches rather than finishing one vehicle before inspecting the rest",
-    "primary_goal": "get the other cars to at least the current Crown007 quality band while preserving Android budgets",
+    "primary_goal": "bring the wider roster to or above the current Crown007 quality band while preserving close-range fidelity and Android runtime budgets",
     "per_vehicle_steps": [
-      "collect all Beta1 matching variants and parts",
+      "collect all compatible Beta1 variants and parts",
       "search Beta2 Car Parking catalog/bundles for exact or compatible identity/components",
-      "search Beta2 Real Racing 3 inventory for exact or compatible identity/components",
-      "compare body geometry, interior, wheels, tyres, glass, lamps, materials, textures, LODs and damage parts",
-      "select strongest compatible cross-beta component set with provenance",
+      "search the completed RR3 ZIP64 inventory for exact or compatible identity/components",
+      "include owner-provided procedural sources when they provide stronger dimensions or original geometry",
+      "compare body geometry, interior, wheels, tyres, brakes, glass, lamps, materials, textures, LODs, damage parts and audio",
+      "select strongest compatible cross-source component set with provenance",
       "author only the missing production pieces",
-      "validate LOD0-LOD3 and Android budgets independently",
+      "validate identity and generation/trim compatibility before body promotion",
+      "validate LOD0-LOD3 and Android budgets independently without using budget targets to visibly degrade LOD0",
+      "assign player/AI/ambient availability explicitly",
       "defer runtime integration to the main optimization lane"
     ]
   },
@@ -95,16 +120,29 @@
     "ToyotaChaserV",
     "ToyotaGT86",
     "ToyotaMark2",
-    "ToyotaSupraRZ"
+    "ToyotaProbox",
+    "ToyotaSupraRZ",
+    "Porsche Panamera Turbo S family",
+    "Porsche Cayenne Turbo",
+    "Porsche 911 991 family",
+    "Porsche GT3 RS family",
+    "Porsche 911 1996-era family",
+    "Porsche 919 Hybrid",
+    "Porsche 918 Spyder",
+    "Porsche Carrera GT 2004"
   ],
   "deprioritized_reference_vehicles": [
     "Toyota Crown 2013 / Crown007"
   ],
   "identity_rules": {
-    "ToyotaMark2": "not Toyota Mark X",
-    "ToyotaChaserV": "not Toyota Mark X",
+    "ToyotaMark2": "not Toyota Mark X unless exact evidence proves a Mark X source",
+    "ToyotaChaserV": "not Toyota Mark X unless exact evidence proves a Mark X source",
     "ToyotaCrown": "accepted current state; not permanently complete; not primary focus",
-    "Porsche": "excluded from all extraction, reconstruction, branding and promotion",
+    "ToyotaProbox": "procedural scaffold establishes dimensions only; final generation/trim and production detail still require source-backed evidence",
+    "Porsche 911 991 family": "do not relabel as 992",
+    "Porsche 911 1996-era family": "do not relabel as 992",
+    "Porsche GT3 RS family": "generation unresolved; no 992 claim without geometry/prefab evidence",
+    "Porsche": "active from authorized source material; brand permission does not waive exact identity/generation/trim checks",
     "unresolved": "must pass identity gate before media promotion"
   }
 }
