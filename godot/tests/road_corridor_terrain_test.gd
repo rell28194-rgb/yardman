@@ -139,6 +139,16 @@ func _initialize() -> void:
     var fill_rebuild := runtime.rebuild_land_arrays(source, low_heights, cells, Vector2i.ZERO, 128.0, 64.0, 3, 8.0)
     _require(absf(_mesh_height(fill_rebuild.arrays, Vector2(32, 32)) - 5.0) < 0.001,
         "ribbon boundary constraints raised fill terrain")
+    # A refinement request must survive a transient readiness miss. Streamer
+    # signals for roads, terrain, coast and height payloads are not guaranteed
+    # to arrive in the same frame.
+    var pending_tile := Vector2i(7, 9)
+    runtime.set("_connected", true)
+    runtime.call("_queue_refine", pending_tile)
+    runtime.call("_process", 0.05)
+    var pending_after: Dictionary = runtime.get("_pending_tiles")
+    _require(pending_after.has(pending_tile), "transiently unavailable corridor refinement was dropped")
+
     print("BOUNDARY_METRICS micro=%d national_micro=%d under_deck=%.6f graded_error=%.6f" % [
         rebuilt.micro_triangles, national_rebuild.micro_triangles, max_under_deck, graded_max_error])
     runtime.free()
