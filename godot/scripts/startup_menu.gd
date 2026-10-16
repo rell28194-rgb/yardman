@@ -30,6 +30,51 @@ const AI_RUNTIME_NAMES := [
     "TrafficBrakeLightRuntime",
     "TrafficHeadlightRuntime",
 ]
+const PREGAME_RUNTIME_NAMES := [
+    "RenderRuntime",
+    "TerrainPhysicsRuntime",
+    "BuildingHLOD",
+    "RoadVisibilityRuntime",
+    "RoadCorridorTerrainRuntime",
+    "RoadEarthworksRuntime",
+    "RoadDrainageRuntime",
+    "RoadsideEngineeringRuntime",
+    "RoadHairpinRuntime",
+    "TrafficRuntime",
+    "TrafficSignalRuntime",
+    "ParkedVehicleRuntime",
+    "PedestrianRuntime",
+    "PedestrianDestinationRuntime",
+    "PedestrianIdleRuntime",
+    "TrafficPedestrianSafetyRuntime",
+    "TrafficVisualVarietyRuntime",
+    "TrafficBrakeLightRuntime",
+    "StreetlightNightRuntime",
+    "VehicleHeadlightRuntime",
+    "TrafficHeadlightRuntime",
+    "BuildingNightRuntime",
+    "EnvironmentAudioRuntime",
+    "VehicleSignalRuntime",
+    "JobRuntime",
+    "JobPersistenceRuntime",
+    "JobGuidanceRuntime",
+    "VegetationBudgetRuntime",
+    "ReflectionBudgetRuntime",
+    "VehicleGarage",
+    "VehicleVisualRuntime",
+    "VehicleCameraRuntime",
+    "SurfaceDynamics",
+    "RoadworkLayer",
+    "FenceLayer",
+    "StreetLightLayer",
+    "GuardRailLayer",
+    "RetainingWallLayer",
+    "BusStopLayer",
+    "VehicleDriverLayer",
+    "AtmosphereFX",
+    "WeatherCycleRuntime",
+    "LocationTracker",
+]
 
 var game: Node
 var screen: Control
@@ -46,11 +91,15 @@ var _pending_start_parish := ""
 var _pending_quality := ""
 var _open_garage_after_launch := false
 var _ai_enabled := true
+var _pregame_process_modes: Dictionary = {}
+var _pregame_suspended := false
 
 func _ready() -> void:
     layer = 200
     process_mode = Node.PROCESS_MODE_ALWAYS
     _load_options()
+    _suspend_gameplay_runtimes()
+    call_deferred("_suspend_gameplay_runtimes")
     _build_ui()
     _populate_parishes_from_manifest()
     _apply_ai_enabled(_ai_enabled)
@@ -68,6 +117,7 @@ func _bind_game() -> void:
     var launched_now := _launching_game
     game = scene
     _launching_game = false
+    _restore_gameplay_runtimes()
     if continue_button != null:
         continue_button.disabled = false
         continue_button.text = "CONTINUE DRIVE"
@@ -88,6 +138,34 @@ func _bind_game() -> void:
     else:
         _set_open(true)
     print("YARDMAN_STARTUP_MENU_BOUND")
+
+func _suspend_gameplay_runtimes() -> void:
+    if is_instance_valid(game) or _launching_game:
+        return
+    for runtime_name in PREGAME_RUNTIME_NAMES:
+        var runtime := get_node_or_null("/root/%s" % runtime_name)
+        if runtime == null:
+            continue
+        if not _pregame_process_modes.has(runtime_name):
+            _pregame_process_modes[runtime_name] = runtime.process_mode
+        runtime.process_mode = Node.PROCESS_MODE_DISABLED
+    _pregame_suspended = not _pregame_process_modes.is_empty()
+
+func _restore_gameplay_runtimes() -> void:
+    if not _pregame_suspended and _pregame_process_modes.is_empty():
+        return
+    for runtime_name in _pregame_process_modes.keys():
+        var runtime := get_node_or_null("/root/%s" % str(runtime_name))
+        if runtime == null:
+            continue
+        runtime.process_mode = int(_pregame_process_modes[runtime_name])
+    _pregame_process_modes.clear()
+    _pregame_suspended = false
+
+func _begin_shader_warmup() -> void:
+    var warmup := get_node_or_null("/root/ShaderWarmup")
+    if warmup != null and warmup.has_method("begin"):
+        warmup.call("begin")
 
 func _build_ui() -> void:
     screen = Control.new()
@@ -278,6 +356,7 @@ func _launch_game() -> void:
         continue_button.text = "LOADING JAMAICA…"
     if garage_button != null:
         garage_button.disabled = true
+    _begin_shader_warmup()
     var error := get_tree().change_scene_to_file(GAMEPLAY_SCENE)
     if error != OK:
         _launching_game = false
