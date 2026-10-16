@@ -1,6 +1,9 @@
 extends Node
 class_name YardmanJobRuntime
 
+# Owner sandbox builds keep the economy/job systems dormant until explicitly enabled.
+const SANDBOX_MODE := true
+
 const UPDATE_INTERVAL := 0.20
 const ARRIVAL_RADIUS_M := 90.0
 const MAX_VALID_STEP_M := 220.0
@@ -29,6 +32,9 @@ var _active_label: Label
 var _abandon_button: Button
 
 func _ready() -> void:
+    if SANDBOX_MODE:
+        process_mode = Node.PROCESS_MODE_DISABLED
+        return
     process_mode = Node.PROCESS_MODE_ALWAYS
     _build_ui()
 
