@@ -1,0 +1,91 @@
+{
+  "format_version": 1,
+  "checkpoint": "fleet-source-discovery-001",
+  "created_utc": "2026-10-16",
+  "scope_rule": "All legally usable cars from CarX, Car Parking Multiplayer, and Real Racing 3 are production intake. These discovery metrics are not a shortlist and are not final car counts.",
+  "carx_drift": {
+    "inventory_objects": 247863,
+    "serialized_files_seen": 5591,
+    "recall_first_vehicle_family_or_dependency_files_queued": 304,
+    "porsche_specific_candidate_files_detected_by_current_name_filter": 0,
+    "note": "304 is a dependency/family-file queue count, not a distinct-car count. Object-graph/dependency closure will consolidate files into complete source vehicles without dropping unresolved entries."
+  },
+  "carx_highway": {
+    "inventory_objects": 162374,
+    "serialized_files_seen": 71,
+    "recall_first_vehicle_family_or_dependency_files_queued": 6,
+    "porsche_specific_candidate_files_detected_by_current_name_filter": 0,
+    "named_vehicle_identity_anchors_before_alias_deduplication": 75,
+    "named_anchor_examples": [
+      "AudiR8",
+      "AudiRS6",
+      "BMW_M1",
+      "BMW_M3_E46",
+      "BMW_M3_E92_GTS",
+      "BMW_M4",
+      "BMW_X5_e53",
+      "Chevrolet_Express",
+      "DodgeChallengerRT",
+      "DodgeCharger1970",
+      "DodgeRam2010",
+      "Ferrari488",
+      "Ford_F150",
+      "Ford_GT",
+      "FordFocusST2019",
+      "FordMustang350",
+      "FordMustangEleanor",
+      "HondaNSX",
+      "Jaguar_F_Type",
+      "JeepGrandCherokee2005",
+      "Lexus_LS2004",
+      "LexusLFA",
+      "Mazda3",
+      "MazdaMX5",
+      "MazdaRX7_FC",
+      "MazdaRX8",
+      "MclarenF1LM",
+      "MercedesBenzAMGGT2019",
+      "MercedesBenzCLK63",
+      "MitsubishiEvo9",
+      "Nissan180sx",
+      "Nissan370z",
+      "NissanSkylineR34",
+      "NissanSkylineR35",
+      "SubaruImprezaWRX",
+      "ToyotaAltezza",
+      "ToyotaChaserV",
+      "ToyotaCorolla2019",
+      "ToyotaGT86",
+      "ToyotaPrius",
+      "ToyotaSupra2020",
+      "ToyotaSupraRZ",
+      "Volkswagen_Service_Van"
+    ],
+    "note": "Highway packs many cars into monolithic resources.assets/shared assets, so serialized-file count is especially not a vehicle count. Named anchors prove the source pool is already broad; extraction must resolve every vehicle object graph."
+  },
+  "car_parking_multiplayer": {
+    "xapk_bytes": 2391971165,
+    "unity_streaming_assets_pack_bytes": 1088603009,
+    "car_prefixed_bundles_known": 239,
+    "current_verified_example": "catalog 218 Toyota Crown 2013",
+    "migration_scope": "catalog-wide/all cars, not Crown-only"
+  },
+  "real_racing_3": {
+    "outer_source": "com.ea.games.r3_row_xclipse",
+    "nested_split_parts": 246,
+    "logical_bytes": 6165950862,
+    "inner_vehicle_inventory_state": "pending complete reconstruction/index",
+    "migration_scope": "all recoverable cars after complete inventory, with Porsche-specific entries filtered before conversion"
+  },
+  "rights_filter": {
+    "porsche": "excluded",
+    "behavior": "Porsche-specific source entries remain recorded as PORSCHE_RIGHTS_EXCLUDED so fleet coverage accounting stays exhaustive; they are not converted, branded, badged, or fidelity-reproduced."
+  },
+  "nonclaims": [
+    "304 CarX Drift queue files are not 304 distinct cars",
+    "75 CarX Highway named anchors are not the complete Highway car count",
+    "Car Parking 239 car-prefixed bundles are not asserted to equal 239 distinct cars",
+    "RR3 distinct-car count is not yet claimed",
+    "discovery does not equal conversion or integration acceptance"
+  ]
+}
