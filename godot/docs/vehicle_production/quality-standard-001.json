@@ -1,0 +1,37 @@
+{
+  "checkpoint": "vehicle-quality-standard-001",
+  "scope": "all active non-Porsche production vehicles",
+  "owner_target": "top quality detail",
+  "principles": {
+    "close_range": "LOD0 preserves source-backed exterior, cabin, lights, glass, wheels and brake detail; mobile optimization must not be achieved by degrading the hero vehicle.",
+    "distance": "LOD1-LOD3 progressively remove invisible/small geometry and expensive material work while preserving silhouette, wheel placement, glazing and lighting readability.",
+    "provenance": "Every promoted component records exact source path and SHA-256 evidence. Ambiguous family/generation matches remain review-required.",
+    "rights": "Porsche is excluded. Crown007 remains accepted/deprioritized and may inherit shared fleet improvements without blocking fleet expansion.",
+    "runtime": "Android-device performance remains an explicit acceptance item and may be pending; it must never be silently represented as passed."
+  },
+  "required_detail_evidence": [
+    "exterior_body",
+    "interior_cabin",
+    "lighting",
+    "glass",
+    "wheels",
+    "brakes"
+  ],
+  "required_lod_chain": ["lod0", "lod1", "lod2", "lod3"],
+  "lod_policy": {
+    "strictly_decreasing_triangle_counts": true,
+    "lod3_max_fraction_of_lod0": 0.12,
+    "note": "No universal LOD0 triangle cap is used as a quality proxy. LOD0 fidelity and actual Android measurements decide whether further optimization is necessary."
+  },
+  "visual_acceptance": {
+    "close": "required",
+    "mid": "required",
+    "far": "required",
+    "android_device": "required before final runtime promotion"
+  },
+  "source_state": {
+    "car_parking": "237 bundles decoded; 227 non-Porsche resolved; 8 Porsche excluded; IDs 21 and 122 remain gated",
+    "beta1_carx": "cross-source identity/source-unit matching active",
+    "rr3": "sequential solid-stream inventory pending; Beta2 outer parts 83-200 are the required recovery range"
+  }
+}
