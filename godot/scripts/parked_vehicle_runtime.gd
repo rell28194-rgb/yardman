@@ -66,230 +66,105 @@ static func budget_for(quality: String, thermal_stage: int) -> Dictionary:
     var near_distance := 155.0
     var medium_distance := 430.0
     match quality:
-        "Performance":
-            count = 7
-            near = 3
-            near_distance = 130.0
-            medium_distance = 340.0
-        "Quality":
-            count = 14
-            near = 6
-            near_distance = 190.0
-            medium_distance = 470.0
-        "Ultra":
-            count = 18
-            near = 7
-            near_distance = 220.0
-            medium_distance = 500.0
+        "Performance": count = 7; near = 3; near_distance = 130.0; medium_distance = 340.0
+        "Quality": count = 14; near = 6; near_distance = 190.0; medium_distance = 470.0
+        "Ultra": count = 18; near = 7; near_distance = 220.0; medium_distance = 500.0
     var stage := clampi(thermal_stage, 0, 5)
     var factor: float = float([1.0, 0.96, 0.88, 0.78, 0.66, 0.56][stage])
     return {"max_parked": maxi(4, int(round(float(count) * factor))), "near_visuals": maxi(2, int(round(float(near) * factor))), "near_radius": maxf(105.0, near_distance * lerpf(0.82, 1.0, factor)), "medium_radius": maxf(290.0, medium_distance * lerpf(0.80, 1.0, factor))}
 
 static func parked_pose(record: Dictionary, progress: float, side_sign: int) -> Dictionary:
-    var a: Vector2 = record.get("a", Vector2.ZERO)
-    var b: Vector2 = record.get("b", Vector2.ZERO)
-    var tangent := b - a
-    var length := tangent.length()
-    if length < 0.001:
-        return {}
+    var a: Vector2 = record.get("a", Vector2.ZERO); var b: Vector2 = record.get("b", Vector2.ZERO); var tangent := b - a; var length := tangent.length()
+    if length < 0.001: return {}
     tangent /= length
-    var t := clampf(progress, 0.08, 0.92)
-    var center := a.lerp(b, t)
-    var normal := Vector2(-tangent.y, tangent.x) * float(1 if side_sign >= 0 else -1)
-    var width := maxf(3.0, float(record.get("width_m", 6.5)))
-    var shoulder_offset := width * 0.5 + 1.12
+    var t := clampf(progress, 0.08, 0.92); var center := a.lerp(b, t); var normal := Vector2(-tangent.y, tangent.x) * float(1 if side_sign >= 0 else -1); var width := maxf(3.0, float(record.get("width_m", 6.5))); var shoulder_offset := width * 0.5 + 1.12
     return {"position": center + normal * shoulder_offset, "heading": atan2(-tangent.x, -tangent.y) + (0.0 if side_sign >= 0 else PI), "shoulder_offset": shoulder_offset, "length": length, "progress": t}
-
 static func _compiled_deck_height(record: Dictionary, progress: float) -> float:
-    var a_value = record.get("height_a", null)
-    var b_value = record.get("height_b", null)
-    if a_value == null or b_value == null:
-        return NAN
-    var a := float(a_value)
-    var b := float(b_value)
-    if not is_finite(a) or not is_finite(b):
-        return NAN
+    var a_value = record.get("height_a", null); var b_value = record.get("height_b", null)
+    if a_value == null or b_value == null: return NAN
+    var a := float(a_value); var b := float(b_value)
+    if not is_finite(a) or not is_finite(b): return NAN
     return lerpf(a, b, clampf(progress, 0.0, 1.0))
 
 func _reconcile(roads, active_xz: Vector2) -> void:
     var records_value = roads.call("_nearby_surface_segments", active_xz.x, active_xz.y, minf(medium_radius, 500.0))
-    if not records_value is Dictionary:
-        return
+    if not records_value is Dictionary: return
     var records: Dictionary = records_value
     for identifier in parked.keys():
         var entry: Dictionary = parked[identifier]
-        if Vector2(entry.position).distance_to(active_xz) > minf(512.0, medium_radius + 65.0):
-            _destroy(str(identifier))
-    if parked.size() >= max_parked:
-        return
-    var keys: Array = records.keys()
-    keys.sort()
+        if Vector2(entry.position).distance_to(active_xz) > minf(512.0, medium_radius + 65.0): _destroy(str(identifier))
+    if parked.size() >= max_parked: return
+    var keys: Array = records.keys(); keys.sort()
     for key in keys:
-        if parked.size() >= max_parked:
-            break
+        if parked.size() >= max_parked: break
         var record: Dictionary = records[key]
-        if (int(record.get("flags", 0)) & 8) != 0 or float(record.get("width_m", 0.0)) < 6.2:
-            continue
-        var edge_id := str(record.get("edge_id", key))
-        var seed := absi(edge_id.hash())
-        if seed % 4 != 0:
-            continue
-        var side := 1 if ((seed >> 3) & 1) == 0 else -1
-        var progress := 0.18 + float((seed >> 5) % 6200) / 10000.0
-        var identifier := "%s:parked:%d" % [edge_id, side]
-        if parked.has(identifier):
-            continue
+        if (int(record.get("flags", 0)) & 8) != 0 or float(record.get("width_m", 0.0)) < 6.2: continue
+        var edge_id := str(record.get("edge_id", key)); var seed := absi(edge_id.hash())
+        if seed % 4 != 0: continue
+        var side := 1 if ((seed >> 3) & 1) == 0 else -1; var progress := 0.18 + float((seed >> 5) % 6200) / 10000.0; var identifier := "%s:parked:%d" % [edge_id, side]
+        if parked.has(identifier): continue
         var pose := parked_pose(record, progress, side)
-        if pose.is_empty():
-            continue
+        if pose.is_empty(): continue
         var point: Vector2 = pose.position
-        if point.distance_to(active_xz) < 32.0:
-            continue
-        parked[identifier] = {"record": record.duplicate(true), "progress": float(pose.progress), "position": point, "heading": float(pose.heading), "node": null, "model": null}
+        if point.distance_to(active_xz) < 32.0: continue
+        parked[identifier] = {"record": record, "progress": float(pose.progress), "position": point, "heading": float(pose.heading), "node": null, "model": null}
 
 func _refresh_visuals(scene: Node, roads, terrain, active_xz: Vector2) -> void:
-    if _proxy == null or _proxy.multimesh == null:
-        return
-    var near_count := 0
-    var proxy_count := 0
-    var ids: Array = parked.keys()
-    ids.sort()
+    if _proxy == null or _proxy.multimesh == null: return
+    var near_count := 0; var proxy_count := 0; var ids: Array = parked.keys(); ids.sort()
     for identifier in ids:
-        var entry: Dictionary = parked[identifier]
-        var point: Vector2 = entry.position
-        var distance := point.distance_to(active_xz)
-        var deck_y := _compiled_deck_height(entry.record, float(entry.get("progress", 0.5)))
-        if not is_finite(deck_y):
-            deck_y = float(terrain.height_at(point.x, point.y))
-        if not is_finite(deck_y):
-            _dematerialize(str(identifier))
-            continue
+        var entry: Dictionary = parked[identifier]; var point: Vector2 = entry.position; var distance := point.distance_to(active_xz); var deck_y := _compiled_deck_height(entry.record, float(entry.get("progress", 0.5)))
+        if not is_finite(deck_y): deck_y = float(terrain.height_at(point.x, point.y))
+        if not is_finite(deck_y): _dematerialize(str(identifier)); continue
         var local: Vector3 = roads.world_to_local(point.x, point.y, deck_y + 0.46)
         if distance <= near_radius and near_count < near_visual_budget:
-            _materialize(scene, str(identifier), entry)
-            entry = parked[identifier]
-            var node := entry.node as StaticBody3D
-            if node != null:
-                node.position = local
-                node.rotation.y = float(entry.heading)
+            _materialize(scene, str(identifier), entry); entry = parked[identifier]; var node := entry.node as StaticBody3D
+            if node != null: node.position = local; node.rotation.y = float(entry.heading)
             near_count += 1
         else:
             _dematerialize(str(identifier))
-            if distance <= medium_radius and proxy_count < _proxy.multimesh.instance_count:
-                _proxy.multimesh.set_instance_transform(proxy_count, Transform3D(Basis(Vector3.UP, float(entry.heading)), local + Vector3.UP * 0.18))
-                proxy_count += 1
-    _proxy.multimesh.visible_instance_count = proxy_count
-    _last_near = near_count
-    _last_medium = proxy_count
+            if distance <= medium_radius and proxy_count < _proxy.multimesh.instance_count: _proxy.multimesh.set_instance_transform(proxy_count, Transform3D(Basis(Vector3.UP, float(entry.heading)), local + Vector3.UP * 0.18)); proxy_count += 1
+    _proxy.multimesh.visible_instance_count = proxy_count; _last_near = near_count; _last_medium = proxy_count
 
 func _materialize(scene: Node, identifier: String, entry: Dictionary) -> void:
-    if entry.get("node", null) is StaticBody3D and is_instance_valid(entry.node):
-        return
+    if entry.get("node", null) is StaticBody3D and is_instance_valid(entry.node): return
     var body: StaticBody3D
     while not _parked_pool.is_empty() and body == null:
-        var candidate := _parked_pool.pop_back()
-        if is_instance_valid(candidate):
-            body = candidate
-    if body == null:
-        body = _create_parked_body()
-        scene.add_child(body)
+        var candidate: StaticBody3D = _parked_pool.pop_back() as StaticBody3D
+        if is_instance_valid(candidate): body = candidate
+    if body == null: body = _create_parked_body(); scene.add_child(body)
     elif body.get_parent() != scene:
-        if body.get_parent() != null:
-            body.get_parent().remove_child(body)
+        if body.get_parent() != null: body.get_parent().remove_child(body)
         scene.add_child(body)
-    body.name = "Parked_" + identifier.replace(":", "_").replace("/", "_")
-    body.visible = true
-    body.process_mode = Node.PROCESS_MODE_INHERIT
-    body.collision_layer = 1
+    body.name = "Parked_" + identifier.replace(":", "_").replace("/", "_"); body.visible = true; body.process_mode = Node.PROCESS_MODE_INHERIT; body.collision_layer = 1
     var collider := body.get_node_or_null("CollisionShape3D") as CollisionShape3D
-    if collider != null:
-        collider.set_deferred("disabled", false)
-    entry.node = body
-    entry.model = body.get_node_or_null("ParkedVisual")
-    parked[identifier] = entry
-
+    if collider != null: collider.set_deferred("disabled", false)
+    entry.node = body; entry.model = body.get_node_or_null("ParkedVisual"); parked[identifier] = entry
 func _create_parked_body() -> StaticBody3D:
-    var body := StaticBody3D.new()
-    body.collision_layer = 0
-    body.collision_mask = 0
-    var shape := BoxShape3D.new()
-    shape.size = Vector3(1.85, 1.30, 4.0)
-    var collider := CollisionShape3D.new()
-    collider.name = "CollisionShape3D"
-    collider.shape = shape
-    collider.position.y = 0.65
-    body.add_child(collider)
-    var model := VehicleModelScript.new()
-    model.name = "ParkedVisual"
-    model.build()
-    body.add_child(model)
-    return body
-
+    var body := StaticBody3D.new(); body.collision_layer = 0; body.collision_mask = 0; var shape := BoxShape3D.new(); shape.size = Vector3(1.85, 1.30, 4.0); var collider := CollisionShape3D.new(); collider.name = "CollisionShape3D"; collider.shape = shape; collider.position.y = 0.65; body.add_child(collider); var model := VehicleModelScript.new(); model.name = "ParkedVisual"; model.build(); body.add_child(model); return body
 func _dematerialize(identifier: String) -> void:
-    if not parked.has(identifier):
-        return
-    var entry: Dictionary = parked[identifier]
-    var node = entry.get("node", null)
+    if not parked.has(identifier): return
+    var entry: Dictionary = parked[identifier]; var node = entry.get("node", null)
     if node is StaticBody3D and is_instance_valid(node):
-        var body := node as StaticBody3D
-        body.visible = false
-        body.process_mode = Node.PROCESS_MODE_DISABLED
-        body.collision_layer = 0
-        var collider := body.get_node_or_null("CollisionShape3D") as CollisionShape3D
-        if collider != null:
-            collider.set_deferred("disabled", true)
+        var body := node as StaticBody3D; body.visible = false; body.process_mode = Node.PROCESS_MODE_DISABLED; body.collision_layer = 0; var collider := body.get_node_or_null("CollisionShape3D") as CollisionShape3D
+        if collider != null: collider.set_deferred("disabled", true)
         _parked_pool.append(body)
-    entry.node = null
-    entry.model = null
-    parked[identifier] = entry
-
+    entry.node = null; entry.model = null; parked[identifier] = entry
 func _destroy(identifier: String) -> void:
-    if not parked.has(identifier):
-        return
-    _dematerialize(identifier)
-    parked.erase(identifier)
-
+    if not parked.has(identifier): return
+    _dematerialize(identifier); parked.erase(identifier)
 func _ensure_proxy(scene: Node) -> void:
-    if _proxy != null and is_instance_valid(_proxy) and _proxy_scene == scene:
-        return
-    if _proxy != null and is_instance_valid(_proxy):
-        _proxy.queue_free()
-    _clear_pool()
-    _proxy_scene = scene
-    _proxy = MultiMeshInstance3D.new()
-    _proxy.name = "ParkedVehicleMediumHLOD"
-    _proxy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-    var mesh := BoxMesh.new()
-    mesh.size = Vector3(1.78, 1.22, 3.85)
-    var material := StandardMaterial3D.new()
-    material.albedo_color = Color(0.23, 0.24, 0.25)
-    material.roughness = 0.62
-    mesh.material = material
-    var multimesh := MultiMesh.new()
-    multimesh.transform_format = MultiMesh.TRANSFORM_3D
-    multimesh.mesh = mesh
-    multimesh.instance_count = max_parked
-    multimesh.visible_instance_count = 0
-    _proxy.multimesh = multimesh
-    scene.add_child(_proxy)
-
+    if _proxy != null and is_instance_valid(_proxy) and _proxy_scene == scene: return
+    if _proxy != null and is_instance_valid(_proxy): _proxy.queue_free()
+    _clear_pool(); _proxy_scene = scene; _proxy = MultiMeshInstance3D.new(); _proxy.name = "ParkedVehicleMediumHLOD"; _proxy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF; var mesh := BoxMesh.new(); mesh.size = Vector3(1.78, 1.22, 3.85); var material := StandardMaterial3D.new(); material.albedo_color = Color(0.23, 0.24, 0.25); material.roughness = 0.62; mesh.material = material; var multimesh := MultiMesh.new(); multimesh.transform_format = MultiMesh.TRANSFORM_3D; multimesh.mesh = mesh; multimesh.instance_count = max_parked; multimesh.visible_instance_count = 0; _proxy.multimesh = multimesh; scene.add_child(_proxy)
 func _clear_pool() -> void:
     for body in _parked_pool:
-        if is_instance_valid(body):
-            body.queue_free()
+        if is_instance_valid(body): body.queue_free()
     _parked_pool.clear()
-
 func _clear_scene_state() -> void:
-    for identifier in parked.keys():
-        _dematerialize(str(identifier))
-    parked.clear()
-    _clear_pool()
-    if _proxy != null and is_instance_valid(_proxy):
-        _proxy.queue_free()
-    _proxy = null
-    _proxy_scene = null
-    _last_near = 0
-    _last_medium = 0
-
+    for identifier in parked.keys(): _dematerialize(str(identifier))
+    parked.clear(); _clear_pool()
+    if _proxy != null and is_instance_valid(_proxy): _proxy.queue_free()
+    _proxy = null; _proxy_scene = null; _last_near = 0; _last_medium = 0
 func runtime_snapshot() -> Dictionary:
     return {"parked": parked.size(), "near_full": _last_near, "medium_hlod": _last_medium, "pooled_near": _parked_pool.size(), "quality": _quality, "thermal_stage": _thermal_stage}
