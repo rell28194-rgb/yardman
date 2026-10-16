@@ -180,7 +180,8 @@ func set_quality(quality: String, custom: Dictionary = {}) -> void:
         profile.merge(custom, true)
     roads.load_radius = clampi(int(profile.road_radius), 1, 3)
     terrain.load_radius = clampi(int(profile.terrain_radius), 1, 2)
-    sun.shadow_enabled = bool(profile.shadows)
+    var mobile_balanced := OS.has_feature("mobile") and quality in ["Performance", "Balanced", "Custom"]
+    sun.shadow_enabled = bool(profile.shadows) and not mobile_balanced
     get_viewport().scaling_3d_scale = clampf(float(profile.get("resolution", 0.75 if quality == "Performance" else 1.0)), 0.5, 1.25)
     for tile_root in roads._loaded.values():
         visuals.apply_roadside_quality(tile_root)
