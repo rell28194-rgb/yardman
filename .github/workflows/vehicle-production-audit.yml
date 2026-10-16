@@ -82,6 +82,36 @@ jobs:
           print('YARDMAN_FULL_FLEET_SOURCE_POLICY_PASS')
           PY
 
+      - name: Gate full Car Parking bundle decode
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path('godot/docs/vehicle_production/carparking-full-fleet-decode-002.json')
+          d = json.loads(p.read_text())
+          assert d['decode']['current_car_bundles'] == 237
+          assert d['decode']['unityfs_parse_failures'] == 0
+          assert d['decode']['resolved_non_porsche'] == 227
+          assert d['decode']['excluded_porsche'] == 8
+          assert d['decode']['conflict_review_required'] == 1
+          assert d['decode']['unresolved'] == 1
+          assert d['excluded_porsche_catalog_ids'] == [24, 28, 109, 188, 205, 207, 222, 250]
+          assert set(d['open_identity_gates']) == {'21', '122'}
+          assert d['source_verification']['xapk_sha256'] == 'ec2b27625eb0901aa699318d1e159ac1a9f8fe08cdd8e9f28f1024e020502dc7'
+          assert d['source_verification']['streaming_apk_sha256'] == 'd1e9eac6de65bf7ffb6071b8545d743c910befb85f868196efc9f671728a56da'
+          assert d['source_verification']['addressables_catalog_sha256'] == '4bacdddca1c11ed8d3ba9697c90c06424e616eb2ca32af09191c5183694963b9'
+
+          batch = json.loads(Path('godot/docs/vehicle_production/beta1-beta2-vehicle-fusion-batch-002.json').read_text())
+          assert len(batch['candidates']) == 22
+          assert batch['source_state']['rr3'].startswith('search still pending')
+          assert not any('porsche' in str(v).lower() for v in batch['candidates'])
+          assert all(v['beta1_source_unit'] and v['beta2_bundle_path'] for v in batch['candidates'])
+          print('YARDMAN_CARPARKING_FULL_FLEET_DECODE_PASS')
+          PY
+
       - name: Upload vehicle-production evidence
         uses: actions/upload-artifact@v4
         with:
