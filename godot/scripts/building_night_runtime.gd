@@ -11,6 +11,9 @@ var _refresh_clock := 0.0
 var _last_night_factor := 0.0
 var _last_lit_fraction := 0.0
 var _last_applied := false
+var _last_material_id := 0
+var _last_signature := ""
+var _force_apply := true
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -18,28 +21,53 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
     _refresh_clock += delta
-    if _refresh_clock < 0.25:
+    if _refresh_clock < 0.5 and not _force_apply:
         return
     _refresh_clock = 0.0
     var scene := get_tree().current_scene
     if scene == null:
         _last_applied = false
+        _last_material_id = 0
+        _last_signature = ""
+        _force_apply = true
         return
     var buildings = scene.get("buildings")
     if buildings == null:
         _last_applied = false
+        _last_material_id = 0
+        _last_signature = ""
+        _force_apply = true
         return
     var material = buildings.get("_wall_material")
     var hour := float(scene.get("day_hour"))
     var budget := budget_for(quality, thermal_stage, renderer)
-    _last_applied = apply_material(material, hour, budget)
-    _last_night_factor = NightPolicy.night_factor(hour)
-    _last_lit_fraction = effective_lit_fraction(hour, budget)
+    var night := NightPolicy.night_factor(hour)
+    var fraction := effective_lit_fraction(hour, budget)
+    var material_id := material.get_instance_id() if material is ShaderMaterial else 0
+    # Quantize only the continuously changing twilight term. The lit-fraction
+    # policy itself is already piecewise, so there is no reason to rewrite the
+    # same three shader uniforms several times per second for hours of game time.
+    var night_step := roundi(night * 64.0)
+    var signature := "%d|%d|%d|%.3f|%.3f" % [material_id, night_step,
+        thermal_stage, float(budget.get("emission", 1.35)), fraction]
+    if not _force_apply and material_id == _last_material_id and signature == _last_signature:
+        return
+    _last_applied = apply_material_values(material, float(night_step) / 64.0, fraction, budget)
+    _last_night_factor = night
+    _last_lit_fraction = fraction
+    _last_material_id = material_id
+    _last_signature = signature
+    _force_apply = false
 
 func apply_render_policy(active: Dictionary) -> void:
-    renderer = str(active.get("renderer", renderer))
-    quality = str(active.get("quality", quality))
-    thermal_stage = clampi(int(active.get("thermal_stage", thermal_stage)), 0, 5)
+    var next_renderer := str(active.get("renderer", renderer))
+    var next_quality := str(active.get("quality", quality))
+    var next_stage := clampi(int(active.get("thermal_stage", thermal_stage)), 0, 5)
+    if next_renderer != renderer or next_quality != quality or next_stage != thermal_stage:
+        _force_apply = true
+    renderer = next_renderer
+    quality = next_quality
+    thermal_stage = next_stage
 
 static func lit_fraction_for_hour(hour: float) -> float:
     var h := fmod(hour + 24.0, 24.0)
@@ -84,13 +112,16 @@ static func effective_lit_fraction(hour: float, budget: Dictionary) -> float:
     return clampf(lit_fraction_for_hour(hour) * float(budget.get("lit_scale", 1.0)), 0.0, 0.72)
 
 static func apply_material(material_value, hour: float, budget: Dictionary) -> bool:
+    var night := NightPolicy.night_factor(hour)
+    var fraction := effective_lit_fraction(hour, budget)
+    return apply_material_values(material_value, night, fraction, budget)
+
+static func apply_material_values(material_value, night: float, fraction: float, budget: Dictionary) -> bool:
     if not material_value is ShaderMaterial:
         return false
     var material := material_value as ShaderMaterial
     if material.shader != BuildingShader:
         return false
-    var night := NightPolicy.night_factor(hour)
-    var fraction := effective_lit_fraction(hour, budget)
     material.set_shader_parameter("night_factor", night)
     material.set_shader_parameter("window_emission_strength", float(budget.get("emission", 1.35)))
     material.set_shader_parameter("window_lit_threshold", 1.0 - fraction if night > 0.001 else 1.0)
