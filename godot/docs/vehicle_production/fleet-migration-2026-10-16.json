@@ -1,24 +1,28 @@
 {
-  "format_version": 1,
-  "authority": "Owner vehicle-production directive, 2026-10-16",
+  "format_version": 2,
+  "authority": "Owner vehicle-production directive, updated 2026-10-16",
   "branch": "codex/vehicle-production-001",
   "base_owner_build_source": "71199ca05ca16084637872927e7b27973a72da0a",
-  "mission": "Migrate the complete legally usable vehicle fleets from CarX, Car Parking Multiplayer, and Real Racing 3 into Yardman's private vehicle-production pipeline. Do not cherry-pick a small hero roster.",
+  "source_use_policy": "godot/docs/vehicle_production/source-use-policy-001.json",
+  "mission": "Migrate the complete owner-authorized vehicle fleets and reusable vehicle assets from the Yardman project source pool into the private vehicle-production pipeline. Do not cherry-pick a small hero roster and do not import source-game map/world geography.",
   "non_negotiable_rules": [
-    "Every discovered source vehicle enters the migration queue.",
+    "Every discovered vehicle from the owner-authorized Yardman project source pool enters the migration queue or an explicit evidence-backed duplicate/no-match state.",
     "Do not silently reject a car for poor geometry, materials, missing dependencies, excessive cost, or incomplete LODs; keep it queued in an explicit repair/block state.",
-    "Preserve source identity and provenance. Do not cosmetically relabel one model as another.",
-    "Porsche-specific vehicles, bodies, branding, badges, and Porsche-specific source media are excluded until the owner explicitly changes the rights status.",
-    "Shared generic dependencies may be reused when they are not Porsche-specific.",
+    "Preserve source identity and provenance. Do not cosmetically relabel one model or generation as another.",
+    "There is no brand-specific exclusion inside the owner-authorized project source pool; Porsche and Tesla are evaluated under the same source, identity, quality, physics, audio and Android gates as other brands.",
+    "Do not ingest source-game maps, terrain/world layouts, road networks as replacement geography, or settlement/world geography.",
+    "Do not introduce third-party assets from outside the owner-provided Yardman source pool unless the owner explicitly approves that source.",
     "Private source media stays outside public Git. Public Git may contain tools, manifests, measurements, generated original proxies, and non-media evidence.",
     "No fleet integration may destabilize the main Android optimization lane or core island streaming.",
-    "No APK is produced merely because a vehicle batch completes."
+    "No APK is produced merely because a vehicle batch completes.",
+    "Quantity is not artificially capped; each distinct vehicle may remain if it passes the same quality and runtime gates.",
+    "Exact motorsport variants may ship as player-selectable private-garage vehicles; when marked player-only they must not enter AI-driver or ambient-traffic pools."
   ],
   "source_fleets": [
     {
       "id": "carx_drift",
       "source": "CarX Drift Racing 1.16.2",
-      "scope": "ALL vehicle families and their required vehicle-part/material/texture dependencies",
+      "scope": "ALL recoverable vehicle families and their required vehicle-part/material/texture/audio dependencies",
       "inventory_state": "exhaustive_static_inventory_available",
       "known_inventory": {
         "objects": 247863,
@@ -30,36 +34,56 @@
     {
       "id": "carx_highway",
       "source": "CarX Highway Racing 1.75.9",
-      "scope": "ALL vehicle families and their required vehicle-part/material/texture dependencies",
+      "scope": "ALL recoverable vehicle families and their required vehicle-part/material/texture/audio dependencies",
       "inventory_state": "exhaustive_static_inventory_available",
       "known_inventory": {
         "objects": 162374,
         "types": 74
       },
-      "migration_policy": "all discovered player, rival, traffic, service, police, truck and other vehicle families queued when they contain recoverable vehicle geometry"
+      "migration_policy": "all discovered player, rival, traffic, service, police, truck and other vehicle families queued when they contain recoverable vehicle assets"
     },
     {
       "id": "car_parking_multiplayer",
       "source": "Car Parking Multiplayer 4.9.11 / code 200485",
-      "scope": "ALL cars in the recovered catalog and all car-prefixed source bundles, plus required wheel/material/texture/interior dependencies",
+      "scope": "ALL cars in the recovered catalog and all car-prefixed source bundles, plus required wheel/material/texture/interior/audio dependencies",
       "inventory_state": "xapk_reconstructed_and_readable_addressables_available",
       "known_inventory": {
         "car_prefixed_bundles": 239,
+        "decoded_current_car_bundles": 237,
+        "unityfs_parse_failures": 0,
         "xapk_bytes": 2391971165,
         "unity_streaming_asset_pack_bytes": 1088603009
       },
-      "migration_policy": "catalog-wide extraction; Crown catalog 218 is only a validated reference example, not the fleet boundary"
+      "migration_policy": "catalog-wide extraction; Crown catalog 218 is only a validated reference example, not the fleet boundary; historical brand exclusions are evidence history, not current eligibility gates"
     },
     {
       "id": "real_racing_3",
       "source": "com.ea.games.r3_row_xclipse",
       "scope": "ALL recoverable cars and required vehicle dependencies from the owner's RR3 source",
-      "inventory_state": "beta2_outer_source_grounded_inner_vehicle_inventory_pending",
+      "inventory_state": "zip64_vehicle_inventory_complete_random_access_recovery_validated",
       "known_inventory": {
         "nested_split_parts": 246,
-        "logical_bytes": 6165950862
+        "logical_bytes": 6165950862,
+        "zip_entries": 46814,
+        "vehicle_directories": 547,
+        "validated_vehicle_directories_before_latest_queue": 15,
+        "validated_files_before_latest_queue": 457,
+        "validated_uncompressed_bytes_before_latest_queue": 162908472,
+        "latest_recovered_vehicle_directories": 7,
+        "latest_recovered_files": 200,
+        "latest_recovered_uncompressed_bytes": 72085259
       },
-      "migration_policy": "complete source reconstruction and vehicle inventory first, then queue every legally usable car; Porsche-specific entries are filtered rather than converted"
+      "migration_policy": "use validated ZIP64 inventory and random-access LZMA2 reset-window recovery; queue every useful exact vehicle/component candidate without full-archive expansion and without brand filtering"
+    },
+    {
+      "id": "owner_provided_procedural_sources",
+      "source": "owner-provided vehicle generation scripts and geometry scaffolds",
+      "scope": "procedural dimensional/proportion baselines and original generated geometry",
+      "inventory_state": "active",
+      "known_sources": [
+        "godot/tools/vehicle_production/generate_toyota_probox_blender.py"
+      ],
+      "migration_policy": "procedural scaffolds establish deterministic dimensions/anchors but do not bypass the normal production quality gate"
     }
   ],
   "vehicle_state_machine": [
@@ -80,43 +104,69 @@
     "INTEGRATION_READY"
   ],
   "blocking_states": [
-    "PORSCHE_RIGHTS_EXCLUDED",
+    "SOURCE_SCOPE_APPROVAL_REQUIRED",
     "SOURCE_CORRUPT_RETRY_REQUIRED",
     "IDENTITY_UNRESOLVED",
+    "GENERATION_OR_TRIM_UNRESOLVED",
     "DEPENDENCY_MISSING",
     "GEOMETRY_REPAIR_REQUIRED",
     "NORMALS_REPAIR_REQUIRED",
     "UV_REPAIR_REQUIRED",
     "MATERIAL_REPAIR_REQUIRED",
     "RIG_REPAIR_REQUIRED",
+    "AUDIO_REPAIR_REQUIRED",
     "LOD_REPAIR_REQUIRED",
     "ANDROID_COST_REDUCTION_REQUIRED",
     "RENDER_REGRESSION_REQUIRED"
   ],
   "default_lod_policy": {
-    "LOD0": {"range_m": [0, 18], "role": "player/showroom/close traffic", "triangle_cap_default": 120000},
-    "LOD1": {"range_m": [18, 55], "role": "normal gameplay", "triangle_cap_default": 45000},
-    "LOD2": {"range_m": [55, 140], "role": "medium traffic", "triangle_cap_default": 15000},
-    "LOD3": {"range_m": [140, 300], "role": "distant traffic", "triangle_cap_default": 4000},
-    "impostor_or_cull": {"range_m": [300, null], "role": "extreme distance"}
+    "LOD0": {
+      "range_m": [0, 18],
+      "role": "player/showroom/close traffic",
+      "triangle_budget_target_default": 120000,
+      "quality_rule": "hero fidelity has priority; this target is not a hard cap and must not force visible degradation"
+    },
+    "LOD1": {
+      "range_m": [18, 55],
+      "role": "normal gameplay",
+      "triangle_budget_target_default": 45000
+    },
+    "LOD2": {
+      "range_m": [55, 140],
+      "role": "medium traffic",
+      "triangle_budget_target_default": 15000
+    },
+    "LOD3": {
+      "range_m": [140, 300],
+      "role": "distant traffic",
+      "triangle_budget_target_default": 4000
+    },
+    "impostor_or_cull": {
+      "range_m": [300, null],
+      "role": "extreme distance"
+    },
+    "optimization_rule": "reduce cost through LOD transitions, texture residency, pooling, dormant physics and AI/traffic eligibility before sacrificing player-facing close-range quality"
   },
   "batching": {
-    "unit": "vehicle family",
+    "unit": "vehicle family or exact distinct variant",
     "recommended_batch_size": 8,
     "reason": "large enough for throughput while keeping render evidence, provenance and failures attributable per car",
     "promotion": "cars pass independently; one broken car does not block extraction/conversion of the rest of a batch"
   },
   "report_per_vehicle": [
     "source and exact source identity",
-    "rights/provenance state",
+    "source-scope/provenance state",
     "source dependency closure",
+    "identity and generation/trim compatibility",
     "triangle counts by LOD",
     "texture dimensions and formats",
     "material count",
     "estimated geometry and texture memory",
     "wheel/rig status",
     "interior status",
+    "audio status",
     "damage/moving-panel readiness",
+    "player/AI/ambient availability class",
     "Android suitability",
     "dual-render evidence",
     "exact commit/checkpoint containing public tooling/evidence and exact private checkpoint containing media"
