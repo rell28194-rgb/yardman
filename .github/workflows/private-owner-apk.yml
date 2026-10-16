@@ -7,6 +7,10 @@ on:
       - '.github/workflows/private-owner-apk.yml'
       - 'godot/**'
 
+concurrency:
+  group: yardman-owner-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
