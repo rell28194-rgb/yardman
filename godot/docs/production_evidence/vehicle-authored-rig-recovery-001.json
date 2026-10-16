@@ -1,0 +1,93 @@
+{
+  "engine": "Godot4.7.2.stable.official.ed1daf0bf",
+  "test": "vehicle_hero_asset_test",
+  "checks": 122,
+  "result": "PASS",
+  "errors": [],
+  "source_sha256": {
+    "godot/scripts/vehicle_model.gd": "34bdbbb6a71b6a339ad8b6bb4fb80f3833d8dfc384c344f9e97e9dc4a7988c22",
+    "godot/tests/vehicle_hero_asset_test.gd": "d236308ad1a8152633a4d8314b64f42c91e5b1d5f3a9a280baf73321a0d2de6b"
+  },
+  "logs_sha256": {
+    "vehicle_visual_test.log": "0d6ea3dcdb681b10d57b2988a35d2250f3cdef04ed1d9412987d7720b07acd1d",
+    "vehicle_camera_test.log": "ffa663cb2c1ba81af9ee2269a44d2e2cc27d76694f29164b85ceb558f6ec0ad3",
+    "vehicle_catalog_test.log": "cf2864fc4b687079b92ce7cc7ef0c4544e031a4cb284d3c1f35859072439f1ea",
+    "vehicle_visual_styler_test.log": "6a2582fc4fa292e5d5d5df50acb8c0e0c7dcf58202aa1c9319503f59152d94df",
+    "baseline-control.log": "c37d8ba979a08c3aed2ea40268f09ec4db0f9555a67eb1db3e48f244078be1d2",
+    "vehicle_hero_asset_test.log": "a53287f77f65cab03a42c0256f9ed9c1b54eb7099e13f4a5e1c22ef7e41812a1",
+    "vehicle_test.log": "39b6022d6f29c45c49bbd91224120cd123d0c5870776d1f39861462f4eca94c4",
+    "vehicle_signal_test.log": "5510c4fbcb0d558fd00f154e2d0e04d9b5d9e5817926372f5c8f2b254e1e32a7",
+    "vehicle_headlight_test.log": "398f6ca5fe04d2617b83c178e4b3d7f5ee9635e394bce37c872a75253379ceac"
+  },
+  "regressions": [
+    "rest body, spindle, and steering orientation for dedicated and generic source rigs",
+    "mirrored determinant-negative pivots/spindles and nonuniform body scale",
+    "profile stance scale retained after build",
+    "non-3D scene root released before fallback",
+    "non-finite/extreme bounds, empty/tiny tyres, body-nested wheels, collapsed/reversed axles rejected"
+  ],
+  "baseline_control": "75f6754 original model fails same122-check suite with exit1",
+  "limits": [
+    "Generated public fixture evidence; not actual Crown visual acceptance",
+    "No Android-device claim"
+  ],
+  "checkpoint": "vehicle-authored-rig-recovery-001",
+  "existing_suites": [
+    {
+      "test": "vehicle_test",
+      "exit_code": 0,
+      "clean": true,
+      "markers": [
+        "YARDMAN_VEHICLE_TEST PASS acceleration_kmh=103.5 braking=1 reverse=1 steering=1 drift_angle=26.4 grass=1 freeze=1 reference_model=false triangles=0 textured_surfaces=0"
+      ]
+    },
+    {
+      "test": "vehicle_catalog_test",
+      "exit_code": 0,
+      "clean": true,
+      "markers": [
+        "YARDMAN_VEHICLE_CATALOG_TEST PASS profiles=3 hero_contract=1 switch=1"
+      ]
+    },
+    {
+      "test": "vehicle_visual_test",
+      "exit_code": 0,
+      "clean": true,
+      "markers": [
+        "YARDMAN_VEHICLE_VISUAL_TEST PASS paint=1 glass=1 wheel=1 profile_identity=3 distinct_geometry=3 stance=3 runtime_bridge=1"
+      ]
+    },
+    {
+      "test": "vehicle_visual_styler_test",
+      "exit_code": 0,
+      "clean": true,
+      "markers": [
+        "YARDMAN_VEHICLE_VISUAL_STYLER_TEST PASS crown_dielectric=1 roughness=0.12 clearcoat=0.10"
+      ]
+    },
+    {
+      "test": "vehicle_camera_test",
+      "exit_code": 0,
+      "clean": true,
+      "markers": [
+        "YARDMAN_VEHICLE_CAMERA_TEST PASS vehicles=3 distinct_chase_profiles=1"
+      ]
+    },
+    {
+      "test": "vehicle_headlight_test",
+      "exit_code": 0,
+      "clean": true,
+      "markers": [
+        "YARDMAN_VEHICLE_HEADLIGHT_TEST PASS night=1 weather=1 renderer_budget=1 thermal=1 runtime=1"
+      ]
+    },
+    {
+      "test": "vehicle_signal_test",
+      "exit_code": 0,
+      "clean": true,
+      "markers": [
+        "YARDMAN_VEHICLE_SIGNAL_TEST PASS left_right=1 hazards=1 blink=1 auto_cancel=1 placement=1"
+      ]
+    }
+  ]
+}

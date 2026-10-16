@@ -1,0 +1,95 @@
+name: Yardman Vehicle Profile Render
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - 'godot/scripts/vehicle_model.gd'
+      - 'godot/scripts/vehicle_catalog.gd'
+      - 'godot/scripts/vehicle_profile_geometry.gd'
+      - 'godot/scripts/vehicle_stance_runtime.gd'
+      - 'godot/scripts/vehicle_visual_styler.gd'
+      - 'godot/scripts/vehicle_visual_runtime.gd'
+      - 'godot/scripts/vehicle_garage.gd'
+      - 'godot/tests/vehicle_profile_render_test.gd'
+      - 'godot/tests/garage_preview_render_test.gd'
+      - '.github/workflows/vehicle-profile-render.yml'
+  workflow_dispatch:
+
+jobs:
+  render-vehicles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        method: [gl_compatibility, mobile]
+    env:
+      GODOT_VERSION: '4.7.2'
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      GALLIUM_DRIVER: llvmpipe
+      YARDMAN_EXPECT_RENDER_METHOD: ${{ matrix.method }}
+      YARDMAN_VEHICLE_CAPTURE_DIR: ${{ github.workspace }}/godot/build/vehicle-${{ matrix.method }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot and software renderer
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb mesa-vulkan-drivers libgl1-mesa-dri
+          wget -q "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Import production project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/vehicle-render-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/vehicle-render-import.log; then exit 1; fi
+
+      - name: Render Crown Mark X and Port Royal profiles
+        shell: bash
+        run: |
+          set -uo pipefail
+          set +e
+          timeout 180 xvfb-run -a -s '-screen 0 960x540x24' godot --path godot --rendering-method "$YARDMAN_EXPECT_RENDER_METHOD" --audio-driver Dummy --script res://tests/vehicle_profile_render_test.gd 2>&1 | tee godot/build/vehicle-profile-render.log
+          render_status=${PIPESTATUS[0]}
+          set -e
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/vehicle-profile-render.log; then exit 1; fi
+          grep -q 'YARDMAN_VEHICLE_PROFILE_RENDER_TEST PASS' godot/build/vehicle-profile-render.log
+          if [ "$render_status" -ne 0 ] && [ "$render_status" -ne 124 ]; then
+            exit "$render_status"
+          fi
+          if [ "$render_status" -eq 124 ]; then
+            echo "YARDMAN_VEHICLE_PROFILE_RENDER_EXIT_TIMEOUT_ACCEPTED renderer=${YARDMAN_EXPECT_RENDER_METHOD} pass_marker=1"
+          fi
+
+      - name: Compare actual garage preview reflections
+        shell: bash
+        env:
+          YARDMAN_GARAGE_CAPTURE_DIR: ${{ github.workspace }}/godot/build/vehicle-${{ matrix.method }}/garage
+        run: |
+          set -euo pipefail
+          timeout 180 xvfb-run -a -s '-screen 0 960x540x24' godot --path godot --rendering-method "$YARDMAN_EXPECT_RENDER_METHOD" --audio-driver Dummy --script res://tests/garage_preview_render_test.gd 2>&1 | tee godot/build/garage-preview-render.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/garage-preview-render.log; then exit 1; fi
+          grep -q 'YARDMAN_GARAGE_PREVIEW_RENDER_TEST PASS' godot/build/garage-preview-render.log
+
+      - name: Preserve vehicle render evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Vehicle-Profiles-${{ matrix.method }}
+          path: |
+            godot/build/vehicle-*/
+            godot/build/vehicle-profile-render.log
+            godot/build/garage-preview-render.log
+            godot/build/vehicle-render-import.log
+          if-no-files-found: warn
+          retention-days: 14

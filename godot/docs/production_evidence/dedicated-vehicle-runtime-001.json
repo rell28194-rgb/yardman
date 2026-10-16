@@ -1,0 +1,57 @@
+{
+  "engine": "Godot4.7.2.stable.official.ed1daf0bf",
+  "source_base": "fe150a27646c1dcae6aef692a6847eea8b3ad0d7",
+  "result": "PASS",
+  "integration_checks": 117,
+  "clean_focused_suites": 13,
+  "source_sha256": {
+    "godot/scripts/vehicle_model.gd": "a4f791501527405ecfc1da9447bbbbd5a932d61cb59ee7b2d90d719431bfed7f",
+    "godot/scripts/vehicle_controller.gd": "24d0c43a7097dbb01fc07ca0f38f33bfeb4f6782f45e839f6ddeda8d4eebc80f",
+    "godot/scripts/vehicle_stance_runtime.gd": "657b71451e4582477c2f3435f4ddadfb579b58c83b3c51676b8973746a53e6d6",
+    "godot/scripts/vehicle_visual_styler.gd": "4e5a5b896fff4ebcbfe53a09f6d2aee893611830a34895b1f0a3da584ebf55ef",
+    "godot/scripts/vehicle_visual_runtime.gd": "a96002826cde64d993009648cb96b6bc1e691c72d4564f74adf1fc83610740d9",
+    "godot/scripts/vehicle_profile_geometry.gd": "aa25daeb7c5ece8d77abf98dfe5f35f91b979c3418f793c267a6d8aa7a65e9e6",
+    "godot/scripts/vehicle_garage.gd": "590060ee6d6841a0f2313c5ab9e0878228f73133b90db0199562a528e1f109a1",
+    "godot/tests/vehicle_hero_integration_test.gd": "0ed9fdfb5b626b7983b6261950ea77bd8c2a8cc8ee37ba56e8861b3b74016db0"
+  },
+  "logs_sha256": {
+    "vehicle_visual_test.log": "0d6ea3dcdb681b10d57b2988a35d2250f3cdef04ed1d9412987d7720b07acd1d",
+    "vehicle_camera_test.log": "ffa663cb2c1ba81af9ee2269a44d2e2cc27d76694f29164b85ceb558f6ec0ad3",
+    "vehicle_catalog_test.log": "cf2864fc4b687079b92ce7cc7ef0c4544e031a4cb284d3c1f35859072439f1ea",
+    "vehicle_visual_styler_test.log": "6a2582fc4fa292e5d5d5df50acb8c0e0c7dcf58202aa1c9319503f59152d94df",
+    "baseline-control-import.log": "9040e5165f613970e6d2122211ab472c737344025d87284f0dde97d07bb8f198",
+    "baseline-control.log": "1feade3e17f51030250265b5327c9ea1852fc35190cfc2fad2e8704586ef5f33",
+    "vehicle_hero_asset_test.log": "785668d3f86c0951e5125ba68d5bb2b3631d3f8f29480aed4de887103211cc02",
+    "vehicle_test.log": "39b6022d6f29c45c49bbd91224120cd123d0c5870776d1f39861462f4eca94c4",
+    "garage_test.log": "5a6ed26d95e5eacfb1dbab5a96ea8f1063580d180c5aeb0dcd649779a5182f13",
+    "vehicle_signal_test.log": "5510c4fbcb0d558fd00f154e2d0e04d9b5d9e5817926372f5c8f2b254e1e32a7",
+    "powertrain_test.log": "9280969a4e99739e5aa41456faba85254c3012fd43e916f5d18c862f9ba66ce8",
+    "vehicle_hero_integration_test.log": "2ed10cf94422841a6cf162ff40914e190f43e3a9a80a953a0c5f59c40e6034db",
+    "vehicle_headlight_test.log": "398f6ca5fe04d2617b83c178e4b3d7f5ee9635e394bce37c872a75253379ceac",
+    "garage_purchase_recovery_test.log": "9579a41c8208c854c571480f6ce912dec10143cca1b6ce3a191b415f509214b4",
+    "garage_economy_test.log": "35c709da498584452d2c5407148f572293f22b35d6cc563e68e06b706e284a43"
+  },
+  "integration": [
+    "Catalog-bound actual hero bypasses fallback mesh hiding",
+    "Actual source body, material resources, texture binding, glass transmission and independent wheels survive real Controller, Garage and VisualRuntime",
+    "Actual dimensions drive wheelbase, track probes, headlight placement and collision",
+    "Profile visual scaling is applied only to generic/procedural fallback and survives controller motion/reset",
+    "Hero brake/reverse states remain instance-local",
+    "Hidden garage preview disables rendering; unchanged candidate reuses model",
+    "All3 production profiles remain distinct with absent media and generic recovered sedan"
+  ],
+  "control": {
+    "baseline_source": "fe150a27646c1dcae6aef692a6847eea8b3ad0d7",
+    "same117_check_suite": "FAIL",
+    "exit_code": 1,
+    "import_exit_code": 0,
+    "parser_errors": false,
+    "assertion_failures": 78
+  },
+  "limits": [
+    "Generated in-memory public fixture; source manifest/import verification tested separately",
+    "Actual private Crown renderer acceptance remains separate",
+    "No Android-device evidence"
+  ],
+  "checkpoint": "dedicated-vehicle-runtime-001"
+}

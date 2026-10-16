@@ -1,0 +1,74 @@
+name: Yardman Test Drive Fast Gate
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - 'godot/scripts/startup_menu.gd'
+      - 'godot/scripts/vehicle_controller.gd'
+      - 'godot/scripts/vehicle_model.gd'
+      - 'godot/scripts/vehicle_catalog.gd'
+      - 'godot/scripts/vehicle_garage.gd'
+      - 'godot/scripts/vehicle_visual_styler.gd'
+      - 'godot/scripts/road_streamer.gd'
+      - 'godot/scripts/road_hairpin_runtime.gd'
+      - 'godot/scripts/traffic_runtime.gd'
+      - 'godot/scripts/pedestrian_runtime.gd'
+      - 'godot/scripts/location_tracker.gd'
+      - 'godot/tests/vehicle_test.gd'
+      - 'godot/tests/vehicle_catalog_test.gd'
+      - 'godot/tests/vehicle_hero_asset_test.gd'
+      - 'godot/tests/vehicle_hero_integration_test.gd'
+      - 'godot/tests/vehicle_visual_styler_test.gd'
+      - 'godot/tests/road_surface_test.gd'
+      - 'godot/tests/road_hairpin_test.gd'
+      - 'godot/tests/traffic_runtime_test.gd'
+      - 'godot/tests/pedestrian_runtime_test.gd'
+      - 'godot/tests/location_tracker_test.gd'
+      - 'godot/project.godot'
+      - '.github/workflows/godot-test-drive-fast.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  godot-fast-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+      - name: Parse project and test drive/runtime code
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/fast-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/fast-import.log; then exit 1; fi
+          for TEST in vehicle vehicle_catalog vehicle_hero_asset vehicle_hero_integration vehicle_visual_styler road_surface road_hairpin traffic_runtime pedestrian_runtime location_tracker; do
+            timeout 180 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/fast-${TEST}.log"
+            if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/fast-${TEST}.log"; then exit 1; fi
+            grep -q 'PASS' "godot/build/fast-${TEST}.log"
+          done
+      - name: Preserve fast-gate diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Test-Drive-Fast-Gate
+          path: godot/build/fast-*.log
+          if-no-files-found: ignore
+          retention-days: 7

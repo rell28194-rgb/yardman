@@ -1,0 +1,3 @@
+source_id,dataset,provider,source_url,source_version,working_crs,source_resolution,licence,attribution_location,raw_in_git,derivatives_in_apk
+osm_jamaica,Complete Jamaica OSM PBF,OpenStreetMap contributors / Geofabrik,https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf,current extract hash recorded in road manifest,EPSG:3448,vector,ODbL 1.0,In-game Data / Credits and packaged manifest,false,true
+cop_dem_public,Copernicus GLO-30 Public DSM,EU / ESA / DLR / Airbus via Sinergise AWS,https://registry.opendata.aws/copernicus-dem/,2021 public AWS release and individual COG hashes,EPSG:3448,30 m source / 64 m initial runtime grid,Copernicus WorldDEM-30 free public licence,In-game Data / Credits and packaged manifest,false,true

@@ -1,0 +1,10 @@
+{
+  "schema_version": "0.1",
+  "evidence_class": "SYNTHETIC_TEST_ONLY",
+  "vertical_datum_id": "SYNTHETIC_METRES",
+  "anchor_e": 0,
+  "anchor_n": 0,
+  "seed": 41,
+  "road_width_m": 8,
+  "road_overrides": {}
+}

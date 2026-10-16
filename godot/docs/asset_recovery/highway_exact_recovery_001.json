@@ -1,0 +1,35 @@
+{
+  "format_version": 1,
+  "checkpoint": "carx-highway-exact-recovery-001",
+  "source": "beta/carx-highway-mod_1.75.9-an1.com.7z.001 through .021",
+  "outer_volume_slice": {
+    "beta1_outer_volumes": "128-148",
+    "volume_count": 21,
+    "each_full_volume_bytes": 25165824,
+    "method": "Decode only the exact global outer-stream ranges covering the Highway nested split archive."
+  },
+  "nested_split_verification": {
+    "split_count": 21,
+    "all_split_crc_checks_passed": true,
+    "all_split_uncompressed_size_checks_passed": true
+  },
+  "reconstructed_apk": {
+    "bytes": 746147491,
+    "crc32": "823605ef",
+    "sha256": "8e35189a162c6d6679d76a07a052e9cd7dce99705f52e5ae5ff9fcedd1877f31",
+    "matches_prior_inventory_identity": true
+  },
+  "prior_static_inventory": {
+    "apk_members_verified": 1284,
+    "serialized_objects": 162374,
+    "serialized_types": 74,
+    "parse_errors": 0,
+    "metadata_errors": 0,
+    "hash_errors": 0,
+    "fmod_banks_indexed": 44,
+    "fsb_containers_indexed": 40,
+    "fmod_samples_indexed": 417
+  },
+  "acceptance_boundary": "This proves exact source reconstruction and identity. It does not prove useful-family extraction, dependency closure, Godot integration, private visual/audio quality, Android device performance, or Beta 1 completion.",
+  "next_gate": "Extract exact prioritized Mesh/Texture2D/Material/AudioClip/Animation and reference-system payloads from the verified APK, close dependencies, then inspect/integrate or deliberately reject each useful family."
+}

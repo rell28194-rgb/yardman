@@ -1,0 +1,257 @@
+#!/usr/bin/env python3
+"""Build compact streamed Jamaica road tiles for Yardman from Osmium GeoJSON."""
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import shutil
+import hashlib
+import subprocess
+import sys
+from collections import Counter, defaultdict
+from pathlib import Path
+from typing import Dict, Iterator, List, Sequence, Tuple
+
+from pyproj import Transformer
+from road_graph import build_network, partition_id, read_osm_features
+from road_profile import smooth_network_profiles
+
+CRS_SOURCE = "EPSG:4326"
+CRS_TARGET = "EPSG:3448"
+ORIGIN_LAT = 17.9714
+ORIGIN_LON = -76.7936
+DEFAULT_TILE_SIZE = 4096.0
+
+ROAD_WIDTHS = {
+    "motorway": 8.4, "motorway_link": 4.6,
+    "trunk": 8.0, "trunk_link": 4.3,
+    "primary": 7.2, "primary_link": 4.0,
+    "secondary": 6.8, "secondary_link": 3.8,
+    "tertiary": 6.4, "tertiary_link": 3.6,
+    "unclassified": 5.8, "residential": 5.5,
+    "living_street": 4.5, "service": 3.5,
+    "road": 5.8, "track": 3.0, "raceway": 8.0,
+}
+ROAD_CLASSES = {name: i for i, name in enumerate(ROAD_WIDTHS)}
+
+ROAD_FLAG_ONEWAY = 1
+ROAD_FLAG_BRIDGE = 2
+ROAD_FLAG_TUNNEL = 4
+ROAD_FLAG_UNPAVED = 8
+ROAD_FLAG_ONEWAY_REVERSE = 16
+
+PARISH_COVERAGE_ANCHORS = {
+    "Kingston": (17.9714, -76.7936),
+    "St. Andrew": (18.0120, -76.7970),
+    "St. Catherine": (17.9911, -76.9574),
+    "Clarendon": (17.9645, -77.2451),
+    "Manchester": (18.0417, -77.5071),
+    "St. Elizabeth": (18.0264, -77.8487),
+    "Westmoreland": (18.2190, -78.1332),
+    "Hanover": (18.4510, -78.1736),
+    "St. James": (18.4762, -77.8939),
+    "Trelawny": (18.4936, -77.6559),
+    "St. Ann": (18.4358, -77.2000),
+    "St. Mary": (18.3685, -76.8895),
+    "Portland": (18.1762, -76.4509),
+    "St. Thomas": (17.8815, -76.4093),
+}
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser()
+    p.add_argument("input_geojson", type=Path, help="OSM PBF or GeoJSON")
+    p.add_argument("output_dir", type=Path)
+    p.add_argument("--tile-size", type=float, default=DEFAULT_TILE_SIZE)
+    p.add_argument("--terrain", type=Path, help="Compiled terrain root for registered road elevation")
+    p.add_argument(
+        "--skip-auxiliary",
+        action="store_true",
+        help="Build only roads/graph. Used by the temporary flat road pass that bootstraps terrain.",
+    )
+    return p.parse_args()
+
+
+def iter_lines(geometry: dict) -> Iterator[Sequence[Sequence[float]]]:
+    kind = geometry.get("type")
+    coords = geometry.get("coordinates") or []
+    if kind == "LineString":
+        yield coords
+    elif kind == "MultiLineString":
+        yield from coords
+
+
+def midpoint_tile(x1: float, z1: float, x2: float, z2: float, tile_size: float) -> Tuple[int, int]:
+    return math.floor(((x1 + x2) * 0.5) / tile_size), math.floor(((z1 + z2) * 0.5) / tile_size)
+
+
+def road_flags(properties: dict) -> int:
+    flags = 0
+    oneway = str(properties.get("oneway", "")).strip().lower()
+    highway = str(properties.get("highway", "")).strip().lower()
+    junction = str(properties.get("junction", "")).strip().lower()
+    explicit_two_way = oneway in {"no", "0", "false"}
+    forward_oneway = oneway in {"yes", "1", "true"}
+    reverse_oneway = oneway == "-1"
+    implicit_oneway = not explicit_two_way and not reverse_oneway and (
+        junction == "roundabout" or highway == "motorway"
+    )
+    if forward_oneway or reverse_oneway or implicit_oneway:
+        flags |= ROAD_FLAG_ONEWAY
+    if reverse_oneway:
+        flags |= ROAD_FLAG_ONEWAY_REVERSE
+    if str(properties.get("bridge", "")).lower() not in {"", "no", "0", "false"}:
+        flags |= ROAD_FLAG_BRIDGE
+    if str(properties.get("tunnel", "")).lower() not in {"", "no", "0", "false"}:
+        flags |= ROAD_FLAG_TUNNEL
+    if str(properties.get("surface", "")).lower() in {
+        "unpaved", "gravel", "dirt", "ground", "earth", "sand", "mud", "compacted"
+    }:
+        flags |= ROAD_FLAG_UNPAVED
+    return flags
+
+
+def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE_SIZE,
+                    require_national_coverage: bool = True, height_sampler=None) -> dict:
+    if tile_size <= 0 or not math.isfinite(tile_size):
+        raise ValueError("--tile-size must be finite and positive")
+    if input_path.suffix == ".pbf":
+        features = read_osm_features(input_path)
+    else:
+        data = json.loads(input_path.read_text(encoding="utf-8"))
+        if data.get("type") != "FeatureCollection":
+            raise ValueError("Expected a GeoJSON FeatureCollection or OSM PBF")
+        features = data.get("features", [])
+    transformer = Transformer.from_crs(CRS_SOURCE, CRS_TARGET, always_xy=True)
+    origin_e, origin_n = transformer.transform(ORIGIN_LON, ORIGIN_LAT)
+    anchors = {}
+    for name, (lat, lon) in PARISH_COVERAGE_ANCHORS.items():
+        e, n = transformer.transform(lon, lat)
+        anchors[name] = (e - origin_e, origin_n - n)
+    network = build_network(features, transformer, (origin_e, origin_n), tile_size,
+                            ROAD_WIDTHS, ROAD_CLASSES, road_flags, anchors, height_sampler)
+    if height_sampler:
+        smooth_network_profiles(network)
+    stats, bounds = network["stats"], network["bounds"]
+    if not stats["source_segments"]:
+        raise ValueError("No drivable road segments were generated")
+    if require_national_coverage:
+        if bounds[2] - bounds[0] < 180000 or bounds[3] - bounds[1] < 45000:
+            raise ValueError("Road coverage is too small for Jamaica")
+        missing = [p for p, d in stats["parish_anchor_distance_m"].items() if d > 10000]
+        if missing:
+            raise ValueError("Missing parish coverage: " + ", ".join(missing))
+    staging = out.with_name(out.name + ".staging")
+    if staging.exists():
+        shutil.rmtree(staging)
+    (staging / "graph").mkdir(parents=True)
+    tile_entries = []
+    for (tx, tz), segments in sorted(network["tiles"].items()):
+        filename = f"tile_{tx}_{tz}.json"
+        payload = {"tile": [tx, tz], "segments": segments}
+        (staging / filename).write_text(json.dumps(payload, separators=(",", ":")))
+        tile_entries.append({"x": tx, "z": tz, "file": filename, "segments": len(segments)})
+    for kind in ("nodes", "edges"):
+        partitions = defaultdict(dict)
+        for identifier, item in sorted(network[kind].items()):
+            partitions[partition_id(identifier)][identifier] = item
+        for partition, values in sorted(partitions.items()):
+            (staging / "graph" / f"{kind}_{partition}.json").write_text(
+                json.dumps(values, separators=(",", ":")), encoding="utf-8")
+    manifest = {
+        "format": 3, "source": "OpenStreetMap / Geofabrik Jamaica extract",
+        "source_sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
+        "attribution": "© OpenStreetMap contributors — https://www.openstreetmap.org/copyright (ODbL)",
+        "crs": CRS_TARGET, "origin": {"lat": ORIGIN_LAT, "lon": ORIGIN_LON,
+                                      "easting": origin_e, "northing": origin_n},
+        "axis": "X=east, Y=elevation, Z=south, metres",
+        "tile_size": tile_size, "bounds": [round(v, 3) for v in bounds],
+        "road_classes": ROAD_CLASSES, "road_widths": ROAD_WIDTHS,
+        "road_geometry": {"join": "shared bounded miter, complete source way before tile clipping",
+                          "width": "source width, then source lanes, then carriageway-class estimate",
+                          "uv": "continuous source-way station metres and signed lateral metres",
+                          "markings": "inferred presentation, not surveyed road-paint positions",
+                          "elevation": "DEM registered; interior longitudinal bumps bounded to 0.45m adjustment; graph junctions and bridge/tunnel profiles preserved",
+                          "vertical_transition_qa": "signed grades, grade-break percent-points, and crest/sag reversal candidates retained in stats for evidence-driven engineering"},
+        "graph": {"format": 1, "partition": "sha1(id)[0:2]", "directory": "graph",
+                  "nodes": stats["graph_nodes"], "edges": stats["graph_edges"]},
+        "elevation_source": "DEM" if height_sampler else "unmeasured-flat",
+        "tiles": tile_entries, "stats": stats,
+        "parish_anchors": {name: {**network["anchor_roads"].get(name, {}), "lat": PARISH_COVERAGE_ANCHORS[name][0],
+                                   "lon": PARISH_COVERAGE_ANCHORS[name][1],
+                                   "x": position[0], "z": position[1]} for name, position in anchors.items()},
+    }
+    (staging / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
+    if out.exists():
+        shutil.rmtree(out)
+    staging.replace(out)
+    return manifest
+
+
+def build_auxiliary_layers(input_path: Path, output_dir: Path, tile_size: float) -> None:
+    """Build canonical source-derived engineering/context layers after roads."""
+    roadwork_tool = Path(__file__).with_name("build_roadworks.py")
+    subprocess.run([
+        sys.executable, str(roadwork_tool), str(input_path),
+        str(output_dir / "roadworks"), "--tile-size", str(tile_size),
+    ], check=True)
+
+    # These are part of the same road-engineering evidence stack as the deck and
+    # earthworks. Keeping them in the canonical road build prevents stale drainage
+    # or safety geometry from surviving a fresh Jamaica source compile.
+    drainage_tool = Path(__file__).with_name("build_drainage.py")
+    subprocess.run([
+        sys.executable, str(drainage_tool), str(input_path),
+        str(output_dir / "drainage"), "--tile-size", str(tile_size),
+    ], check=True)
+    guardrail_tool = Path(__file__).with_name("build_guardrails.py")
+    subprocess.run([
+        sys.executable, str(guardrail_tool), str(input_path),
+        str(output_dir / "guardrails"), "--tile-size", str(tile_size),
+    ], check=True)
+
+    if input_path.suffix.lower() != ".pbf":
+        return
+
+    place_tool = Path(__file__).with_name("build_places.py")
+    subprocess.run([
+        sys.executable, str(place_tool), str(input_path),
+        str(output_dir.parent / "places"), "--tile-size", str(tile_size),
+    ], check=True)
+    parish_tool = Path(__file__).with_name("build_parishes.py")
+    subprocess.run([
+        sys.executable, str(parish_tool), str(input_path),
+        str(output_dir.parent / "parishes"),
+    ], check=True)
+    bus_stop_tool = Path(__file__).with_name("build_bus_stops.py")
+    subprocess.run([
+        sys.executable, str(bus_stop_tool), str(input_path),
+        str(output_dir / "bus_stops"), "--tile-size", str(tile_size),
+    ], check=True)
+    retaining_wall_tool = Path(__file__).with_name("build_retaining_walls.py")
+    subprocess.run([
+        sys.executable, str(retaining_wall_tool), str(input_path),
+        str(output_dir / "retaining_walls"), "--tile-size", str(tile_size),
+    ], check=True)
+
+
+def main() -> int:
+    args = parse_args()
+    sampler = None
+    if args.terrain:
+        from build_terrain import TerrainSampler
+        sampler = TerrainSampler(args.terrain)
+    manifest = compile_dataset(args.input_geojson, args.output_dir, args.tile_size, height_sampler=sampler)
+    if not args.skip_auxiliary:
+        build_auxiliary_layers(args.input_geojson, args.output_dir, args.tile_size)
+    else:
+        print("Skipped auxiliary source layers for terrain bootstrap road pass")
+    print(json.dumps(manifest["stats"], indent=2, sort_keys=True))
+    print(f"Bounds (m): {manifest['bounds']}")
+    print(f"Wrote {len(manifest['tiles'])} road tiles and persistent topology to {args.output_dir}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

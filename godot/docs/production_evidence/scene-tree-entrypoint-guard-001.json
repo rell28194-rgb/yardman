@@ -1,0 +1,37 @@
+{
+  "checkpoint": "scene-tree-entrypoint-guard-001",
+  "branch": "codex/godot-polish-002",
+  "guard_commit": "061eccc50e5abac98270b795b5c44430a296b875",
+  "root_cause": "game_capture_test.gd defined _run() without a root SceneTree startup callback, so Godot --script idled until the CI timeout",
+  "fix": {
+    "game_capture_test": "adds _initialize() and defers _run()",
+    "regression_guard": "godot/tests/test_scene_tree_entrypoints.py scans every top-level SceneTree test for a root _initialize()/_init() callback and verifies _run() is scheduled when present",
+    "failure_timing": "guard runs in the first Python unittest discovery stage before national data generation and renderer work"
+  },
+  "validation": {
+    "core_run": 38746900602,
+    "core_result": "success",
+    "android_run": 38746900735,
+    "android_run_number": 392,
+    "android_result": "success",
+    "android_steps": {
+      "full_jamaica_data": "success",
+      "project_import": "success",
+      "smoke_boot": "success",
+      "streaming_topology": "success",
+      "all_parish_gameplay": "success",
+      "vehicle_and_surface_suite": "success",
+      "compatibility_capture": "success",
+      "apk_export": "success",
+      "apk_validation": "success",
+      "artifact_retention": "success"
+    },
+    "apk_sha256": "da73475625f5ea524b9d3564dd682237c98ead1d955c44855e2387c32bc1564f",
+    "apk_size_bytes": 340126640
+  },
+  "limits": [
+    "This proves the source/public internal Android smoke package at the recorded head; it is not owner-device acceptance.",
+    "The private Toyota Crown candidate is not contained in this APK.",
+    "The guard targets silent SceneTree entrypoint omissions; unrelated hangs still require their own bounded tests and diagnostics."
+  ]
+}

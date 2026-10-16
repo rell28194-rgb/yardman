@@ -1,0 +1,171 @@
+name: Yardman road earthworks
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - 'godot/scripts/road_earthworks_runtime.gd'
+      - 'godot/scripts/road_drainage_runtime.gd'
+      - 'godot/scripts/road_corridor_terrain_runtime.gd'
+      - 'godot/scripts/roadside_engineering_runtime.gd'
+      - 'godot/scripts/road_hairpin_runtime.gd'
+      - 'godot/scripts/guardrail_layer.gd'
+      - 'godot/scripts/retaining_wall_layer.gd'
+      - 'godot/tools/build_retaining_walls.py'
+      - 'godot/tests/road_earthworks_test.gd'
+      - 'godot/tests/road_drainage_runtime_test.gd'
+      - 'godot/tests/road_corridor_terrain_test.gd'
+      - 'godot/tests/road_corridor_render_test.gd'
+      - 'godot/tests/roadside_engineering_test.gd'
+      - 'godot/tests/road_hairpin_test.gd'
+      - 'godot/tests/guardrail_layer_test.gd'
+      - 'godot/tests/retaining_wall_layer_test.gd'
+      - 'godot/tests/test_retaining_walls.py'
+      - 'godot/project.godot'
+      - '.github/workflows/godot-road-earthworks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  earthworks-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Godot
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+      - name: Import project and reject parser errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/earthworks-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/earthworks-import.log; then exit 1; fi
+      - name: Test road terrain cut fill drainage
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/road_earthworks_test.gd 2>&1 | tee godot/build/road-earthworks.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/road-earthworks.log; then exit 1; fi
+          grep -q 'YARDMAN_ROAD_EARTHWORKS_TEST PASS' godot/build/road-earthworks.log
+      - name: Test explicit Jamaica drainage runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/road_drainage_runtime_test.gd 2>&1 | tee godot/build/road-drainage.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/road-drainage.log; then exit 1; fi
+          grep -q 'YARDMAN_ROAD_DRAINAGE_TEST PASS' godot/build/road-drainage.log
+      - name: Test sourced guardrail authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/guardrail_layer_test.gd 2>&1 | tee godot/build/guardrail-authority.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/guardrail-authority.log; then exit 1; fi
+          grep -q 'YARDMAN_GUARDRAIL_LAYER_TEST PASS' godot/build/guardrail-authority.log
+      - name: Test terrain-inferred safety authority handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/roadside_engineering_test.gd 2>&1 | tee godot/build/roadside-engineering.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/roadside-engineering.log; then exit 1; fi
+          grep -q 'YARDMAN_ROADSIDE_ENGINEERING_TEST PASS' godot/build/roadside-engineering.log
+      - name: Test mountain road hairpin widening
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/road_hairpin_test.gd 2>&1 | tee godot/build/road-hairpin.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/road-hairpin.log; then exit 1; fi
+          grep -q 'YARDMAN_ROAD_HAIRPIN_TEST PASS' godot/build/road-hairpin.log
+      - name: Test coarse terrain road corridor replacement
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/road_corridor_terrain_test.gd 2>&1 | tee godot/build/road-corridor-terrain.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/road-corridor-terrain.log; then exit 1; fi
+          grep -q 'YARDMAN_ROAD_CORRIDOR_TERRAIN_TEST PASS' godot/build/road-corridor-terrain.log
+      - name: Test sourced retaining wall geometry
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/retaining_wall_layer_test.gd 2>&1 | tee godot/build/retaining-wall.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/retaining-wall.log; then exit 1; fi
+          grep -q 'YARDMAN_RETAINING_WALL_TEST PASS' godot/build/retaining-wall.log
+      - name: Retain earthworks evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Road-Earthworks-Evidence
+          path: |
+            godot/build/earthworks-import.log
+            godot/build/road-earthworks.log
+            godot/build/road-drainage.log
+            godot/build/guardrail-authority.log
+            godot/build/roadside-engineering.log
+            godot/build/road-hairpin.log
+            godot/build/road-corridor-terrain.log
+            godot/build/retaining-wall.log
+          if-no-files-found: error
+          retention-days: 30
+
+  corridor-renderers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        method: [gl_compatibility, mobile]
+    env:
+      GODOT_VERSION: '4.7.2'
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      GALLIUM_DRIVER: llvmpipe
+      YARDMAN_EXPECT_RENDER_METHOD: ${{ matrix.method }}
+      YARDMAN_RENDER_CAPTURE_DIR: ${{ github.workspace }}/godot/build/corridor-${{ matrix.method }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install renderer toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb mesa-vulkan-drivers libgl1-mesa-dri
+          wget -q "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+      - name: Import production project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/corridor-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/corridor-import.log; then exit 1; fi
+      - name: Render and probe engineered road clearance
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 180 xvfb-run -a -s '-screen 0 960x540x24' godot --path godot --rendering-method "$YARDMAN_EXPECT_RENDER_METHOD" --audio-driver Dummy --script res://tests/road_corridor_render_test.gd 2>&1 | tee godot/build/corridor-render.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/corridor-render.log; then exit 1; fi
+          grep -q 'YARDMAN_ROAD_CORRIDOR_RENDER_TEST PASS' godot/build/corridor-render.log
+      - name: Preserve road renderer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Road-Corridor-${{ matrix.method }}
+          path: |
+            godot/build/corridor-*/
+            godot/build/corridor-*.log
+          if-no-files-found: warn
+          retention-days: 30

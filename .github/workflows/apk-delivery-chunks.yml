@@ -1,0 +1,157 @@
+name: Yardman APK Delivery
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Validated Yardman Godot Android run ID; leave blank for latest successful run on codex/godot-polish-002'
+        required: false
+        type: string
+      part_size_mb:
+        description: 'Transport chunk size in MiB'
+        required: false
+        default: '60'
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare-delivery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve validated Android run
+        id: resolve
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+          RUN_ID="$REQUESTED_RUN_ID"
+          if [ -z "$RUN_ID" ]; then
+            RUN_ID="$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow 'Yardman Godot Android' \
+              --branch 'codex/godot-polish-002' \
+              --status success \
+              --limit 1 \
+              --json databaseId \
+              --jq '.[0].databaseId')"
+          fi
+          test -n "$RUN_ID"
+
+          META="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion,headBranch,headSha,name,status)"
+          test "$(jq -r '.status' <<<"$META")" = 'completed'
+          test "$(jq -r '.conclusion' <<<"$META")" = 'success'
+          test "$(jq -r '.headBranch' <<<"$META")" = 'codex/godot-polish-002'
+          test "$(jq -r '.name' <<<"$META")" = 'Yardman Godot Android'
+
+          HEAD_SHA="$(jq -r '.headSha' <<<"$META")"
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          printf 'Resolved validated Android run %s at %s\n' "$RUN_ID" "$HEAD_SHA"
+
+      - name: Download validated Android artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.resolve.outputs.run_id }}
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/yardman-delivery delivery
+          gh run download "$RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name Yardman-Internal-Android \
+            --dir /tmp/yardman-delivery
+          APK="$(find /tmp/yardman-delivery -type f -name 'Yardman-Beta.apk' -print -quit)"
+          test -n "$APK"
+          test -s "$APK"
+          cp "$APK" delivery/Yardman-Beta.apk
+          sha256sum delivery/Yardman-Beta.apk | tee delivery/Yardman-Beta.apk.sha256
+
+      - name: Build delivery manifest and transport chunks
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.resolve.outputs.run_id }}
+          HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
+          PART_SIZE_MB: ${{ inputs.part_size_mb }}
+        run: |
+          set -euxo pipefail
+          case "$PART_SIZE_MB" in
+            ''|*[!0-9]*) echo 'part_size_mb must be an integer' >&2; exit 2 ;;
+          esac
+          test "$PART_SIZE_MB" -ge 16
+          test "$PART_SIZE_MB" -le 256
+
+          split -b "${PART_SIZE_MB}M" -d -a 3 \
+            delivery/Yardman-Beta.apk delivery/Yardman-Beta.apk.part-
+          PART_COUNT="$(find delivery -maxdepth 1 -type f -name 'Yardman-Beta.apk.part-*' | wc -l)"
+          test "$PART_COUNT" -ge 2
+
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+
+          root = Path('delivery')
+          apk = root / 'Yardman-Beta.apk'
+          parts = sorted(root.glob('Yardman-Beta.apk.part-*'))
+          sha = hashlib.sha256(apk.read_bytes()).hexdigest()
+          manifest = {
+              'artifact': apk.name,
+              'bytes': apk.stat().st_size,
+              'sha256': sha,
+              'source_run_id': int(os.environ['RUN_ID']),
+              'source_head_sha': os.environ['HEAD_SHA'],
+              'source_branch': 'codex/godot-polish-002',
+              'source_workflow': 'Yardman Godot Android',
+              'part_size_mib': int(os.environ['PART_SIZE_MB']),
+              'parts': [
+                  {
+                      'name': part.name,
+                      'bytes': part.stat().st_size,
+                      'sha256': hashlib.sha256(part.read_bytes()).hexdigest(),
+                  }
+                  for part in parts
+              ],
+              'reassemble_unix': 'cat Yardman-Beta.apk.part-* > Yardman-Beta.apk',
+          }
+          (root / 'Yardman-Beta.delivery.json').write_text(json.dumps(manifest, indent=2) + '\n')
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Verify chunk reassembly
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cat delivery/Yardman-Beta.apk.part-* > /tmp/Yardman-Beta.reassembled.apk
+          test "$(sha256sum delivery/Yardman-Beta.apk | cut -d' ' -f1)" = \
+               "$(sha256sum /tmp/Yardman-Beta.reassembled.apk | cut -d' ' -f1)"
+
+      - name: Upload full APK delivery
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Validated-APK
+          path: |
+            delivery/Yardman-Beta.apk
+            delivery/Yardman-Beta.apk.sha256
+            delivery/Yardman-Beta.delivery.json
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload transport-safe chunks
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Validated-APK-Chunks
+          path: |
+            delivery/Yardman-Beta.apk.part-*
+            delivery/Yardman-Beta.apk.sha256
+            delivery/Yardman-Beta.delivery.json
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14

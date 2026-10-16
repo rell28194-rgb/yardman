@@ -1,0 +1,78 @@
+{
+  "scope": "Host headless loader/material logic; no render or Android acceptance",
+  "private_assets_used": false,
+  "cases": [
+    {
+      "case": "asset-absent",
+      "passed": true,
+      "import_exit": 0,
+      "run_exit": 0,
+      "expected_failure": false,
+      "generated_controls": []
+    },
+    {
+      "case": "original-only",
+      "passed": true,
+      "import_exit": 0,
+      "run_exit": 0,
+      "expected_failure": false,
+      "generated_controls": [
+        "ground_rock.png"
+      ]
+    },
+    {
+      "case": "approved-alternate",
+      "passed": true,
+      "import_exit": 0,
+      "run_exit": 0,
+      "expected_failure": false,
+      "generated_controls": [
+        "ground_dry_grass.png",
+        "ground_grass.png",
+        "ground_rock.png",
+        "ground_rock_alternate.png"
+      ]
+    },
+    {
+      "case": "tampered-alternate",
+      "passed": true,
+      "import_exit": 0,
+      "run_exit": 0,
+      "expected_failure": false,
+      "generated_controls": [
+        "ground_dry_grass.png",
+        "ground_grass.png",
+        "ground_rock.png",
+        "ground_rock_alternate.png"
+      ]
+    },
+    {
+      "case": "mutation-original-only",
+      "passed": true,
+      "import_exit": 0,
+      "run_exit": 1,
+      "expected_failure": true,
+      "generated_controls": [
+        "ground_rock.png"
+      ]
+    }
+  ],
+  "engine": "4.7.2.stable.official.ed1daf0bf",
+  "production_sha256": {
+    "scripts/world_visuals.gd": "c7824d8cbce17ccbe737d37c63e085dc82cd5fc6baefb9179be432a3e38d75d2",
+    "scripts/reference_assets.gd": "d94b1be403d6015b9b59c921c712d8b013c33eccbd9b062b04a3d86e5c71dc3a",
+    "shaders/tree_bark.gdshader": "a10154c6cadb47a03f91282be720b999da0c4a3ad8cd5504f6c9da56820e858d",
+    "shaders/foliage.gdshader": "48e4adf101faf308be3febe3481ba20ac9b1975d154e9a2ac8c7eb7e107cf466",
+    "shaders/terrain_surface.gdshader": "2f4bb2bb203069c8857daac6bdeb0d70d928f2b04c792adb91640f1016243938"
+  },
+  "passed": true,
+  "checkpoint": "reference-role-manifest-controls-001",
+  "root_cause": "96eb2ff requires manifest verification; old generated fixtures omitted the manifest, rejecting valid alternate textures and masking the strict-alias mutation",
+  "prior_control": "private/reference-role-current: approved-alternate FAIL exit1, strict-alias mutation unexpectedly exit0",
+  "validator_sha256": "1201523931c1c9ceede779cfa64db276ef6d41ceb91b6e9672d7ff1a8a1cbe40",
+  "ci_failure": {
+    "run": 38761744589,
+    "job": 116514505161,
+    "stage": "Validate material roles with isolated generated controls"
+  }
+}

@@ -1,0 +1,50 @@
+name: Jamaica street-light authority
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - 'godot/tools/build_streetlights.py'
+      - 'godot/tests/test_build_streetlights.py'
+      - '.github/workflows/godot-streetlights.yml'
+  workflow_dispatch:
+
+jobs:
+  compile-streetlights:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install map compiler dependencies
+        run: python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4' 'osmium>=4,<5'
+
+      - name: Test strict street-light compiler
+        run: python -m unittest godot/tests/test_build_streetlights.py -v
+
+      - name: Compile current Jamaica explicit street lamps
+        shell: bash
+        run: |
+          set -euxo pipefail
+          wget -q https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf -O /tmp/jamaica.osm.pbf
+          python godot/tools/build_streetlights.py \
+            /tmp/jamaica.osm.pbf godot/data/roads/streetlights --tile-size 4096
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m = json.loads(Path('godot/data/roads/streetlights/manifest.json').read_text())
+          assert m['purpose'] == 'visual-only explicit OSM highway=street_lamp points; OSM remains geographic authority', m
+          assert m['placement_rule'] == 'explicit highway=street_lamp nodes only; no inferred spacing or recovered-art placement', m
+          assert m['crs'] == 'EPSG:3448', m
+          assert m['stats']['features'] >= 0 and m['stats']['tiles'] >= 0, m['stats']
+          print('YARDMAN_JAMAICA_STREETLIGHT_AUTHORITY', json.dumps(m['stats'], sort_keys=True))
+          PY
+
+      - name: Retain authority manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jamaica-Streetlight-Authority
+          path: godot/data/roads/streetlights/**
+          if-no-files-found: error
+          retention-days: 30

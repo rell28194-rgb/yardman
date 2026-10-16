@@ -1,0 +1,252 @@
+{
+  "checkpoint": "garage-studio-reflections-001",
+  "base_head": "75f67548ef4310cca021c183f86b4265105eb73d",
+  "runtime": "Godot 4.7.2 ed1daf0bf",
+  "scope": "Actual production garage SubViewport; three source-only fallback cars; no private Crown or device acceptance",
+  "change": "128px local static studio sky supplies reflected/ambient lighting while solid background, direct lights and paint stay fixed",
+  "backends": {
+    "gl_compatibility": {
+      "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+      "captures": 6,
+      "result": "PASS",
+      "vehicles": [
+        {
+          "asset": "",
+          "captures": {
+            "studio": {
+              "image": "toyota_crown-studio.png",
+              "metrics": {
+                "bbox": [
+                  186,
+                  184,
+                  540,
+                  328
+                ],
+                "median_luma": 0.0854564729452133,
+                "p90_luma": 0.198096473681927,
+                "samples": 7433,
+                "white_clip_fraction": 0.00174895735234764
+              }
+            },
+            "without-reflections": {
+              "image": "toyota_crown-without-reflections.png",
+              "metrics": {
+                "bbox": [
+                  186,
+                  184,
+                  540,
+                  328
+                ],
+                "median_luma": 0.030287060347572,
+                "p90_luma": 0.109069021095335,
+                "samples": 7666,
+                "white_clip_fraction": 0.00169579963475085
+              }
+            }
+          },
+          "id": "toyota_crown"
+        },
+        {
+          "asset": "",
+          "captures": {
+            "studio": {
+              "image": "toyota_mark_x-studio.png",
+              "metrics": {
+                "bbox": [
+                  190,
+                  186,
+                  538,
+                  328
+                ],
+                "median_luma": 0.0896611785769462,
+                "p90_luma": 0.220982746827602,
+                "samples": 7327,
+                "white_clip_fraction": 0.00177425958782585
+              }
+            },
+            "without-reflections": {
+              "image": "toyota_mark_x-without-reflections.png",
+              "metrics": {
+                "bbox": [
+                  190,
+                  186,
+                  538,
+                  328
+                ],
+                "median_luma": 0.0316815699070692,
+                "p90_luma": 0.1266745155707,
+                "samples": 7454,
+                "white_clip_fraction": 0.00174403005097934
+              }
+            }
+          },
+          "id": "toyota_mark_x"
+        },
+        {
+          "asset": "",
+          "captures": {
+            "studio": {
+              "image": "port_royal_992-studio.png",
+              "metrics": {
+                "bbox": [
+                  198,
+                  194,
+                  532,
+                  328
+                ],
+                "median_luma": 0.0927490215301514,
+                "p90_luma": 0.339555297745764,
+                "samples": 6756,
+                "white_clip_fraction": 0.00162818235642392
+              }
+            },
+            "without-reflections": {
+              "image": "port_royal_992-without-reflections.png",
+              "metrics": {
+                "bbox": [
+                  198,
+                  194,
+                  532,
+                  328
+                ],
+                "median_luma": 0.0448564719088376,
+                "p90_luma": 0.244078434892185,
+                "samples": 6868,
+                "white_clip_fraction": 0.00160163075131043
+              }
+            }
+          },
+          "id": "port_royal_992"
+        }
+      ]
+    },
+    "mobile": {
+      "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+      "captures": 6,
+      "result": "PASS",
+      "vehicles": [
+        {
+          "asset": "",
+          "captures": {
+            "studio": {
+              "image": "toyota_crown-studio.png",
+              "metrics": {
+                "bbox": [
+                  186,
+                  184,
+                  540,
+                  328
+                ],
+                "median_luma": 0.084638433778286,
+                "p90_luma": 0.191323140752315,
+                "samples": 7480,
+                "white_clip_fraction": 0.0017379679144385
+              }
+            },
+            "without-reflections": {
+              "image": "toyota_crown-without-reflections.png",
+              "metrics": {
+                "bbox": [
+                  188,
+                  184,
+                  542,
+                  328
+                ],
+                "median_luma": 0.0235294122248888,
+                "p90_luma": 0.107066668273509,
+                "samples": 7742,
+                "white_clip_fraction": 0.00167915267372772
+              }
+            }
+          },
+          "id": "toyota_crown"
+        },
+        {
+          "asset": "",
+          "captures": {
+            "studio": {
+              "image": "toyota_mark_x-studio.png",
+              "metrics": {
+                "bbox": [
+                  190,
+                  186,
+                  538,
+                  328
+                ],
+                "median_luma": 0.0997380407214165,
+                "p90_luma": 0.265560798287392,
+                "samples": 7349,
+                "white_clip_fraction": 0.00176894815621173
+              }
+            },
+            "without-reflections": {
+              "image": "toyota_mark_x-without-reflections.png",
+              "metrics": {
+                "bbox": [
+                  192,
+                  186,
+                  538,
+                  328
+                ],
+                "median_luma": 0.0255113730255514,
+                "p90_luma": 0.10795137514919,
+                "samples": 7432,
+                "white_clip_fraction": 0.0017491926803014
+              }
+            }
+          },
+          "id": "toyota_mark_x"
+        },
+        {
+          "asset": "",
+          "captures": {
+            "studio": {
+              "image": "port_royal_992-studio.png",
+              "metrics": {
+                "bbox": [
+                  198,
+                  194,
+                  532,
+                  328
+                ],
+                "median_luma": 0.119916863586009,
+                "p90_luma": 0.286557659780979,
+                "samples": 6720,
+                "white_clip_fraction": 0.00163690476190476
+              }
+            },
+            "without-reflections": {
+              "image": "port_royal_992-without-reflections.png",
+              "metrics": {
+                "bbox": [
+                  200,
+                  194,
+                  532,
+                  328
+                ],
+                "median_luma": 0.0465600008230656,
+                "p90_luma": 0.185960007051006,
+                "samples": 6811,
+                "white_clip_fraction": 0.00161503450300984
+              }
+            }
+          },
+          "id": "port_royal_992"
+        }
+      ]
+    }
+  },
+  "source_sha256": {
+    "godot/scripts/vehicle_garage.gd": "2c33c6961c6bdf958ef8df8c8b7dd4dc6f7d1a9123b6ce029ed767aead137e93",
+    "godot/tests/garage_preview_render_test.gd": "7b752b9fc963d25cd43bf1e8e7e784acbd5fe473eb263903777470ade3c924cd"
+  },
+  "regressions": {
+    "garage_checks": 85,
+    "purchase_recovery_checks": 53,
+    "crown_material_contract": "PASS"
+  },
+  "limits": [
+    "Host llvmpipe only; Android GPU and owner visual acceptance remain open",
+    "Private hero-material rendering is a separate milestone"
+  ]
+}

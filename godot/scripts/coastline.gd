@@ -1,0 +1,125 @@
+extends Node3D
+class_name YardmanCoastline
+
+const MaterialRegistry = preload("res://scripts/render_material_registry.gd")
+const BeachShader = preload("res://shaders/beach.gdshader")
+const ReferenceAssets = preload("res://scripts/reference_assets.gd")
+var water_material: ShaderMaterial
+var beach_material: ShaderMaterial
+var _quality := "Balanced"
+var _force_safe_water := false
+
+func _init() -> void:
+    water_material = ShaderMaterial.new()
+    water_material.shader = MaterialRegistry.shader_for("water")
+    beach_material = ShaderMaterial.new()
+    beach_material.shader = BeachShader
+    _bind_reference_media()
+
+func _bind_reference_media() -> void:
+    for binding in [
+        [beach_material, "reference_sand", "has_reference_sand", "beach_sand.png"],
+        [water_material, "reference_surface", "has_reference_surface", "water_surface.png"],
+        [water_material, "reference_foam", "has_reference_foam", "water_foam.png"],
+        [water_material, "reference_caustics", "has_reference_caustics", "water_caustics.png"],
+        # Direct owner-authorized Beta2 recovery. The KTX keeps the original
+        # uCaptain WaterBump ETC1 mip chain; asset-absent validation builds simply
+        # retain Yardman's procedural normal field.
+        [water_material, "reference_normal", "has_reference_normal", "beta2_ucaptain_water_bump.ktx"],
+    ]:
+        var texture: Texture2D = ReferenceAssets.texture(str(binding[3]))
+        binding[0].set_shader_parameter(str(binding[2]), texture != null)
+        if texture != null:
+            binding[0].set_shader_parameter(str(binding[1]), texture)
+
+func _ready() -> void:
+    add_to_group("yardman_render_quality")
+
+func apply_render_policy(policy: Dictionary, renderer_override: String = "") -> void:
+    var requested_quality := str(policy.get("quality", _quality))
+    if not requested_quality.is_empty():
+        _quality = requested_quality
+    _force_safe_water = str(policy.get("water_variant", "dual_normal")) == "opaque"
+    var selected := MaterialRegistry.shader_for("water", renderer_override, _quality, _force_safe_water)
+    if water_material.shader != selected:
+        water_material.shader = selected
+        # ShaderMaterial parameter tables are shader-specific. Re-apply both the
+        # ordinary private media and direct Beta2 source normal after any renderer
+        # or thermal-quality variant swap.
+        _bind_reference_media()
+
+func material_variant() -> String:
+    return MaterialRegistry.variant_name("water", "", _quality, _force_safe_water)
+
+func instantiate_tile(tile: Vector2i, payload: Dictionary, parent_node: Node3D, tile_size: float = 4096.0) -> void:
+    append_water(payload, parent_node, float(tile.x) * tile_size, float(tile.y) * tile_size)
+    append_beach(payload, parent_node, float(tile.x) * tile_size, float(tile.y) * tile_size)
+
+func append_water(payload: Dictionary, parent_node: Node3D, world_x: float, world_z: float) -> MeshInstance3D:
+    var source: PackedVector3Array = payload.get("water", PackedVector3Array())
+    if source.is_empty():
+        return null
+    var distances: PackedFloat32Array = payload.get("shore_distance", PackedFloat32Array())
+    if distances.size() != source.size() or source.size() % 3 != 0:
+        push_error("Water vertices and coastline-distance samples differ")
+        return null
+    var normals := PackedVector3Array()
+    var vertices := PackedVector3Array()
+    var uvs := PackedVector2Array()
+    var colors := PackedColorArray()
+    for triangle in range(0, source.size(), 3):
+        var cross := (source[triangle + 1] - source[triangle]).cross(source[triangle + 2] - source[triangle])
+        var order := [0, 2, 1] if cross.y > 0.0 else [0, 1, 2]
+        for offset: int in order:
+            var index: int = triangle + offset
+            var vertex := source[index]
+            vertices.append(vertex)
+            normals.append(Vector3.UP)
+            uvs.append(Vector2((world_x + float(vertex.x)) * 0.025,
+                (world_z + float(vertex.z)) * 0.025))
+            colors.append(Color(clampf(distances[index] / 40.0, 0.0, 1.0), 0.0, 0.0, 1.0))
+    var instance := _instance("RegisteredOcean", vertices, normals, uvs, colors, water_material, parent_node)
+    instance.extra_cull_margin = 0.15
+    return instance
+
+func append_beach(payload: Dictionary, parent_node: Node3D, world_x: float, world_z: float) -> MeshInstance3D:
+    var source: PackedVector3Array = payload.get("beach", PackedVector3Array())
+    if source.is_empty() or source.size() % 3 != 0:
+        return null
+    var vertices := PackedVector3Array()
+    var normals := PackedVector3Array()
+    var uvs := PackedVector2Array()
+    for index in range(0, source.size(), 3):
+        var cross := (source[index + 1] - source[index]).cross(source[index + 2] - source[index])
+        if cross.length_squared() < 0.000000000001:
+            continue
+        var normal := cross.normalized()
+        if normal.y < 0.0:
+            normal = -normal
+        var order := [0, 2, 1] if cross.dot(normal) > 0.0 else [0, 1, 2]
+        for offset: int in order:
+            var vertex := source[index + offset]
+            vertex.y += 0.035
+            vertices.append(vertex)
+            normals.append(normal)
+            uvs.append(Vector2((world_x + float(vertex.x)) / 3.0, (world_z + float(vertex.z)) / 3.0))
+    return _instance("SourcedBeach", vertices, normals, uvs, PackedColorArray(), beach_material, parent_node)
+
+func _instance(label: String, vertices: PackedVector3Array, normals: PackedVector3Array,
+        uvs: PackedVector2Array, colors: PackedColorArray, material: Material, parent_node: Node3D) -> MeshInstance3D:
+    var arrays: Array = []
+    arrays.resize(Mesh.ARRAY_MAX)
+    arrays[Mesh.ARRAY_VERTEX] = vertices
+    arrays[Mesh.ARRAY_NORMAL] = normals
+    arrays[Mesh.ARRAY_TEX_UV] = uvs
+    if not colors.is_empty():
+        arrays[Mesh.ARRAY_COLOR] = colors
+    var mesh := ArrayMesh.new()
+    mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+    mesh.surface_set_material(0, material)
+    var instance := MeshInstance3D.new()
+    instance.name = label
+    instance.mesh = mesh
+    instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    parent_node.add_child(instance)
+    return instance

@@ -1,0 +1,239 @@
+name: Yardman Vehicle + Render Platform
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - 'godot/project.godot'
+      - 'godot/scripts/render_quality_manager.gd'
+      - 'godot/scripts/render_runtime.gd'
+      - 'godot/scripts/render_material_registry.gd'
+      - 'godot/scripts/streaming_budget_runtime.gd'
+      - 'godot/scripts/building_hlod_runtime.gd'
+      - 'godot/scripts/road_visibility_runtime.gd'
+      - 'godot/scripts/traffic_runtime.gd'
+      - 'godot/scripts/traffic_signal_runtime.gd'
+      - 'godot/scripts/traffic_pedestrian_safety_runtime.gd'
+      - 'godot/scripts/traffic_visual_variety_runtime.gd'
+      - 'godot/scripts/traffic_brake_light_runtime.gd'
+      - 'godot/scripts/parked_vehicle_runtime.gd'
+      - 'godot/scripts/pedestrian_runtime.gd'
+      - 'godot/scripts/pedestrian_destination_runtime.gd'
+      - 'godot/scripts/pedestrian_idle_runtime.gd'
+      - 'godot/scripts/streetlight_layer.gd'
+      - 'godot/scripts/streetlight_night_runtime.gd'
+      - 'godot/scripts/vehicle_headlight_runtime.gd'
+      - 'godot/scripts/traffic_headlight_runtime.gd'
+      - 'godot/scripts/building_night_runtime.gd'
+      - 'godot/scripts/environment_audio_runtime.gd'
+      - 'godot/scripts/weather_cycle_runtime.gd'
+      - 'godot/scripts/vehicle_signal_runtime.gd'
+      - 'godot/scripts/job_runtime.gd'
+      - 'godot/scripts/job_persistence_runtime.gd'
+      - 'godot/scripts/atomic_save_file.gd'
+      - 'godot/scripts/save_game.gd'
+      - 'godot/scripts/job_guidance_runtime.gd'
+      - 'godot/scripts/shader_warmup.gd'
+      - 'godot/scripts/atmosphere_fx.gd'
+      - 'godot/scripts/surface_dynamics_runtime.gd'
+      - 'godot/scripts/vegetation_budget_runtime.gd'
+      - 'godot/scripts/reflection_budget_runtime.gd'
+      - 'godot/scripts/coastline.gd'
+      - 'godot/scripts/reference_assets.gd'
+      - 'godot/scripts/startup_menu.gd'
+      - 'godot/scripts/player_controller.gd'
+      - 'godot/scripts/touch_controls.gd'
+      - 'godot/shaders/**'
+      - 'godot/scripts/vehicle_catalog.gd'
+      - 'godot/scripts/vehicle_powertrain.gd'
+      - 'godot/scripts/vehicle_controller.gd'
+      - 'godot/scripts/vehicle_garage.gd'
+      - 'godot/scripts/vehicle_model.gd'
+      - 'godot/scripts/vehicle_profile_geometry.gd'
+      - 'godot/scripts/vehicle_stance_runtime.gd'
+      - 'godot/scripts/vehicle_visual_styler.gd'
+      - 'godot/scripts/vehicle_visual_runtime.gd'
+      - 'godot/scripts/vehicle_camera_runtime.gd'
+      - 'godot/scripts/vehicle_audio_profiles.gd'
+      - 'godot/scripts/game_audio.gd'
+      - 'godot/tests/render_quality_test.gd'
+      - 'godot/tests/render_runtime_capture_test.gd'
+      - 'godot/tests/material_variants_test.gd'
+      - 'godot/tests/reference_assets_test.gd'
+      - 'godot/tools/validate_reference_role_fallback.py'
+      - 'godot/tests/streaming_budget_test.gd'
+      - 'godot/tests/building_hlod_test.gd'
+      - 'godot/tests/road_visibility_test.gd'
+      - 'godot/tests/traffic_runtime_test.gd'
+      - 'godot/tests/traffic_signal_test.gd'
+      - 'godot/tests/traffic_pedestrian_safety_test.gd'
+      - 'godot/tests/traffic_visual_variety_test.gd'
+      - 'godot/tests/traffic_brake_light_test.gd'
+      - 'godot/tests/parked_vehicle_test.gd'
+      - 'godot/tests/pedestrian_runtime_test.gd'
+      - 'godot/tests/pedestrian_destination_test.gd'
+      - 'godot/tests/pedestrian_idle_test.gd'
+      - 'godot/tests/streetlight_night_test.gd'
+      - 'godot/tests/vehicle_headlight_test.gd'
+      - 'godot/tests/traffic_headlight_test.gd'
+      - 'godot/tests/building_night_test.gd'
+      - 'godot/tests/environment_audio_test.gd'
+      - 'godot/tests/weather_cycle_test.gd'
+      - 'godot/tests/vehicle_signal_test.gd'
+      - 'godot/tests/job_runtime_test.gd'
+      - 'godot/tests/job_persistence_test.gd'
+      - 'godot/tests/job_guidance_test.gd'
+      - 'godot/tests/startup_menu_test.gd'
+      - 'godot/tests/player_locomotion_test.gd'
+      - 'godot/tests/shader_warmup_test.gd'
+      - 'godot/tests/weather_test.gd'
+      - 'godot/tests/surface_dynamics_test.gd'
+      - 'godot/tests/vegetation_budget_test.gd'
+      - 'godot/tests/reflection_budget_test.gd'
+      - 'godot/tests/vehicle_catalog_test.gd'
+      - 'godot/tests/vehicle_hero_asset_test.gd'
+      - 'godot/tests/vehicle_hero_integration_test.gd'
+      - 'godot/tests/powertrain_test.gd'
+      - 'godot/tests/vehicle_visual_test.gd'
+      - 'godot/tests/vehicle_camera_test.gd'
+      - 'godot/tests/garage_test.gd'
+      - 'godot/tests/garage_economy_test.gd'
+      - 'godot/tests/garage_purchase_recovery_test.gd'
+      - 'godot/tests/save_game_test.gd'
+      - 'godot/tests/audio_test.gd'
+      - '.github/workflows/vehicle-render-platform.yml'
+  workflow_dispatch:
+
+jobs:
+  platform-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Import and parse production project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/platform-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/platform-import.log; then exit 1; fi
+
+      - name: Validate material roles with isolated generated controls
+        run: |
+          python3 godot/tools/validate_reference_role_fallback.py \
+            --godot godot --project-root godot \
+            --evidence-dir godot/build/role-fallback --mutation-control
+
+      - name: Test renderer, streaming/HLOD, road culling, junction-aware traffic, pedestrian-aware traffic safety, traffic visual/brake behavior, parked vehicles, pedestrian destinations/idles, night lighting, player/traffic headlights, building night activity, environmental ambience, weather cycle, player/traffic signals, courier economy/guidance, player locomotion, startup buttons, weather, scalable vegetation/reflections, powertrain, vehicle presentation, garage and automotive audio platforms
+        shell: bash
+        run: |
+          set -euo pipefail
+          for TEST in render_quality material_variants reference_assets streaming_budget building_hlod road_visibility traffic_runtime traffic_signal traffic_pedestrian_safety traffic_visual_variety traffic_brake_light parked_vehicle pedestrian_runtime pedestrian_destination pedestrian_idle streetlight_night vehicle_headlight traffic_headlight building_night environment_audio weather_cycle vehicle_signal job_runtime job_persistence save_game job_guidance player_locomotion startup_menu shader_warmup weather surface_dynamics vegetation_budget reflection_budget vehicle_catalog vehicle_hero_asset vehicle_hero_integration powertrain vehicle_visual vehicle_camera garage garage_economy garage_purchase_recovery audio; do
+            timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
+            if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
+            grep -q 'PASS' "godot/build/${TEST}.log"
+          done
+
+      - name: Preserve diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Vehicle-Render-Platform-Diagnostics
+          path: |
+            godot/build/*.log
+            godot/build/role-fallback/
+          if-no-files-found: warn
+          retention-days: 14
+
+  actual-renderers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        method: [gl_compatibility, mobile]
+    env:
+      GODOT_VERSION: '4.7.2'
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      GALLIUM_DRIVER: llvmpipe
+      YARDMAN_EXPECT_RENDER_METHOD: ${{ matrix.method }}
+      YARDMAN_RENDER_CAPTURE_DIR: ${{ github.workspace }}/godot/build/render-${{ matrix.method }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot and software renderer
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb mesa-vulkan-drivers libgl1-mesa-dri
+          wget -q "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+      - name: Import production scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/render-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/render-import.log; then exit 1; fi
+      - name: Render production shaders and measure internal resolution
+        shell: bash
+        run: |
+          set -uo pipefail
+          set +e
+          timeout 120 xvfb-run -a -s '-screen 0 960x540x24' godot --path godot --rendering-method "$YARDMAN_EXPECT_RENDER_METHOD" --audio-driver Dummy --script res://tests/render_runtime_capture_test.gd 2>&1 | tee godot/build/actual-render.log
+          render_status=${PIPESTATUS[0]}
+          set -e
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/actual-render.log; then exit 1; fi
+          grep -q 'YARDMAN_RENDER_RUNTIME_CAPTURE_TEST PASS' godot/build/actual-render.log
+          if [ "$render_status" -ne 0 ] && [ "$render_status" -ne 124 ]; then
+            exit "$render_status"
+          fi
+          if [ "$render_status" -eq 124 ]; then
+            echo "YARDMAN_RENDER_RUNTIME_EXIT_TIMEOUT_ACCEPTED renderer=${YARDMAN_EXPECT_RENDER_METHOD} pass_marker=1"
+          fi
+      - name: Prove missing flat and black panels fail the render gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pair in missing_panel:0 flat_panel:1 black_panel:2; do
+            control=${pair%:*}
+            panel=${pair#*:}
+            log="godot/build/render-control-${control}.log"
+            set +e
+            YARDMAN_RENDER_FIXTURE_CONTROL="$control" YARDMAN_RENDER_FIXTURE_CONTROL_PANEL="$panel" YARDMAN_RENDER_CAPTURE_DIR="${YARDMAN_RENDER_CAPTURE_DIR}/controls/${control}" timeout 120 xvfb-run -a -s '-screen 0 960x540x24' godot --path godot --rendering-method "$YARDMAN_EXPECT_RENDER_METHOD" --audio-driver Dummy --script res://tests/render_runtime_capture_test.gd > "$log" 2>&1
+            control_status=$?
+            set -e
+            if [ "$control_status" -eq 0 ] || [ "$control_status" -eq 124 ]; then cat "$log"; exit 1; fi
+            if grep -E 'SCRIPT ERROR|Parse Error' "$log"; then exit 1; fi
+            grep -q "Production shader panel ${panel} .*lost its material signature" "$log"
+            grep -q 'YARDMAN_RENDER_RUNTIME_CAPTURE_TEST FAIL' "$log"
+            echo "YARDMAN_RENDER_NEGATIVE_CONTROL PASS renderer=$YARDMAN_EXPECT_RENDER_METHOD control=$control panel=$panel"
+          done
+      - name: Preserve rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Actual-Render-${{ matrix.method }}
+          path: |
+            godot/build/render-*/
+            godot/build/*render*.log
+          if-no-files-found: warn
+          retention-days: 14

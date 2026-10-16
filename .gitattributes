@@ -1,0 +1,9 @@
+* text=auto eol=lf
+*.cs text eol=lf
+*.json text eol=lf
+*.meta text eol=lf
+*.sh text eol=lf
+*.png binary
+*.jpg binary
+*.fbx binary
+*.blend binary

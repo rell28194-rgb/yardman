@@ -1,0 +1,204 @@
+{
+  "base_head": "5a2516141bba8a5cfcfa43868138ba04bce4986c",
+  "source_sha256": "fa1bc8a75118d5768648bb81ddd08a6e7250df7151031c945cfbad3f9fc9f668",
+  "fixture_sha256": "09bfd07f1bb2037b0226f4e2b5e2f7adf10c1fe80d7edd6ec03348850e0288d8",
+  "regressions": [
+    {
+      "test": "material_variants",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "test": "coastline",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "test": "reference_assets",
+      "exit_code": 0,
+      "passed": true
+    }
+  ],
+  "scope": "Host llvmpipe software OpenGL and Vulkan Mobile. Original KTX has ten mip levels; unsupported ETC GPU format converts to RGBA8 on this host. Actual Android ETC sampling/performance, national coastline and world visual acceptance remain open.",
+  "milestone": "recovered-water-001",
+  "recorded_utc": "2026-10-15T03:22:33.942607+00:00",
+  "private_pack": {
+    "version": 10,
+    "sha256": "c4efbd98e7b42a8314bbc47ea61ce4f577b21bb677ef968949e4add88e8d5fea",
+    "members": 178
+  },
+  "actual_renders": {
+    "gles": {
+      "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+      "captures": [
+        {
+          "difference": {
+            "changed_fraction_over_1_byte": 0.2465,
+            "maximum_rgb": 0.17254900932312,
+            "mean_absolute_rgb": 0.00456870912205574,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-before-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-before",
+          "recovered_image": "high-before-recovered.png",
+          "shader": "res://shaders/water.gdshader",
+          "recovered_image_sha256": "39ec73a69169ba612152a96b9e823be4fa516501122b5f91914e6467f25d6094",
+          "fallback_image_sha256": "28da079dbeac8897c9755db0fd8676bbadcf24c2f7769b7721e134d22a961d45"
+        },
+        {
+          "difference": {
+            "changed_fraction_over_1_byte": 0.213953125,
+            "maximum_rgb": 0.126797378063202,
+            "mean_absolute_rgb": 0.00401668705919284,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "safe-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "safe",
+          "recovered_image": "safe-recovered.png",
+          "shader": "res://shaders/water_gles.gdshader",
+          "recovered_image_sha256": "89d60e280bf82dc467d891b998ba89f39c59435b71e0d74e9fe7177f1d235594",
+          "fallback_image_sha256": "fb8d42084498d0136f4ba55c1463961c0fb51a63ff30e33441b5aaf2a29f47d8"
+        },
+        {
+          "difference": {
+            "changed_fraction_over_1_byte": 0.2458125,
+            "maximum_rgb": 0.166013062000275,
+            "mean_absolute_rgb": 0.00461948526301415,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-restored-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-restored",
+          "recovered_image": "high-restored-recovered.png",
+          "shader": "res://shaders/water.gdshader",
+          "recovered_image_sha256": "645874159745df1f82d0fc6a9d7ebca50e5613db028dc37d7c041c5c2a60ba8c",
+          "fallback_image_sha256": "1770033cc99b8b622902144253e864f987d66dc67a89b43d88e1e6aab8e5c5c9"
+        }
+      ],
+      "display": "X11",
+      "engine": {
+        "build": "official",
+        "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+        "hex": 263938,
+        "major": 4,
+        "minor": 7,
+        "patch": 2,
+        "status": "stable",
+        "string": "4.7.2-stable (official)",
+        "timestamp": 0
+      },
+      "failures": 0,
+      "installed_ktx_mip_levels_including_base": 10,
+      "method": "gl_compatibility",
+      "scope": "Actual host/software renderer, generated geometry, recovered production material. Not Android-device, geographic or national deployment acceptance.",
+      "source_dimensions": [
+        512,
+        512
+      ],
+      "source_name": "beta2_ucaptain_water_bump.ktx"
+    },
+    "vulkan": {
+      "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+      "captures": [
+        {
+          "difference": {
+            "changed_fraction_over_1_byte": 0.292515625,
+            "maximum_rgb": 0.156862735748291,
+            "mean_absolute_rgb": 0.00479556774592484,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-before-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-before",
+          "recovered_image": "high-before-recovered.png",
+          "shader": "res://shaders/water.gdshader",
+          "recovered_image_sha256": "843a837483b140e4eb8bb926d3ef0dc4ef4577ba07de37fecaddb4ec53381988",
+          "fallback_image_sha256": "0e8022e466041f7cfdd04b667f984c20ee42037f330e33e66c80ad4c05fde5b2"
+        },
+        {
+          "difference": {
+            "changed_fraction_over_1_byte": 0.248609375,
+            "maximum_rgb": 0.130718946456909,
+            "mean_absolute_rgb": 0.00417573522345628,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "safe-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "safe",
+          "recovered_image": "safe-recovered.png",
+          "shader": "res://shaders/water_gles.gdshader",
+          "recovered_image_sha256": "c30fadeeefbf95386bd6180dbc071cb0b38c94477ec6791557521409a24e2de1",
+          "fallback_image_sha256": "ad926480bfa164d3deb7e38e81495a23dbc9c33d49d54885ae186e0b78cb3719"
+        },
+        {
+          "difference": {
+            "changed_fraction_over_1_byte": 0.29303125,
+            "maximum_rgb": 0.185620903968811,
+            "mean_absolute_rgb": 0.0049332107618296,
+            "sampled_pixels": 64000
+          },
+          "fallback_image": "high-restored-fallback.png",
+          "identical_control_difference": {
+            "changed_fraction_over_1_byte": 0.0,
+            "maximum_rgb": 0.0,
+            "mean_absolute_rgb": 0.0,
+            "sampled_pixels": 64000
+          },
+          "label": "high-restored",
+          "recovered_image": "high-restored-recovered.png",
+          "shader": "res://shaders/water.gdshader",
+          "recovered_image_sha256": "a0972309d3950794e2921434c158b16c3ff51428ec2ebfbb68a418927b4595c5",
+          "fallback_image_sha256": "1d5e39922ea152a928f111bb2a369664503eb65e1061f623f14ded44eed0f34d"
+        }
+      ],
+      "display": "X11",
+      "engine": {
+        "build": "official",
+        "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+        "hex": 263938,
+        "major": 4,
+        "minor": 7,
+        "patch": 2,
+        "status": "stable",
+        "string": "4.7.2-stable (official)",
+        "timestamp": 0
+      },
+      "failures": 0,
+      "installed_ktx_mip_levels_including_base": 10,
+      "method": "mobile",
+      "scope": "Actual host/software renderer, generated geometry, recovered production material. Not Android-device, geographic or national deployment acceptance.",
+      "source_dimensions": [
+        512,
+        512
+      ],
+      "source_name": "beta2_ucaptain_water_bump.ktx"
+    }
+  }
+}

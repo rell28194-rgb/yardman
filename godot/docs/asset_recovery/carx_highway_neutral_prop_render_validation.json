@@ -1,0 +1,67 @@
+{
+  "format_version": 1,
+  "checkpoint": "carx-highway-neutral-props-render-002",
+  "source_apk_sha256": "8e35189a162c6d6679d76a07a052e9cd7dce99705f52e5ae5ff9fcedd1877f31",
+  "godot": "4.7.2-stable official ed1daf0bf",
+  "renderer": {
+    "rendering_method": "gl_compatibility",
+    "rendering_device": "llvmpipe (LLVM 19.1.7, 256 bits)",
+    "api_version": "4.5 (Core Profile) Mesa 25.0.7-2"
+  },
+  "render_scope": "isolated private recovered props rendered under Xvfb with actual OpenGL Compatibility frames; not Android-device evidence",
+  "private_checkpoint": "Yardman-Beta1-CarX-Highway-Neutral-Props-Render-Validation.zip",
+  "assets": {
+    "RoadRepair_Cone.glb": {
+      "extents_m": [0.321933627128601, 0.432832837104797, 0.321933627128601],
+      "triangles": 60,
+      "materials": 1,
+      "render_png_sha256": "3cca331fd3b713d9eeb797ea54f56ec4a6d0431811d78fdf79712d316b6313a3",
+      "visual_status": "accept_private_reference_candidate",
+      "reason": "Compatibility render is coherent: texture/material present, upright road-cone silhouette, no visible triangle/material corruption, and plausible 0.43 m height.",
+      "placement_gate": "roadworks/construction contexts only; registered Jamaica road geometry remains authoritative"
+    },
+    "Barrel.glb": {
+      "extents_m": [1.12229108810425, 1.33251845836639, 1.12229120731354],
+      "triangles": 116,
+      "materials": 1,
+      "render_png_sha256": "4eb5dc6c859645c786bd4613d724cd9c239233269c765dfd281e4d16527d9db4",
+      "visual_status": "hold_scale_context",
+      "reason": "Compatibility render is coherent and textured, but the 1.33 m by 1.12 m dimensions are oversized for a generic drum and require exact role/scale classification before integration.",
+      "placement_gate": "industrial/service or roadwork context only after scale validation"
+    },
+    "Medium_Stone_01.glb": {
+      "extents_m": [13.7374496459961, 13.0336856842041, 8.78940582275391],
+      "triangles": 186,
+      "materials": 1,
+      "render_png_sha256": "d72386f83d841ab8c596cdd8df3ac73de4ec6ca38387e0e159d8e4d24b521f24",
+      "visual_status": "hold_geology_scale",
+      "reason": "Compatibility render is coherent and textured, but this is a large boulder/outcrop rather than a generic roadside rock.",
+      "placement_gate": "Jamaica terrain/geology rules plus collision and streaming budget"
+    },
+    "Medium_Stone_02.glb": {
+      "extents_m": [9.86162376403809, 5.91156005859375, 5.69676685333252],
+      "triangles": 64,
+      "materials": 1,
+      "render_png_sha256": "f86055eae0e60a00ee7a0e74878193a00efb5f98ca32e69ad908e785f8dc5c92",
+      "visual_status": "hold_geology_scale",
+      "reason": "Compatibility render is coherent and textured, but this is a large boulder requiring terrain/geology placement rules.",
+      "placement_gate": "Jamaica terrain/geology rules plus collision and streaming budget"
+    },
+    "Satellite_Dish.glb": {
+      "extents_m": [8.59310913085938, 10.1901435852051, 7.34525203704834],
+      "triangles": 1673,
+      "materials": 1,
+      "render_png_sha256": "e66deeaeb6d6a0a90098045850d8385e59ef21eac05f85f7a77c6015c8ab663c",
+      "visual_status": "hold_context_scale",
+      "reason": "Compatibility render is coherent with dish/support geometry and material present; approximately 10.2 m height makes it site infrastructure, not generic street furniture.",
+      "placement_gate": "communications/industrial sites only after location/context rule; no national scatter"
+    }
+  },
+  "non_claims": [
+    "No Android-device visual or performance acceptance is claimed.",
+    "No national or geographic placement acceptance is claimed.",
+    "No collision acceptance is claimed.",
+    "Private recovered source bytes and render captures remain outside the public repository.",
+    "This checkpoint does not close Beta 1 or unlock Beta 2."
+  ]
+}

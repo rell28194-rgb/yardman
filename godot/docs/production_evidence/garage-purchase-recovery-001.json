@@ -1,0 +1,156 @@
+{
+  "milestone": "atomic-wallet-and-paid-vehicle-ownership",
+  "engine": "4.7.2.stable.official.ed1daf0bf",
+  "scope": "Host runtime persistence logic; no Android-device power-loss acceptance",
+  "source_sha256": {
+    "godot/scripts/job_runtime.gd": "2d595fb631a0b1e589a19e53c03375c43ef8787b5ef537e0f37ba6603732c277",
+    "godot/scripts/job_persistence_runtime.gd": "71aa5a59aad5e55bcec5fdba4d1eaf868de17b07cabbab4fca3d156912cd04ca",
+    "godot/scripts/vehicle_garage.gd": "4cb187d10b20f3569dc7fb7484d821317eed1250644030de6c7370866557f12f",
+    "godot/tests/garage_purchase_recovery_test.gd": "54b39391c1c832821914fdf0bb89a6486fad21fb7cadd34f0ee8ed8ec4c1860b"
+  },
+  "runtime_suites": {
+    "garage_purchase_recovery": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_GARAGE_PURCHASE_RECOVERY_TEST PASS checks=53"
+      ]
+    },
+    "garage": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_GARAGE_TEST PASS checks=85 vehicles=3 transaction=1 failure_rollback=1 scene_rebind=1 preview=1 pause=1 persistence=1"
+      ]
+    },
+    "garage_economy": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_GARAGE_ECONOMY_TEST PASS vehicles=3 purchase=1 ownership=1 migration=1 bridge=1 persistence=1"
+      ]
+    },
+    "job_persistence": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_JOB_PERSISTENCE_TEST PASS valid=3 checksum=3 invalid=3 express=2 ownership=6"
+      ]
+    },
+    "job_runtime": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_JOB_RUNTIME_TEST PASS anchors=1 economy=5 travel_guard=2 completion=5 offers=5 timers=2 persistence=5"
+      ]
+    },
+    "job_guidance": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_JOB_GUIDANCE_TEST PASS cardinal=4 arrived=1 metres=1 sign=1 camera_relative=1"
+      ]
+    },
+    "startup_menu": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_STARTUP_MENU_TEST PASS continue_button=1 garage_button=1 start_button=1 touch_overlay=1"
+      ]
+    },
+    "powertrain": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_POWERTRAIN_TEST PASS vehicles=3 torque_curves=1 gearing=1 final_drive=1 controller=1"
+      ]
+    },
+    "vehicle_catalog": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_VEHICLE_CATALOG_TEST PASS profiles=3 switch=1"
+      ]
+    },
+    "vehicle_camera": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_VEHICLE_CAMERA_TEST PASS vehicles=3 distinct_chase_profiles=1"
+      ]
+    },
+    "audio": {
+      "passed": true,
+      "exit": 0,
+      "markers": [
+        "YARDMAN_AUDIO_TEST PASS profiles=3 voices=10 load_layers=1 transmission=1 shift_pulse=1 scrub=1 grass=1 footsteps=1 cache_reuse=1"
+      ]
+    }
+  },
+  "mutation_control": {
+    "passed": true,
+    "scope": "Current 53-check source in isolated project; production files unchanged",
+    "mutation": "Remove wallet-save ownership binding",
+    "detected_error": "debit reached disk without ownership",
+    "actual_engine": "Godot 4.7.2"
+  },
+  "recovery_semantics": {
+    "wallet_and_paid_ownership": "single checksummed jobs.json atomic primary/backup record",
+    "vehicle_json": "selection cache, legacy ownership until first paid save",
+    "interruption_after_debit_before_selection": "paid car remains owned; previous selection can remain until owner selects it",
+    "refund_save_failure": "retain durable debit and ownership; retry selection without a second charge",
+    "first_legacy_purchase": "Persist baseline ownership before first debit so backup cannot mix a legacy wallet with newer paid cache",
+    "save_after_backup_recovery": "Only validated primaries rotate to .bak; corrupt primary never overwrites last valid backup"
+  },
+  "open": [
+    "Android device storage and process termination evidence",
+    "Hero vehicle geometry and rendered presentation"
+  ],
+  "review_controls": [
+    {
+      "case": "current",
+      "import_exit": 0,
+      "test_exit": 0,
+      "messages": [
+        "YARDMAN_GARAGE_PURCHASE_RECOVERY_TEST PASS checks=53"
+      ]
+    },
+    {
+      "case": "no_baseline",
+      "import_exit": 0,
+      "test_exit": 1,
+      "messages": [
+        "ERROR: GARAGE_PURCHASE_RECOVERY: first purchase backup lacks an atomic legacy baseline",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: legacy backup recovery granted a free paid car",
+        "YARDMAN_GARAGE_PURCHASE_RECOVERY_TEST FAIL checks=53"
+      ]
+    },
+    {
+      "case": "old_backup_rotation",
+      "import_exit": 0,
+      "test_exit": 1,
+      "messages": [
+        "ERROR: GARAGE_PURCHASE_RECOVERY: failed save after recovery destroyed the good wallet/ownership checkpoint",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: save after backup recovery replaced the valid backup with corrupt data",
+        "YARDMAN_GARAGE_PURCHASE_RECOVERY_TEST FAIL checks=53"
+      ]
+    },
+    {
+      "case": "no_ownership_binding",
+      "import_exit": 0,
+      "test_exit": 1,
+      "messages": [
+        "ERROR: GARAGE_PURCHASE_RECOVERY: debit reached disk without ownership",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: restart lost money or the paid vehicle",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: recovered car was charged twice",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: missing selection file lost paid ownership",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: corrupt selection file lost paid ownership",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: refund did not persist money and ownership together",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: failed-refund restart lost the car",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: first purchase backup lacks an atomic legacy baseline",
+        "ERROR: GARAGE_PURCHASE_RECOVERY: legacy backup recovery granted a free paid car",
+        "YARDMAN_GARAGE_PURCHASE_RECOVERY_TEST FAIL checks=53"
+      ]
+    }
+  ]
+}

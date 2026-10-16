@@ -1,0 +1,37 @@
+name: Yardman Asset Extractor Toolchain
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - '.github/workflows/asset-extractor-toolchain.yml'
+  workflow_dispatch:
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Fetch pinned AssetRipper Linux x64
+        shell: bash
+        run: |
+          set -euxo pipefail
+          URL='https://github.com/AssetRipper/AssetRipper/releases/download/2.0.0/AssetRipper_linux_x64.tar.xz'
+          EXPECTED='6f5d4352d36795b944243eb3ec790ec37dbca6d6756e52605bc8616e042d384e'
+          wget -q "$URL" -O AssetRipper_linux_x64.tar.xz
+          echo "$EXPECTED  AssetRipper_linux_x64.tar.xz" | sha256sum -c -
+          mkdir -p extracted
+          tar -xJf AssetRipper_linux_x64.tar.xz -C extracted
+          find extracted -maxdepth 2 -type f -printf '%p\n' | sort | head -80
+          test -n "$(find extracted -maxdepth 2 -type f -name 'AssetRipper*' -print -quit)"
+
+      - name: Retain verified extractor toolchain
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-AssetRipper-Linux-x64-2.0.0
+          path: |
+            AssetRipper_linux_x64.tar.xz
+            extracted/**
+          if-no-files-found: error
+          retention-days: 30

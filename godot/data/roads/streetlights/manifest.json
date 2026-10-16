@@ -1,0 +1,53 @@
+{
+  "attribution": "© OpenStreetMap contributors — https://www.openstreetmap.org/copyright (ODbL)",
+  "axis": "X=east, Z=south, metres",
+  "bounds": [
+    -141404.215,
+    -57996.453,
+    -1320.18,
+    -3025.769
+  ],
+  "crs": "EPSG:3448",
+  "format": 1,
+  "placement_rule": "explicit highway=street_lamp nodes only; no inferred spacing or recovered-art placement",
+  "purpose": "visual-only explicit OSM highway=street_lamp points; OSM remains geographic authority",
+  "source": "OpenStreetMap / Geofabrik Jamaica extract",
+  "source_sha256": "cc3243ff4a9e75f6d700b15c824e054532f17f52e39c54cac407e5a92fd43ebc",
+  "stats": {
+    "by_lamp_mount": {
+      "unspecified": 19
+    },
+    "by_support": {
+      "unspecified": 19
+    },
+    "features": 19,
+    "tiles": 4
+  },
+  "tile_size": 4096.0,
+  "tiles": [
+    {
+      "file": "tile_-35_-7.json",
+      "records": 4,
+      "x": -35,
+      "z": -7
+    },
+    {
+      "file": "tile_-23_-15.json",
+      "records": 10,
+      "x": -23,
+      "z": -15
+    },
+    {
+      "file": "tile_-10_-13.json",
+      "records": 3,
+      "x": -10,
+      "z": -13
+    },
+    {
+      "file": "tile_-1_-1.json",
+      "records": 2,
+      "x": -1,
+      "z": -1
+    }
+  ]
+}

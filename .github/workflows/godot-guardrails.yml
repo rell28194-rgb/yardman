@@ -1,0 +1,49 @@
+name: Jamaica guard-rail authority
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - 'godot/tools/build_guardrails.py'
+      - 'godot/tests/test_build_guardrails.py'
+      - '.github/workflows/godot-guardrails.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile-guardrails:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install map compiler dependencies
+        run: python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4' 'osmium>=4,<5'
+      - name: Test strict guard-rail compiler
+        run: python -m unittest godot/tests/test_build_guardrails.py -v
+      - name: Compile current Jamaica explicit guard rails
+        shell: bash
+        run: |
+          set -euxo pipefail
+          wget -q https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf -O /tmp/jamaica.osm.pbf
+          python godot/tools/build_guardrails.py \
+            /tmp/jamaica.osm.pbf godot/data/roads/guardrails --tile-size 4096
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m = json.loads(Path('godot/data/roads/guardrails/manifest.json').read_text())
+          assert m['purpose'] == 'visual-only explicit OSM barrier=guard_rail geometry; OSM remains geographic authority', m
+          assert m['placement_rule'] == 'explicit barrier=guard_rail ways only; no inferred highway-edge or recovered-art placement', m
+          assert m['crs'] == 'EPSG:3448', m
+          assert m['stats']['features'] >= 0 and m['stats']['tiles'] >= 0, m['stats']
+          print('YARDMAN_JAMAICA_GUARDRAIL_AUTHORITY', json.dumps(m['stats'], sort_keys=True))
+          PY
+      - name: Retain authority dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jamaica-Guardrail-Authority
+          path: godot/data/roads/guardrails/**
+          if-no-files-found: error
+          retention-days: 30

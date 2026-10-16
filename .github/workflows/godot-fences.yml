@@ -1,0 +1,48 @@
+name: Jamaica fence authority
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - 'godot/tools/build_fences.py'
+      - 'godot/tests/test_build_fences.py'
+      - '.github/workflows/godot-fences.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile-fences:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install map compiler dependencies
+        run: python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4' 'osmium>=4,<5'
+      - name: Test strict fence compiler
+        run: python -m unittest godot/tests/test_build_fences.py -v
+      - name: Compile current Jamaica explicit fences
+        shell: bash
+        run: |
+          set -euxo pipefail
+          wget -q https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf -O /tmp/jamaica.osm.pbf
+          python godot/tools/build_fences.py \
+            /tmp/jamaica.osm.pbf godot/data/roads/fences --tile-size 4096
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m = json.loads(Path('godot/data/roads/fences/manifest.json').read_text())
+          assert m['purpose'] == 'visual-only OSM barrier=fence geometry; OSM remains geographic authority', m
+          assert m['crs'] == 'EPSG:3448', m
+          assert m['stats']['features'] >= m['stats']['wire_compatible_features'] >= 0, m['stats']
+          print('YARDMAN_JAMAICA_FENCE_AUTHORITY', json.dumps(m['stats'], sort_keys=True))
+          PY
+      - name: Retain authority dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jamaica-Fence-Authority
+          path: godot/data/roads/fences/**
+          if-no-files-found: error
+          retention-days: 30

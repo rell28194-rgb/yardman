@@ -1,0 +1,93 @@
+{
+  "format_version": 1,
+  "checkpoint": "carx-highway-driver-sedan-fit-002",
+  "source_apk_sha256": "8e35189a162c6d6679d76a07a052e9cd7dce99705f52e5ae5ff9fcedd1877f31",
+  "private_fit_checkpoint": "Yardman-Beta1-Highway-Driver-Sedan-Fit.zip",
+  "private_render_checkpoint": {
+    "filename": "Yardman-Beta1-Highway-Driver-Sedan-Combined-Render.zip",
+    "library_id": "libfile_64abb15b563081918571c504beff6b4f",
+    "bytes": 490178,
+    "sha256": "073ab09454bf94c642ae6b06355c23f9aea5e7a1debedce8eebd363e369f6105"
+  },
+  "driver": {
+    "private_filename": "road_driver_seated.glb",
+    "sha256": "6a44cfc1abf2a3ef7a44467ba81015db5167f3f84211e2e1c0cb4d9381782574",
+    "vertices": 3986,
+    "triangles": 6066,
+    "bones": 60,
+    "source_pose": "original recovered seated bone hierarchy",
+    "isolated_godot_compatibility_validation": "pass"
+  },
+  "sedan": {
+    "private_filename": "road_car.glb",
+    "bounds_m": {
+      "min": [-0.97853601, 0.02514448, -2.39813829],
+      "max": [0.97853601, 1.36870004, 2.43325185]
+    },
+    "steering_wheel_bounds_m": {
+      "min": [0.2417, 0.6649, -0.6829],
+      "max": [0.6184, 1.0383, -0.4551]
+    },
+    "right_hand_drive": true
+  },
+  "fit": {
+    "godot_import_root_position_m": [0.0, 0.0, 0.0],
+    "runtime_position_m": [0.91, 0.21, -0.187],
+    "rotation_y_rad": 0.0,
+    "scale": 1.0,
+    "mirrored": false,
+    "import_semantics": "Godot 4.7.2 bakes the source authoring-root translation while importing the GLB; the instantiated scene root is identity, then the measured sedan-space position is assigned at runtime.",
+    "fitted_driver_bounds_m": {
+      "min": [0.202779803276062, 0.210000029802322, -1.04148181629181],
+      "max": [0.755886126160622, 1.27101262569427, 0.042367166757584]
+    },
+    "fitted_landmarks_m": {
+      "right_palm": [0.4419, 0.8173, -0.5631],
+      "left_palm": [0.3441, 0.8818, -0.5604],
+      "pelvis": [0.5393, 0.4459, -0.2153],
+      "head": [0.5064, 1.1372, -0.1421],
+      "left_foot": [0.4114, 0.2557, -0.8672],
+      "right_foot": [0.5907, 0.2574, -0.8493]
+    },
+    "checks": {
+      "both_palms_inside_steering_wheel_xyz_bounds": true,
+      "head_inside_cabin_horizontal_x": true,
+      "head_below_roof_max_y": true,
+      "driver_right_extent_not_beyond_interior_x": true,
+      "feet_above_vehicle_floor_min_y": true
+    }
+  },
+  "combined_compatibility_render": {
+    "result": "pass",
+    "godot": "4.7.2-stable official ed1daf0bf",
+    "rendering_method": "gl_compatibility",
+    "rendering_device": "llvmpipe software OpenGL",
+    "skeletons": 1,
+    "bones": 60,
+    "driver_meshes": 1,
+    "assertion": "YARDMAN_DRIVER_COMBINED PASS skeletons=1 meshes=1 godot_import_root=(0.0, 0.0, 0.0) fit_position=(0.91, 0.21, -0.187)",
+    "captures": {
+      "cabin.png": "5351444fac834c55075d8ed3ee4dd2b181a1f925195cd834bb29f8e7637542db",
+      "front.png": "cfc4d98b21ed1c6cc81c1bc9f9a07d1d8d0225e07156d7f83d80466fb7abb48d",
+      "rear.png": "851bbdc9b10efe0f9573f3dcd994d73774a2eb89154a317f6b101df15dd74fa7",
+      "right.png": "bd46ed21688da01a151916aba03641f5a8023d136e794c7ed0360d545e192711"
+    },
+    "visual_review": "The recovered source-seated driver remains inside the right-hand-drive sedan cabin in the reviewed cabin/front/rear/right frames; head and torso do not visibly breach the roof/body in those views."
+  },
+  "runtime": {
+    "script": "res://scripts/vehicle_driver_layer.gd",
+    "optional_private_asset": true,
+    "parent": "reference sedan BodyShell",
+    "visible_only_while_player_in_vehicle": true,
+    "collision_changes": false,
+    "physics_changes": false,
+    "navigation_changes": false,
+    "animation": "static recovered source-seated pose; no synthetic locomotion/steering animation"
+  },
+  "non_claims": [
+    "Combined Godot Compatibility rendering is accepted, but no physical Android-device visual/performance acceptance is claimed.",
+    "No recovered steering, walk or run animation is accepted by this checkpoint.",
+    "No on-foot player replacement is accepted.",
+    "This does not close the characters/animations category, Beta 1, or unlock Beta 2."
+  ]
+}

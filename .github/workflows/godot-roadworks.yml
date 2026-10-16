@@ -1,0 +1,60 @@
+name: Yardman Jamaica roadworks metadata
+
+on:
+  push:
+    branches:
+      - codex/godot-polish-002
+    paths:
+      - 'godot/tools/build_roadworks.py'
+      - 'godot/tools/build_drainage.py'
+      - 'godot/tools/validate_apk.py'
+      - 'godot/tests/test_roadworks.py'
+      - 'godot/tests/test_drainage.py'
+      - 'godot/tests/test_validate_apk_drainage.py'
+      - '.github/workflows/godot-roadworks.yml'
+  workflow_dispatch:
+
+jobs:
+  compile-roadworks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install geodata dependencies
+        run: python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4' 'osmium>=4,<5'
+      - name: Test roadwork, drainage, and APK drainage validators
+        run: python -m unittest godot/tests/test_roadworks.py godot/tests/test_drainage.py godot/tests/test_validate_apk_drainage.py -v
+      - name: Compile current Jamaica OSM roadwork and drainage metadata
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p godot/build
+          wget -q https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf -O /tmp/jamaica.osm.pbf
+          python godot/tools/build_roadworks.py /tmp/jamaica.osm.pbf godot/build/roadworks --tile-size 4096 | tee godot/build/roadworks.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          road = json.loads(Path('godot/build/roadworks/manifest.json').read_text())
+          rs = road['stats']
+          assert rs['features'] >= 0 and rs['source_segments'] >= 0 and rs['tile_pieces'] >= 0
+          assert road['purpose'] == 'visual-only OSM-tagged roadworks; never navigation authority'
+          drainage = json.loads(Path('godot/build/drainage/manifest.json').read_text())
+          ds = drainage['stats']
+          assert ds['features'] >= 0 and ds['source_segments'] >= 0 and ds['tile_pieces'] >= 0
+          assert set(ds['by_kind']).issubset({'culvert', 'ditch', 'drain'})
+          assert drainage['purpose'] == 'explicit OSM drainage evidence for Jamaica road engineering; never road or terrain authority'
+          assert drainage['placement_rule'] == 'mapped waterway=ditch/drain plus explicit culvert-tagged waterways only; generic streams are excluded'
+          print('ROADWORK_COUNTS', json.dumps(rs, sort_keys=True))
+          print('DRAINAGE_COUNTS', json.dumps(ds, sort_keys=True))
+          PY
+      - name: Retain roadwork and drainage evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Jamaica-Roadworks-Drainage-Metadata
+          path: |
+            godot/build/roadworks/
+            godot/build/fences/
+            godot/build/drainage/
+            godot/build/roadworks.log
+          if-no-files-found: error
+          retention-days: 14

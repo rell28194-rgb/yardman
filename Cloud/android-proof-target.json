@@ -1,0 +1,31 @@
+{
+  "name": "Yardman ARCH-PROOF-001 Android",
+  "platform": "android",
+  "targetType": "normal",
+  "enabled": true,
+  "settings": {
+    "autoBuild": false,
+    "unityVersion": "6000.3.24f1",
+    "autoDetectUnityVersion": false,
+    "fallbackPatchVersion": false,
+    "executablename": "Yardman-Proof",
+    "scm": {
+      "type": "git",
+      "url": "https://github.com/rell28194-rgb/yardman.git",
+      "branch": "codex/arch-proof-001",
+      "subdirectory": "",
+      "shallowclone": true
+    },
+    "advanced": {
+      "android": { "buildAppBundle": false },
+      "unity": {
+        "preExportMethod": "Jamaica.Unity.Editor.YardmanBuild.PreExport",
+        "playerExporter": {
+          "sceneList": [ "Assets/Yardman/Generated/StreamingProof.unity" ],
+          "buildOptions": [ "Development" ],
+          "export": true
+        }
+      }
+    }
+  }
+}
