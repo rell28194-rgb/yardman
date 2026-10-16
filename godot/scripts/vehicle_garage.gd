@@ -395,7 +395,9 @@ func _apply_from_selector() -> void:
 
 func _load_selection() -> void:
     _selected_id = STARTER_VEHICLE_ID
-    _owned_ids = Catalog.production_ids()
+    _owned_ids.clear()
+    for vehicle_id in Catalog.production_ids():
+        _owned_ids.append(str(vehicle_id))
     if FileAccess.file_exists(_settings_path()):
         var file := FileAccess.open(_settings_path(), FileAccess.READ)
         if file != null:
