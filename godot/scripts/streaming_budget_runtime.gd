@@ -6,10 +6,10 @@ class_name YardmanStreamingBudgetRuntime
 # baseline each time, so thermal recovery is reversible rather than destructive.
 const BASELINES := {
     "Performance": {"road_radius": 1, "terrain_radius": 1, "building_distance": 450.0, "building_cells": 64},
-    "Balanced": {"road_radius": 2, "terrain_radius": 1, "building_distance": 800.0, "building_cells": 96},
+    "Balanced": {"road_radius": 1, "terrain_radius": 1, "building_distance": 650.0, "building_cells": 64},
     "Quality": {"road_radius": 2, "terrain_radius": 2, "building_distance": 1100.0, "building_cells": 144},
     "Ultra": {"road_radius": 3, "terrain_radius": 2, "building_distance": 1450.0, "building_cells": 192},
-    "Custom": {"road_radius": 2, "terrain_radius": 1, "building_distance": 800.0, "building_cells": 96},
+    "Custom": {"road_radius": 1, "terrain_radius": 1, "building_distance": 650.0, "building_cells": 64},
 }
 
 var _last_signature := ""
@@ -45,12 +45,12 @@ static func budget_for(quality: String, thermal_stage: int, custom: Dictionary =
         "terrain_radius": clampi(terrain_radius, 1, 2),
         "building_distance": maxf(320.0, float(base.building_distance) * distance_factor),
         "building_cells": maxi(32, int(round(float(base.building_cells) * cell_factor))),
-        "road_geometry_us": maxi(1100, int(round(2500.0 * geometry_factor))),
-        "terrain_geometry_us": maxi(1100, int(round(2500.0 * geometry_factor))),
-        "building_geometry_us": maxi(800, int(round(1800.0 * geometry_factor))),
-        "road_segments_per_frame": maxi(128, int(round(384.0 * geometry_factor))),
-        "building_records_per_frame": maxi(8, int(round(20.0 * geometry_factor))),
-        "io_jobs": 2 if stage < 3 else 1,
+        "road_geometry_us": maxi(850, int(round(1800.0 * geometry_factor))),
+        "terrain_geometry_us": maxi(850, int(round(1800.0 * geometry_factor))),
+        "building_geometry_us": maxi(650, int(round(1200.0 * geometry_factor))),
+        "road_segments_per_frame": maxi(96, int(round(256.0 * geometry_factor))),
+        "building_records_per_frame": maxi(6, int(round(14.0 * geometry_factor))),
+        "io_jobs": 1 if name in ["Performance", "Balanced", "Custom"] or stage >= 2 else 2,
         "thermal_stage": stage,
         "quality": name,
     }
