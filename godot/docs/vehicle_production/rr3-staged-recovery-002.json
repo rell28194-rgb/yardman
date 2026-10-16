@@ -1,0 +1,46 @@
+{
+  "checkpoint": "rr3-staged-recovery-002",
+  "source": "Beta2/com.ea.games.r3_row_xclipse",
+  "status": "staged_exact_inner_split_volumes_001_through_010",
+  "outer_source": {
+    "materialized_parts": [83, 84, 85, 86, 87],
+    "part_bytes": 52428800,
+    "source_folder": "/Google Drive/Yardman beta/Beta2",
+    "method": "sparse-map exact outer volumes into logical Beta2 archive, parse authoritative 7z header, extract only fully-covered RR3 members"
+  },
+  "rr3_inner": {
+    "split_parts_total": 246,
+    "staged_parts": 10,
+    "bytes_per_staged_part": 25165824,
+    "staged_unpacked_bytes": 251658240,
+    "first_member_outer_file_index": 174,
+    "first_member_pack_offset": 4307473099,
+    "first_member_pack_size": 25167031,
+    "hashes_sha256": {
+      "001": "9d91a0fa764f492fecd4a0b73a378dfb09608ea3d5d81ba152cd342222ab8407",
+      "002": "c0008be22986baeb19c7a10d749aab27ff1f2488bad6d1dd63532ea620a0dfa2",
+      "003": "fb84114c0de92e992922307dda59f2b6acd354db505dc96904a20d0db8753bf6",
+      "004": "c7264896490db1f0e7dd90d8274af242d8221dd750cd48f97c2c15d194802a4f",
+      "005": "865af78856c3862f685bad62525201968119c4e1a2a70d6bf73d914a6485157c",
+      "006": "1618496c179b7aaa925c52ca84869ca234be76a4477a44a34f5985047ddf0014",
+      "007": "b6cb27d6c915ec27f4684410b7237960f27457753122da7d6676c062682b1f37",
+      "008": "3489aa737521f24e178f662162a25aee6df5579d7d6788d4be852fefdb3bfa7a",
+      "009": "27d7afd14722ae2c926912004aac129af56c30df5858e0cf8e28dbaeeaede376",
+      "010": "80f5d1e14d62996441b29f4592eeb98e84e10683b1266f299328ef06cb19791d"
+    }
+  },
+  "wrapper": {
+    "member": "com.ea.games.r3_row_xclipse.zip",
+    "compression": "LZMA2 solid stream",
+    "packed_bytes": 6165950692,
+    "unpacked_bytes": 6310079877,
+    "inventory_state": "pending_remaining_inner_split_staging_and_sequential_decode"
+  },
+  "policy": {
+    "private_media_public_git": false,
+    "git_contains": "hash/provenance/decode evidence only",
+    "crown007": "accepted current state and deprioritized, not complete",
+    "fleet": "continue RR3 inventory so every active vehicle receives Beta1+Beta2 source search"
+  },
+  "next": "stage the next contiguous outer-volume batch, extract additional exact RR3 split members, then run the committed split-aware sequential decoder when all 246 inner parts are present"
+}
