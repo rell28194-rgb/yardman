@@ -13,7 +13,6 @@ var agents: Dictionary = {}
 var _spawn_clock := 0.0
 var _proxy: MultiMeshInstance3D
 var _proxy_scene: Node
-var _pedestrian_pool: Array[AnimatableBody3D] = []
 var _last_near := 0
 var _last_medium := 0
 var _far_statistical := 0
@@ -58,6 +57,7 @@ func _physics_process(delta: float) -> void:
     _simulation_clock += delta
     _visual_clock += delta
 
+    # Pedestrian discovery, weather and route churn are chunk/interval work.
     if _spawn_clock >= 1.25:
         _spawn_clock = 0.0
         _update_weather_factors()
@@ -75,6 +75,7 @@ func _physics_process(delta: float) -> void:
 
 static func _chunk_for_world(point: Vector2) -> Vector2i:
     return Vector2i(floori(point.x / AI_CHUNK_SIZE_M), floori(point.y / AI_CHUNK_SIZE_M))
+
 
 func apply_render_policy(active: Dictionary) -> void:
     _quality = str(active.get("quality", "Balanced"))
@@ -149,6 +150,8 @@ static func statistical_population_for(capacity: int, hour: float, weather_facto
     return maxi(0, int(round(island_scale * density_for_hour(hour) * clampf(weather_factor, 0.55, 1.0))))
 
 static func roadside_walk_pose(record: Dictionary, progress: float, direction_sign: int, side_sign: int) -> Dictionary:
+    # Roadside corridors are inferred context, not mapped sidewalks. Never extend
+    # them through bridges or tunnels, where doing so would fabricate support.
     if (int(record.get("flags", 0)) & 6) != 0:
         return {}
     var a: Vector2 = record.get("a", Vector2.ZERO)
@@ -162,9 +165,17 @@ static func roadside_walk_pose(record: Dictionary, progress: float, direction_si
     var travel := tangent * float(direction)
     var normal := Vector2(-tangent.y, tangent.x) * float(1 if side_sign >= 0 else -1)
     var width := maxf(3.0, float(record.get("width_m", 6.0)))
+    # Until registered sidewalk data exists, keep pedestrians outside the real
+    # carriageway on a reversible road-context walking corridor.
     var offset := width * 0.5 + 1.65
     var point := a.lerp(b, clampf(progress, 0.0, 1.0)) + normal * offset
-    return {"position": point, "travel": travel, "heading": atan2(-travel.x, -travel.y), "length": length, "offset": offset}
+    return {
+        "position": point,
+        "travel": travel,
+        "heading": atan2(-travel.x, -travel.y),
+        "length": length,
+        "offset": offset,
+    }
 
 func _update_weather_factors() -> void:
     var rain := 0.0
@@ -186,6 +197,7 @@ func _reconcile_population(scene: Node, roads, active_xz: Vector2) -> void:
     var hour := float(scene.get("day_hour"))
     var target := clampi(int(round(float(max_agents) * density_for_hour(hour) * _weather_density_factor)), 3, max_agents)
     var far_target := statistical_population_for(max_agents, hour, _weather_density_factor)
+
     for identifier in agents.keys():
         var agent: Dictionary = agents[identifier]
         if Vector2(agent.position).distance_to(active_xz) > despawn_radius:
@@ -193,6 +205,7 @@ func _reconcile_population(scene: Node, roads, active_xz: Vector2) -> void:
     if agents.size() >= target:
         _far_statistical = maxi(0, far_target - agents.size())
         return
+
     var keys: Array = records.keys()
     keys.sort()
     for key in keys:
@@ -218,7 +231,19 @@ func _reconcile_population(scene: Node, roads, active_xz: Vector2) -> void:
         if point.distance_to(active_xz) < 18.0:
             continue
         var base_speed := 1.05 + float(seed % 35) * 0.012
-        agents[identifier] = {"id": identifier, "record": record, "direction": direction, "side": side, "progress": progress, "position": point, "heading": float(pose.heading), "speed": base_speed, "node": null, "rig": {}, "gait": float(seed % 628) / 100.0}
+        agents[identifier] = {
+            "id": identifier,
+            "record": record.duplicate(true),
+            "direction": direction,
+            "side": side,
+            "progress": progress,
+            "position": point,
+            "heading": float(pose.heading),
+            "speed": base_speed,
+            "node": null,
+            "rig": {},
+            "gait": float(seed % 628) / 100.0,
+        }
     _far_statistical = maxi(0, far_target - agents.size())
 
 func _advance_agents(delta: float, roads, active_xz: Vector2) -> void:
@@ -244,8 +269,7 @@ func _advance_agents(delta: float, roads, active_xz: Vector2) -> void:
             speed *= 0.35
         var progress := float(agent.progress) + float(direction) * speed * delta / maxf(float(pose.length), 0.1)
         if progress > 1.0 or progress < 0.0:
-            var endpoint: Vector2 = record.b if direction >= 0 else record.a
-            var candidates_value = roads.call("_nearby_surface_segments", endpoint.x, endpoint.y, 35.0)
+            var candidates_value = roads.call("_nearby_surface_segments", Vector2(record.b if direction >= 0 else record.a).x, Vector2(record.b if direction >= 0 else record.a).y, 35.0)
             var continuation := TrafficScript.continuation_for(record, direction, candidates_value if candidates_value is Dictionary else {})
             if continuation.is_empty():
                 direction = -direction
@@ -256,7 +280,8 @@ func _advance_agents(delta: float, roads, active_xz: Vector2) -> void:
                 progress = 0.015 if direction >= 0 else 0.985
             pose = roadside_walk_pose(record, progress, direction, side)
             if pose.is_empty():
-                _destroy_agent(str(identifier))                continue
+                _destroy_agent(str(identifier))
+                continue
         point = Vector2(pose.position)
         agent.record = record
         agent.direction = direction
@@ -278,9 +303,6 @@ func _refresh_visuals(scene: Node, roads, terrain, active_xz: Vector2, delta: fl
         var point: Vector2 = agent.position
         var distance := point.distance_to(active_xz)
         var ground_y := float(terrain.height_at(point.x, point.y)) + 0.04
-        if not is_finite(ground_y):
-            _dematerialize_agent(str(identifier))
-            continue
         var local: Vector3 = roads.world_to_local(point.x, point.y, ground_y)
         if distance <= near_radius and near_count < near_visual_budget:
             _materialize_agent(scene, str(identifier), agent)
@@ -303,44 +325,24 @@ func _refresh_visuals(scene: Node, roads, terrain, active_xz: Vector2, delta: fl
 func _materialize_agent(scene: Node, identifier: String, agent: Dictionary) -> void:
     if agent.get("node", null) is AnimatableBody3D and is_instance_valid(agent.node):
         return
-    var body: AnimatableBody3D
-    if not _pedestrian_pool.is_empty():
-        body = _pedestrian_pool.pop_back()
-    else:
-        body = _create_pedestrian_body()
-    if body.get_parent() != scene:
-        if body.get_parent() != null:
-            body.get_parent().remove_child(body)
-        scene.add_child(body)
+    var body := AnimatableBody3D.new()
     body.name = "Pedestrian_" + identifier.replace(":", "_").replace("/", "_")
-    body.visible = true
-    body.process_mode = Node.PROCESS_MODE_INHERIT
     body.collision_layer = 1
     body.collision_mask = 0
     body.sync_to_physics = true
-    var rig_root := body.get_node_or_null("PedestrianRig") as Node3D
-    agent.node = body
-    agent.rig = _rig_dictionary(rig_root)
-    agents[identifier] = agent
-
-func _create_pedestrian_body() -> AnimatableBody3D:
-    var body := AnimatableBody3D.new()
     var capsule := CapsuleShape3D.new()
     capsule.radius = 0.27
     capsule.height = 1.72
     var collider := CollisionShape3D.new()
-    collider.name = "CollisionShape3D"
     collider.shape = capsule
     collider.position.y = 0.86
     body.add_child(collider)
-    var rig := _build_rig(0)
+    var rig := _build_rig(absi(identifier.hash()))
     body.add_child(rig.root)
-    return body
-
-func _rig_dictionary(root: Node3D) -> Dictionary:
-    if root == null:
-        return {}
-    return {"root": root, "left_leg": root.get_node_or_null("LeftLeg"), "right_leg": root.get_node_or_null("RightLeg"), "left_arm": root.get_node_or_null("LeftArm"), "right_arm": root.get_node_or_null("RightArm")}
+    scene.add_child(body)
+    agent.node = body
+    agent.rig = rig
+    agents[identifier] = agent
 
 func _build_rig(seed: int) -> Dictionary:
     var root := Node3D.new()
@@ -355,25 +357,30 @@ func _build_rig(seed: int) -> Dictionary:
     head.radial_segments = 10
     head.rings = 5
     _part(root, head, Vector3(0, 1.62, 0), skin)
-    var left_leg := _limb(root, "LeftLeg", Vector3(-0.11, 0.82, 0), 0.082, 0.72, trousers)
-    var right_leg := _limb(root, "RightLeg", Vector3(0.11, 0.82, 0), 0.082, 0.72, trousers)
-    var left_arm := _limb(root, "LeftArm", Vector3(-0.28, 1.38, 0), 0.066, 0.56, skin)
-    var right_arm := _limb(root, "RightArm", Vector3(0.28, 1.38, 0), 0.066, 0.56, skin)
+    var left_leg := _limb(root, Vector3(-0.11, 0.82, 0), 0.082, 0.72, trousers)
+    var right_leg := _limb(root, Vector3(0.11, 0.82, 0), 0.082, 0.72, trousers)
+    var left_arm := _limb(root, Vector3(-0.28, 1.38, 0), 0.066, 0.56, skin)
+    var right_arm := _limb(root, Vector3(0.28, 1.38, 0), 0.066, 0.56, skin)
     return {"root": root, "left_leg": left_leg, "right_leg": right_leg, "left_arm": left_arm, "right_arm": right_arm}
 
 func _animate_rig(agent: Dictionary, delta: float) -> void:
     var rig: Dictionary = agent.get("rig", {})
-    if rig.is_empty(): return
-    var swing := sin(float(agent.gait)) * 0.42
-    var response := clampf(delta * 12.0, 0.0, 1.0)
+    if rig.is_empty():
+        return
+    var phase := float(agent.gait)
+    var swing := sin(phase) * 0.42
     var left_leg := rig.get("left_leg") as Node3D
     var right_leg := rig.get("right_leg") as Node3D
     var left_arm := rig.get("left_arm") as Node3D
     var right_arm := rig.get("right_arm") as Node3D
-    if left_leg != null: left_leg.rotation.x = lerpf(left_leg.rotation.x, swing, response)
-    if right_leg != null: right_leg.rotation.x = lerpf(right_leg.rotation.x, -swing, response)
-    if left_arm != null: left_arm.rotation.x = lerpf(left_arm.rotation.x, -swing * 0.75, response)
-    if right_arm != null: right_arm.rotation.x = lerpf(right_arm.rotation.x, swing * 0.75, response)
+    if left_leg != null:
+        left_leg.rotation.x = lerpf(left_leg.rotation.x, swing, clampf(delta * 12.0, 0.0, 1.0))
+    if right_leg != null:
+        right_leg.rotation.x = lerpf(right_leg.rotation.x, -swing, clampf(delta * 12.0, 0.0, 1.0))
+    if left_arm != null:
+        left_arm.rotation.x = lerpf(left_arm.rotation.x, -swing * 0.75, clampf(delta * 12.0, 0.0, 1.0))
+    if right_arm != null:
+        right_arm.rotation.x = lerpf(right_arm.rotation.x, swing * 0.75, clampf(delta * 12.0, 0.0, 1.0))
 
 func _part(parent: Node3D, mesh: Mesh, position_local: Vector3, color: Color) -> MeshInstance3D:
     var instance := MeshInstance3D.new()
@@ -394,44 +401,35 @@ func _capsule_mesh(radius: float, height: float) -> CapsuleMesh:
     mesh.rings = 3
     return mesh
 
-func _limb(parent: Node3D, node_name: String, origin: Vector3, radius: float, length: float, color: Color) -> Node3D:
+func _limb(parent: Node3D, origin: Vector3, radius: float, length: float, color: Color) -> Node3D:
     var pivot := Node3D.new()
-    pivot.name = node_name
     pivot.position = origin
     parent.add_child(pivot)
     _part(pivot, _capsule_mesh(radius, length), Vector3(0, -length * 0.45, 0), color)
     return pivot
 
 func _dematerialize_agent(identifier: String) -> void:
-    if not agents.has(identifier): return
+    if not agents.has(identifier):
+        return
     var agent: Dictionary = agents[identifier]
-    var body := agent.get("node", null) as AnimatableBody3D
-    if body != null and is_instance_valid(body):
-        body.visible = false
-        body.process_mode = Node.PROCESS_MODE_DISABLED
-        body.collision_layer = 0
-        body.collision_mask = 0
-        body.sync_to_physics = false
-        if not _pedestrian_pool.has(body):
-            _pedestrian_pool.append(body)
+    var node = agent.get("node", null)
+    if node is Node and is_instance_valid(node):
+        (node as Node).queue_free()
     agent.node = null
     agent.rig = {}
     agents[identifier] = agent
 
 func _destroy_agent(identifier: String) -> void:
-    if not agents.has(identifier): return
+    if not agents.has(identifier):
+        return
     _dematerialize_agent(identifier)
     agents.erase(identifier)
 
-func _clear_pool() -> void:
-    for body in _pedestrian_pool:
-        if is_instance_valid(body): body.queue_free()
-    _pedestrian_pool.clear()
-
 func _ensure_proxy(scene: Node) -> void:
-    if _proxy != null and is_instance_valid(_proxy) and _proxy_scene == scene: return
-    _clear_pool()
-    if _proxy != null and is_instance_valid(_proxy): _proxy.queue_free()
+    if _proxy != null and is_instance_valid(_proxy) and _proxy_scene == scene:
+        return
+    if _proxy != null and is_instance_valid(_proxy):
+        _proxy.queue_free()
     _proxy_scene = scene
     _proxy = MultiMeshInstance3D.new()
     _proxy.name = "PedestrianMediumHLOD"
@@ -454,10 +452,11 @@ func _ensure_proxy(scene: Node) -> void:
     scene.add_child(_proxy)
 
 func _clear_scene_state() -> void:
-    for identifier in agents.keys(): _dematerialize_agent(str(identifier))
+    for identifier in agents.keys():
+        _dematerialize_agent(str(identifier))
     agents.clear()
-    _clear_pool()
-    if _proxy != null and is_instance_valid(_proxy): _proxy.queue_free()
+    if _proxy != null and is_instance_valid(_proxy):
+        _proxy.queue_free()
     _proxy = null
     _proxy_scene = null
     _last_near = 0
@@ -467,4 +466,13 @@ func _clear_scene_state() -> void:
     _weather_density_factor = 1.0
 
 func runtime_snapshot() -> Dictionary:
-    return {"agents": agents.size(), "near_full": _last_near, "medium_hlod": _last_medium, "far_statistical": _far_statistical, "pooled_near": _pedestrian_pool.size(), "quality": _quality, "thermal_stage": _thermal_stage, "weather_speed_factor": _weather_speed_factor, "weather_density_factor": _weather_density_factor}
+    return {
+        "agents": agents.size(),
+        "near_full": _last_near,
+        "medium_hlod": _last_medium,
+        "far_statistical": _far_statistical,
+        "quality": _quality,
+        "thermal_stage": _thermal_stage,
+        "weather_speed_factor": _weather_speed_factor,
+        "weather_density_factor": _weather_density_factor,
+    }
