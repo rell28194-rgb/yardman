@@ -208,8 +208,10 @@ if __name__ == "__main__":
     parser.add_argument("roads_manifest", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--acquire", action="store_true")
+    parser.add_argument("--resolution", type=int, default=65,
+                        help="Samples per tile edge; one plus a power of two")
     args = parser.parse_args()
     if args.acquire:
         acquire(args.source_dir)
-    m = compile_terrain(args.source_dir, args.roads_manifest, args.output)
+    m = compile_terrain(args.source_dir, args.roads_manifest, args.output, args.resolution)
     print("YARDMAN_TERRAIN_COMPILE_PASS", len(m["tiles"]), "tiles; peak", m["max_height"], "metres; shared edges exact")
