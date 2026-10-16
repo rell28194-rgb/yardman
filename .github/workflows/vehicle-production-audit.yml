@@ -14,75 +14,71 @@ permissions:
   contents: read
 
 jobs:
-  audit-vehicle-lod-assets:
+  audit-active-vehicle-lod-assets:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reproduce committed LOD3 proxies from dimensions only
+      - name: Reproduce active non-Crown LOD3 proxy from dimensions only
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/yardman-vehicle-lod
           python godot/tools/vehicle_production/generate_lod3_proxy.py \
-            /tmp/yardman-vehicle-lod/toyota_crown_lod3.glb \
-            --width 2.054 --height 1.306 --length 4.970 --wheelbase 2.85 --wheel-radius 0.34 \
-            --paint 0.055,0.070,0.090
-          python godot/tools/vehicle_production/generate_lod3_proxy.py \
             /tmp/yardman-vehicle-lod/toyota_chaser_v_lod3.glb \
             --width 1.957 --height 1.344 --length 4.831 --wheelbase 2.673 --wheel-radius 0.35 \
             --paint 0.20,0.035,0.035
-          cmp /tmp/yardman-vehicle-lod/toyota_crown_lod3.glb godot/assets/vehicle_lod/toyota_crown_lod3.glb
           cmp /tmp/yardman-vehicle-lod/toyota_chaser_v_lod3.glb godot/assets/vehicle_lod/toyota_chaser_v_lod3.glb
 
-      - name: Audit distant geometry and Yardman rig contract
+      - name: Audit active distant geometry and Yardman rig contract
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p godot/build/vehicle-production
           python godot/tools/vehicle_production/audit_glb.py \
-            godot/assets/vehicle_lod/toyota_crown_lod3.glb \
-            --require-rig --max-triangles 4000 --max-materials 3 --max-textures 0 \
-            --output godot/build/vehicle-production/crown-lod3.json
-          python godot/tools/vehicle_production/audit_glb.py \
             godot/assets/vehicle_lod/toyota_chaser_v_lod3.glb \
             --require-rig --max-triangles 4000 --max-materials 3 --max-textures 0 \
             --output godot/build/vehicle-production/chaser-v-lod3.json
           python godot/tools/vehicle_production/validate_lod_chain.py \
-            --lod3 godot/build/vehicle-production/crown-lod3.json \
-            --output godot/build/vehicle-production/crown-lod3-chain.json
-          python godot/tools/vehicle_production/validate_lod_chain.py \
             --lod3 godot/build/vehicle-production/chaser-v-lod3.json \
             --output godot/build/vehicle-production/chaser-v-lod3-chain.json
 
-      - name: Enforce tiny proxy budgets and legal identity rules
+      - name: Enforce full-fleet source policy and legal identity rules
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           import json
           from pathlib import Path
-          root = Path('godot/build/vehicle-production')
-          for name in ('crown-lod3.json', 'chaser-v-lod3.json'):
-              report = json.loads((root / name).read_text())
-              metrics = report['metrics']
-              assert report['policy']['pass']
-              assert metrics['scene_instance_triangles'] == 152
-              assert metrics['unique_mesh_triangles'] == 56
-              assert metrics['materials_referenced'] == 3
-              assert metrics['textures'] == 0
-              assert metrics['estimated_geometry_bytes'] < 10000
-              assert metrics['rig_contract']['pass']
+          report = json.loads(Path('godot/build/vehicle-production/chaser-v-lod3.json').read_text())
+          metrics = report['metrics']
+          assert report['policy']['pass']
+          assert metrics['scene_instance_triangles'] == 152
+          assert metrics['unique_mesh_triangles'] == 56
+          assert metrics['materials_referenced'] == 3
+          assert metrics['textures'] == 0
+          assert metrics['estimated_geometry_bytes'] < 10000
+          assert metrics['rig_contract']['pass']
+
           roster = json.loads(Path('godot/docs/vehicle_production/roster-2026-10-16.json').read_text())
+          fusion = roster['policy']['source_fusion']
+          assert fusion['required_for_every_active_vehicle'] is True
+          assert roster['policy']['crown007']['status'] == 'done_frozen_owner_accepted'
+          assert roster['policy']['crown007']['active_work'] is False
           assert roster['policy']['porsche']['authorized'] is False
+
+          crown = next(v for v in roster['vehicles'] if v['id'] == 'toyota_crown')
+          assert crown['active_work'] is False
           porsche = next(v for v in roster['vehicles'] if v['id'] == 'port_royal_992')
-          assert porsche['status'] == 'frozen_fictional_no_porsche_source_work'
+          assert porsche['active_work'] is False
           mark_x = next(v for v in roster['vehicles'] if v['id'] == 'toyota_mark_x')
-          assert mark_x['status'] == 'unresolved_no_verified_source_hero'
+          assert mark_x['status'] == 'active_identity_and_source_fusion'
           chaser = next(v for v in roster['vehicles'] if v['id'] == 'toyota_chaser_v_candidate')
-          assert 'do_not_relabel_as_mark_x' in chaser['status']
-          print('YARDMAN_VEHICLE_LOD3_POLICY_PASS')
+          assert chaser['status'] == 'active_full_source_fusion'
+          assert chaser['beta1']['source']
+          assert chaser['beta2']['status'] == 'mandatory_search_and_component_match'
+          print('YARDMAN_FULL_FLEET_SOURCE_POLICY_PASS')
           PY
 
       - name: Upload vehicle-production evidence
