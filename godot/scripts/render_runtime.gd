@@ -13,6 +13,10 @@ var _custom_key := ""
 var _budget_clock := 0.0
 var _refresh_clock := 0.0
 var _timing_enabled := false
+var _last_budget_signature := ""
+var _last_scene_id := 0
+var _last_stream_signature := ""
+var _force_budget_apply := true
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -46,6 +50,7 @@ func _process(delta: float) -> void:
         _quality = quality
         _custom_key = custom_key
         _configured = true
+        _force_budget_apply = true
     _refresh_clock += delta
     if _refresh_clock >= 2.0:
         _refresh_clock = 0.0
@@ -57,7 +62,35 @@ func _process(delta: float) -> void:
     _budget_clock += delta
     if _budget_clock >= 0.5:
         _budget_clock = 0.0
-        _apply_scene_budgets(scene)
+        _apply_scene_budgets_if_dirty(scene)
+
+func _apply_scene_budgets_if_dirty(scene: Node) -> void:
+    if scene == null or not _configured:
+        return
+    var active := manager.effective_policy()
+    active["quality"] = manager.quality
+    active["renderer"] = manager.renderer
+    active["thermal_stage"] = manager.thermal_stage
+    var policy_signature := JSON.stringify(active)
+    var scene_id := scene.get_instance_id()
+    var roads = scene.get("roads")
+    var terrain = scene.get("terrain")
+    var buildings = scene.get("buildings")
+    var stream_signature := "%s|%s|%s|%s|%s|%s" % [
+        str(roads.get("generation")) if roads != null else "-",
+        str((roads.get("_loaded") as Dictionary).size()) if roads != null and roads.get("_loaded") is Dictionary else "0",
+        str(terrain.get("generation")) if terrain != null else "-",
+        str((terrain.get("_loaded") as Dictionary).size()) if terrain != null and terrain.get("_loaded") is Dictionary else "0",
+        str(buildings.get("generation")) if buildings != null else "-",
+        str((buildings.get("_loaded") as Dictionary).size()) if buildings != null and buildings.get("_loaded") is Dictionary else "0",
+    ]
+    if not _force_budget_apply and scene_id == _last_scene_id and policy_signature == _last_budget_signature and stream_signature == _last_stream_signature:
+        return
+    _last_scene_id = scene_id
+    _last_budget_signature = policy_signature
+    _last_stream_signature = stream_signature
+    _force_budget_apply = false
+    _apply_scene_budgets(scene)
 
 func _apply_scene_budgets(scene: Node) -> void:
     if scene == null or not _configured:
@@ -138,9 +171,10 @@ func _is_terrain_material(material: Material) -> bool:
 
 func set_thermal_stage(stage: int) -> void:
     manager.set_thermal_stage(stage)
+    _force_budget_apply = true
     if OS.has_feature("mobile"):
         manager.apply_viewport(get_viewport())
-        _apply_scene_budgets(get_tree().current_scene)
+        _apply_scene_budgets_if_dirty(get_tree().current_scene)
 
 func set_adaptive_resolution_enabled(enabled: bool) -> void:
     manager.adaptive_resolution_enabled = enabled
