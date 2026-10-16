@@ -88,6 +88,18 @@ func _model() -> Node3D:
     root.add_child(model)
     return model
 
+func _check_dedicated_identity(filename: String, vehicle_id: String, hero: PackedScene) -> void:
+    var loader := FakeSceneLoader.new()
+    loader.scenes[filename] = hero
+    loader.scenes["road_car.glb"] = _packed_vehicle(true)
+    var model = _model()
+    model.call("build", filename, Callable(loader, "scene"))
+    _check(bool(model.get("is_reference_model")), "%s dedicated hero did not bind" % vehicle_id)
+    _check(str(model.get("reference_asset_name")) == filename, "%s did not retain its hero filename" % vehicle_id)
+    _check(bool(model.get_meta("yardman_dedicated_vehicle_mesh", false)), "%s did not mark itself as dedicated" % vehicle_id)
+    _check(str(model.get_meta("yardman_dedicated_vehicle_id", "")) == vehicle_id, "%s got the wrong catalog identity" % vehicle_id)
+    _check(loader.requests == [filename], "%s queried a cross-model fallback" % vehicle_id)
+
 func _check_rejected_hero(options: Dictionary, generic: PackedScene, reason: String) -> void:
     var loader := FakeSceneLoader.new()
     loader.scenes["toyota_crown_2013.glb"] = _packed_vehicle(true, options)
@@ -163,16 +175,9 @@ func _run() -> void:
     var generic := _packed_vehicle(true)
     var invalid_hero := _packed_vehicle(false)
 
-    var hero_loader := FakeSceneLoader.new()
-    hero_loader.scenes["toyota_crown_2013.glb"] = hero
-    hero_loader.scenes["road_car.glb"] = generic
-    var hero_model = _model()
-    hero_model.call("build", "toyota_crown_2013.glb", Callable(hero_loader, "scene"))
-    _check(bool(hero_model.get("is_reference_model")), "Dedicated Crown hero did not bind")
-    _check(str(hero_model.get("reference_asset_name")) == "toyota_crown_2013.glb", "Dedicated hero identity was not retained")
-    _check(bool(hero_model.get_meta("yardman_dedicated_vehicle_mesh", false)), "Dedicated Crown did not mark itself as dedicated")
-    _check(str(hero_model.get_meta("yardman_dedicated_vehicle_id", "")) == "toyota_crown", "Dedicated Crown got the wrong catalog identity")
-    _check(hero_loader.requests == ["toyota_crown_2013.glb"], "Generic fallback was queried even though the hero was valid")
+    _check_dedicated_identity("toyota_crown_2013.glb", "toyota_crown", hero)
+    _check_dedicated_identity("toyota_mark_x_2013.glb", "toyota_mark_x", hero)
+    _check_dedicated_identity("porsche_911_992.glb", "port_royal_992", hero)
 
     var invalid_loader := FakeSceneLoader.new()
     invalid_loader.scenes["toyota_crown_2013.glb"] = invalid_hero
@@ -216,13 +221,15 @@ func _run() -> void:
     wrong_root.free()
     var wrong_loader := FakeSceneLoader.new()
     wrong_loader.scenes["toyota_crown_2013.glb"] = wrong_scene
-    wrong_loader.scenes["road_car.glb"] = generic
     var wrong_model = _model()
     var orphans_before := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
-    wrong_model.call("build", "toyota_crown_2013.glb", Callable(wrong_loader, "scene"))
-    _check(str(wrong_model.get("reference_asset_name")).is_empty(), "Non-3D Crown root silently substituted another asset")
-    _check(wrong_loader.requests == ["toyota_crown_2013.glb"], "Non-3D Crown root queried road_car.glb")
-    _check(int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)) == orphans_before, "Rejected non-3D scene leaked an orphan Node")
+    var wrong_accepted := bool(wrong_model.call("_try_reference_sedan", "toyota_crown_2013.glb", Callable(wrong_loader, "scene")))
+    _check(not wrong_accepted, "Non-3D Crown root was accepted")
+    _check(str(wrong_model.get("reference_asset_name")).is_empty(), "Non-3D Crown root claimed an asset identity")
+    _check(wrong_loader.requests == ["toyota_crown_2013.glb"], "Non-3D Crown root queried an unrelated asset")
+    await process_frame
+    var orphans_after := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+    _check(orphans_after <= orphans_before, "Rejected non-3D scene increased orphan Nodes before=%d after=%d" % [orphans_before, orphans_after])
 
     _check_rejected_hero({"body_size": Vector3(1.8, 40.0, 4.8)}, generic, "Extreme height")
     _check_rejected_hero({"body_position": Vector3(INF, 0.0, 0.0)}, generic, "Non-finite geometry transform")
@@ -237,7 +244,7 @@ func _run() -> void:
     _check_motion_rest_pose("road_car.glb")
     _check_motion_rest_pose("road_car.glb", true)
 
-    print("YARDMAN_VEHICLE_HERO_ASSET_TEST %s checks=%d dedicated=1 strict_identity=1 missing_identity_guard=1 generic=1 procedural=1 authored_motion=3 geometry_rejections=9 wrong_root_cleanup=1" % ["PASS" if failures == 0 else "FAIL", checks])
+    print("YARDMAN_VEHICLE_HERO_ASSET_TEST %s checks=%d dedicated=3 strict_identity=3 missing_identity_guard=1 generic=1 procedural=1 authored_motion=3 geometry_rejections=9 wrong_root_cleanup=1" % ["PASS" if failures == 0 else "FAIL", checks])
     for child in root.get_children():
         if child != root:
             child.queue_free()
