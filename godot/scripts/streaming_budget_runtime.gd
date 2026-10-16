@@ -240,8 +240,8 @@ func _start_roadside_job(tile: Vector2i) -> void:
         return
     var staging := Node3D.new()
     staging.name = "RoadsideProxy"
-    var prepared = source.get("records", [])
-    var has_prepared := prepared is Array and not prepared.is_empty()
+    var prepared: Array = source.get("records", [])
+    var has_prepared: bool = not prepared.is_empty()
     _roadside_jobs[tile] = {
         "tile": tile,
         "root": root,
