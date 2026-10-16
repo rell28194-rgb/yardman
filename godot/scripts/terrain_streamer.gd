@@ -15,6 +15,8 @@ var _far_thread: Thread
 var _far_build: Dictionary = {}
 var _far_root: Node3D
 var _far_sectors: Dictionary = {}
+var collision_radius_tiles := 1
+var _terrain_collision: Dictionary = {}
 
 func _ready() -> void:
     if coastline == null:
@@ -40,11 +42,13 @@ func _exit_tree() -> void:
 func _process(delta: float) -> void:
     super._process(delta)
     _prepare_far()
+    _refresh_collision_residency()
 
 func _remove_terrain_data(tile: Vector2i) -> void:
     var key := _tile_key(tile.x, tile.y)
     _height_data.erase(key)
     _coast_data.erase(key)
+    _terrain_collision.erase(key)
     if _far_sectors.has(key):
         _far_sectors[key].visible = true
 
@@ -245,18 +249,18 @@ func _complete_near() -> void:
         instance.name = "RegisteredLand"
         instance.mesh = mesh
         tile_root.add_child(instance)
-    if not _building.indices.is_empty():
-        var faces := PackedVector3Array()
-        for index in _building.indices:
-            faces.append(_building.vertices[index])
-        var shape := ConcavePolygonShape3D.new()
-        shape.backface_collision = true
-        shape.set_faces(faces)
+    if mesh.get_surface_count() > 0:
+        # Rendering can become resident without forcing a concave physics BVH
+        # into the same frame. Collision is activated only inside the player's
+        # tile bubble and at most one missing tile is materialized per pass.
         var collider := CollisionShape3D.new()
-        collider.shape = shape
         var body := StaticBody3D.new()
+        body.name = "TerrainCollision"
+        body.collision_layer = 0
+        body.collision_mask = 0
         body.add_child(collider)
         tile_root.add_child(body)
+        _terrain_collision[key] = {"tile": tile, "mesh": mesh, "body": body, "collider": collider}
     coastline.instantiate_tile(tile, _building.coast, tile_root, tile_size)
     _height_data[key] = _building.heights
     _coast_data[key] = _building.coast
@@ -266,6 +270,60 @@ func _complete_near() -> void:
         _far_sectors[key].visible = false
     _building.clear()
     tile_ready.emit(tile)
+
+
+func _collision_tile_active(tile: Vector2i, current: Vector2i) -> bool:
+    return maxi(absi(tile.x - current.x), absi(tile.y - current.y)) <= collision_radius_tiles
+
+func _refresh_collision_residency() -> void:
+    if target == null or not is_instance_valid(target) or _terrain_collision.is_empty():
+        return
+    var current := _target_tile()
+    var candidates: Array[String] = []
+    for raw_key in _terrain_collision.keys():
+        var key := str(raw_key)
+        var entry: Dictionary = _terrain_collision[key]
+        var tile: Vector2i = entry.tile
+        var body: StaticBody3D = entry.body
+        var collider: CollisionShape3D = entry.collider
+        var active := _collision_tile_active(tile, current)
+        if not active:
+            body.collision_layer = 0
+            if collider.shape != null:
+                collider.shape = null
+            continue
+        if collider.shape == null:
+            candidates.append(key)
+        else:
+            body.collision_layer = 1
+    if candidates.is_empty():
+        return
+    candidates.sort_custom(func(a: String, b: String) -> bool:
+        return _key_tile(a).distance_squared_to(current) < _key_tile(b).distance_squared_to(current))
+    var key := candidates[0]
+    var entry: Dictionary = _terrain_collision[key]
+    var mesh: ArrayMesh = entry.mesh
+    var faces := mesh.get_faces()
+    if faces.is_empty():
+        return
+    var shape := ConcavePolygonShape3D.new()
+    shape.backface_collision = true
+    shape.set_faces(faces)
+    var collider: CollisionShape3D = entry.collider
+    collider.shape = shape
+    var body: StaticBody3D = entry.body
+    body.collision_layer = 1
+
+func inflight_count() -> int:
+    var pending := super.inflight_count()
+    if target == null or not is_instance_valid(target):
+        return pending
+    var current := _target_tile()
+    for entry: Dictionary in _terrain_collision.values():
+        var collider: CollisionShape3D = entry.collider
+        if collider.shape == null and _collision_tile_active(entry.tile, current):
+            pending += 1
+    return pending
 
 func height_at(x: float, z: float) -> float:
     if not is_finite(x) or not is_finite(z):
