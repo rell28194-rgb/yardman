@@ -1,0 +1,67 @@
+{
+  "checkpoint": "player-only-race-vehicles-001",
+  "format_version": 1,
+  "scope": "private owner garage",
+  "policy": {
+    "quantity": "retain every distinct validated race variant; do not remove vehicles merely to keep fleet size small",
+    "quality": "same hero-quality LOD0 standard as road vehicles; no lower-quality exception for quantity",
+    "player_selectable": true,
+    "owner_private": true,
+    "ai_driver_eligible": false,
+    "ambient_traffic_eligible": false,
+    "ambient_parked_eligible": false,
+    "mission_npc_eligible": false,
+    "road_car_substitution": false,
+    "porsche": "excluded"
+  },
+  "vehicles": [
+    {
+      "id": "rr3_2012_audi_r8_lms",
+      "source_directory": "2012_audi_r8_lms",
+      "display_name": "Audi R8 LMS",
+      "class": "race",
+      "availability": "player_only_private_garage"
+    },
+    {
+      "id": "rr3_2018_audi_r8_gt4",
+      "source_directory": "2018_audi_r8_gt4",
+      "display_name": "Audi R8 GT4",
+      "class": "race",
+      "availability": "player_only_private_garage"
+    },
+    {
+      "id": "rr3_2017_bmw_m4_dtm",
+      "source_directory": "2017_bmw_m4_dtm",
+      "display_name": "BMW M4 DTM",
+      "class": "race",
+      "availability": "player_only_private_garage"
+    },
+    {
+      "id": "rr3_2018_bmw_m4_gt4",
+      "source_directory": "2018_bmw_m4_gt4",
+      "display_name": "BMW M4 GT4",
+      "class": "race",
+      "availability": "player_only_private_garage"
+    },
+    {
+      "id": "rr3_2021_bmw_m4_gt3",
+      "source_directory": "2021_bmw_m4_gt3",
+      "display_name": "BMW M4 GT3",
+      "class": "race",
+      "availability": "player_only_private_garage"
+    },
+    {
+      "id": "rr3_2017_mercedes_c63_dtm",
+      "source_directory": "2017_mercedes_c63_dtm",
+      "display_name": "Mercedes C63 DTM",
+      "class": "race",
+      "availability": "player_only_private_garage"
+    }
+  ],
+  "runtime_contract": {
+    "garage": "include only after the exact vehicle passes normal visual, physics, audio and Android validation",
+    "traffic": "must filter every vehicle where ai_driver_eligible=false before NPC/ambient selection",
+    "parked_vehicles": "must filter every player-only vehicle from ambient parked-car generation",
+    "quality_gate": "player-only status must never be used to bypass geometry, material, provenance, LOD or Android validation"
+  }
+}
