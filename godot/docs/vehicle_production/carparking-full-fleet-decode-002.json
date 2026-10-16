@@ -1,0 +1,48 @@
+{
+  "checkpoint": "carparking-full-fleet-decode-002",
+  "source": "Car Parking Multiplayer 4.9.11 exact current Addressables car bundles",
+  "source_verification": {
+    "xapk_bytes": 2391971165,
+    "xapk_sha256": "ec2b27625eb0901aa699318d1e159ac1a9f8fe08cdd8e9f28f1024e020502dc7",
+    "streaming_apk_bytes": 1088603009,
+    "streaming_apk_sha256": "d1e9eac6de65bf7ffb6071b8545d743c910befb85f868196efc9f671728a56da",
+    "addressables_catalog_bytes": 7718124,
+    "addressables_catalog_sha256": "4bacdddca1c11ed8d3ba9697c90c06424e616eb2ca32af09191c5183694963b9",
+    "unity_revision": "2022.3.62f2"
+  },
+  "decode": {
+    "current_car_bundles": 237,
+    "unityfs_parse_failures": 0,
+    "resolved_non_porsche": 227,
+    "excluded_porsche": 8,
+    "conflict_review_required": 1,
+    "unresolved": 1
+  },
+  "excluded_porsche_catalog_ids": [24, 28, 109, 188, 205, 207, 222, 250],
+  "open_identity_gates": {
+    "21": "conflict: global catalog identifies Jeep Grand Cherokee SRT-8 while exact car21 bundle carries Wrangler materials/audio; do not guess",
+    "122": "sell-model/wheel data only; no defensible make/model identity recovered"
+  },
+  "resolved_special_cases": {
+    "37": "Ford Transit SuperSportVan",
+    "101": "Ford Transit shared-family variant",
+    "161": "Jeep Grand Cherokee",
+    "173": "Mercedes CLS63 2012",
+    "251": "Toyota Altezza",
+    "252": "BMW M5 E34 Touring 1992",
+    "253": "Ford F650",
+    "254": "Renault Logan Dacia 2004",
+    "255": "Lexus IS300"
+  },
+  "private_metadata_checkpoint": {
+    "name": "Yardman-CarParking-Full-Fleet-Decode-002.zip",
+    "sha256": "1ff31448aed6bc61bee4775e80fb5a302ac5424d5d493222d7b9bf71d3d4fdcb",
+    "contains_recovered_vehicle_media": false
+  },
+  "policy": {
+    "crown007": "accepted current state and deprioritized; not complete or frozen",
+    "porsche": "excluded",
+    "identity": "exact bundle evidence outranks noisy global catalog aliases; conflicts stay unresolved",
+    "fleet": "use Beta1 and Beta2 source searches for every active vehicle; an absent exact match is a recorded no-match, not a fabricated substitute"
+  }
+}
