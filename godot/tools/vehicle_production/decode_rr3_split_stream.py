@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Sequentially decode Yardman's RR3 7z wrapper directly from 246 split parts.
 
-No concatenated 7z staging file is required. The decoder validates the known
-first/tail split hashes, parses the 7z header through the split reader, streams
-the single LZMA2 member into a private ZIP, and can emit a complete ZIP inventory.
+The decoder validates known edge hashes, parses the 7z wrapper through a virtual
+split reader, streams the single LZMA2 member into a private ZIP, and can emit a
+complete central-directory inventory. No concatenated 7z staging file is needed.
 """
 from __future__ import annotations
 
@@ -43,10 +43,12 @@ class SplitArchive:
         self.paths = [root / f"{prefix}.{i:03d}" for i in range(1, PARTS + 1)]
         missing = [str(p) for p in self.paths if not p.is_file()]
         if missing:
-            raise FileNotFoundError(f"missing RR3 split parts: {missing[:8]}" + (" ..." if len(missing) > 8 else ""))
-        for i, p in enumerate(self.paths, 1):
+            raise FileNotFoundError(
+                f"missing RR3 split parts: {missing[:8]}" + (" ..." if len(missing) > 8 else "")
+            )
+        for i, path in enumerate(self.paths, 1):
             expected = TAIL_BYTES if i == PARTS else PART_BYTES
-            actual = p.stat().st_size
+            actual = path.stat().st_size
             if actual != expected:
                 raise ValueError(("unexpected split size", i, actual, expected))
         if sha256_file(self.paths[0]) != FIRST_SHA256:
@@ -95,27 +97,29 @@ def parse_wrapper(arc: SplitArchive) -> dict:
         raise ValueError(("bad 7z signature", h[:8].hex()))
     start_crc = struct.unpack("<I", h[8:12])[0]
     start = h[12:32]
-    if (zlib.crc32(start) & 0xffffffff) != start_crc:
+    if (zlib.crc32(start) & 0xFFFFFFFF) != start_crc:
         raise ValueError("start-header CRC mismatch")
     next_offset, next_size, next_crc = struct.unpack("<QQI", start)
     next_header = arc.read_exact_at(32 + next_offset, next_size)
-    if (zlib.crc32(next_header) & 0xffffffff) != next_crc:
+    if (zlib.crc32(next_header) & 0xFFFFFFFF) != next_crc:
         raise ValueError("next-header CRC mismatch")
     if not next_header or next_header[0] != K_HEADER:
         raise ValueError("RR3 wrapper next header is not a plain 7z header")
+
     parsed = parse_files_header(next_header)
     main = parsed["main"]
     if parsed["nfiles"] != 1 or len(parsed["names"]) != 1:
         raise ValueError(("unexpected RR3 wrapper file count", parsed["nfiles"], parsed["names"]))
-    if len(main["folders"]) != 1 or len(main["pack_sizes"]) != 1:
-        raise ValueError("RR3 wrapper is no longer a single-folder/single-pack archive")
+    if not main or len(main["folders"]) != 1 or len(main["pack_sizes"]) != 1:
+        raise ValueError("RR3 wrapper is no longer single-folder/single-pack")
     folder = main["folders"][0]
     if len(folder["coders"]) != 1 or folder["coders"][0]["method"] != b"\x21":
         raise ValueError(("unexpected RR3 compression", [c["method"].hex() for c in folder["coders"]]))
     props = folder["coders"][0]["props"]
     if len(props) != 1:
         raise ValueError(("unexpected LZMA2 properties", props.hex()))
-    return {
+
+    meta = {
         "name": parsed["names"][0],
         "pack_offset": pack_offsets(main)[0],
         "pack_size": main["pack_sizes"][0],
@@ -125,6 +129,9 @@ def parse_wrapper(arc: SplitArchive) -> dict:
         "next_header_offset": next_offset,
         "next_header_size": next_size,
     }
+    if meta["pack_offset"] + meta["pack_size"] > LOGICAL_BYTES:
+        raise ValueError(("packed stream exceeds logical wrapper", meta))
+    return meta
 
 
 def decode_member(arc: SplitArchive, meta: dict, output: Path, chunk: int) -> dict:
@@ -135,41 +142,46 @@ def decode_member(arc: SplitArchive, meta: dict, output: Path, chunk: int) -> di
     remaining = meta["pack_size"]
     written = 0
     digest = hashlib.sha256()
+
     with output.open("wb") as out:
-        while remaining:
+        while remaining and not dec.eof:
             data = arc.read(min(chunk, remaining))
             if not data:
                 raise EOFError(("packed RR3 stream ended early", remaining))
             remaining -= len(data)
             feed = data
-            while feed or not dec.needs_input:
+            while (feed or not dec.needs_input) and not dec.eof:
                 raw = dec.decompress(feed if dec.needs_input else b"", max_length=chunk)
                 feed = b""
                 if raw:
                     out.write(raw)
                     digest.update(raw)
                     written += len(raw)
+
         while not dec.eof and not dec.needs_input:
             raw = dec.decompress(b"", max_length=chunk)
             if raw:
                 out.write(raw)
                 digest.update(raw)
                 written += len(raw)
-            elif dec.needs_input:
-                break
+
+    if remaining != 0:
+        raise ValueError(("LZMA2 reached EOF before declared packed bytes were consumed", remaining))
     if not dec.eof:
-        raise ValueError("LZMA2 stream did not reach EOF after consuming declared packed bytes")
+        raise ValueError("LZMA2 stream did not reach EOF after declared packed bytes")
     if written != meta["unpacked_size"]:
         raise ValueError(("decoded-size mismatch", meta["unpacked_size"], written))
     return {"output": str(output), "bytes": written, "sha256": digest.hexdigest()}
 
 
-def inventory_zip(path: Path, output: Path) -> dict:
+def inventory_zip(path: Path, output: Path, verify_crc: bool = False) -> dict:
     entries = []
     ext_counts = collections.Counter()
-    total_uncompressed = total_compressed = 0
+    total_uncompressed = 0
+    total_compressed = 0
+
     with zipfile.ZipFile(path, "r") as zf:
-        bad = zf.testzip()
+        bad = zf.testzip() if verify_crc else None
         if bad is not None:
             raise ValueError(f"ZIP CRC failure: {bad}")
         for info in zf.infolist():
@@ -185,12 +197,15 @@ def inventory_zip(path: Path, output: Path) -> dict:
                 "crc32": f"{info.CRC:08x}",
                 "compression": info.compress_type,
             })
+
     result = {
         "zip": str(path),
         "entry_count": len(entries),
         "total_uncompressed_bytes": total_uncompressed,
         "total_compressed_bytes": total_compressed,
         "extension_counts": dict(sorted(ext_counts.items())),
+        "central_directory_readable": True,
+        "full_crc_verified": verify_crc,
         "entries": entries,
     }
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -202,16 +217,30 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("split_root", type=Path)
     p.add_argument("--prefix", default="com.ea.games.r3_row_xclipse.zip")
-    p.add_argument("--output-zip", type=Path, required=True)
+    p.add_argument("--output-zip", type=Path)
+    p.add_argument(
+        "--inspect-only",
+        action="store_true",
+        help="Validate split hashes and wrapper metadata without decoding the multi-GB member",
+    )
     p.add_argument("--inventory", type=Path)
     p.add_argument("--report", type=Path)
+    p.add_argument(
+        "--verify-zip-crc",
+        action="store_true",
+        help="Expensive: reread/decompress every ZIP entry for CRC validation",
+    )
     p.add_argument("--chunk-mib", type=int, default=8)
     args = p.parse_args()
     chunk = max(1, args.chunk_mib) * 1024 * 1024
 
+    if not args.inspect_only and args.output_zip is None:
+        p.error("--output-zip is required unless --inspect-only is used")
+    if args.inspect_only and args.inventory:
+        p.error("--inventory cannot be used with --inspect-only")
+
     arc = SplitArchive(args.split_root, args.prefix)
     meta = parse_wrapper(arc)
-    decoded = decode_member(arc, meta, args.output_zip, chunk)
     report = {
         "source": {
             "split_parts": PARTS,
@@ -220,10 +249,16 @@ def main() -> int:
             "tail_sha256_verified": True,
         },
         "wrapper": meta,
-        "decoded": decoded,
+        "mode": "inspect_only" if args.inspect_only else "decode",
     }
-    if args.inventory:
-        report["inventory"] = inventory_zip(args.output_zip, args.inventory, args.verify_zip_crc)
+
+    if not args.inspect_only:
+        report["decoded"] = decode_member(arc, meta, args.output_zip, chunk)
+        if args.inventory:
+            report["inventory"] = inventory_zip(
+                args.output_zip, args.inventory, args.verify_zip_crc
+            )
+
     text = json.dumps(report, indent=2) + "\n"
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
