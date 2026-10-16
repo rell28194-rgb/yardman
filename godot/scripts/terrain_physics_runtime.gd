@@ -47,10 +47,10 @@ func _refresh_physics_residency() -> void:
         return
     var loaded: Dictionary = loaded_value
 
-    # The expensive collision walk is only needed when residency changes. Road
-    # corridor collider swaps explicitly invalidate this runtime, so there is no
-    # reason to traverse every loaded tile's children eight times per second just
-    # to rediscover the same StaticBody3D instance IDs.
+    # Residency only needs a full collision walk when the active warm set or
+    # loaded terrain set changes. Road-corridor collider replacement preserves
+    # the old body's active state on the new body, so rescanning child instance
+    # IDs every 120 ms was redundant steady-state work.
     var loaded_keys: Array[String] = []
     for key_value in loaded.keys():
         loaded_keys.append(str(key_value))
