@@ -2,6 +2,7 @@ extends CanvasLayer
 
 signal vehicle_selected(vehicle_id: String)
 
+const SANDBOX_MODE := true
 const Catalog = preload("res://scripts/vehicle_catalog.gd")
 const ModelScript = preload("res://scripts/vehicle_model.gd")
 const Styler = preload("res://scripts/vehicle_visual_styler.gd")
@@ -54,7 +55,6 @@ func _process(delta: float) -> void:
         vehicle_selected.emit(_selected_id)
 
 func _exit_tree() -> void:
-    # Removing/reloading the garage must not leave its pause behind.
     if _paused_by_garage and get_tree() != null:
         get_tree().paused = false
         _paused_by_garage = false
@@ -67,8 +67,6 @@ func _input(event: InputEvent) -> void:
         close_garage()
         get_viewport().set_input_as_handled()
     elif key not in [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_TAB, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_SHIFT]:
-        # Leave UI navigation to the focused control. Gameplay/menu shortcuts
-        # must not reach always-processing autoloads underneath this modal.
         get_viewport().set_input_as_handled()
 
 func available_vehicle_ids() -> Array:
@@ -94,8 +92,6 @@ static func normalized_owned_ids(value: Variant, selected_id: String) -> Array[S
             if Catalog.production_ids().has(vehicle_id) and not result.has(vehicle_id):
                 result.append(vehicle_id)
     if Catalog.production_ids().has(selected_id) and not result.has(selected_id):
-        # Legacy vehicle.json files only stored selected_vehicle. Treat that
-        # existing selection as owned so an update never takes a car away.
         result.append(selected_id)
     return result
 
@@ -136,8 +132,6 @@ func set_selected_vehicle(vehicle_id: String, persist: bool = true, apply_to_gam
         if not _switch_allowed(scene):
             _last_selection_error = "STOP THE VEHICLE BEFORE SWITCHING"
             return false
-    # Prepare a sibling file first. A failed write cannot corrupt the previous
-    # selection, and a rejected controller never commits the prepared file.
     if persist and _stage_selection(vehicle_id) != OK:
         _last_selection_error = "COULD NOT SAVE VEHICLE SELECTION"
         return false
@@ -164,89 +158,10 @@ func set_selected_vehicle(vehicle_id: String, persist: bool = true, apply_to_gam
     return true
 
 func purchase_vehicle(vehicle_id: String, apply_to_game: bool = true) -> bool:
-    _last_selection_error = ""
-    if not Catalog.production_ids().has(vehicle_id):
-        _last_selection_error = "VEHICLE UNAVAILABLE"
-        return false
-    if is_vehicle_owned(vehicle_id):
+    if SANDBOX_MODE:
         return set_selected_vehicle(vehicle_id, true, apply_to_game)
-    if apply_to_game and not _switch_allowed():
-        _last_selection_error = "STOP THE VEHICLE BEFORE SWITCHING"
-        return false
-    var price := vehicle_price_jmd(vehicle_id)
-    # The debit and ownership must reach the SAME atomic record. vehicle.json
-    # remains a selection/UI cache; a crash before it commits cannot lose a car.
-    if price <= 0:
-        _last_selection_error = "COULD NOT COMPLETE VEHICLE PAYMENT"
-        return false
-    if wallet_jmd() < price:
-        _last_selection_error = "COULD NOT COMPLETE VEHICLE PAYMENT"
-        return false
-    var jobs := get_node_or_null("/root/JobRuntime")
-    # Seed a wallet+ownership baseline BEFORE the first debit. Otherwise the
-    # first purchase's .bak could contain a legacy wallet without ownership and
-    # incorrectly grandfather the newer selection cache after backup recovery.
-    if jobs == null or (jobs.get("garage_owned_ids") == null and not _save_wallet()):
-        _last_selection_error = "COULD NOT COMPLETE VEHICLE PAYMENT"
-        return false
-    _owned_ids.append(vehicle_id)
-    if not _spend_wallet(price):
-        _owned_ids.erase(vehicle_id)
-        _last_selection_error = "COULD NOT COMPLETE VEHICLE PAYMENT"
-        return false
-    if not set_selected_vehicle(vehicle_id, true, apply_to_game):
-        _owned_ids.erase(vehicle_id)
-        if not _refund_wallet(price):
-            # The durable purchase still owns the vehicle. Never retain an
-            # in-memory refund which failed to reach disk or offer a second debit.
-            var runtime := get_node_or_null("/root/JobRuntime")
-            _owned_ids = normalized_owned_ids(runtime.get("garage_owned_ids"), STARTER_VEHICLE_ID)
-            _refresh_preview()
-            _last_selection_error = "PURCHASE SAVED — SELECT YOUR VEHICLE AGAIN"
-        return false
-    return true
-
-func _wallet_save_path() -> String:
-    return "user://yardman/jobs.json"
-
-func _save_wallet() -> bool:
-    var runtime := get_node_or_null("/root/JobRuntime")
-    var persistence := get_node_or_null("/root/JobPersistenceRuntime")
-    if runtime == null or persistence == null:
-        return false
-    var state = runtime.call("save_snapshot")
-    if not state is Dictionary:
-        return false
-    state["garage_owned_ids"] = owned_vehicle_ids()
-    if persistence.call("write_state", _wallet_save_path(), state) != OK:
-        return false
-    runtime.set("garage_owned_ids", owned_vehicle_ids())
-    return true
-
-func _spend_wallet(amount: int) -> bool:
-    if amount <= 0 or wallet_jmd() < amount:
-        return false
-    var runtime := get_node_or_null("/root/JobRuntime")
-    var balance := wallet_jmd()
-    runtime.set("wallet_jmd", balance - amount)
-    if not _save_wallet():
-        runtime.set("wallet_jmd", balance)
-        return false
-    runtime.call("_update_ui")
-    return true
-
-func _refund_wallet(amount: int) -> bool:
-    var runtime := get_node_or_null("/root/JobRuntime")
-    if runtime == null:
-        return false
-    var balance := wallet_jmd()
-    runtime.set("wallet_jmd", balance + amount)
-    if not _save_wallet():
-        runtime.set("wallet_jmd", balance)
-        runtime.call("_update_ui")
-        return false
-    runtime.call("_update_ui")
-    return true
+    _last_selection_error = "ECONOMY DISABLED"
+    return false
 
 func _scene_controller(scene: Node) -> Object:
     if not is_instance_valid(scene):
@@ -268,8 +183,6 @@ func _apply_vehicle_to_scene(scene: Node, vehicle_id: String) -> bool:
     var result = controller.call("apply_profile", vehicle_id)
     if result is bool and not result:
         return false
-    # Older controller adapters return void. When a controller publishes its
-    # active profile, verify the result instead of treating a no-op as success.
     var active_id = controller.get("vehicle_id")
     return active_id == vehicle_id if active_id != null else result == null or result == true
 
@@ -345,11 +258,9 @@ func _build_ui() -> void:
     _root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     _root.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(_root)
-
     _garage_button = Button.new()
     _garage_button.name = "GarageButton"
     _garage_button.text = "GARAGE"
-    _garage_button.tooltip_text = "Open vehicle selection"
     _garage_button.custom_minimum_size = Vector2(156.0, 56.0)
     _garage_button.set_anchor(SIDE_LEFT, 1.0)
     _garage_button.set_anchor(SIDE_RIGHT, 1.0)
@@ -360,17 +271,13 @@ func _build_ui() -> void:
     _garage_button.mouse_filter = Control.MOUSE_FILTER_STOP
     _garage_button.pressed.connect(open_garage)
     _root.add_child(_garage_button)
-
     _modal = ColorRect.new()
-    _modal.name = "GarageModal"
     _modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     _modal.color = Color(0.01, 0.016, 0.025, 0.84)
     _modal.mouse_filter = Control.MOUSE_FILTER_STOP
     _modal.visible = false
     _root.add_child(_modal)
-
     _panel = PanelContainer.new()
-    _panel.name = "GaragePanel"
     _panel.set_anchor(SIDE_LEFT, 0.5)
     _panel.set_anchor(SIDE_RIGHT, 0.5)
     _panel.set_anchor(SIDE_TOP, 0.5)
@@ -382,148 +289,57 @@ func _build_ui() -> void:
     _panel.mouse_filter = Control.MOUSE_FILTER_STOP
     _panel.visible = false
     _root.add_child(_panel)
-
     var outer := VBoxContainer.new()
-    outer.add_theme_constant_override("separation", 10)
     _panel.add_child(outer)
-
     var title := Label.new()
-    title.text = "YARDMAN VEHICLE GARAGE"
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", 26)
+    title.text = "YARDMAN VEHICLE GARAGE — SANDBOX"
     outer.add_child(title)
-
-    var subtitle := Label.new()
-    subtitle.text = "Choose your next drive"
-    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    outer.add_child(subtitle)
-
-    var content := HBoxContainer.new()
-    content.add_theme_constant_override("separation", 16)
-    content.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    outer.add_child(content)
-
-    var preview_host := SubViewportContainer.new()
-    preview_host.name = "VehiclePreview"
-    preview_host.custom_minimum_size = Vector2(500.0, 330.0)
-    preview_host.stretch = true
-    preview_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    preview_host.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    content.add_child(preview_host)
-
-    _preview_viewport = SubViewport.new()
-    _preview_viewport.name = "PreviewViewport"
-    _preview_viewport.size = Vector2i(640, 360)
-    _preview_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
-    _preview_viewport.own_world_3d = true
-    preview_host.add_child(_preview_viewport)
-    _build_preview_world()
-
-    var side := VBoxContainer.new()
-    side.custom_minimum_size = Vector2(315.0, 330.0)
-    side.add_theme_constant_override("separation", 12)
-    content.add_child(side)
-
-    var choose := Label.new()
-    choose.text = "SELECT VEHICLE"
-    side.add_child(choose)
-
     _selector = OptionButton.new()
-    _selector.name = "VehicleSelector"
-    _selector.custom_minimum_size = Vector2(300.0, 50.0)
     for vehicle_id in Catalog.production_ids():
-        var data := Catalog.profile(str(vehicle_id))
-        _selector.add_item(str(data.display_name))
-        _selector.set_item_metadata(_selector.item_count - 1, str(vehicle_id))
-    _selector.item_selected.connect(_on_preview_selected)
-    side.add_child(_selector)
-
+        _selector.add_item(str(Catalog.profile(vehicle_id).display_name))
+        _selector.set_item_metadata(_selector.item_count - 1, vehicle_id)
+    _selector.item_selected.connect(func(_index: int): _refresh_preview())
+    outer.add_child(_selector)
     _info = Label.new()
-    _info.name = "VehicleInfo"
-    _info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    _info.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    side.add_child(_info)
-
+    outer.add_child(_info)
+    _preview_viewport = SubViewport.new()
+    _preview_viewport.size = Vector2i(720, 280)
+    _preview_viewport.transparent_bg = true
+    _preview_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+    outer.add_child(_preview_viewport)
+    _preview_root = Node3D.new()
+    _preview_viewport.add_child(_preview_root)
+    var camera := Camera3D.new()
+    camera.position = Vector3(4.6, 2.2, 6.8)
+    camera.look_at_from_position(camera.position, Vector3(0, 0.8, 0))
+    _preview_viewport.add_child(camera)
+    var light := DirectionalLight3D.new()
+    light.rotation_degrees = Vector3(-38, -28, 0)
+    _preview_viewport.add_child(light)
+    var texture_rect := TextureRect.new()
+    texture_rect.custom_minimum_size = Vector2(720, 280)
+    texture_rect.texture = _preview_viewport.get_texture()
+    texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    outer.add_child(texture_rect)
     _status = Label.new()
-    _status.name = "GarageStatus"
-    _status.text = "READY TO SWITCH"
-    _status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    side.add_child(_status)
-
+    outer.add_child(_status)
     _apply_button = Button.new()
-    _apply_button.name = "ApplyVehicle"
     _apply_button.text = "USE THIS VEHICLE"
-    _apply_button.custom_minimum_size = Vector2(300.0, 54.0)
     _apply_button.pressed.connect(_apply_from_selector)
-    side.add_child(_apply_button)
-
+    outer.add_child(_apply_button)
     var close_button := Button.new()
-    close_button.name = "CloseGarage"
     close_button.text = "CLOSE"
-    close_button.custom_minimum_size = Vector2(300.0, 48.0)
     close_button.pressed.connect(close_garage)
-    side.add_child(close_button)
-
+    outer.add_child(close_button)
     _sync_selector()
     _refresh_preview()
 
-func _build_preview_world() -> void:
-    _preview_root = Node3D.new()
-    _preview_root.name = "PreviewWorld"
-    _preview_viewport.add_child(_preview_root)
-
-    var environment := Environment.new()
-    environment.background_mode = Environment.BG_COLOR
-    environment.background_color = Color(0.025, 0.032, 0.040)
-    # Metallic surfaces need an environment to reflect even when the visible
-    # background is a solid studio colour. Keep this small, static and local to
-    # the garage's isolated viewport rather than changing the world lighting.
-    var studio_material := ProceduralSkyMaterial.new()
-    studio_material.sky_top_color = Color(0.22, 0.24, 0.28)
-    studio_material.sky_horizon_color = Color(0.72, 0.74, 0.78)
-    studio_material.ground_bottom_color = Color(0.09, 0.10, 0.12)
-    studio_material.ground_horizon_color = Color(0.62, 0.64, 0.68)
-    var studio_sky := Sky.new()
-    studio_sky.radiance_size = Sky.RADIANCE_SIZE_128
-    studio_sky.process_mode = Sky.PROCESS_MODE_QUALITY
-    studio_sky.sky_material = studio_material
-    environment.sky = studio_sky
-    environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-    environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-    environment.ambient_light_energy = 0.75
-    var world_environment := WorldEnvironment.new()
-    world_environment.environment = environment
-    _preview_root.add_child(world_environment)
-
-    var key := DirectionalLight3D.new()
-    key.light_energy = 2.0
-    key.rotation_degrees = Vector3(-48.0, -32.0, 0.0)
-    key.shadow_enabled = true
-    _preview_root.add_child(key)
-
-    var fill := OmniLight3D.new()
-    fill.position = Vector3(-3.5, 2.8, 3.5)
-    fill.light_energy = 4.0
-    fill.omni_range = 12.0
-    _preview_root.add_child(fill)
-
-    var floor_mesh := PlaneMesh.new()
-    floor_mesh.size = Vector2(14.0, 14.0)
-    var floor_material := StandardMaterial3D.new()
-    floor_material.albedo_color = Color(0.09, 0.105, 0.12)
-    floor_material.metallic = 0.15
-    floor_material.roughness = 0.42
-    floor_mesh.material = floor_material
-    var floor_instance := MeshInstance3D.new()
-    floor_instance.mesh = floor_mesh
-    _preview_root.add_child(floor_instance)
-
-    var camera := Camera3D.new()
-    camera.position = Vector3(5.2, 2.6, 7.0)
-    camera.fov = 48.0
-    camera.current = true
-    _preview_root.add_child(camera)
-    camera.look_at(Vector3(0.0, 0.85, 0.0), Vector3.UP)
+func _preview_id() -> String:
+    if _selector == null or _selector.item_count == 0:
+        return _selected_id
+    var metadata = _selector.get_item_metadata(_selector.selected)
+    return str(metadata) if metadata != null else _selected_id
 
 func _sync_selector() -> void:
     if _selector == null:
@@ -533,40 +349,19 @@ func _sync_selector() -> void:
             _selector.select(index)
             return
 
-func _on_preview_selected(_index: int) -> void:
-    _refresh_preview()
-
-func _preview_id() -> String:
-    if _selector == null or _selector.item_count == 0 or _selector.selected < 0:
-        return _selected_id
-    return str(_selector.get_item_metadata(_selector.selected))
-
 func _refresh_preview() -> void:
     if _preview_root == null or _selector == null or _info == null:
         return
     var preview_id := _preview_id()
     var data := Catalog.profile(preview_id)
     var top_kmh := float(data.max_forward_mps) * 3.6
-    if SANDBOX_MODE:
-        _info.text = "%s\n%s • %s\nSANDBOX • AVAILABLE\n\nMass: %.0f kg\nWheelbase: %.2f m\nTrack: %.2f m\nTop speed: %.0f km/h" % [
-            str(data.display_name), str(data.manufacturer), str(data.drivetrain),
-            float(data.mass_kg), float(data.wheelbase_m), float(data.track_width_m), top_kmh
-        ]
-    else:
-        var ownership_text := "OWNED" if is_vehicle_owned(preview_id) else "PRICE: J$%d" % vehicle_price_jmd(preview_id)
-        _info.text = "%s\n%s • %s\n%s • WALLET J$%d\n\nMass: %.0f kg\nWheelbase: %.2f m\nTrack: %.2f m\nTop speed: %.0f km/h" % [
-            str(data.display_name), str(data.manufacturer), str(data.drivetrain), ownership_text, wallet_jmd(),
-            float(data.mass_kg), float(data.wheelbase_m), float(data.track_width_m), top_kmh
-        ]
+    _info.text = "%s\n%s • %s\nSANDBOX • AVAILABLE\n\nMass: %.0f kg\nWheelbase: %.2f m\nTrack: %.2f m\nTop speed: %.0f km/h" % [str(data.display_name), str(data.manufacturer), str(data.drivetrain), float(data.mass_kg), float(data.wheelbase_m), float(data.track_width_m), top_kmh]
     _refresh_action_state()
-    # Candidate changes while hidden update the text/selection only. GPU work
-    # and model allocation start when the garage is actually opened.
     if not is_open():
         return
     if is_instance_valid(_preview_model) and _preview_built_id == preview_id:
         return
     if is_instance_valid(_preview_model):
-        _preview_root.remove_child(_preview_model)
         _preview_model.queue_free()
     _preview_model = ModelScript.new()
     _preview_model.name = "PreviewVehicleModel"
@@ -587,91 +382,53 @@ func _refresh_action_state() -> void:
         _apply_button.text = "STOP VEHICLE"
         _status.text = "STOP THE VEHICLE BEFORE SWITCHING"
         return
-    if is_vehicle_owned(preview_id):
-        _apply_button.disabled = false
-        _apply_button.text = "USE THIS VEHICLE"
-        _status.text = "CURRENT VEHICLE" if preview_id == _selected_id else ("SANDBOX • READY TO SWITCH" if SANDBOX_MODE else "OWNED • READY TO SWITCH")
-        return
-    var price := vehicle_price_jmd(preview_id)
-    var balance := wallet_jmd()
-    _apply_button.text = "BUY • J$%d" % price
-    if balance >= price:
-        _apply_button.disabled = false
-        _status.text = "READY TO BUY • WALLET J$%d" % balance
-    else:
-        _apply_button.disabled = true
-        _status.text = "NEED J$%d MORE" % (price - balance)
+    _apply_button.disabled = false
+    _apply_button.text = "USE THIS VEHICLE"
+    _status.text = "CURRENT VEHICLE" if preview_id == _selected_id else "SANDBOX • READY TO SWITCH"
 
 func _apply_from_selector() -> void:
-    if not _switch_allowed():
-        _refresh_action_state()
-        return
     var requested := _preview_id()
-    if is_vehicle_owned(requested):
-        if set_selected_vehicle(requested, true, true):
-            _status.text = "%s SELECTED" % str(Catalog.profile(requested).display_name).to_upper()
-        else:
-            _status.text = "VEHICLE SWITCH FAILED"
-        return
-    if purchase_vehicle(requested, true):
-        _status.text = "PURCHASED • %s SELECTED" % str(Catalog.profile(requested).display_name).to_upper()
+    if set_selected_vehicle(requested, true, true):
+        _status.text = "%s SELECTED" % str(Catalog.profile(requested).display_name).to_upper()
     else:
         _status.text = _last_selection_error
 
 func _load_selection() -> void:
     _selected_id = STARTER_VEHICLE_ID
-    _owned_ids = [STARTER_VEHICLE_ID]
+    _owned_ids = Catalog.production_ids()
     if FileAccess.file_exists(_settings_path()):
         var file := FileAccess.open(_settings_path(), FileAccess.READ)
         if file != null:
             var json := JSON.new()
             if json.parse(file.get_as_text()) == OK and json.data is Dictionary:
-                var parsed: Dictionary = json.data
-                var candidate := str(parsed.get("selected_vehicle", STARTER_VEHICLE_ID))
+                var candidate := str(json.data.get("selected_vehicle", STARTER_VEHICLE_ID))
                 if Catalog.production_ids().has(candidate):
                     _selected_id = candidate
-                _owned_ids = normalized_owned_ids(parsed.get("owned_vehicles", []), _selected_id)
-    # Job persistence loads deferred, after this autoload's _ready. Read the
-    # same validated primary/backup pair here so recovery has no startup race.
-    var state := JobPersistence.read_state(_wallet_save_path())
-    if state.has("garage_owned_ids"):
-        _owned_ids = normalized_owned_ids(state["garage_owned_ids"], STARTER_VEHICLE_ID)
-        if not is_vehicle_owned(_selected_id):
-            _selected_id = STARTER_VEHICLE_ID
 
 func _settings_path() -> String:
     return SETTINGS_PATH
 
-func _staged_settings_path() -> String:
-    return "%s.pending-%d" % [_settings_path(), get_instance_id()]
+func _stage_path() -> String:
+    return SETTINGS_PATH + ".next"
 
 func _stage_selection(vehicle_id: String) -> Error:
-    var directory := ProjectSettings.globalize_path(_settings_path().get_base_dir())
-    var error := DirAccess.make_dir_recursive_absolute(directory)
-    if error != OK:
-        return error
-    var file := FileAccess.open(_staged_settings_path(), FileAccess.WRITE)
+    DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("user://yardman"))
+    var file := FileAccess.open(_stage_path(), FileAccess.WRITE)
     if file == null:
         return FileAccess.get_open_error()
-    file.store_string(JSON.stringify({"selected_vehicle": vehicle_id, "owned_vehicles": _owned_ids}, "  "))
+    file.store_string(JSON.stringify({"selected_vehicle": vehicle_id}))
     file.flush()
-    error = file.get_error()
-    file.close()
-    if error != OK:
-        _discard_staged_selection()
-    return error
+    return OK
 
 func _commit_staged_selection() -> Error:
-    return DirAccess.rename_absolute(ProjectSettings.globalize_path(_staged_settings_path()), ProjectSettings.globalize_path(_settings_path()))
+    var absolute_stage := ProjectSettings.globalize_path(_stage_path())
+    var absolute_target := ProjectSettings.globalize_path(_settings_path())
+    if not FileAccess.file_exists(_stage_path()):
+        return ERR_FILE_NOT_FOUND
+    if FileAccess.file_exists(_settings_path()):
+        DirAccess.remove_absolute(absolute_target)
+    return DirAccess.rename_absolute(absolute_stage, absolute_target)
 
 func _discard_staged_selection() -> void:
-    if FileAccess.file_exists(_staged_settings_path()):
-        DirAccess.remove_absolute(ProjectSettings.globalize_path(_staged_settings_path()))
-
-func _save_selection() -> bool:
-    if _stage_selection(_selected_id) != OK:
-        return false
-    if _commit_staged_selection() != OK:
-        _discard_staged_selection()
-        return false
-    return true
+    if FileAccess.file_exists(_stage_path()):
+        DirAccess.remove_absolute(ProjectSettings.globalize_path(_stage_path()))
