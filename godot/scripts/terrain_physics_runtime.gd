@@ -40,19 +40,29 @@ func _refresh_physics_residency() -> void:
         return
     var loaded: Dictionary = loaded_value
 
-    # Collision state only changes when the player crosses the warm boundary or
-    # terrain residency changes. Avoid walking every loaded tile at ~8 Hz while
-    # driving through the interior of the same 2 km tile.
+    # Collision state only changes when the player crosses the warm boundary,
+    # terrain residency changes, or a loaded tile swaps its terrain collider.
+    # Include the current StaticBody3D instance IDs so a road-corridor collision
+    # replacement cannot inherit a stale disabled state until the next tile move.
     var loaded_keys: Array[String] = []
+    var collider_keys: Array[String] = []
     for key_value in loaded.keys():
-        loaded_keys.append(str(key_value))
+        var key := str(key_value)
+        loaded_keys.append(key)
+        var root = loaded[key_value]
+        if not root is Node:
+            continue
+        for child in (root as Node).get_children():
+            if child is StaticBody3D:
+                collider_keys.append("%s:%d" % [key, (child as StaticBody3D).get_instance_id()])
     loaded_keys.sort()
+    collider_keys.sort()
     var wanted_keys: Array[String] = []
     for tile_value in wanted.keys():
         var tile: Vector2i = tile_value
         wanted_keys.append("%d:%d" % [tile.x, tile.y])
     wanted_keys.sort()
-    var signature := "%d:%d|%s|%s" % [current.x, current.y, ",".join(wanted_keys), ",".join(loaded_keys)]
+    var signature := "%d:%d|%s|%s|%s" % [current.x, current.y, ",".join(wanted_keys), ",".join(loaded_keys), ",".join(collider_keys)]
     if signature == _last_residency_signature:
         return
     _last_residency_signature = signature
