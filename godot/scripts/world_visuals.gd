@@ -10,10 +10,10 @@ const ROAD_BUCKET_M := 64.0
 const MAX_PLANTS := 1800
 const PROFILES := {
     "Performance": {"trees": 180, "road_radius": 1, "terrain_radius": 1, "shadows": false},
-    "Balanced": {"trees": 420, "road_radius": 2, "terrain_radius": 1, "shadows": true},
+    "Balanced": {"trees": 300, "road_radius": 1, "terrain_radius": 1, "shadows": true},
     "Quality": {"trees": 800, "road_radius": 2, "terrain_radius": 2, "shadows": true},
     "Ultra": {"trees": 1400, "road_radius": 3, "terrain_radius": 2, "shadows": true},
-    "Custom": {"trees": 500, "road_radius": 2, "terrain_radius": 1, "shadows": true},
+    "Custom": {"trees": 360, "road_radius": 1, "terrain_radius": 1, "shadows": true},
 }
 var quality := "Balanced"
 var custom: Dictionary = {}
