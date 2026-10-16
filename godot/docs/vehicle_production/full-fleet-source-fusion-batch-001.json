@@ -1,8 +1,9 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "policy": {
     "scope": "full_fleet_parallel_source_fusion",
-    "crown007": "frozen_done_owner_accepted",
+    "crown007": "accepted_current_state_deprioritized_not_complete",
+    "crown007_rule": "Keep Crown stable as the quality reference, allow opportunistic/shared-fleet improvements, but do not let Crown polish block getting the rest of the roster into production.",
     "porsche": "excluded",
     "beta1_requirement": "use all recoverable Beta1 vehicle/part/material sources",
     "beta2_requirement": "for every active vehicle, search Car Parking Multiplayer and Real Racing 3 before promotion",
@@ -26,6 +27,7 @@
   },
   "batch_rule": {
     "parallelism": "process identities in batches rather than finishing one vehicle before inspecting the rest",
+    "primary_goal": "get the other cars to at least the current Crown007 quality band while preserving Android budgets",
     "per_vehicle_steps": [
       "collect all Beta1 matching variants and parts",
       "search Beta2 Car Parking catalog/bundles for exact or compatible identity/components",
@@ -87,9 +89,13 @@
     "ToyotaMark2",
     "ToyotaSupraRZ"
   ],
+  "deprioritized_reference_vehicles": [
+    "Toyota Crown 2013 / Crown007"
+  ],
   "identity_rules": {
     "ToyotaMark2": "not Toyota Mark X",
     "ToyotaChaserV": "not Toyota Mark X",
+    "ToyotaCrown": "accepted current state; not permanently complete; not primary focus",
     "Porsche": "excluded from all extraction, reconstruction, branding and promotion",
     "unresolved": "must pass identity gate before media promotion"
   }
