@@ -1,0 +1,96 @@
+{
+  "format_version": 1,
+  "policy": {
+    "scope": "full_fleet_parallel_source_fusion",
+    "crown007": "frozen_done_owner_accepted",
+    "porsche": "excluded",
+    "beta1_requirement": "use all recoverable Beta1 vehicle/part/material sources",
+    "beta2_requirement": "for every active vehicle, search Car Parking Multiplayer and Real Racing 3 before promotion",
+    "selection": "do not stop at first usable source; combine strongest compatible body/interior/wheels/materials/LOD/damage parts across Beta1 and Beta2"
+  },
+  "source_state": {
+    "beta1_carx_drift": {
+      "root_candidates": 174,
+      "resolved_identity_records": 135,
+      "unique_resolved_identities": 48
+    },
+    "beta2_car_parking": {
+      "queued_bundles": 237,
+      "resolved_identity": 1
+    },
+    "beta2_real_racing_3": {
+      "logical_bytes": 6165950862,
+      "split_parts": 246,
+      "status": "source_container_confirmed_car_inventory_pending"
+    }
+  },
+  "batch_rule": {
+    "parallelism": "process identities in batches rather than finishing one vehicle before inspecting the rest",
+    "per_vehicle_steps": [
+      "collect all Beta1 matching variants and parts",
+      "search Beta2 Car Parking catalog/bundles for exact or compatible identity/components",
+      "search Beta2 Real Racing 3 inventory for exact or compatible identity/components",
+      "compare body geometry, interior, wheels, tyres, glass, lamps, materials, textures, LODs and damage parts",
+      "select strongest compatible cross-beta component set with provenance",
+      "author only the missing production pieces",
+      "validate LOD0-LOD3 and Android budgets independently",
+      "defer runtime integration to the main optimization lane"
+    ]
+  },
+  "active_identity_batches": [
+    "AE86",
+    "AudiR8",
+    "BMWE46M3",
+    "BMWM5E60",
+    "BMW_M2",
+    "BMW_M3_E36",
+    "BMW_M3_E92_GTS",
+    "BMW_M4",
+    "BmwE30M3",
+    "Camaro",
+    "DodgeChallengerRT",
+    "DodgeSRT10",
+    "DodgeViperGTS",
+    "HondaS2000",
+    "LexusLFA",
+    "MazdaMX5",
+    "MazdaMX5_90",
+    "MazdaMX5_Crosspromo",
+    "MazdaRX7",
+    "MazdaRX7_FC",
+    "MercedesC63",
+    "MitsubishiEvo9",
+    "MitsubishiEvoX",
+    "Mustang350",
+    "MustangEleanor",
+    "MustangHoonigan",
+    "Nissan180sx",
+    "Nissan350z",
+    "NissanLaurelC33",
+    "NissanS30Z",
+    "Nissan_CarX",
+    "Nissan_CarX_piant",
+    "Silvia13",
+    "SilviaS13R",
+    "SilviaS14",
+    "SilviaS14SwapFront",
+    "SilviaS15",
+    "SkylineR32",
+    "SkylineR33",
+    "SkylineR34",
+    "SkylineR35",
+    "SubaruWRX",
+    "ToyotaAltezza",
+    "ToyotaCelicaGT77",
+    "ToyotaChaserV",
+    "ToyotaGT86",
+    "ToyotaMark2",
+    "ToyotaSupraRZ"
+  ],
+  "identity_rules": {
+    "ToyotaMark2": "not Toyota Mark X",
+    "ToyotaChaserV": "not Toyota Mark X",
+    "Porsche": "excluded from all extraction, reconstruction, branding and promotion",
+    "unresolved": "must pass identity gate before media promotion"
+  }
+}
