@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reproduce active non-Crown LOD3 proxy from dimensions only
+      - name: Reproduce active fleet-expansion LOD3 proxy from dimensions only
         shell: bash
         run: |
           set -euo pipefail
@@ -64,12 +64,13 @@ jobs:
           roster = json.loads(Path('godot/docs/vehicle_production/roster-2026-10-16.json').read_text())
           fusion = roster['policy']['source_fusion']
           assert fusion['required_for_every_active_vehicle'] is True
-          assert roster['policy']['crown007']['status'] == 'done_frozen_owner_accepted'
-          assert roster['policy']['crown007']['active_work'] is False
+          assert roster['policy']['crown007']['status'] == 'accepted_current_state_deprioritized'
+          assert roster['policy']['crown007']['priority'] == 'reference_not_primary_focus'
           assert roster['policy']['porsche']['authorized'] is False
 
           crown = next(v for v in roster['vehicles'] if v['id'] == 'toyota_crown')
-          assert crown['active_work'] is False
+          assert crown['status'] == 'accepted_current_state_deprioritized'
+          assert crown['priority'] == 'reference_not_primary_focus'
           porsche = next(v for v in roster['vehicles'] if v['id'] == 'port_royal_992')
           assert porsche['active_work'] is False
           mark_x = next(v for v in roster['vehicles'] if v['id'] == 'toyota_mark_x')
