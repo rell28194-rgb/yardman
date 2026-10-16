@@ -184,7 +184,7 @@ def main() -> int:
     rgb = [float(value) for value in args.paint.split(",")]
     if len(rgb) != 3 or any(value < 0.0 or value > 1.0 for value in rgb):
         parser.error("--paint must be r,g,b with values from 0 to 1")
-    generate(args.output, args.width, args.height, args.length, args.wheelbase, args.wheel_radius, rgb + [1.0])
+    generate(args.output, args.width, args.height, args.length, args.wheelbase, args.wheel_radius, rgb + [1])
     return 0
 
 
