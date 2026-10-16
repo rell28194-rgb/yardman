@@ -220,6 +220,9 @@ func _run() -> void:
     var wrong_model = _model()
     var orphans_before := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
     wrong_model.call("build", "toyota_crown_2013.glb", Callable(wrong_loader, "scene"))
+    # Godot updates OBJECT_ORPHAN_NODE_COUNT on the frame boundary. The rejected
+    # instance is freed synchronously; yield once so the monitor reflects that cleanup.
+    await process_frame
     _check(str(wrong_model.get("reference_asset_name")).is_empty(), "Non-3D Crown root silently substituted another asset")
     _check(wrong_loader.requests == ["toyota_crown_2013.glb"], "Non-3D Crown root queried road_car.glb")
     _check(int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)) == orphans_before, "Rejected non-3D scene leaked an orphan Node")
