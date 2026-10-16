@@ -13,8 +13,7 @@ var _frames_remaining := 0
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
-    if OS.has_feature("mobile") and DisplayServer.get_name() != "headless":
-        call_deferred("begin")
+    set_process(false)
 
 func _process(_delta: float) -> void:
     if status != "warming":
@@ -40,7 +39,7 @@ static func planned_shader_paths(renderer_family: String) -> Array[String]:
     return result
 
 func begin(renderer_override: String = "", force_headless: bool = false) -> bool:
-    if status == "warming":
+    if status == "warming" or status == "completed":
         return false
     if DisplayServer.get_name() == "headless" and not force_headless:
         status = "skipped_headless"
@@ -50,6 +49,7 @@ func begin(renderer_override: String = "", force_headless: bool = false) -> bool
     _build_viewport(warmed_paths)
     _frames_remaining = 6
     status = "warming"
+    set_process(true)
     return true
 
 func reset_for_test() -> void:
@@ -60,6 +60,7 @@ func reset_for_test() -> void:
     renderer = ""
     warmed_paths.clear()
     _frames_remaining = 0
+    set_process(false)
 
 func debug_snapshot() -> Dictionary:
     return {
@@ -125,6 +126,7 @@ func _build_viewport(paths: Array[String]) -> void:
 
 func _finish() -> void:
     status = "completed"
+    set_process(false)
     if _viewport != null:
         _viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
         _viewport.queue_free()
