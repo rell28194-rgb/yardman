@@ -5,6 +5,10 @@ Consumes the completed Beta1+Car Parking+RR3 crossmatch and a validated RR3
 recovery checkpoint. Already recovered RR3 directories are removed, explicit
 no-match results are preserved, and exact motorsport variants remain eligible
 as player-only private-garage vehicles while staying excluded from AI traffic.
+
+Brand names are not filtered here. Vehicle eligibility is source-scoped: assets
+already present in the owner-authorized Yardman source pool may be evaluated;
+outside third-party assets require explicit owner approval before ingestion.
 """
 from __future__ import annotations
 
@@ -17,7 +21,6 @@ from typing import Any
 MOTORSPORT_RE = re.compile(
     r"(?:_dtm|_gt3|_gt4|_lms|_cup|_gte|_gt2|_race|_racing)(?:_|$)", re.I
 )
-PORSCHE_RE = re.compile(r"\bporsche\b", re.I)
 
 
 def load(path: Path) -> dict[str, Any]:
@@ -78,10 +81,6 @@ def build(fusion: dict[str, Any], recovery: dict[str, Any]) -> dict[str, Any]:
         for source_id in matches:
             if source_id in recovered:
                 continue
-            # Current Yardman vehicle-production policy excludes Porsche. Do not
-            # allow stale historical rights overlays to add one to a recovery queue.
-            if PORSCHE_RE.search(identity) or PORSCHE_RE.search(source_id):
-                continue
             priority, intended_use, availability_class = score(source_id, status)
             motorsport = availability_class == "owner_private_player_only"
             queue.append(
@@ -113,12 +112,19 @@ def build(fusion: dict[str, Any], recovery: dict[str, Any]) -> dict[str, Any]:
     )
 
     return {
-        "format_version": 2,
-        "checkpoint": "rr3-recovery-queue-004",
+        "format_version": 3,
+        "checkpoint": "rr3-recovery-queue-005",
         "source": fusion.get("checkpoint", "rr3-crossmatch"),
         "recovery_source": recovery.get("checkpoint", "rr3-recovery"),
         "policy": {
-            "porsche": "excluded",
+            "brand_filter": "none",
+            "porsche": "active_when_present_in_owner_authorized_project_sources",
+            "tesla": "active_when_present_in_owner_authorized_project_sources",
+            "source_authorization": (
+                "owner-authorized Yardman project source material may be evaluated and fused; "
+                "outside third-party assets require explicit owner approval before ingestion"
+            ),
+            "source_game_world_content": "excluded_from_vehicle_fusion",
             "crown007": "accepted/deprioritized; shared improvements only",
             "private_media_public_git": False,
             "quality": (
