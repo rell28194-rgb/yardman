@@ -1,0 +1,125 @@
+{
+  "checkpoint": "rr3-random-access-recovery-002",
+  "supersedes_for_recovery_counts": "rr3-random-access-recovery-001",
+  "source": "Beta2/com.ea.games.r3_row_xclipse",
+  "method": {
+    "inventory": "ZIP64 central directory decoded from the final independent LZMA2 dictionary-reset window",
+    "vehicle_recovery": "decode only reset window(s) containing requested local ZIP records; stitch compressed member ranges across adjacent windows when necessary",
+    "validation": "inner ZIP uncompressed size + CRC32 validated per file; SHA-256 recorded by recovery tooling",
+    "full_6_31gb_expansion_required": false
+  },
+  "source_invariants": {
+    "split_parts": 246,
+    "wrapper_logical_bytes": 6165950862,
+    "lzma2_packed_bytes": 6165950692,
+    "inner_zip_bytes": 6310079877,
+    "lzma2_dictionary_reset_segments": 24,
+    "zip_entries": 46814,
+    "rr3_vehicle_directories": 547
+  },
+  "previous_validated_batch": {
+    "vehicle_directories": 7,
+    "files": 209,
+    "uncompressed_bytes": 68075629,
+    "vehicles": [
+      "2012_lexus_lfa",
+      "2008_mitsubishi_evolution_x",
+      "2006_nissan_350z",
+      "2010_bmw_m3gts",
+      "1995_nissan_skyline_r33",
+      "1997_nissan_skyline_r33",
+      "2009_honda_s2000_gt"
+    ]
+  },
+  "new_validated_batch": [
+    {
+      "rr3_vehicle": "2002_mazda_rx7_spiritr",
+      "files": 31,
+      "uncompressed_bytes": 9769516,
+      "cross_source": "Beta1 MazdaRX7 + Car Parking catalog 129 Mazda RX7",
+      "decision": "generation/trim candidate; exact compatibility review required"
+    },
+    {
+      "rr3_vehicle": "2013_audi_r8",
+      "files": 31,
+      "uncompressed_bytes": 7606596,
+      "cross_source": "Beta1 AudiR8 + Car Parking catalog 107 Audi R8",
+      "decision": "road-generation candidate; compare against other RR3 R8 generations before component selection"
+    },
+    {
+      "rr3_vehicle": "2020_mazda_mx5",
+      "files": 31,
+      "uncompressed_bytes": 13337364,
+      "cross_source": "Beta1 MazdaMX5 + Car Parking catalog 158 Mazda miata mx5",
+      "decision": "generation candidate; do not mix body panels across MX-5 generations"
+    },
+    {
+      "rr3_vehicle": "2020_mercedes_amg_c63_s",
+      "files": 32,
+      "uncompressed_bytes": 13268763,
+      "cross_source": "Beta1 MercedesC63 + Car Parking catalog 17 C63 AMG",
+      "decision": "road-generation/trim candidate; motorsport C63 variants remain separate"
+    },
+    {
+      "rr3_vehicle": "2021_audi_r8",
+      "files": 32,
+      "uncompressed_bytes": 13458182,
+      "reset_segments": [19, 20],
+      "cross_window_files": 1,
+      "cross_window_proof": {
+        "path": "livery/2021_audi_r8_ext_ara_blue_crystal.dxt.dds.z",
+        "compressed_bytes": 181188,
+        "uncompressed_bytes": 181701,
+        "crc32": "2f67ccee",
+        "sha256": "2dbb18f18ad410663c811daea0e4872b11964939d9df5e4389e9c053a6b33652"
+      },
+      "cross_source": "Beta1 AudiR8 + Car Parking catalog 107 Audi R8",
+      "decision": "exact recovery proves cross-reset stitching; generation still must match before promotion"
+    },
+    {
+      "rr3_vehicle": "2021_bmw_m4",
+      "files": 32,
+      "uncompressed_bytes": 13750001,
+      "cross_source": "Beta1 BMW_M4 + Car Parking catalog 103 BMW m4",
+      "decision": "road-generation candidate; keep GT3/GT4/DTM variants separate"
+    },
+    {
+      "rr3_vehicle": "1989_mazda_mx5",
+      "files": 28,
+      "uncompressed_bytes": 11541188,
+      "reset_segments": [12],
+      "cross_source": "Beta1 MazdaMX5 + Car Parking catalog 158 Mazda miata mx5",
+      "decision": "first-generation candidate; compare with 2020 RR3 source and exact Beta1/Car Parking generation before selection"
+    },
+    {
+      "rr3_vehicle": "2018_bmw_m2_cs",
+      "files": 31,
+      "uncompressed_bytes": 12101233,
+      "reset_segments": [17],
+      "cross_source": "Beta1 BMW_M2 + Car Parking catalog 127 BMW M2",
+      "decision": "CS trim candidate; exact trim/body compatibility gate remains"
+    }
+  ],
+  "new_batch_totals": {
+    "vehicle_directories": 8,
+    "files": 248,
+    "uncompressed_bytes": 94832843,
+    "all_inner_zip_crc_checks": "PASS"
+  },
+  "cumulative_validated_recovery": {
+    "vehicle_directories": 15,
+    "files": 457,
+    "uncompressed_bytes": 162908472,
+    "all_inner_zip_crc_checks": "PASS"
+  },
+  "identity_limits": {
+    "mark_x": "no explicit Mark X / GRX120 / GRX130 identity anywhere in the 46,814 RR3 ZIP paths",
+    "no_substitution": "Mark II, Chaser, Crown, Lexus and unrelated Toyota geometry remain forbidden as Mark X identity substitutes"
+  },
+  "policy": {
+    "private_vehicle_media_public_git": false,
+    "porsche": "current owner-authorized recovery; exact model/generation/trim gate still required",
+    "crown007": "accepted current state and deprioritized, not complete",
+    "runtime_integration": "deferred to main Android optimization lane"
+  }
+}
