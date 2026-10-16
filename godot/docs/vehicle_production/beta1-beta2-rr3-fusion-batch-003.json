@@ -1,0 +1,169 @@
+{
+  "checkpoint": "beta1-beta2-rr3-fusion-batch-003",
+  "format_version": 1,
+  "source_state": {
+    "beta1": "CarX resolved source units",
+    "car_parking": "full fleet bundle decode complete for current 237 bundles, subject to current rights-policy refresh",
+    "rr3": "ZIP64 inventory complete: 46,814 paths / 547 vehicle directories; exact directory search complete"
+  },
+  "rr3_search_complete": true,
+  "candidates": [
+    {
+      "beta1": "AE86",
+      "car_parking": "catalog 140 / AE 86",
+      "rr3_matches": [],
+      "rr3_status": "no_exact_vehicle_match",
+      "note": "RR3 has one driver_toyota_gts_ae86.banim path but no AE86 vehicle directory; driver animation is not vehicle geometry evidence"
+    },
+    {
+      "beta1": "AudiR8",
+      "car_parking": "catalog 107 / Audi R8",
+      "rr3_matches": ["2013_audi_r8", "2014_audi_r8spyder", "2021_audi_r8", "2012_audi_r8_lms", "2018_audi_r8_gt4"],
+      "rr3_status": "model_family_candidates_generation_gate_required"
+    },
+    {
+      "beta1": "BMW_M2",
+      "car_parking": "catalog 127 / BMW M2",
+      "rr3_matches": ["2018_bmw_m2_cs"],
+      "rr3_status": "trim_candidate_generation_gate_required"
+    },
+    {
+      "beta1": "BMW_M3_E36",
+      "car_parking": "catalog 0 / BMW E36 M3",
+      "rr3_matches": [],
+      "rr3_status": "no_exact_generation_match",
+      "note": "RR3 M3 directories are later generations; do not use them as E36 body substitutes"
+    },
+    {
+      "beta1": "BMW_M3_E92_GTS",
+      "car_parking": "catalog 56 / m3e92",
+      "rr3_matches": ["2010_bmw_m3gts"],
+      "rr3_status": "strong_generation_trim_candidate",
+      "recovery": "26 files / 6,381,238 bytes CRC-validated"
+    },
+    {
+      "beta1": "BMW_M4",
+      "car_parking": "catalog 103 / BMW m4",
+      "rr3_matches": ["2021_bmw_m4", "2017_bmw_m4_dtm", "2018_bmw_m4_gt4", "2021_bmw_m4_gt3"],
+      "rr3_status": "road_model_candidate_plus_motorsport_variants_generation_gate_required"
+    },
+    {
+      "beta1": "BMWM5E60",
+      "car_parking": "catalog 31 / BMW e60",
+      "rr3_matches": [],
+      "rr3_status": "no_exact_e60_match",
+      "note": "2018_bmw_m5 is a different generation"
+    },
+    {
+      "beta1": "HondaS2000",
+      "car_parking": "catalog 47 / Honda S2000",
+      "rr3_matches": ["2009_honda_s2000_gt"],
+      "rr3_status": "same_model_family_gt_variant_review_required",
+      "recovery": "32 files / 11,043,161 bytes CRC-validated"
+    },
+    {
+      "beta1": "LexusLFA",
+      "car_parking": "catalog 7 / Lexus LFA",
+      "rr3_matches": ["2012_lexus_lfa"],
+      "rr3_status": "strong_triple_source_identity_match",
+      "recovery": "33 files / 7,366,745 bytes CRC-validated"
+    },
+    {
+      "beta1": "MazdaMX5",
+      "car_parking": "catalog 158 / Mazda miata mx5",
+      "rr3_matches": ["1989_mazda_mx5", "2020_mazda_mx5"],
+      "rr3_status": "multiple_generations_generation_gate_required"
+    },
+    {
+      "beta1": "MazdaRX7",
+      "car_parking": "catalog 129 / Mazda RX7",
+      "rr3_matches": ["2002_mazda_rx7_spiritr"],
+      "rr3_status": "generation_trim_candidate_review_required"
+    },
+    {
+      "beta1": "MercedesC63",
+      "car_parking": "catalog 17 / Mersedes-Benz C63 AMG",
+      "rr3_matches": ["2020_mercedes_amg_c63_s", "2017_mercedes_c63_dtm"],
+      "rr3_status": "road_generation_candidate_plus_motorsport_variant_review_required"
+    },
+    {
+      "beta1": "MitsubishiEvo9",
+      "car_parking": "catalog 82 / Mitsubishi Lancer Evolution IX",
+      "rr3_matches": [],
+      "rr3_status": "no_exact_evolution_ix_match",
+      "note": "RR3 has Evolution VI and X; neither is IX"
+    },
+    {
+      "beta1": "MitsubishiEvoX",
+      "car_parking": "catalog 12 / Lancer EvolutionX",
+      "rr3_matches": ["2008_mitsubishi_evolution_x"],
+      "rr3_status": "strong_triple_source_identity_match",
+      "recovery": "29 files / 13,360,081 bytes CRC-validated"
+    },
+    {
+      "beta1": "Nissan350z",
+      "car_parking": "catalog 145 / 350z",
+      "rr3_matches": ["2006_nissan_350z"],
+      "rr3_status": "strong_triple_source_identity_match",
+      "recovery": "31 files / 6,660,082 bytes CRC-validated"
+    },
+    {
+      "beta1": "Silvia13",
+      "car_parking": "catalog 177 / SilviaS13",
+      "rr3_matches": [],
+      "rr3_status": "no_exact_s13_match",
+      "note": "RR3 has S15 directories; do not substitute them for S13"
+    },
+    {
+      "beta1": "SkylineR33",
+      "car_parking": "catalog 213 / Nissan Skyline R33",
+      "rr3_matches": ["1995_nissan_skyline_r33", "1997_nissan_skyline_r33"],
+      "rr3_status": "strong_generation_match_variant_selection_open",
+      "recovery": "58 files / 23,264,322 bytes across both RR3 R33 variants CRC-validated"
+    },
+    {
+      "beta1": "SubaruWRX",
+      "car_parking": "catalog 224 / subaru WRX 2018",
+      "rr3_matches": [],
+      "rr3_status": "no_exact_wrx_match",
+      "note": "1998_subaru_impreza_sti_22b is not accepted as the claimed WRX identity"
+    },
+    {
+      "beta1": "ToyotaAltezza",
+      "car_parking": "catalog 251 / Toyota Altezza",
+      "rr3_matches": [],
+      "rr3_status": "no_exact_vehicle_match"
+    },
+    {
+      "beta1": "ToyotaChaserV",
+      "car_parking": "catalog 214 / Toyota chaser 100",
+      "rr3_matches": [],
+      "rr3_status": "no_exact_vehicle_match"
+    },
+    {
+      "beta1": "ToyotaMark2",
+      "car_parking": "catalog 134 / Toyota Mark 2",
+      "rr3_matches": [],
+      "rr3_status": "no_exact_vehicle_match"
+    },
+    {
+      "beta1": "ToyotaSupraRZ",
+      "car_parking": "catalog 49 / toyota supra 1998",
+      "rr3_matches": [],
+      "rr3_status": "no_exact_vehicle_match"
+    }
+  ],
+  "mark_x_search": {
+    "zip_paths_searched": 46814,
+    "terms": {
+      "mark_x": 0,
+      "markx": 0,
+      "mark x": 0,
+      "grx120": 0,
+      "grx130": 0,
+      "toyota_mark": 0
+    },
+    "decision": "RR3 provides no explicit Mark X identity. Continue authored reconstruction/reference work if Mark X remains a fleet target; never relabel Mark II, Chaser, Crown or Lexus geometry."
+  },
+  "promotion_rule": "An RR3 source match adds component evidence only. Exact model/generation/trim compatibility still gates body promotion; mismatched motorsport and later-generation bodies are not substitutes."
+}
