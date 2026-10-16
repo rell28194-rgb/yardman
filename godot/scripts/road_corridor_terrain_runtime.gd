@@ -55,8 +55,11 @@ func _process(delta: float) -> void:
         if processed >= MAX_REFINEMENTS_PER_TICK:
             break
         var tile: Vector2i = tile_value
-        _pending_tiles.erase(tile)
+        # Keep transiently unavailable work queued. Terrain, coast and height
+        # payloads can become ready on different frames; dropping the request
+        # here could leave a loaded road corridor permanently unrefined.
         if _try_refine(tile):
+            _pending_tiles.erase(tile)
             processed += 1
 
 func _tile_priority(tile: Vector2i) -> float:
@@ -177,8 +180,7 @@ func refinement_plan(segments: Array, tile: Vector2i, tile_size: float, spacing:
                 if land_mask[z * (resolution - 1) + x] != 1: continue
                 var cell_rect := Rect2(tile_origin + Vector2(float(x), float(z)) * spacing, Vector2.ONE * spacing)
                 if not _corridor_touches_cell(axis_start, axis_end, expand, cell_rect): continue
-                var cell_key := "%d:%d" % [x, z]
-                if not cells.has(cell_key): cells[cell_key] = {"cell": Vector2i(x, z), "segments": []}
+                var cell_key := "%d:%d" % [x, z]                if not cells.has(cell_key): cells[cell_key] = {"cell": Vector2i(x, z), "segments": []}
                 cells[cell_key].segments.append(segment)
     return {"cells": cells, "structural_skips": structural_skips}
 
@@ -357,8 +359,7 @@ func _replace_collision(tile_root: Node3D, arrays: Array) -> void:
     var shape := ConcavePolygonShape3D.new(); shape.backface_collision = true; shape.set_faces(faces)
     var collider := CollisionShape3D.new(); collider.shape = shape
     var body := StaticBody3D.new(); body.name = "RoadAwareTerrainCollision"; body.collision_layer = 0; body.collision_mask = 0; body.add_child(collider)
-    # Stage the replacement before retiring the previous terrain collider. This
-    # avoids a scene-tree interval with no terrain body at all. TerrainPhysicsRuntime
+    # Stage the replacement before retiring the previous terrain collider. This    # avoids a scene-tree interval with no terrain body at all. TerrainPhysicsRuntime
     # remains the authority that decides whether this tile is physically active.
     tile_root.add_child(body)
     var old_body: StaticBody3D
