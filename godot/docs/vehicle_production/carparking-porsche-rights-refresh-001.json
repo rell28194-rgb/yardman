@@ -1,0 +1,130 @@
+{
+  "checkpoint": "carparking-porsche-rights-refresh-001",
+  "format_version": 1,
+  "source": "Car Parking Multiplayer 4.9.11 / code 200485 exact current Addressables car bundles",
+  "supersedes_policy_only": "carparking-full-fleet-decode-002 historical excluded_porsche flags",
+  "source_evidence_unchanged": true,
+  "current_owner_permission": "Porsche vehicle-production recovery authorized; exact model/generation/trim evidence remains mandatory",
+  "historical_excluded_catalog_ids": [24, 28, 109, 188, 205, 207, 222, 250],
+  "refreshed": [
+    {
+      "catalog_id": 24,
+      "bundle_path": "assets/aa/Android/car24_assets_all_b446083e21105dca33a1fed46879baad.bundle",
+      "bundle_bytes": 163734,
+      "exact_bundle_model_directories": ["24 panamero"],
+      "audio_evidence": ["24_Porsche_Panamera_Turbo_S"],
+      "historical_identity": "panamero",
+      "normalized_identity": "Porsche Panamera Turbo S family",
+      "rights_status": "owner_authorized_exact_identity_generation_gate",
+      "identity_status": "family_resolved_by_bundle_directory_plus_explicit_audio",
+      "generation_status": "not_proven",
+      "decision": "AUTHORIZED_FAMILY_SOURCE; keep the misspelled bundle directory in provenance and do not invent a model year or generation"
+    },
+    {
+      "catalog_id": 28,
+      "bundle_path": "assets/aa/Android/car28_assets_all_dc17e837f53af778ddb3a68c4b767aad.bundle",
+      "bundle_bytes": 1213693,
+      "exact_bundle_model_directories": ["28 Porsche Cayenne Turbo"],
+      "audio_evidence": ["28_Porsche_Cayenne_Turbo_S_V2"],
+      "normalized_identity": "Porsche Cayenne Turbo",
+      "rights_status": "owner_authorized_exact_identity_generation_gate",
+      "identity_status": "model_resolved",
+      "generation_status": "not_proven",
+      "decision": "AUTHORIZED_MODEL_SOURCE; trim audio is stronger than the directory but no generation/year is claimed"
+    },
+    {
+      "catalog_id": 109,
+      "bundle_path": "assets/aa/Android/car109_assets_all_eb29f709aa16d27a15bf5031af39a726.bundle",
+      "bundle_bytes": 1596973,
+      "exact_bundle_model_directories": ["109 Porsche 911"],
+      "audio_evidence": ["109_Porsche_911_991_V3"],
+      "normalized_identity": "Porsche 911 991 family",
+      "rights_status": "owner_authorized_exact_identity_generation_gate",
+      "identity_status": "model_and_generation_family_resolved",
+      "generation_status": "991_explicit_audio_evidence",
+      "decision": "AUTHORIZED_991_SOURCE; REJECT_AS_992_BODY_SUBSTITUTE"
+    },
+    {
+      "catalog_id": 188,
+      "bundle_path": "assets/aa/Android/car188_assets_all_23b28ba8b7e81530b466834af5a16c36.bundle",
+      "bundle_bytes": 475711,
+      "all_bundle_model_directories": ["154 Hilux2017", "188_Porsche23"],
+      "exact_bundle_model_directories": ["188_Porsche23"],
+      "audio_evidence": ["188_Porsche_GT3_RS"],
+      "normalized_identity": "Porsche GT3 RS family",
+      "rights_status": "owner_authorized_exact_identity_generation_gate",
+      "identity_status": "family_resolved_generation_unresolved",
+      "generation_status": "unresolved",
+      "decision": "AUTHORIZED_GT3_RS_FAMILY_SOURCE; HOLD_992_CLAIM until raw geometry/prefab evidence independently establishes generation"
+    },
+    {
+      "catalog_id": 205,
+      "bundle_path": "assets/aa/Android/car205_assets_all_709ca027bf813601a3fe4b4e6eb69fa3.bundle",
+      "bundle_bytes": 1235810,
+      "exact_bundle_model_directories": ["205 porsche1996"],
+      "audio_evidence": ["205_Porsche_911_V2"],
+      "normalized_identity": "Porsche 911 1996-era family",
+      "rights_status": "owner_authorized_exact_identity_generation_gate",
+      "identity_status": "era_and_model_family_resolved",
+      "generation_status": "1996_era_explicit_bundle_label",
+      "decision": "AUTHORIZED_1996_ERA_911_SOURCE; REJECT_AS_992_BODY_SUBSTITUTE"
+    },
+    {
+      "catalog_id": 207,
+      "bundle_path": "assets/aa/Android/car207_assets_all_2e0d83da98a122acf6f9997d8b52b61c.bundle",
+      "bundle_bytes": 2093068,
+      "exact_bundle_model_directories": ["207 Porsche 919 Hybrid"],
+      "audio_evidence": ["207_Porsche_919_V2"],
+      "normalized_identity": "Porsche 919 Hybrid",
+      "rights_status": "owner_authorized_exact_identity_generation_gate",
+      "identity_status": "model_resolved",
+      "generation_status": "not_required_for_911_992_gate",
+      "decision": "AUTHORIZED_MODEL_SOURCE"
+    },
+    {
+      "catalog_id": 222,
+      "bundle_path": "assets/aa/Android/car222_assets_all_6058b9d2e7c7dd03af5689568f784ea1.bundle",
+      "bundle_bytes": 2226217,
+      "exact_bundle_model_directories": ["222 Porsche_918_spyder"],
+      "audio_evidence": ["Porsche_918_Spyder_v1"],
+      "normalized_identity": "Porsche 918 Spyder",
+      "rights_status": "owner_authorized_exact_identity_generation_gate",
+      "identity_status": "model_resolved",
+      "generation_status": "model_identity_sufficient",
+      "decision": "AUTHORIZED_MODEL_SOURCE"
+    },
+    {
+      "catalog_id": 250,
+      "bundle_path": "assets/aa/Android/car250_assets_all_d433530deac072322bdd52b42373af26.bundle",
+      "bundle_bytes": 2217225,
+      "exact_bundle_model_directories": ["250 Porsche Carrera Gt 2004"],
+      "audio_evidence": ["250_Porsch_Carrera_GT"],
+      "normalized_identity": "Porsche Carrera GT 2004",
+      "rights_status": "owner_authorized_exact_identity_generation_gate",
+      "identity_status": "model_and_year_resolved",
+      "generation_status": "2004_explicit_bundle_label",
+      "decision": "AUTHORIZED_MODEL_SOURCE"
+    }
+  ],
+  "summary": {
+    "historical_exclusions_refreshed": 8,
+    "current_rights_blocked": 0,
+    "exact_or_family_identity_resolved": 8,
+    "generation_unresolved_for_992_claim": [188],
+    "explicitly_not_992": [109, 205],
+    "992_verified_sources": 0
+  },
+  "992_gate": {
+    "target_runtime_id": "port_royal_992",
+    "target_hero_filename": "porsche_911_992.glb",
+    "status": "NO_VERIFIED_992_GEOMETRY_YET",
+    "rule": "Current Porsche permission authorizes recovery but does not authorize generation relabeling. 991/1996-era sources remain invalid 992 substitutes. Catalog 188 may advance only after geometry/prefab evidence proves the generation."
+  },
+  "provenance": {
+    "durable_checkpoint": "Yardman-CarParking-Full-Fleet-Decode-002.zip",
+    "checkpoint_sha256": "1ff31448aed6bc61bee4775e80fb5a302ac5424d5d493222d7b9bf71d3d4fdcb",
+    "source_xapk_sha256": "ec2b27625eb0901aa699318d1e159ac1a9f8fe08cdd8e9f28f1024e020502dc7",
+    "streaming_apk_sha256": "d1e9eac6de65bf7ffb6071b8545d743c910befb85f868196efc9f671728a56da",
+    "unity_revision": "2022.3.62f2"
+  }
+}
