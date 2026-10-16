@@ -1,0 +1,113 @@
+{
+  "checkpoint": "rr3-recovery-queue-003",
+  "format_version": 1,
+  "source": "beta1-beta2-rr3-fusion-batch-003",
+  "recovery_source": "rr3-random-access-recovery-002",
+  "policy": {
+    "porsche": "excluded",
+    "crown007": "accepted/deprioritized; shared improvements only",
+    "private_media_public_git": false,
+    "quality": "high-detail LOD0; optimize via LOD/runtime, not hero-vehicle degradation"
+  },
+  "already_recovered_rr3_vehicle_directories": [
+    "1989_mazda_mx5",
+    "1995_nissan_skyline_r33",
+    "1997_nissan_skyline_r33",
+    "2002_mazda_rx7_spiritr",
+    "2006_nissan_350z",
+    "2008_mitsubishi_evolution_x",
+    "2009_honda_s2000_gt",
+    "2010_bmw_m3gts",
+    "2012_lexus_lfa",
+    "2013_audi_r8",
+    "2018_bmw_m2_cs",
+    "2020_mazda_mx5",
+    "2020_mercedes_amg_c63_s",
+    "2021_audi_r8",
+    "2021_bmw_m4"
+  ],
+  "queue": [
+    {
+      "identity": "AudiR8",
+      "rr3_vehicle": "2014_audi_r8spyder",
+      "priority": 80,
+      "intended_use": "generation_gate_body_candidate",
+      "crossmatch_status": "model_family_candidates_generation_gate_required",
+      "promotion_gate": "exact model/generation/trim compatibility required; Spyder body must not be substituted for a coupe without an exact target match"
+    },
+    {
+      "identity": "AudiR8",
+      "rr3_vehicle": "2012_audi_r8_lms",
+      "priority": 30,
+      "intended_use": "component_reference_only",
+      "crossmatch_status": "model_family_candidates_generation_gate_required",
+      "promotion_gate": "motorsport shell is not a road-body substitute; recover only defensible reusable component/reference evidence"
+    },
+    {
+      "identity": "AudiR8",
+      "rr3_vehicle": "2018_audi_r8_gt4",
+      "priority": 30,
+      "intended_use": "component_reference_only",
+      "crossmatch_status": "model_family_candidates_generation_gate_required",
+      "promotion_gate": "GT4 shell is not a road-body substitute; recover only defensible reusable component/reference evidence"
+    },
+    {
+      "identity": "BMW_M4",
+      "rr3_vehicle": "2017_bmw_m4_dtm",
+      "priority": 30,
+      "intended_use": "component_reference_only",
+      "crossmatch_status": "road_model_candidate_plus_motorsport_variants_generation_gate_required",
+      "promotion_gate": "DTM geometry must remain separate from the road car; component/reference recovery only"
+    },
+    {
+      "identity": "BMW_M4",
+      "rr3_vehicle": "2018_bmw_m4_gt4",
+      "priority": 30,
+      "intended_use": "component_reference_only",
+      "crossmatch_status": "road_model_candidate_plus_motorsport_variants_generation_gate_required",
+      "promotion_gate": "GT4 geometry must remain separate from the road car; component/reference recovery only"
+    },
+    {
+      "identity": "BMW_M4",
+      "rr3_vehicle": "2021_bmw_m4_gt3",
+      "priority": 30,
+      "intended_use": "component_reference_only",
+      "crossmatch_status": "road_model_candidate_plus_motorsport_variants_generation_gate_required",
+      "promotion_gate": "GT3 geometry must remain separate from the road car; component/reference recovery only"
+    },
+    {
+      "identity": "MercedesC63",
+      "rr3_vehicle": "2017_mercedes_c63_dtm",
+      "priority": 30,
+      "intended_use": "component_reference_only",
+      "crossmatch_status": "road_generation_candidate_plus_motorsport_variant_review_required",
+      "promotion_gate": "DTM geometry must remain separate from the road car; component/reference recovery only"
+    }
+  ],
+  "verified_no_match_identities": [
+    {"identity": "AE86", "rr3_status": "no_exact_vehicle_match"},
+    {"identity": "BMW_M3_E36", "rr3_status": "no_exact_generation_match"},
+    {"identity": "BMWM5E60", "rr3_status": "no_exact_e60_match"},
+    {"identity": "MitsubishiEvo9", "rr3_status": "no_exact_evolution_ix_match"},
+    {"identity": "Silvia13", "rr3_status": "no_exact_s13_match"},
+    {"identity": "SubaruWRX", "rr3_status": "no_exact_wrx_match"},
+    {"identity": "ToyotaAltezza", "rr3_status": "no_exact_vehicle_match"},
+    {"identity": "ToyotaChaserV", "rr3_status": "no_exact_vehicle_match"},
+    {"identity": "ToyotaMark2", "rr3_status": "no_exact_vehicle_match"},
+    {"identity": "ToyotaSupraRZ", "rr3_status": "no_exact_vehicle_match"}
+  ],
+  "summary": {
+    "already_recovered": 15,
+    "queued": 7,
+    "body_or_generation_candidates": 1,
+    "component_reference_only": 6,
+    "verified_no_match_identities": 10
+  },
+  "execution": {
+    "tool": "godot/tools/vehicle_production/extract_rr3_vehicle_random_access.py",
+    "queue_builder": "godot/tools/vehicle_production/build_rr3_recovery_queue.py",
+    "validation": "inner ZIP uncompressed size + CRC32 per file; record SHA-256 for recovered files",
+    "media_destination": "private workspace only",
+    "post_recovery": "feed exact source paths/hashes and defensible components into fleet fusion; run vehicle quality gate before any promotion"
+  }
+}
