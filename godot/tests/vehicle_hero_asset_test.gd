@@ -88,14 +88,18 @@ func _model() -> Node3D:
     root.add_child(model)
     return model
 
-func _check_invalid_fixture(options: Dictionary, generic: PackedScene, reason: String) -> void:
+func _check_rejected_hero(options: Dictionary, generic: PackedScene, reason: String) -> void:
     var loader := FakeSceneLoader.new()
     loader.scenes["toyota_crown_2013.glb"] = _packed_vehicle(true, options)
     loader.scenes["road_car.glb"] = generic
     var model = _model()
     model.call("build", "toyota_crown_2013.glb", Callable(loader, "scene"))
-    _check(str(model.get("reference_asset_name")) == "road_car.glb", reason + " did not fall back")
-    _check(loader.requests == ["toyota_crown_2013.glb", "road_car.glb"], reason + " changed fallback order")
+    _check(not bool(model.get("is_reference_model")), reason + " incorrectly bound another recovered vehicle")
+    _check(str(model.get("reference_asset_name")).is_empty(), reason + " incorrectly claimed a recovered identity")
+    _check(bool(model.get_meta("yardman_hero_asset_missing_or_invalid", false)), reason + " did not expose the dedicated-asset failure")
+    _check(str(model.get_meta("yardman_requested_hero_scene", "")) == "toyota_crown_2013.glb", reason + " lost requested Crown identity")
+    _check(bool(model.get_meta("yardman_procedural_vehicle_fallback", false)), reason + " did not use the neutral procedural fallback")
+    _check(loader.requests == ["toyota_crown_2013.glb"], reason + " queried a cross-model fallback")
 
 func _check_motion_rest_pose(filename: String, mirrored: bool = false) -> void:
     var options := {
@@ -166,6 +170,8 @@ func _run() -> void:
     hero_model.call("build", "toyota_crown_2013.glb", Callable(hero_loader, "scene"))
     _check(bool(hero_model.get("is_reference_model")), "Dedicated Crown hero did not bind")
     _check(str(hero_model.get("reference_asset_name")) == "toyota_crown_2013.glb", "Dedicated hero identity was not retained")
+    _check(bool(hero_model.get_meta("yardman_dedicated_vehicle_mesh", false)), "Dedicated Crown did not mark itself as dedicated")
+    _check(str(hero_model.get_meta("yardman_dedicated_vehicle_id", "")) == "toyota_crown", "Dedicated Crown got the wrong catalog identity")
     _check(hero_loader.requests == ["toyota_crown_2013.glb"], "Generic fallback was queried even though the hero was valid")
 
     var invalid_loader := FakeSceneLoader.new()
@@ -173,16 +179,20 @@ func _run() -> void:
     invalid_loader.scenes["road_car.glb"] = generic
     var invalid_model = _model()
     invalid_model.call("build", "toyota_crown_2013.glb", Callable(invalid_loader, "scene"))
-    _check(bool(invalid_model.get("is_reference_model")), "Invalid hero did not fall back to the generic recovered sedan")
-    _check(str(invalid_model.get("reference_asset_name")) == "road_car.glb", "Invalid hero selected the wrong fallback asset")
-    _check(invalid_loader.requests == ["toyota_crown_2013.glb", "road_car.glb"], "Invalid hero fallback order changed")
+    _check(not bool(invalid_model.get("is_reference_model")), "Invalid Crown silently substituted another recovered vehicle")
+    _check(str(invalid_model.get("reference_asset_name")).is_empty(), "Invalid Crown claimed the wrong asset identity")
+    _check(bool(invalid_model.get_meta("yardman_hero_asset_missing_or_invalid", false)), "Invalid Crown did not expose its asset failure")
+    _check(invalid_loader.requests == ["toyota_crown_2013.glb"], "Invalid Crown queried road_car.glb")
 
     var missing_loader := FakeSceneLoader.new()
     missing_loader.scenes["road_car.glb"] = generic
     var missing_model = _model()
     missing_model.call("build", "toyota_crown_2013.glb", Callable(missing_loader, "scene"))
-    _check(str(missing_model.get("reference_asset_name")) == "road_car.glb", "Missing hero did not fall back to road_car.glb")
-    _check(missing_loader.requests == ["toyota_crown_2013.glb", "road_car.glb"], "Missing hero fallback order changed")
+    _check(not bool(missing_model.get("is_reference_model")), "Missing Crown silently substituted another recovered vehicle")
+    _check(str(missing_model.get("reference_asset_name")).is_empty(), "Missing Crown claimed road_car.glb")
+    _check(bool(missing_model.get_meta("yardman_hero_asset_missing_or_invalid", false)), "Missing Crown did not expose its asset failure")
+    _check(str(missing_model.get_meta("yardman_requested_hero_scene", "")) == "toyota_crown_2013.glb", "Missing Crown lost requested identity")
+    _check(missing_loader.requests == ["toyota_crown_2013.glb"], "Missing Crown queried road_car.glb")
 
     var generic_loader := FakeSceneLoader.new()
     generic_loader.scenes["road_car.glb"] = generic
@@ -194,10 +204,11 @@ func _run() -> void:
     var empty_loader := FakeSceneLoader.new()
     var procedural_model = _model()
     procedural_model.call("build", "toyota_crown_2013.glb", Callable(empty_loader, "scene"))
-    _check(not bool(procedural_model.get("is_reference_model")), "Media-absent build did not preserve procedural fallback")
+    _check(not bool(procedural_model.get("is_reference_model")), "Media-absent build did not preserve neutral procedural fallback")
     _check(str(procedural_model.get("reference_asset_name")).is_empty(), "Procedural fallback incorrectly claims a recovered asset")
     _check(procedural_model.get("shell") != null, "Procedural fallback failed to construct a body shell")
-    _check(empty_loader.requests == ["toyota_crown_2013.glb", "road_car.glb"], "Media-absent fallback did not exhaust the intended reference order")
+    _check(bool(procedural_model.get_meta("yardman_procedural_vehicle_fallback", false)), "Media-absent Crown did not mark procedural fallback")
+    _check(empty_loader.requests == ["toyota_crown_2013.glb"], "Media-absent Crown queried a cross-model fallback")
 
     var wrong_root := Node.new()
     var wrong_scene := PackedScene.new()
@@ -209,23 +220,24 @@ func _run() -> void:
     var wrong_model = _model()
     var orphans_before := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
     wrong_model.call("build", "toyota_crown_2013.glb", Callable(wrong_loader, "scene"))
-    _check(str(wrong_model.get("reference_asset_name")) == "road_car.glb", "Non-3D root did not fall back")
+    _check(str(wrong_model.get("reference_asset_name")).is_empty(), "Non-3D Crown root silently substituted another asset")
+    _check(wrong_loader.requests == ["toyota_crown_2013.glb"], "Non-3D Crown root queried road_car.glb")
     _check(int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)) == orphans_before, "Rejected non-3D scene leaked an orphan Node")
 
-    _check_invalid_fixture({"body_size": Vector3(1.8, 40.0, 4.8)}, generic, "Extreme height")
-    _check_invalid_fixture({"body_position": Vector3(INF, 0.0, 0.0)}, generic, "Non-finite geometry transform")
-    _check_invalid_fixture({"empty_wheels": true}, generic, "Empty wheel geometry")
-    _check_invalid_fixture({"tyre_size": Vector3(0.22, 0.08, 0.08)}, generic, "Invalid tyre radius")
-    _check_invalid_fixture({"body_nested_wheels": true}, generic, "Wheels coupled to body lean")
-    _check_invalid_fixture({"wheelbase_scale": 0.0}, generic, "Collapsed wheelbase")
-    _check_invalid_fixture({"wheelbase_scale": -1.0}, generic, "Reversed axles")
-    _check_invalid_fixture({"track_scale": 0.0}, generic, "Collapsed track")
-    _check_invalid_fixture({"track_scale": -1.0}, generic, "Reversed wheel sides")
+    _check_rejected_hero({"body_size": Vector3(1.8, 40.0, 4.8)}, generic, "Extreme height")
+    _check_rejected_hero({"body_position": Vector3(INF, 0.0, 0.0)}, generic, "Non-finite geometry transform")
+    _check_rejected_hero({"empty_wheels": true}, generic, "Empty wheel geometry")
+    _check_rejected_hero({"tyre_size": Vector3(0.22, 0.08, 0.08)}, generic, "Invalid tyre radius")
+    _check_rejected_hero({"body_nested_wheels": true}, generic, "Wheels coupled to body lean")
+    _check_rejected_hero({"wheelbase_scale": 0.0}, generic, "Collapsed wheelbase")
+    _check_rejected_hero({"wheelbase_scale": -1.0}, generic, "Reversed axles")
+    _check_rejected_hero({"track_scale": 0.0}, generic, "Collapsed track")
+    _check_rejected_hero({"track_scale": -1.0}, generic, "Reversed wheel sides")
     _check_motion_rest_pose("toyota_crown_2013.glb")
     _check_motion_rest_pose("road_car.glb")
     _check_motion_rest_pose("road_car.glb", true)
 
-    print("YARDMAN_VEHICLE_HERO_ASSET_TEST %s checks=%d dedicated=1 invalid_fallback=1 missing_fallback=1 generic=1 procedural=1 authored_motion=3 geometry_rejections=9 wrong_root_cleanup=1" % ["PASS" if failures == 0 else "FAIL", checks])
+    print("YARDMAN_VEHICLE_HERO_ASSET_TEST %s checks=%d dedicated=1 strict_identity=1 missing_identity_guard=1 generic=1 procedural=1 authored_motion=3 geometry_rejections=9 wrong_root_cleanup=1" % ["PASS" if failures == 0 else "FAIL", checks])
     for child in root.get_children():
         if child != root:
             child.queue_free()
