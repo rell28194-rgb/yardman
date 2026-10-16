@@ -47,6 +47,9 @@ var _daylight_clock := 999.0
 var _audio_clock := 0.0
 const DAYLIGHT_UPDATE_INTERVAL := 0.10
 const AUDIO_CONTROL_INTERVAL := 1.0 / 30.0
+const PERFORMANCE_SAMPLE_INTERVAL := 2.0
+var _performance_clock := 0.0
+var _last_performance_snapshot: Dictionary = {}
 var _preferences_loaded := false
 var _app_active := true
 
@@ -349,10 +352,48 @@ func _physics_process(delta: float) -> void:
         game_audio.update_state(audio_step, {"driving": player.in_vehicle, "speed_mps": vehicle.speed_mps,
             "rpm": vehicle.engine_rpm, "on_road": vehicle.on_road, "walk_speed": speed / 3.6,
             "ready": ready, "menu_open": blocked, "throttle": throttle})
+    _sample_runtime_performance(delta)
     _radar_clock += delta
     if _radar_clock >= 0.5:
         _radar_clock = 0.0
         hud.set_radar_paths(roads.nearby_paths(world[0], world[2]), Vector2(world[0], world[2]), camera_yaw)
+
+func runtime_performance_snapshot() -> Dictionary:
+    return _last_performance_snapshot.duplicate(true)
+
+func _sample_runtime_performance(delta: float) -> void:
+    _performance_clock += delta
+    if _performance_clock < PERFORMANCE_SAMPLE_INTERVAL:
+        return
+    _performance_clock = 0.0
+    var snapshot := {
+        "fps": Performance.get_monitor(Performance.TIME_FPS),
+        "process_ms": float(Performance.get_monitor(Performance.TIME_PROCESS)) * 1000.0,
+        "physics_ms": float(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0,
+        "static_memory_bytes": int(Performance.get_monitor(Performance.MEMORY_STATIC)),
+        "objects": int(Performance.get_monitor(Performance.OBJECT_COUNT)),
+        "nodes": int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
+        "resources": int(Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)),
+        "orphans": int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)),
+        "render_objects": int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)),
+        "draw_calls": int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
+        "primitives": int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)),
+        "physics_active": int(Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS)),
+        "physics_pairs": int(Performance.get_monitor(Performance.PHYSICS_3D_COLLISION_PAIRS)),
+    }
+    if roads != null and roads.has_method("runtime_snapshot"):
+        snapshot["roads"] = roads.call("runtime_snapshot")
+    if terrain != null and terrain.has_method("runtime_snapshot"):
+        snapshot["terrain"] = terrain.call("runtime_snapshot")
+    if buildings != null and buildings.has_method("runtime_snapshot"):
+        snapshot["buildings"] = buildings.call("runtime_snapshot")
+    var traffic := get_node_or_null("/root/TrafficRuntime")
+    if traffic != null and traffic.has_method("runtime_snapshot"):
+        snapshot["traffic"] = traffic.call("runtime_snapshot")
+    var pedestrians := get_node_or_null("/root/PedestrianRuntime")
+    if pedestrians != null and pedestrians.has_method("runtime_snapshot"):
+        snapshot["pedestrians"] = pedestrians.call("runtime_snapshot")
+    _last_performance_snapshot = snapshot
 
 func _collision_ready(x: float, z: float) -> bool:
     # Freeze traversal until the footprint's neighboring colliders are resident.
