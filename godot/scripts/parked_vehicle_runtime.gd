@@ -13,6 +13,7 @@ var _visual_clock := 0.0
 const VISUAL_INTERVAL := 0.12
 var _proxy: MultiMeshInstance3D
 var _proxy_scene: Node
+var _parked_pool: Array[StaticBody3D] = []
 var _last_near := 0
 var _last_medium := 0
 var _quality := "Balanced"
@@ -184,13 +185,37 @@ func _refresh_visuals(scene: Node, roads, terrain, active_xz: Vector2) -> void:
 func _materialize(scene: Node, identifier: String, entry: Dictionary) -> void:
     if entry.get("node", null) is StaticBody3D and is_instance_valid(entry.node):
         return
-    var body := StaticBody3D.new()
+    var body: StaticBody3D
+    while not _parked_pool.is_empty() and body == null:
+        var candidate := _parked_pool.pop_back()
+        if is_instance_valid(candidate):
+            body = candidate
+    if body == null:
+        body = _create_parked_body()
+        scene.add_child(body)
+    elif body.get_parent() != scene:
+        if body.get_parent() != null:
+            body.get_parent().remove_child(body)
+        scene.add_child(body)
     body.name = "Parked_" + identifier.replace(":", "_").replace("/", "_")
+    body.visible = true
+    body.process_mode = Node.PROCESS_MODE_INHERIT
     body.collision_layer = 1
+    var collider := body.get_node_or_null("CollisionShape3D") as CollisionShape3D
+    if collider != null:
+        collider.set_deferred("disabled", false)
+    entry.node = body
+    entry.model = body.get_node_or_null("ParkedVisual")
+    parked[identifier] = entry
+
+func _create_parked_body() -> StaticBody3D:
+    var body := StaticBody3D.new()
+    body.collision_layer = 0
     body.collision_mask = 0
     var shape := BoxShape3D.new()
     shape.size = Vector3(1.85, 1.30, 4.0)
     var collider := CollisionShape3D.new()
+    collider.name = "CollisionShape3D"
     collider.shape = shape
     collider.position.y = 0.65
     body.add_child(collider)
@@ -198,18 +223,22 @@ func _materialize(scene: Node, identifier: String, entry: Dictionary) -> void:
     model.name = "ParkedVisual"
     model.build()
     body.add_child(model)
-    scene.add_child(body)
-    entry.node = body
-    entry.model = model
-    parked[identifier] = entry
+    return body
 
 func _dematerialize(identifier: String) -> void:
     if not parked.has(identifier):
         return
     var entry: Dictionary = parked[identifier]
     var node = entry.get("node", null)
-    if node is Node and is_instance_valid(node):
-        (node as Node).queue_free()
+    if node is StaticBody3D and is_instance_valid(node):
+        var body := node as StaticBody3D
+        body.visible = false
+        body.process_mode = Node.PROCESS_MODE_DISABLED
+        body.collision_layer = 0
+        var collider := body.get_node_or_null("CollisionShape3D") as CollisionShape3D
+        if collider != null:
+            collider.set_deferred("disabled", true)
+        _parked_pool.append(body)
     entry.node = null
     entry.model = null
     parked[identifier] = entry
@@ -225,6 +254,7 @@ func _ensure_proxy(scene: Node) -> void:
         return
     if _proxy != null and is_instance_valid(_proxy):
         _proxy.queue_free()
+    _clear_pool()
     _proxy_scene = scene
     _proxy = MultiMeshInstance3D.new()
     _proxy.name = "ParkedVehicleMediumHLOD"
@@ -243,10 +273,17 @@ func _ensure_proxy(scene: Node) -> void:
     _proxy.multimesh = multimesh
     scene.add_child(_proxy)
 
+func _clear_pool() -> void:
+    for body in _parked_pool:
+        if is_instance_valid(body):
+            body.queue_free()
+    _parked_pool.clear()
+
 func _clear_scene_state() -> void:
     for identifier in parked.keys():
         _dematerialize(str(identifier))
     parked.clear()
+    _clear_pool()
     if _proxy != null and is_instance_valid(_proxy):
         _proxy.queue_free()
     _proxy = null
@@ -255,4 +292,4 @@ func _clear_scene_state() -> void:
     _last_medium = 0
 
 func runtime_snapshot() -> Dictionary:
-    return {"parked": parked.size(), "near_full": _last_near, "medium_hlod": _last_medium, "quality": _quality, "thermal_stage": _thermal_stage}
+    return {"parked": parked.size(), "near_full": _last_near, "medium_hlod": _last_medium, "pooled_near": _parked_pool.size(), "quality": _quality, "thermal_stage": _thermal_stage}
