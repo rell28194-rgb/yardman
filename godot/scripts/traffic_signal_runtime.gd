@@ -4,10 +4,12 @@ class_name YardmanTrafficSignalRuntime
 const Traffic = preload("res://scripts/traffic_runtime.gd")
 const PlayerSignals = preload("res://scripts/vehicle_signal_runtime.gd")
 const UPDATE_INTERVAL := 0.16
+const EMISSION_INTERVAL := 0.08
 const SIGNAL_DISTANCE_M := 34.0
 
 var _clock := 0.0
 var _blink_clock := 0.0
+var _emission_clock := 0.0
 var _rigs: Dictionary = {}
 var _active_left := 0
 var _active_right := 0
@@ -23,9 +25,13 @@ static func _is_live_node3d(value) -> bool:
 
 func _process(delta: float) -> void:
     _clock += delta
+    _emission_clock += delta
     _blink_clock = fmod(_blink_clock + delta, PlayerSignals.BLINK_PERIOD_S)
+    if _emission_clock >= EMISSION_INTERVAL:
+        _emission_clock = 0.0
+        if not _rigs.is_empty():
+            _refresh_emission()
     if _clock < UPDATE_INTERVAL:
-        _refresh_emission()
         return
     _clock = 0.0
     var scene := get_tree().current_scene

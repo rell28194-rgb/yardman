@@ -20,6 +20,8 @@ var _context_interval := 0.85
 var _players: Dictionary = {}
 var _configured := false
 var _context_clock := 999.0
+var _mix_clock := 999.0
+const MIX_INTERVAL := 0.10
 var _coast_factor := 0.0
 var _activity_factor := 0.0
 var _last_mix: Dictionary = {}
@@ -81,6 +83,10 @@ func _process(delta: float) -> void:
         _activity_factor = activity_factor_from_runtimes(
             get_node_or_null("/root/TrafficRuntime"), get_node_or_null("/root/PedestrianRuntime"))
 
+    _mix_clock += delta
+    if _mix_clock < MIX_INTERVAL:
+        return
+    _mix_clock = 0.0
     var atmosphere := get_node_or_null("/root/AtmosphereFX")
     var rain := 0.0
     if atmosphere != null:

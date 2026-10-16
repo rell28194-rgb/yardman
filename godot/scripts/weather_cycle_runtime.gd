@@ -13,12 +13,18 @@ var _last_hour := 0.0
 var _have_clock_sample := false
 var _loaded_mode := ""
 var _dirty := false
+var _update_clock := 999.0
+const UPDATE_INTERVAL := 0.50
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
     _load_state()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+    _update_clock += delta
+    if _update_clock < UPDATE_INTERVAL:
+        return
+    _update_clock = 0.0
     var scene := get_tree().current_scene
     if scene == null:
         return

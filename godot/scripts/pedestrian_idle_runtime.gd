@@ -1,14 +1,21 @@
 extends Node
 class_name YardmanPedestrianIdleRuntime
 
+const UPDATE_INTERVAL := 0.10
 var _idle_clock := 0.0
+var _update_clock := 0.0
 var _overrides := 0
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
 
 func _physics_process(delta: float) -> void:
-    _idle_clock += delta
+    _update_clock += delta
+    if _update_clock < UPDATE_INTERVAL:
+        return
+    var step := _update_clock
+    _update_clock = 0.0
+    _idle_clock += step
     _overrides = 0
     var pedestrians := get_node_or_null("/root/PedestrianRuntime")
     if pedestrians == null:
@@ -29,7 +36,7 @@ func _physics_process(delta: float) -> void:
             continue
         var seed_phase := float(absi(str(identifier_value).hash()) % 628) / 100.0
         var targets := idle_targets(_idle_clock * 1.15 + seed_phase)
-        _apply_idle(rig_value, targets, delta)
+        _apply_idle(rig_value, targets, step)
         _overrides += 1
 
 static func idle_targets(phase: float) -> Dictionary:

@@ -9,6 +9,8 @@ var near_radius := 155.0
 var medium_radius := 430.0
 var parked: Dictionary = {}
 var _refresh_clock := 0.0
+var _visual_clock := 0.0
+const VISUAL_INTERVAL := 0.12
 var _proxy: MultiMeshInstance3D
 var _proxy_scene: Node
 var _last_near := 0
@@ -36,10 +38,14 @@ func _process(delta: float) -> void:
     var active_world: PackedFloat64Array = roads.local_to_world(active.global_position)
     var active_xz := Vector2(float(active_world[0]), float(active_world[2]))
     _refresh_clock += delta
+    _visual_clock += delta
     if _refresh_clock >= 2.0:
         _refresh_clock = 0.0
         _reconcile(roads, active_xz)
-    _refresh_visuals(scene, roads, terrain, active_xz)
+        _visual_clock = VISUAL_INTERVAL
+    if _visual_clock >= VISUAL_INTERVAL:
+        _visual_clock = 0.0
+        _refresh_visuals(scene, roads, terrain, active_xz)
 
 func apply_render_policy(active: Dictionary) -> void:
     _quality = str(active.get("quality", "Balanced"))
