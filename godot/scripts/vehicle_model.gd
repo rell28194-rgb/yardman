@@ -33,14 +33,17 @@ var _silver: StandardMaterial3D
 func build(hero_scene_filename: String = "", scene_loader: Callable = Callable()) -> void:
     if shell != null:
         return
-    var candidates: Array[String] = []
     if not hero_scene_filename.is_empty():
-        candidates.append(hero_scene_filename)
-    if not candidates.has("road_car.glb"):
-        candidates.append("road_car.glb")
-    for candidate in candidates:
-        if _try_reference_sedan(candidate, scene_loader):
+        # A named production hero is an identity requirement, not a preference.
+        # Never replace a missing/invalid Crown with road_car.glb (or any other
+        # recovered vehicle) while the catalog/UI still identifies it as Crown.
+        if _try_reference_sedan(hero_scene_filename, scene_loader):
             return
+        set_meta("yardman_requested_hero_scene", hero_scene_filename)
+        set_meta("yardman_hero_asset_missing_or_invalid", true)
+        push_error("Yardman dedicated vehicle asset %s is unavailable or invalid; refusing cross-model fallback" % hero_scene_filename)
+    elif _try_reference_sedan("road_car.glb", scene_loader):
+        return
     _paint = _material(Color(0.14, 0.31, 0.37), 0.52, 0.27)
     _trim = _material(Color(0.024, 0.032, 0.037), 0.15, 0.62)
     _glass = _material(Color(0.055, 0.125, 0.16), 0.40, 0.13)
@@ -57,6 +60,7 @@ func build(hero_scene_filename: String = "", scene_loader: Callable = Callable()
     _batch_meshes(shell)
     for wheel in wheels:
         _batch_meshes(wheel)
+    set_meta("yardman_procedural_vehicle_fallback", true)
     _capture_motion_rest_pose()
 
 func _capture_motion_rest_pose() -> void:
@@ -118,28 +122,28 @@ func _try_reference_sedan(asset_name: String, scene_loader: Callable = Callable(
         var spin := imported.find_child(wheel_name + "Spin", true, false) as Node3D
         if pivot == null or spin == null or spin.get_parent() != pivot:
             imported.free()
-            push_warning("Yardman reference vehicle %s has no independent wheel rig; trying the next fallback" % asset_name)
+            push_warning("Yardman reference vehicle %s has no independent wheel rig; rejecting asset" % asset_name)
             return false
         pivots.append(pivot)
         spins.append(spin)
     if body_shell == null:
         imported.free()
-        push_warning("Yardman reference vehicle %s has no BodyShell; trying the next fallback" % asset_name)
+        push_warning("Yardman reference vehicle %s has no BodyShell; rejecting asset" % asset_name)
         return false
     for pivot in pivots:
         if body_shell.is_ancestor_of(pivot) or pivot.is_ancestor_of(body_shell):
             imported.free()
-            push_warning("Yardman reference vehicle %s couples wheel and body motion; trying the next fallback" % asset_name)
+            push_warning("Yardman reference vehicle %s couples wheel and body motion; rejecting asset" % asset_name)
             return false
         for other in pivots:
             if other != pivot and pivot.is_ancestor_of(other):
                 imported.free()
-                push_warning("Yardman reference vehicle %s has dependent wheel pivots; trying the next fallback" % asset_name)
+                push_warning("Yardman reference vehicle %s has dependent wheel pivots; rejecting asset" % asset_name)
                 return false
     var bounds: AABB = _measure_mesh_bounds(imported)
     if not _finite_bounds(bounds) or bounds.size.x < 1.0 or bounds.size.x > 4.0 or bounds.size.y < 0.5 or bounds.size.y > 3.5 or bounds.size.z < 2.0 or bounds.size.z > 8.0:
         imported.free()
-        push_warning("Yardman reference vehicle %s has invalid metre-scale bounds; trying the next fallback" % asset_name)
+        push_warning("Yardman reference vehicle %s has invalid metre-scale bounds; rejecting asset" % asset_name)
         return false
     var measured_radius := 0.0
     for spin in spins:
@@ -147,7 +151,7 @@ func _try_reference_sedan(asset_name: String, scene_loader: Callable = Callable(
         var radius := maxf(tyre_bounds.size.y, tyre_bounds.size.z) * 0.5
         if not _finite_bounds(tyre_bounds) or tyre_bounds.size.x < 0.02 or radius < 0.20 or radius > 0.60:
             imported.free()
-            push_warning("Yardman reference vehicle %s has invalid wheel geometry; trying the next fallback" % asset_name)
+            push_warning("Yardman reference vehicle %s has invalid wheel geometry; rejecting asset" % asset_name)
             return false
         measured_radius += radius * 0.25
     # Measure before parenting so a translated/scaled vehicle instance cannot
@@ -161,7 +165,7 @@ func _try_reference_sedan(asset_name: String, scene_loader: Callable = Callable(
     var correct_sides := axle_points[0].x < 0.0 and axle_points[2].x < 0.0 and axle_points[1].x > 0.0 and axle_points[3].x > 0.0
     if measured_wheelbase < 1.8 or measured_wheelbase > 4.5 or measured_track < 1.0 or measured_track > 2.8 or not aligned_axles or not correct_sides:
         imported.free()
-        push_warning("Yardman reference vehicle %s has invalid axle spacing; trying the next fallback" % asset_name)
+        push_warning("Yardman reference vehicle %s has invalid axle spacing; rejecting asset" % asset_name)
         return false
     add_child(imported)
     shell = body_shell
