@@ -1,0 +1,64 @@
+{
+  "format_version": 1,
+  "date": "2026-10-16",
+  "lane": "codex/vehicle-production-001",
+  "supersedes_candidate_only_selection": true,
+  "directive": "Migrate every recoverable vehicle from CarX Drift, Car Parking Multiplayer, and Real Racing 3. Visual quality or recovery difficulty changes processing order only; it does not remove a non-Porsche vehicle from scope.",
+  "rights": {
+    "owner_report": "intended vehicle brands authorized except Porsche",
+    "porsche_authorized": false,
+    "porsche_action": "exclude before model/media extraction or render promotion; do not reproduce Porsche body geometry, badges, branding, or 992 fidelity"
+  },
+  "source_scope": {
+    "carx_drift": {
+      "status": "full static inventory available",
+      "object_count": 247863,
+      "vehicle_and_part_candidates": 7119,
+      "current_root_vehicle_candidates": 174,
+      "current_identity_resolved_from_source_names": 135,
+      "current_identity_unresolved": 39,
+      "selection_rule": "all root vehicle candidates remain queued; merge duplicate/livery roots into one source family only after dependency graph confirms equivalence"
+    },
+    "car_parking_multiplayer": {
+      "status": "decoded XAPK inventory available",
+      "car_prefixed_addressable_bundles": 239,
+      "actual_car_number_bundles": 237,
+      "shared_car_catalog_bundles": 2,
+      "known_catalog_identity": {
+        "218": "Toyota Crown 2013"
+      },
+      "selection_rule": "all 237 car-number bundles remain queued; resolve identity before promotion so Porsche can be excluded"
+    },
+    "real_racing_3": {
+      "source": "com.ea.games.r3_row_xclipse",
+      "status": "source container confirmed; per-car inventory still required",
+      "split_parts": 246,
+      "logical_bytes": 6165950862,
+      "asset_zip_base_from_owner_drive": "https://rr3-upload.devel60.net/asset_zips/",
+      "selection_rule": "enumerate the complete RR3 fleet and queue every non-Porsche vehicle"
+    }
+  },
+  "pipeline": [
+    "source-wide inventory",
+    "vehicle family identity and duplicate/livery grouping",
+    "Porsche exclusion gate",
+    "source dependency closure",
+    "LOD0 close/player/showroom conversion",
+    "LOD1 normal-gameplay conversion",
+    "LOD2 medium-distance conversion",
+    "LOD3 distant-traffic conversion",
+    "impostor-or-cull policy",
+    "materials/glass/lights/paint/interior/wheel/stance normalization",
+    "independent Godot Compatibility and Vulkan Mobile render tests",
+    "private provenance checkpoint",
+    "integration only when the main optimization lane is ready"
+  ],
+  "non_goals": [
+    "do not prune the fleet to a shortlist",
+    "do not stop after Crown or Chaser",
+    "do not integrate every LOD0 globally",
+    "do not package an APK from this lane",
+    "do not edit island streaming/runtime optimization files",
+    "do not merge PR #4"
+  ]
+}
