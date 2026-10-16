@@ -1,0 +1,29 @@
+{
+  "vehicle": "2021_bmw_m4_gt3",
+  "source": "Beta2/com.ea.games.r3_row_xclipse",
+  "source_segment": 20,
+  "source_split_parts": [210, 220],
+  "status": "recovered_crc_validated",
+  "files": 27,
+  "uncompressed_bytes": 13670472,
+  "segment_sha256": "82ffdbe6cfa7541832caf07f5e6c5bff4a4763156df988a9a5204760f8a260cb",
+  "exact_source_path": "com.ea.games.r3_row_xclipse/com.ea.games.r3_row/files/.depot/vehicles/2021_bmw_m4_gt3/",
+  "evidence": {
+    "inner_zip_crc32": "PASS_ALL_27",
+    "components": ["dashplanes", "points", "exterior_m3g_lod_stages", "interior_m3g", "shared_m3g", "lights_texture", "wheel_texture", "wheel_blur_texture", "cab_texture", "interior_texture", "shadow_textures", "livery_texture"]
+  },
+  "identity": {
+    "resolved": "2021 BMW M4 GT3",
+    "basis": "exact RR3 depot directory and per-member basename",
+    "generation_relabeling": false
+  },
+  "fleet_fusion": {
+    "eligible_as_geometry_material_interior_evidence": true,
+    "requires_cross_source_beta1_car_parking_match": true
+  },
+  "policy": {
+    "porsche_authorization": "owner-authorized for current vehicle-production lane; historical exclusion flags do not apply",
+    "crown007": "accepted/deprioritized; shared improvements may apply",
+    "public_git_media": false
+  }
+}
