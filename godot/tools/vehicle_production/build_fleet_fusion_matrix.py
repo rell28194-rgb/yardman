@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 CROWN_RE = re.compile(r"toyota\s*crown", re.I)
+PORSCHE_RE = re.compile(r"\bporsche\b", re.I)
 
 
 def normalized_identity(value: Any) -> str:
@@ -27,7 +28,9 @@ def normalized_identity(value: Any) -> str:
 def rights_state(identity: str) -> str:
     if CROWN_RE.search(identity):
         return "deprioritized_reference_crown007"
-    return "owner_authorized_vehicle"
+    if PORSCHE_RE.search(identity):
+        return "excluded_porsche"
+    return "active_vehicle"
 
 
 def collect_beta1(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -84,12 +87,12 @@ def collect_car_parking(manifest: dict[str, Any], seed: dict[str, Any] | None = 
                 for existing_identity in list(resolved):
                     resolved[existing_identity] = [r for r in resolved[existing_identity] if r.get("catalog_id") != catalog_id]
                     if not resolved[existing_identity]: del resolved[existing_identity]
-                resolved[identity].append({"catalog_id": catalog_id, "bundle_path": vehicle.get("bundle_path") or manifest_by_id.get(catalog_id, {}).get("bundle_path"), "identity_status": status, "rights_status": "owner_authorized_vehicle", "evidence": "exact_carparking_unityfs_bundle_decode"})
+                resolved[identity].append({"catalog_id": catalog_id, "bundle_path": vehicle.get("bundle_path") or manifest_by_id.get(catalog_id, {}).get("bundle_path"), "identity_status": status, "rights_status": rights_state(identity), "evidence": "exact_carparking_unityfs_bundle_decode"})
                 unresolved_ids.discard(catalog_id)
             elif status.startswith("conflict_") or status.startswith("unresolved"):
                 unresolved_ids.add(catalog_id)
         search_complete = int(evidence_counts.get("current_car_bundles", 0) or 0) == len(manifest_by_id) and int(evidence_counts.get("unityfs_parse_errors", 0) or 0) == 0
-    return dict(resolved), {"resolved_identities": len(resolved), "unresolved_bundle_ids": len(unresolved_ids), "search_complete": search_complete, "decoded_bundle_count": int(evidence_counts.get("current_car_bundles", 0) or 0), "previously_excluded_porsche": int(evidence_counts.get("excluded_porsche", 0) or 0), "porsche_policy": "authorized_reactivate_all_resolved_entries", "conflict_review_required": int(evidence_counts.get("conflict_review_required", 0) or 0)}
+    return dict(resolved), {"resolved_identities": len(resolved), "unresolved_bundle_ids": len(unresolved_ids), "search_complete": search_complete, "decoded_bundle_count": int(evidence_counts.get("current_car_bundles", 0) or 0), "excluded_porsche": int(evidence_counts.get("excluded_porsche", 0) or 0), "porsche_policy": "exclude", "conflict_review_required": int(evidence_counts.get("conflict_review_required", 0) or 0)}
 
 
 def collect_rr3(manifest: dict[str, Any]) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
@@ -108,18 +111,21 @@ def build(manifest: dict[str, Any], carparking_seed: dict[str, Any] | None = Non
     car_parking, cp_summary = collect_car_parking(manifest, carparking_seed, carparking_evidence)
     rr3, rr3_summary = collect_rr3(manifest)
     identities = sorted(set(beta1) | set(car_parking) | set(rr3), key=str.casefold)
-    active, deprioritized = [], []
+    active, deprioritized, excluded = [], [], []
     for identity in identities:
         state = rights_state(identity)
         row = {"identity": identity, "rights_status": state, "beta1": beta1.get(identity, {"status": "exact_identity_not_resolved"}), "beta2": {"car_parking": car_parking.get(identity, []), "real_racing_3": rr3.get(identity, []), "car_parking_search_complete": cp_summary["search_complete"], "car_parking_exact_match": bool(car_parking.get(identity)), "real_racing_3_search_complete": rr3_summary["search_complete"], "real_racing_3_exact_match": bool(rr3.get(identity))}}
+        if state == "excluded_porsche":
+            row["promotion_status"] = "excluded_rights"
+            excluded.append(row); continue
         if state == "deprioritized_reference_crown007":
             row["promotion_status"] = "accepted_current_state_detail_improvements_continue"
-            row["remaining_work"] = "continue detail fixes and shared-fleet improvements without blocking fleet expansion"
+            row["remaining_work"] = "shared fleet improvements may apply later without blocking fleet expansion"
             deprioritized.append(row); continue
         searches_complete = cp_summary["search_complete"] and rr3_summary["search_complete"]
         row["promotion_status"] = "component_selection_ready" if searches_complete else "continue_beta2_source_search"
         active.append(row)
-    return {"format_version": 5, "policy": {"scope": "full_fleet_parallel_source_fusion_and_reconstruction", "crown007": "accepted_current_state_but_detail_fixes_continue", "porsche": "owner_authorized_reactivated", "missing_model_rule": "When no exact donor exists, construct the target from authorized reusable components only after target identity, dimensions, wheelbase, silhouette and generation are independently established; donor identity must never be relabeled as the target.", "promotion_rule": "Search Beta1 and both Beta2 vehicle sources for every active vehicle. Record no-match evidence; use multi-source construction when exact donors are absent."}, "summary": {"active_identities": len(active), "deprioritized_reference_identities": len(deprioritized), "excluded_identities": 0, "beta1_resolved_identities": len(beta1), "car_parking": cp_summary, "car_parking_seed_loaded": bool(carparking_seed), "car_parking_bundle_evidence_loaded": bool(carparking_evidence), "real_racing_3": rr3_summary}, "active": active, "deprioritized_reference": deprioritized, "excluded": []}
+    return {"format_version": 6, "policy": {"scope": "full_fleet_parallel_source_fusion", "crown007": "accepted_current_state_deprioritized_not_complete", "porsche": "excluded", "promotion_rule": "Search Beta1 and both Beta2 vehicle sources for every active vehicle. Record no-match evidence; never fabricate an identity from an unrelated donor."}, "summary": {"active_identities": len(active), "deprioritized_reference_identities": len(deprioritized), "excluded_identities": len(excluded), "beta1_resolved_identities": len(beta1), "car_parking": cp_summary, "car_parking_seed_loaded": bool(carparking_seed), "car_parking_bundle_evidence_loaded": bool(carparking_evidence), "real_racing_3": rr3_summary}, "active": active, "deprioritized_reference": deprioritized, "excluded": excluded}
 
 
 def main() -> int:
