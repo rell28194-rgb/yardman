@@ -8,6 +8,7 @@ var _clock := 0.0
 var _last_active := -1
 var _last_dormant := -1
 var _last_tile := Vector2i(2147483647, 2147483647)
+var _last_residency_signature := ""
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -22,9 +23,11 @@ func _process(delta: float) -> void:
 func _refresh_physics_residency() -> void:
     var scene := get_tree().current_scene
     if scene == null:
+        _last_residency_signature = ""
         return
     var terrain = scene.get("terrain")
     if terrain == null or terrain.target == null:
+        _last_residency_signature = ""
         return
     var world: PackedFloat64Array = terrain.coordinates.local_to_world(terrain.target.global_position)
     if world.size() < 3:
@@ -36,6 +39,24 @@ func _refresh_physics_residency() -> void:
     if not loaded_value is Dictionary:
         return
     var loaded: Dictionary = loaded_value
+
+    # Collision state only changes when the player crosses the warm boundary or
+    # terrain residency changes. Avoid walking every loaded tile at ~8 Hz while
+    # driving through the interior of the same 2 km tile.
+    var loaded_keys: Array[String] = []
+    for key_value in loaded.keys():
+        loaded_keys.append(str(key_value))
+    loaded_keys.sort()
+    var wanted_keys: Array[String] = []
+    for tile_value in wanted.keys():
+        var tile: Vector2i = tile_value
+        wanted_keys.append("%d:%d" % [tile.x, tile.y])
+    wanted_keys.sort()
+    var signature := "%d:%d|%s|%s" % [current.x, current.y, ",".join(wanted_keys), ",".join(loaded_keys)]
+    if signature == _last_residency_signature:
+        return
+    _last_residency_signature = signature
+
     var active := 0
     var dormant := 0
     for key_value in loaded.keys():
