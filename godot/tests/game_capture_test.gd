@@ -33,7 +33,9 @@ func _run() -> void:
     root.add_child(scene)
     scene.set_quality("Ultra")
     scene.touch._touch_seen = true
-    for parish in ["St. Ann", "Manchester"]:
+    # Kingston is included specifically to expose dense urban building massing;
+    # St. Ann and Manchester remain stable comparisons for lower-density scenes.
+    for parish in ["Kingston", "St. Ann", "Manchester"]:
         scene.goto_parish(parish)
         scene.day_hour = 10.0
         if not await _wait_world():
@@ -54,7 +56,7 @@ func _run() -> void:
     if not await _capture("yardman-settings"):
         quit(1)
         return
-    print("YARDMAN_CAPTURE_TEST PASS actual_gl_frames=4 renderer=" + RenderingServer.get_video_adapter_name())
+    print("YARDMAN_CAPTURE_TEST PASS actual_gl_frames=5 renderer=" + RenderingServer.get_video_adapter_name())
     scene.queue_free()
     await process_frame
     quit(0)
