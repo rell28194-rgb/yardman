@@ -89,6 +89,14 @@ def building_height(tags: dict) -> tuple[float, int]:
     return HEIGHT_DEFAULTS.get(_source_type(tags), 4.4), HEIGHT_INFERRED
 
 
+def building_base_offset(tags: dict) -> float:
+    minimum_height = parse_length(tags.get("min_height", ""), 0.05, 350.0)
+    if minimum_height is not None:
+        return round(minimum_height, 3)
+    minimum_level = parse_levels(tags.get("building:min_level", ""))
+    return round(minimum_level * 3.15, 3) if minimum_level is not None else 0.0
+
+
 def building_form(tags: dict) -> dict:
     """Keep only source-declared 3D form tags needed for registered massing."""
     result = {}
@@ -364,19 +372,17 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
         if not connection.execute("SELECT 1 FROM raw LIMIT 1").fetchone():
             raise ValueError("No building footprints were compiled")
 
-        # Keep building parts in a bounded spatial lookup. Parts are much rarer
-        # than parent outlines, so the island-wide parent set stays on disk.
+        # Building parts are far rarer than parent outlines, so only the part
+        # set is kept in the bounded spatial lookup. Parent geometry stays on disk.
         part_rows = {}
         part_bins = defaultdict(set)
         for identifier, tags_json, geometry_wkb, minx, minz, maxx, maxz in connection.execute(
                 "SELECT id,tags,geometry,minx,minz,maxx,maxz FROM raw WHERE is_part=1 ORDER BY id"):
             tags = json.loads(tags_json)
-            form = building_form(tags)
-            if form.get("min_height_m") is not None or form.get("min_level") is not None:
-                stats["deferred_elevated_parts"] += 1
-                continue
             geometry = shapely.from_wkb(geometry_wkb)
-            part_rows[identifier] = {"tags": tags, "geometry": geometry, "area": geometry.area}
+            base_offset = building_base_offset(tags)
+            part_rows[identifier] = {"tags": tags, "geometry": geometry, "area": geometry.area,
+                                     "base_offset": base_offset, "ground_origin": base_offset <= 0.001}
             x0, z0 = math.floor(minx / PART_BIN_SIZE), math.floor(minz / PART_BIN_SIZE)
             x1, z1 = math.floor(maxx / PART_BIN_SIZE), math.floor(maxz / PART_BIN_SIZE)
             for bz in range(z0, z1 + 1):
@@ -391,9 +397,8 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
                     result.update(part_bins.get((bx, bz), ()))
             return result
 
-        # Associate each ground-origin part with the most specific containing
-        # registered outline. Parent geometries stay in SQLite instead of being
-        # retained island-wide in memory.
+        # Associate every source part to the most specific containing registered
+        # outline. Elevated parts need the parent for inheritance but never carve it.
         part_parent = {}
         for parent_id, geometry_wkb in connection.execute(
                 "SELECT id,geometry FROM raw WHERE is_part=0 ORDER BY id"):
@@ -418,7 +423,7 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
                 parent_tag_cache[parent_id] = json.loads(row[0]) if row else {}
             return parent_tag_cache[parent_id]
 
-        parent_parts = defaultdict(list)
+        ground_parent_parts = defaultdict(list)
         for part_id, info in part_rows.items():
             tags = dict(info["tags"])
             association = part_parent.get(part_id)
@@ -432,17 +437,27 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
                     elif source_parent_tags.get("building:levels"):
                         tags["building:levels"] = source_parent_tags["building:levels"]
                         stats["part_levels_inherited"] += 1
-                parent_parts[parent_id].append(info["geometry"])
+                if info["ground_origin"]:
+                    ground_parent_parts[parent_id].append(info["geometry"])
+
+            base_offset = building_base_offset(tags)
+            top_height, _ = building_height(tags)
+            if base_offset >= top_height - 0.05:
+                stats["invalid_elevated_parts"] += 1
+                continue
             if emit_geometry(part_id, info["geometry"], tags):
                 stats["building_parts_emitted"] += 1
+                if base_offset > 0.001:
+                    stats["elevated_parts_emitted"] += 1
+                else:
+                    stats["ground_parts_emitted"] += 1
 
-        # Re-read parents from the bounded SQLite spool for final residual
-        # massing instead of holding the million-footprint parent set in RAM.
+        # Re-read parents from the SQLite spool for final residual massing.
         for parent_id, tags_json, geometry_wkb in connection.execute(
                 "SELECT id,tags,geometry FROM raw WHERE is_part=0 ORDER BY id"):
             tags = json.loads(tags_json)
             parent = shapely.from_wkb(geometry_wkb)
-            child_parts = parent_parts.get(parent_id, [])
+            child_parts = ground_parent_parts.get(parent_id, [])
             geometry = split_parent_by_parts(parent, child_parts) if child_parts else parent
             if child_parts:
                 stats["parent_outlines_split"] += 1
@@ -498,7 +513,7 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
                     "attribution": "© OpenStreetMap contributors — https://www.openstreetmap.org/copyright (ODbL)",
                     "terrain_attribution": sampler.manifest.get("attribution", ""),
                     "height_inference": "Source height > source building:levels × 3.15m + 0.35m > declared class estimate (default 4.4m). Maximum massing elevation is above maximum sampled foundation height. DSM foundations are not surveyed bare-earth levels.",
-                    "massing": "Ground-origin building:part polygons replace overlapping parent volume. Partial part coverage subtracts from the parent outline before residual massing is emitted. Elevated parts are preserved as deferred source evidence until runtime base-height support is validated.",
+                    "massing": "Ground-origin building:part polygons replace overlapping parent volume. Elevated parts use source min_height/building:min_level and remain stacked above the parent; they never carve away the lower parent mass. Invalid stacks whose base reaches/exceeds their top are rejected.",
                     "appearance": "Registered footprint and source 3D form metadata are preserved. Unsupported source forms remain conservative extrusions until runtime support exists; presentation inference is explicitly separate from source truth.",
                     "bounds": [round(v, 3) for v in bounds], "max_footprint_reach_m": round(max_reach, 3),
                     "max_cell_uncompressed_bytes": max_cell_bytes, "max_cell_buildings": max_cell_buildings,
