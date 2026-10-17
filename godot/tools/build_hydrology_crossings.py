@@ -19,8 +19,15 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from build_hydrology import WATERWAY_CLASSES, parse_bool_tag, parse_layer, waterway_structure
-from build_jamaica_roads import ROAD_WIDTHS
 
+# Kept dependency-light on purpose: the pure classification contract must be
+# importable by core CI without installing GIS libraries. This set mirrors the
+# production road compiler's accepted drivable highway classes.
+DRIVABLE_HIGHWAYS = {
+    "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
+    "secondary", "secondary_link", "tertiary", "tertiary_link", "unclassified",
+    "residential", "living_street", "service", "road", "track", "raceway",
+}
 FALSE_TAGS = {"", "no", "false", "0"}
 
 
@@ -31,8 +38,8 @@ def active_structure_tag(raw) -> bool:
 def classify_crossing(road_tags: dict, water_tags: dict, shared_osm_node: bool) -> tuple[str, str, bool]:
     """Return classification, evidence reason, and whether resolution is final.
 
-    `final` means the source already states enough to protect terrain generation
-    from making the opposite interpretation. It does not imply that a detailed
+    `final` means source data already states enough to prevent terrain generation
+    from making the opposite interpretation. It does not claim that a detailed
     structural model has already been reconstructed.
     """
     water = waterway_structure(water_tags)
@@ -61,7 +68,6 @@ def classify_crossing(road_tags: dict, water_tags: dict, shared_osm_node: bool) 
 
 
 def _point_components(geometry):
-    """Yield crossing points; linear overlaps are emitted separately by caller."""
     kind = geometry.geom_type
     if kind == "Point":
         yield geometry
@@ -76,7 +82,7 @@ def compile_crossings(osm_pbf: Path, hydrology_root: Path, output_root: Path) ->
     try:
         import osmium
         from pyproj import Transformer
-        from shapely.geometry import LineString, Point
+        from shapely.geometry import LineString
         from shapely.strtree import STRtree
     except ImportError as exc:  # pragma: no cover - workflow dependency gate
         raise RuntimeError("build_hydrology_crossings requires osmium, pyproj and shapely") from exc
@@ -94,7 +100,7 @@ def compile_crossings(osm_pbf: Path, hydrology_root: Path, output_root: Path) ->
         def way(self, way) -> None:
             highway = str(way.tags.get("highway", ""))
             waterway = str(way.tags.get("waterway", ""))
-            if highway not in ROAD_WIDTHS and waterway not in WATERWAY_CLASSES:
+            if highway not in DRIVABLE_HIGHWAYS and waterway not in WATERWAY_CLASSES:
                 return
             nodes = []
             for node in way.nodes:
@@ -107,12 +113,8 @@ def compile_crossings(osm_pbf: Path, hydrology_root: Path, output_root: Path) ->
                 nodes.append((float(easting) - e0, n0 - float(northing), int(node.ref)))
             if len(nodes) < 2:
                 return
-            record = {
-                "id": f"w{int(way.id)}",
-                "tags": dict(way.tags),
-                "nodes": nodes,
-            }
-            if highway in ROAD_WIDTHS:
+            record = {"id": f"w{int(way.id)}", "tags": dict(way.tags), "nodes": nodes}
+            if highway in DRIVABLE_HIGHWAYS:
                 roads.append(record)
             if waterway in WATERWAY_CLASSES:
                 waters.append(record)
@@ -140,22 +142,22 @@ def compile_crossings(osm_pbf: Path, hydrology_root: Path, output_root: Path) ->
             if intersection.is_empty:
                 continue
             common_nodes = set(water_node_positions).intersection(node[2] for node in road_record["nodes"])
-            road_common_positions = {node[2]: (node[0], node[1]) for node in road_record["nodes"] if node[2] in common_nodes}
+            common_positions = {
+                node[2]: (node[0], node[1]) for node in road_record["nodes"] if node[2] in common_nodes
+            }
 
             points = list(_point_components(intersection))
+            overlap = False
             if not points and intersection.geom_type in {"LineString", "MultiLineString"}:
-                representative = intersection.representative_point()
-                points = [representative]
+                points = [intersection.representative_point()]
                 overlap = True
-            else:
-                overlap = False
 
             for point in points:
                 x, z = float(point.x), float(point.y)
                 shared_node = False
                 shared_node_id = None
                 for node_id in common_nodes:
-                    px, pz = road_common_positions[node_id]
+                    px, pz = common_positions[node_id]
                     if math.hypot(px - x, pz - z) <= 0.75:
                         shared_node = True
                         shared_node_id = int(node_id)
@@ -183,20 +185,16 @@ def compile_crossings(osm_pbf: Path, hydrology_root: Path, output_root: Path) ->
                 road_tags = road_record["tags"]
                 water_tags = water_record["tags"]
                 record = {
-                    "x": round(x, 3),
-                    "z": round(z, 3),
-                    "road_way": road_record["id"],
-                    "waterway_way": water_record["id"],
+                    "x": round(x, 3), "z": round(z, 3),
+                    "road_way": road_record["id"], "waterway_way": water_record["id"],
                     "waterway": str(water_tags.get("waterway", "")),
                     "water_name": str(water_tags.get("name", "")),
                     "road_class": str(road_tags.get("highway", "")),
                     "road_name": str(road_tags.get("name", "")),
                     "road_ref": str(road_tags.get("ref", "")),
-                    "classification": classification,
-                    "reason": reason,
+                    "classification": classification, "reason": reason,
                     "resolved_by_source": final,
-                    "shared_osm_node": shared_node,
-                    "shared_node_id": shared_node_id,
+                    "shared_osm_node": shared_node, "shared_node_id": shared_node_id,
                     "road_bridge": str(road_tags.get("bridge", "")),
                     "road_tunnel": str(road_tags.get("tunnel", "")),
                     "road_ford": str(road_tags.get("ford", "")),
@@ -210,10 +208,7 @@ def compile_crossings(osm_pbf: Path, hydrology_root: Path, output_root: Path) ->
                 records_by_tile[(tx, tz)].append(record)
                 stats["crossings"] += 1
                 stats[f"classification_{classification}"] += 1
-                if final:
-                    stats["resolved_by_source"] += 1
-                else:
-                    stats["requires_resolution"] += 1
+                stats["resolved_by_source" if final else "requires_resolution"] += 1
                 if shared_node:
                     stats["shared_node_crossings"] += 1
 
@@ -223,9 +218,7 @@ def compile_crossings(osm_pbf: Path, hydrology_root: Path, output_root: Path) ->
     staging.mkdir(parents=True)
     tiles = []
     for (tx, tz), values in sorted(records_by_tile.items()):
-        values.sort(key=lambda item: (
-            item["waterway_way"], item["road_way"], item["x"], item["z"]
-        ))
+        values.sort(key=lambda item: (item["waterway_way"], item["road_way"], item["x"], item["z"]))
         filename = f"tile_{tx}_{tz}.json"
         (staging / filename).write_text(
             json.dumps({"tile": [tx, tz], "crossings": values}, separators=(",", ":")),
