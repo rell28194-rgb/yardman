@@ -35,8 +35,6 @@ void fragment() {
     surface *= 0.95 + fine_grain * 0.08;
     ROUGHNESS = 0.88;
     if (roof_surface) {
-        // Source images are plain roof surfaces, not a facade atlas stretched
-        // over an entire roof. Roof UVs retain a real-metre repeat frequency.
         if (has_reference_roof) {
             surface *= texture(reference_roof, UV / 3.0).rgb * 1.9;
         }
@@ -53,8 +51,6 @@ void fragment() {
             surface *= texture(reference_plaster, UV / 3.6).rgb * 1.85;
         }
         if (COLOR.a > 0.3 && COLOR.a < 0.5 && has_reference_brick) {
-            // The decoded source has sixteen courses per image: a 1.28m
-            // repeat gives ordinary eight-centimetre courses.
             surface = texture(reference_brick, UV / 1.28).rgb * 1.35;
         }
         if (COLOR.a > 0.7 && COLOR.a < 0.9 && has_reference_stone) {
@@ -63,23 +59,36 @@ void fragment() {
         if (COLOR.a > 0.9 && has_reference_timber) {
             surface = texture(reference_timber, UV / 2.8).rgb * 1.2;
         }
-        // Window layout remains explicitly inferred, independent of OSM
-        // footprints and source heights; art does not alter geography.
+
         vec2 module = fract(vec2(UV.x / 3.2, -UV.y / 3.15));
         float window_x = step(0.29, module.x) * step(module.x, 0.70);
         float window_y = step(0.28, module.y) * step(module.y, 0.63);
-        // UV2 is constant per face: first replaced column and storey row.
-        // The sentinel (-1000,-1000) preserves fallback windows on all other
-        // external/courtyard walls and when optional source media is absent.
         vec2 cell = floor(vec2(UV.x / 3.2, -UV.y / 3.15));
         float replaced = step(-999.0, UV2.x) * step(UV2.x, cell.x)
             * step(cell.x, UV2.x + 2.0) * (1.0 - step(0.5, abs(cell.y - UV2.y))) * step(view_distance, 100.0);
         float window = window_x * window_y * (1.0 - replaced);
+
+        // Give the procedural openings a cheap frame/reveal so large registered
+        // footprints do not read as flat boxes. This uses the existing wall UVs
+        // and adds no texture fetches or geometry.
+        float frame_outer_x = step(0.255, module.x) * step(module.x, 0.735);
+        float frame_outer_y = step(0.235, module.y) * step(module.y, 0.675);
+        float frame = frame_outer_x * frame_outer_y * (1.0 - window) * (1.0 - replaced);
+        vec3 frame_tint = mix(vec3(0.70, 0.68, 0.61), vec3(0.90, 0.88, 0.80), clamp(COLOR.r, 0.0, 1.0));
+        surface = mix(surface, frame_tint, frame * 0.72);
+
         vec3 glass = vec3(0.13, 0.22, 0.25);
         surface = mix(surface, glass, window);
         ROUGHNESS = mix(0.88, 0.30, window);
         float sill = window_x * step(0.64, module.y) * step(module.y, 0.67) * (1.0 - replaced);
         surface = mix(surface, vec3(0.68, 0.65, 0.58), sill);
+
+        // Ground-contact weathering anchors buildings into terrain instead of
+        // leaving bright walls visually floating over grass. UV.y is metre-scale
+        // vertical wall distance and this fades out within the first ~0.7 m.
+        float ground_band = 1.0 - smoothstep(0.10, 0.72, abs(UV.y));
+        float dirt = 0.80 + 0.12 * grain(floor(vec2(UV.x * 1.7, UV.y * 7.0)));
+        surface *= mix(1.0, dirt, ground_band * 0.42);
     }
     ALBEDO = surface;
 }
