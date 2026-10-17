@@ -12,8 +12,9 @@ from pathlib import Path
 from shapely.geometry import Polygon, Point
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from build_buildings import (building_form, building_height, conform_ring, make_record,
-                             parse_height, read_cell, split_parent_by_parts, write_pack)
+from build_buildings import (building_base_offset, building_form, building_height,
+                             conform_ring, make_record, parse_height, read_cell,
+                             split_parent_by_parts, write_pack)
 
 
 class TriangleTerrain:
@@ -59,6 +60,15 @@ class BuildingsTests(unittest.TestCase):
         self.assertEqual(record[8], form)
         self.assertEqual(record[4], 11.65)
 
+    def test_elevated_part_base_policy(self):
+        self.assertEqual(building_base_offset({"building:part": "yes", "min_height": "4 m", "building:min_level": "3"}), 4.0)
+        self.assertEqual(building_base_offset({"building:part": "yes", "building:min_level": "2"}), 6.3)
+        self.assertEqual(building_base_offset({"building:part": "yes"}), 0.0)
+        valid = {"building:part": "yes", "height": "12 m", "min_height": "4 m"}
+        invalid = {"building:part": "yes", "height": "4 m", "min_height": "4 m"}
+        self.assertLess(building_base_offset(valid), building_height(valid)[0] - 0.05)
+        self.assertGreaterEqual(building_base_offset(invalid), building_height(invalid)[0] - 0.05)
+
     def test_building_part_metadata_and_parent_split(self):
         form = building_form({"building:part": "commercial", "building:levels": "3", "roof:shape": "flat"})
         self.assertTrue(form["building_part"])
@@ -71,7 +81,6 @@ class BuildingsTests(unittest.TestCase):
         self.assertTrue(residual.covers(Point(15, 10)))
         self.assertFalse(residual.covers(Point(5, 10)))
         self.assertFalse(residual.covers(Point(25, 10)))
-        # A mostly external part must not carve a hole into the registered parent.
         external = Polygon([(28, 0), (40, 0), (40, 20), (28, 20)])
         self.assertAlmostEqual(split_parent_by_parts(parent, [external]).area, parent.area, places=5)
 
