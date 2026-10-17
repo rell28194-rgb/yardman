@@ -1,8 +1,8 @@
 {
-  "format_version": 3,
+  "format_version": 4,
   "lane": "codex/vehicle-production-001",
   "base_owner_build_source": "71199ca05ca16084637872927e7b27973a72da0a",
-  "owner_feedback_date": "2026-10-16",
+  "owner_feedback_date": "2026-10-17",
   "policy": {
     "engine": "Godot 4.7.2",
     "production_runtime": "godot/",
@@ -11,7 +11,7 @@
     "fleet_scope": "all recoverable vehicles, not one-at-a-time hero work",
     "source_fusion": {
       "required_for_every_active_vehicle": true,
-      "rule": "Search and exploit both Beta1 and Beta2 for every active vehicle. Choose the strongest legally usable body, interior, wheels, tyres, lights, glass, materials, textures, rigging, damage parts and LOD source from either library; combine complementary components when provenance and fit are valid. Do not stop after finding one usable source in one beta.",
+      "rule": "Search and exploit both Beta1 and Beta2 for every active vehicle. Choose the strongest owner-authorized body, interior, wheels, tyres, lights, glass, materials, textures, rigging, damage parts and LOD source from either library; combine complementary components when provenance and fit are valid. Do not stop after finding one usable source in one beta.",
       "beta1_roles": [
         "CarX Drift vehicle bodies/interiors/parts/materials",
         "Mechanic vehicle/part candidates",
@@ -28,25 +28,22 @@
       "status": "accepted_current_state_deprioritized",
       "priority": "reference_not_primary_focus",
       "active_work": "opportunistic_and_shared_fleet_improvements_only",
-      "rule": "Crown007 is in a good accepted state and is the current quality reference. Do not treat it as permanently finished. Do not spend the main vehicle-production budget polishing it while other cars are missing. Apply shared material, LOD, wheel, damage, memory or pipeline improvements when they materially benefit Crown without displacing fleet expansion."
+      "rule": "Crown007 is the accepted reference-quality vehicle. Never degrade it. Apply shared fleet improvements only when they preserve or improve the accepted result."
     },
     "porsche": {
-      "authorized": false,
-      "rule": "Do not recover, reproduce, badge, brand, or increase Porsche/992 fidelity. Keep Porsche source media excluded unless owner rights status changes."
+      "authorized": true,
+      "authorization_date": "2026-10-17",
+      "historical_exclusion_flags": "superseded_for_vehicle_production_recovery",
+      "rule": "Porsche recovery is owner-authorized in this vehicle-production lane. Exact model, generation and trim evidence remains mandatory. Never relabel an unrelated Porsche generation as a 992; preserve exact source identity and provenance for every recovered component."
     },
-    "lod_triangle_caps": {
-      "LOD0": 120000,
-      "LOD1": 45000,
-      "LOD2": 15000,
-      "LOD3": 4000
+    "lane_boundary": {
+      "map_branch": "codex/map-cars-reset-001",
+      "vehicle_lane_owns": ["selector-safe metadata", "clean model instantiation", "local collider/wheel/rig alignment", "forward/reverse/steering/braking behavior in isolated vehicle test scene", "park/exit/re-enter hooks", "camera attachment points", "clean reset/despawn without duplicate or orphan nodes"],
+      "map_lane_owns": ["terrain spawn penetration", "road support", "world collision layers", "streaming failures", "map/runtime defects that immobilize vehicles"],
+      "integration_rule": "Keep vehicle-production separate from map-cars-reset-001 until map visual acceptance."
     },
-    "distance_policy_m": {
-      "LOD0": [0, 18],
-      "LOD1": [18, 55],
-      "LOD2": [55, 140],
-      "LOD3": [140, 300],
-      "impostor_or_cull": [300, null]
-    }
+    "lod_triangle_caps": {"LOD0": 120000, "LOD1": 45000, "LOD2": 15000, "LOD3": 4000},
+    "distance_policy_m": {"LOD0": [0, 18], "LOD1": [18, 55], "LOD2": [55, 140], "LOD3": [140, 300], "impostor_or_cull": [300, null]}
   },
   "vehicles": [
     {
@@ -57,30 +54,16 @@
       "priority": "reference_not_primary_focus",
       "owner_visual_acceptance_date": "2026-10-16",
       "rights_status": "owner-authorized Toyota source; private media",
-      "remaining_work_policy": "Keep current accepted state stable. Permit opportunistic/shared-fleet improvements, later LOD/material/wheel/damage/performance refinement, and regression fixes. Do not hold back production of the rest of the roster for Crown polish."
+      "remaining_work_policy": "Keep current accepted state stable. Permit shared-fleet improvements only when non-regressive."
     },
     {
       "id": "toyota_chaser_v_candidate",
       "display_name": "Toyota Chaser V",
       "asset": "road_car.glb",
       "status": "active_full_source_fusion",
-      "rights_status": "owner-authorized non-Porsche vehicle",
-      "beta1": {
-        "source": "CarX Drift / ToyotaChaserV",
-        "known": {
-          "triangles": 32067,
-          "vertices": 27886,
-          "materials": 17,
-          "bounds_m": [1.957, 1.344, 4.831],
-          "wheelbase_m": 2.673
-        },
-        "material_recovery": "PaintStitches alpha/depth/normal-map behavior recovered; broader close-view cleanup remains useful"
-      },
-      "beta2": {
-        "status": "mandatory_search_and_component_match",
-        "sources": ["Car Parking Multiplayer", "Real Racing 3"],
-        "targets": ["matching body alternative", "interior", "wheel/tyre set", "glass", "lamps", "paint/material stack", "LOD family", "damage/body parts"]
-      },
+      "rights_status": "owner-authorized vehicle",
+      "beta1": {"source": "CarX Drift / ToyotaChaserV", "known": {"triangles": 32067, "vertices": 27886, "materials": 17, "bounds_m": [1.957, 1.344, 4.831], "wheelbase_m": 2.673}, "material_recovery": "PaintStitches alpha/depth/normal-map behavior recovered; broader close-view cleanup remains useful"},
+      "beta2": {"status": "mandatory_search_and_component_match", "sources": ["Car Parking Multiplayer", "Real Racing 3"], "targets": ["matching body alternative", "interior", "wheel/tyre set", "glass", "lamps", "paint/material stack", "LOD family", "damage/body parts"]},
       "rule": "Do not relabel as Mark X. Build the final Chaser from the best compatible Beta1+Beta2 component set, then author missing LODs."
     },
     {
@@ -88,23 +71,19 @@
       "display_name": "Toyota Mark X",
       "status": "active_identity_and_source_fusion",
       "rights_status": "owner-authorized Toyota source",
-      "beta1": {
-        "status": "searched_no_verified_MarkX_yet",
-        "warning": "Toyota Mark 2 and Toyota Chaser V are distinct vehicles and are not Mark X substitutes."
-      },
-      "beta2": {
-        "status": "mandatory_catalog_identity_search",
-        "sources": ["Car Parking Multiplayer", "Real Racing 3"]
-      },
+      "beta1": {"status": "searched_no_verified_MarkX_yet", "warning": "Toyota Mark 2 and Toyota Chaser V are distinct vehicles and are not Mark X substitutes."},
+      "beta2": {"status": "mandatory_catalog_identity_search", "sources": ["Car Parking Multiplayer", "Real Racing 3"]},
       "rule": "Do not promote until exact Mark X identity is verified; once found, still search the other beta for complementary parts/materials/LODs."
     },
     {
       "id": "port_royal_992",
-      "display_name": "Port Royal 992",
-      "status": "frozen_fictional_no_porsche_source_work",
-      "active_work": false,
-      "rights_status": "Porsche excluded",
-      "rule": "No Porsche source asset, branding, badge, body-faithful reproduction, or fidelity escalation in this lane."
+      "display_name": "Port Royal 992 / Porsche 992 identity target",
+      "status": "active_exact_identity_and_source_fusion",
+      "active_work": true,
+      "rights_status": "owner-authorized Porsche vehicle-production recovery",
+      "beta1": {"status": "mandatory_exact_model_generation_trim_search"},
+      "beta2": {"status": "mandatory_exact_model_generation_trim_search", "sources": ["Car Parking Multiplayer", "Real Racing 3"]},
+      "rule": "Recover Porsche source components only with exact source identity/provenance. A Porsche hit is not sufficient evidence of 992 identity; unrelated generations or trims must remain separately identified and must never be relabeled as a 992."
     }
   ]
 }
