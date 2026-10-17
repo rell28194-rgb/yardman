@@ -6,6 +6,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "godot" / "tools"))
 
 from building_semantics import (
+    declared_shell_family,
+    grammar_profile,
     inherit_declared_envelope,
     material_family,
     reconstruction_confidence,
@@ -24,11 +26,14 @@ class BuildingSemanticsTests(unittest.TestCase):
         self.assertEqual(result["roof_material"], "metal")
         self.assertEqual(result["wall_material_raw"], "corrugated_metal")
         self.assertEqual(result["roof_material_raw"], "zinc")
+        self.assertEqual(result["declared_shell_family"], "metal_clad_lightweight")
 
     def test_mixed_envelopes_remain_mixed(self):
         result = source_envelope({"building:material": "wood", "roof:material": "sheet_metal"})
         self.assertEqual(result["wall_material"], "timber")
         self.assertEqual(result["roof_material"], "metal")
+        self.assertEqual(result["declared_shell_family"], "timber_metal")
+        self.assertEqual(declared_shell_family("concrete", "zinc"), "masonry_metal")
 
     def test_parent_evidence_only_fills_missing_part_tags(self):
         parent = {"building:material": "concrete", "roof:material": "zinc", "building:colour": "cream", "tourism": "hotel"}
@@ -55,6 +60,8 @@ class BuildingSemanticsTests(unittest.TestCase):
         self.assertEqual(use_class({"building": "yes", "tourism": "hotel"}), "lodging")
         self.assertEqual(use_class({"building": "yes", "shop": "supermarket"}), "retail")
         self.assertEqual(use_class({"building": "apartments"}), "residential_multi")
+        self.assertEqual(grammar_profile({"building": "yes", "amenity": "school"}), "jamaica_education_v0_1")
+        self.assertEqual(grammar_profile({"building": "house"}), "jamaica_residential_v0_1")
 
     def test_source_envelope_keeps_construction_state(self):
         result = source_envelope({"building": "construction", "construction": "house"})
