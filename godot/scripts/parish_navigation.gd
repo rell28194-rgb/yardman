@@ -150,7 +150,7 @@ func _point_in_ring(point: Vector2, ring: Variant) -> bool:
     if not ring is Array or ring.size() < 3:
         return false
     var inside := false
-    var previous := ring.size() - 1
+    var previous: int = ring.size() - 1
     for index in range(ring.size()):
         var a = ring[index]
         var b = ring[previous]
@@ -173,9 +173,6 @@ func set_map_open(value: bool) -> void:
     if map_open:
         if bool(_hud.get("menu_open")) and _hud.has_method("set_menu_open"):
             _hud.call("set_menu_open", false)
-        # Main already treats hud.menu_open as a traversal/input gate. Set the
-        # state directly so the parish map blocks movement without opening the
-        # settings drawer behind it.
         _hud.set("menu_open", true)
         _hud.set_process_unhandled_key_input(false)
         _touch.set("input_enabled", false)
