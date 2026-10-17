@@ -1,0 +1,43 @@
+{
+  "checkpoint": "beta1-stock-fitment-correction-001",
+  "format_version": 1,
+  "basis": "Use exact stock Desc axle spacing and tyre dimensions as the quality target while preserving each recovered body's current axle midpoint until body-origin mapping is independently proven.",
+  "policy": {
+    "proposal_only": true,
+    "do_not_apply_blindly": true,
+    "preserve_body_axle_midpoint": true,
+    "do_not_promote_until_rerendered": true,
+    "current_generic_wheel_radius_m": 0.353042
+  },
+  "findings": [
+    "The shared current WheelStyle1 assembly is materially oversized for all three exact stock descriptors.",
+    "ToyotaMark2 wheelbase is already essentially exact, but the current conversion loses the source rear-track stagger by about 113 mm total width.",
+    "SkylineR32 needs the largest confirmed axle correction: current wheelbase is about 130 mm longer than the Stock Desc and both tracks are about 83-93 mm wider.",
+    "HondaS2000 axle positions are close, but its source tyres are staggered 205/55R16 front and 225/50R16 rear while the current shared wheel geometry does not preserve that fitment."
+  ],
+  "vehicles": [
+    {
+      "id": "ToyotaMark2",
+      "current": {"front_half_track_m": 0.736, "rear_half_track_m": 0.736, "front_z_m": -1.683, "rear_z_m": 0.993, "wheel_radius_m": 0.353042},
+      "source_target_preserving_current_midpoint": {"front_half_track_m": 0.74250006, "rear_half_track_m": 0.7925, "front_z_m": -1.684000045, "rear_z_m": 0.994000045, "front_tyre_radius_m": 0.3284, "rear_tyre_radius_m": 0.3284},
+      "generic_radius_oversize_m": {"front": 0.024642, "rear": 0.024642},
+      "required_action": "recover stock cap/tyre geometry, restore rear track stagger, render and re-grade"
+    },
+    {
+      "id": "SkylineR32",
+      "current": {"front_half_track_m": 0.784, "rear_half_track_m": 0.784, "front_z_m": -1.377, "rear_z_m": 1.345, "wheel_radius_m": 0.353042},
+      "source_target_preserving_current_midpoint": {"front_half_track_m": 0.7375, "rear_half_track_m": 0.7425, "front_z_m": -1.3120000645, "rear_z_m": 1.2800000645, "front_tyre_radius_m": 0.3139, "rear_tyre_radius_m": 0.3099},
+      "generic_radius_oversize_m": {"front": 0.039142, "rear": 0.043142},
+      "required_action": "resolve R32-vs-R34 Beta2 audio identity conflict, rebuild axle geometry to source fitment, render and re-grade"
+    },
+    {
+      "id": "HondaS2000",
+      "current": {"front_half_track_m": 0.728, "rear_half_track_m": 0.728, "front_z_m": -1.202, "rear_z_m": 1.11, "wheel_radius_m": 0.353042},
+      "source_target_preserving_current_midpoint": {"front_half_track_m": 0.7375, "rear_half_track_m": 0.7375, "front_z_m": -1.219000095, "rear_z_m": 1.127000095, "front_tyre_radius_m": 0.31595, "rear_tyre_radius_m": 0.3157},
+      "generic_radius_oversize_m": {"front": 0.037092, "rear": 0.037342},
+      "required_action": "recover exact stock cap/tyre geometry, preserve front/rear tyre stagger, render and re-grade"
+    }
+  ],
+  "promotion": "hold",
+  "quantity_gate_open": false
+}
