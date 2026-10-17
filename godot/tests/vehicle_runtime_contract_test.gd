@@ -2,7 +2,10 @@ extends SceneTree
 
 const RuntimeContract = preload("res://scripts/vehicle_runtime_contract.gd")
 
-func _init() -> void:
+func _initialize() -> void:
+    call_deferred("_run")
+
+func _run() -> void:
     var vehicle := CharacterBody3D.new()
     vehicle.name = "IsolatedVehicle"
     root.add_child(vehicle)
