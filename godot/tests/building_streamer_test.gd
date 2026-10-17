@@ -17,6 +17,12 @@ func _record(identifier: String) -> Array:
         [[[0, 5, 0], [20, 5, 0], [20, 5, 20], [0, 5, 20]]],
         [[0, 0], [20, 0], [20, 20], [0, 20]], [0, 2, 1, 0, 3, 2]]
 
+func _source_record(identifier: String, shape: String = "gabled") -> Array:
+    var record := _record(identifier)
+    record[2] = 1
+    record.append({"roof_shape": shape, "roof_height_m": 1.2, "roof_orientation": "along"})
+    return record
+
 func _check_visible_winding(mesh: ArrayMesh, label: String) -> void:
     var arrays := mesh.surface_get_arrays(0)
     var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
@@ -101,6 +107,18 @@ func _run() -> void:
         var irregular := _record("irregular")
         irregular[5][0][2][0] = 14
         _check(streamer._inferred_hip_roof(irregular).is_empty(), "An irregular footprint was replaced with a rectangle")
+        var source_gable := _source_record("source-gable")
+        var source_roof: Dictionary = streamer._source_roof(source_gable)
+        _check(not source_roof.is_empty() and source_roof.shape == "gabled", "Source gabled roof metadata did not produce roof massing")
+        _check(is_equal_approx(float(source_roof.roof_y), 9.4) and is_equal_approx(float(source_roof.eaves_y), 8.2), "Source roof height changed the registered maximum building height")
+        var source_hip := _source_record("source-hip", "hipped")
+        _check(streamer._source_roof(source_hip).get("shape", "") == "hipped", "Source hipped roof metadata was ignored")
+        var source_pyramid := _source_record("source-pyramid", "pyramidal")
+        var pyramid: Dictionary = streamer._source_roof(source_pyramid)
+        _check(not pyramid.is_empty() and (pyramid.ridge_a as Vector2).is_equal_approx(pyramid.ridge_b as Vector2), "Source pyramidal roof did not converge to an apex")
+        var source_irregular := _source_record("source-irregular")
+        source_irregular[5][0][2][0] = 14
+        _check(streamer._source_roof(source_irregular).is_empty(), "Irregular source footprint was forced into a rectangular roof")
         var wall_material := walls.mesh.surface_get_material(0) as StandardMaterial3D
         var roof_material := roofs.mesh.surface_get_material(0) as StandardMaterial3D
         _check(wall_material != null and wall_material != wall_source and wall_material.albedo_color == wall_source.albedo_color, "Imported wall material was not copied into the merged mesh")
@@ -146,7 +164,7 @@ func _run() -> void:
         var walls := streamer._loaded["160:0"].root.get_node("Walls") as MeshInstance3D
         _check(is_equal_approx(walls.visibility_range_end, streamer.draw_distance + streamer.cell_size), "Imported material bypassed live mesh visibility settings")
         _check(walls.mesh.surface_get_material(0) is StandardMaterial3D, "Travel discarded the supplied imported wall material")
-    print("YARDMAN_BUILDING_STREAMER_TEST %s cells=1 meshes=1 collision=1 cancel=1 rebase=1 bounds=1 corruption=1 imported_materials=1 art_geometry_invariance=1 clockwise_normals=1 inferred_hip_roof=1 source_heights_courtyards_preserved=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_BUILDING_STREAMER_TEST %s cells=1 meshes=1 collision=1 cancel=1 rebase=1 bounds=1 corruption=1 imported_materials=1 art_geometry_invariance=1 clockwise_normals=1 inferred_hip_roof=1 source_roof_massing=1 source_heights_courtyards_preserved=1" % ("PASS" if failures == 0 else "FAIL"))
     streamer.queue_free()
     await process_frame
     quit(0 if failures == 0 else 1)
