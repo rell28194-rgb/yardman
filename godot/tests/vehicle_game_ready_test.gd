@@ -110,9 +110,9 @@ func _exercise_vehicle(scene: Node3D, vehicle_id: String, index: int) -> void:
     _check(controller.speed_mps == 0.0 and car.velocity == Vector3.ZERO, "%s reset left residual motion" % vehicle_id)
     _check(bool(controller.runtime_contract().get("ready", false)), "%s runtime contract regressed after lifecycle exercise" % vehicle_id)
 
-    var car_name := car.name
+    var car_path := NodePath(str(car.name))
     car.free()
-    _check(scene.get_node_or_null(car_name) == null, "%s despawn left the vehicle node attached" % vehicle_id)
+    _check(scene.get_node_or_null(car_path) == null, "%s despawn left the vehicle node attached" % vehicle_id)
 
 func _run() -> void:
     var scene := Node3D.new()
