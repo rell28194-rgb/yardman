@@ -1,0 +1,10 @@
+[gd_resource type="Resource" format=3]
+
+[resource]
+resource_name = "Crown007Identity"
+metadata/source_asset = "toyota_crown_2013.glb"
+metadata/private_owner_identity = "Crown007"
+metadata/import_scene_sha256 = "7babf2e065a18e02f2fc215b011bcfea359851991c1f0700ea571e5c7365c385"
+metadata/engine_texture_sha256 = "462ab92f7846bc75e815afba56cbd8e5c980e2743ffdd7e9789d6a4228d008dc"
+metadata/lights_texture_sha256 = "fe84217545ee27286b8526c6341c2e618aee199d91ef682ab939e0791a94c439"
+metadata/purpose = "APK provenance marker; vehicle production remains a separate lane"
