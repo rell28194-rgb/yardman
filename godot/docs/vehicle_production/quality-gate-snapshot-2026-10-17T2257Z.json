@@ -1,0 +1,50 @@
+{
+  "checkpoint": "quality-gate-snapshot-2026-10-17T2257Z",
+  "branch": "codex/vehicle-production-001",
+  "inspected_head": "110a13023687f183aafe71e6c374100832e992d4",
+  "policy": {
+    "quality_before_quantity": true,
+    "crown007_protected_reference": true,
+    "dual_beta_required": true,
+    "load_success_is_not_acceptance": true,
+    "map_world_defects_excluded": true,
+    "package_game_apk": false,
+    "merge_pr4": false
+  },
+  "cohort_state": {
+    "source": "beta1-quality-cohort-002.json",
+    "candidates": 10,
+    "promoted": 0,
+    "quantity_gate_open": false,
+    "rig_contract_pass": 10,
+    "interior_evidence": 10,
+    "exact_or_strong_beta2_identity_pass": 5
+  },
+  "acceptance_dimensions": [
+    "identity_confidence",
+    "exterior_geometry",
+    "materials_textures",
+    "interior_completeness",
+    "wheel_rig_correctness",
+    "collider_alignment",
+    "control_behavior",
+    "hook_correctness",
+    "lifecycle_cleanliness",
+    "crown007_non_regression"
+  ],
+  "current_hard_blocks": [
+    "Exact stock wheel/tire fitment is not yet validated across the cohort; existing recovered candidates still carry shared WheelStyle1/1.1-scale fitment evidence.",
+    "ToyotaAltezza requires track/body fitment correction and rerender verification.",
+    "SilviaS13R and SkylineR32 require Beta2 generation/identity conflict resolution.",
+    "NissanLaurelC33 lacks the required exact Beta2 cross-source match in the current decode.",
+    "MitsubishiEvo9 requires stock-vs-custom-livery variant resolution.",
+    "No candidate may be promoted until isolated runtime evidence covers forward, reverse, steering, braking, park/exit/re-enter, reset/despawn, hook placement, and duplicate/orphan cleanliness.",
+    "Crown007 must remain unchanged and must pass non-regression comparison before any cohort promotion."
+  ],
+  "new_capability_at_head": {
+    "tool": "godot/tools/vehicle_production/extract_unity2018_mesh_glb.py",
+    "purpose": "strict Unity 2018.2 serialized Mesh recovery to evidence-backed glTF/GLB",
+    "promotion_effect": "enables exact source geometry recovery but does not itself satisfy visual/runtime acceptance"
+  },
+  "next_execution_gate": "Use exact recovered source geometry and stock fitment metadata to repair the smallest identity-clean candidates first, rerender/re-audit them, then run isolated vehicle lifecycle/control tests and Crown007 non-regression before promotion."
+}
