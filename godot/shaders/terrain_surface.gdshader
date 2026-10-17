@@ -13,6 +13,8 @@ uniform sampler2D tunnel_portal_mask : filter_nearest, repeat_disable;
 uniform bool tunnel_portal_mask_enabled = false;
 uniform sampler2D hydrology_channel_mask : filter_nearest, repeat_disable;
 uniform bool hydrology_channel_mask_enabled = false;
+uniform sampler2D road_earthwork_mask : filter_nearest, repeat_disable;
+uniform bool road_earthwork_mask_enabled = false;
 uniform float terrain_tile_size = 4096.0;
 uniform vec2 tile_origin = vec2(0.0);
 uniform bool overview = false;
@@ -40,6 +42,12 @@ void fragment() {
     // terrain instead of rendered as a surface decal. Culvert/underground and
     // unresolved road-crossing protection never enter this mask.
     if (hydrology_channel_mask_enabled && texture(hydrology_channel_mask, terrain_uv).r > 0.5) {
+        discard;
+    }
+    // Source road cut/fill corridors get their own mask. DEM-only side-hill
+    // candidates never reach this mask: only explicit OSM cutting/embankment
+    // records with sufficient DEM support can replace the coarse terrain skin.
+    if (road_earthwork_mask_enabled && texture(road_earthwork_mask, terrain_uv).r > 0.5) {
         discard;
     }
 
@@ -71,7 +79,6 @@ void fragment() {
             + texture(reference_dry_grass, p.xy / 8.0).rgb * blend.z;
         grass = mix(wet, dry_texture, dry);
     }
-    // Keep recovered texture variation but constrain its lighting response.
     grass *= mix(0.78, 1.12, patch.r) * mix(0.88, 1.08, macro);
     float grass_luma = dot(grass, vec3(0.2126, 0.7152, 0.0722));
     grass = mix(vec3(grass_luma), grass, 0.78) * 0.88;
