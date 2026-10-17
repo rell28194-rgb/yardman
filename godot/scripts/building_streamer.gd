@@ -336,7 +336,9 @@ func _prepare_geometry() -> void:
             break
 
 func _append_building(record: Variant) -> bool:
-    if not record is Array or record.size() != 8 or not record[5] is Array or not record[6] is Array or not record[7] is Array or not is_finite(float(record[4])):
+    if not record is Array or record.size() < 8 or record.size() > 9 or not record[5] is Array or not record[6] is Array or not record[7] is Array or not is_finite(float(record[4])):
+        return false
+    if record.size() == 9 and not record[8] is Dictionary:
         return false
     for ring: Variant in record[5]:
         if not ring is Array or ring.size() < 3:
@@ -352,9 +354,11 @@ func _append_building(record: Variant) -> bool:
     color.a = float(variant) / float(PALETTE.size() - 1)
     var roof_color := Color(0.43, 0.45, 0.43).lerp(Color(0.61, 0.33, 0.24), float(variant % 3) * 0.28)
     var roof_y := float(record[4])
-    var hip := _inferred_hip_roof(record)
-    var wall_top: float = float(hip.get("eaves_y", roof_y))
-    roof_color.a = 1.0 if not hip.is_empty() else 0.0
+    var roof_detail := _source_roof(record)
+    if roof_detail.is_empty():
+        roof_detail = _inferred_hip_roof(record)
+    var wall_top: float = float(roof_detail.get("eaves_y", roof_y))
+    roof_color.a = 1.0 if not roof_detail.is_empty() else 0.0
     var facade := _plan_facade(record, wall_top)
     if not facade.is_empty():
         _build.facades.append(facade)
@@ -399,8 +403,11 @@ func _append_building(record: Variant) -> bool:
             _append_clockwise("wall", offset + 2, offset + 1, offset + 3, normal)
             station += length
         ring_index += 1
-    if not hip.is_empty():
-        _append_hip_roof(hip, roof_color)
+    if not roof_detail.is_empty():
+        if str(roof_detail.get("shape", "hipped")) == "gabled":
+            _append_gabled_roof(roof_detail, roof_color)
+        else:
+            _append_hip_roof(roof_detail, roof_color)
         return true
     var roof_offset: int = _build.roof_vertices.size()
     for point in record[6]:
@@ -432,6 +439,100 @@ func _append_clockwise(kind: String, a: int, b: int, c: int, normal: Vector3) ->
         b = c
         c = swap
     _build[kind + "_indices"].append_array(PackedInt32Array([a, b, c]))
+
+func _source_rectangle_frame(record: Array) -> Dictionary:
+    if record.size() < 9 or not record[8] is Dictionary or record[5].size() != 1:
+        return {}
+    var ring: Array = record[5][0]
+    var corners: Array[Vector2] = []
+    var foundation := -INF
+    for index in ring.size():
+        var before := Vector2(float(ring[posmod(index - 1, ring.size())][0]), float(ring[posmod(index - 1, ring.size())][2]))
+        var point := Vector2(float(ring[index][0]), float(ring[index][2]))
+        var after := Vector2(float(ring[(index + 1) % ring.size()][0]), float(ring[(index + 1) % ring.size()][2]))
+        foundation = maxf(foundation, float(ring[index][1]))
+        var a := point - before
+        var b := after - point
+        if a.length_squared() > 0.000001 and b.length_squared() > 0.000001 and absf(a.normalized().cross(b.normalized())) > 0.002:
+            corners.append(point)
+    if corners.size() != 4:
+        return {}
+    var edges: Array[Vector2] = []
+    var center := Vector2.ZERO
+    for index in range(4):
+        var edge := corners[(index + 1) % 4] - corners[index]
+        if edge.length() < 2.0 or edge.length() > 160.0:
+            return {}
+        edges.append(edge)
+        center += corners[index] * 0.25
+    for index in range(4):
+        if absf(edges[index].normalized().dot(edges[(index + 1) % 4].normalized())) > 0.04:
+            return {}
+        if absf(edges[index].length() - edges[(index + 2) % 4].length()) > 0.15:
+            return {}
+    var long_index := 0 if edges[0].length() >= edges[1].length() else 1
+    var axis := edges[long_index].normalized()
+    var across := Vector2(-axis.y, axis.x)
+    return {"center": center, "axis": axis, "across": across,
+        "half_length": edges[long_index].length() * 0.5,
+        "half_width": edges[(long_index + 1) % 4].length() * 0.5,
+        "foundation": foundation}
+
+func _source_roof(record: Array) -> Dictionary:
+    if record.size() < 9 or not record[8] is Dictionary:
+        return {}
+    var form: Dictionary = record[8]
+    var shape := str(form.get("roof_shape", "")).to_lower()
+    match shape:
+        "hip", "hipped":
+            shape = "hipped"
+        "pyramid", "pyramidal":
+            shape = "pyramidal"
+        "gable", "gabled":
+            shape = "gabled"
+        _:
+            return {}
+    var frame := _source_rectangle_frame(record)
+    if frame.is_empty():
+        return {}
+    var axis: Vector2 = frame.axis
+    var across: Vector2 = frame.across
+    var half_length := float(frame.half_length)
+    var half_width := float(frame.half_width)
+    if str(form.get("roof_orientation", "along")) == "across":
+        var old_axis := axis
+        axis = across
+        across = old_axis
+        var old_length := half_length
+        half_length = half_width
+        half_width = old_length
+    var height := float(record[1])
+    var rise := 0.0
+    if form.has("roof_height_m"):
+        rise = float(form.roof_height_m)
+    elif form.has("roof_levels"):
+        rise = float(form.roof_levels) * 2.4
+    else:
+        rise = clampf(minf(half_width * 0.42, height * 0.28), 0.45, 2.8)
+    rise = minf(rise, height - 1.8)
+    if rise < 0.25:
+        return {}
+    var roof_y := float(record[4])
+    var eaves_y := roof_y - rise
+    if eaves_y - float(frame.foundation) < 1.8:
+        return {}
+    var center: Vector2 = frame.center
+    var x := axis * half_length
+    var z := across * half_width
+    var points: Array[Vector2] = [center - x - z, center + x - z, center + x + z, center - x + z]
+    var ridge_extent := half_length
+    if shape == "hipped":
+        ridge_extent = maxf(0.0, half_length - half_width)
+    elif shape == "pyramidal":
+        ridge_extent = 0.0
+    return {"shape": shape, "corners": points,
+        "ridge_a": center - axis * ridge_extent, "ridge_b": center + axis * ridge_extent,
+        "eaves_y": eaves_y, "roof_y": roof_y, "source": true}
 
 func _inferred_hip_roof(record: Array) -> Dictionary:
     # Source heights/levels, courtyards and irregular footprints retain the
@@ -508,6 +609,35 @@ func _append_hip_roof(hip: Dictionary, color: Color) -> void:
         var offset: int = _build.roof_vertices.size()
         var horizontal: Vector3 = (face[1] - face[0]).normalized()
         var up_slope: Vector3 = normal.cross(horizontal).normalized()
+        for point: Vector3 in face:
+            _build.roof_vertices.append(point)
+            _build.roof_normals.append(normal)
+            _build.roof_uvs.append(Vector2((point - face[0]).dot(horizontal), (point - face[0]).dot(up_slope)))
+            _build.roof_colors.append(color)
+        _append_clockwise("roof", offset, offset + 1, offset + 2, normal)
+        if face.size() == 4:
+            _append_clockwise("roof", offset, offset + 2, offset + 3, normal)
+
+func _append_gabled_roof(roof: Dictionary, color: Color) -> void:
+    var corners: Array = roof.corners
+    var ridge_a := Vector3(float(roof.ridge_a.x), float(roof.roof_y), float(roof.ridge_a.y))
+    var ridge_b := Vector3(float(roof.ridge_b.x), float(roof.roof_y), float(roof.ridge_b.y))
+    var eaves: Array[Vector3] = []
+    for corner: Vector2 in corners:
+        eaves.append(Vector3(corner.x, float(roof.eaves_y), corner.y))
+    var faces: Array = [
+        [eaves[0], eaves[1], ridge_b, ridge_a],
+        [eaves[2], eaves[3], ridge_a, ridge_b],
+        [eaves[3], eaves[0], ridge_a],
+        [eaves[1], eaves[2], ridge_b],
+    ]
+    for face: Array in faces:
+        var normal: Vector3 = (face[1] - face[0]).cross(face[2] - face[0]).normalized()
+        if normal.y < 0.0 and face.size() == 4:
+            normal = -normal
+        var offset: int = _build.roof_vertices.size()
+        var horizontal: Vector3 = (face[1] - face[0]).normalized()
+        var up_slope := Vector3.UP if face.size() == 3 else normal.cross(horizontal).normalized()
         for point: Vector3 in face:
             _build.roof_vertices.append(point)
             _build.roof_normals.append(normal)
