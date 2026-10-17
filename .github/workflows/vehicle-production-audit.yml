@@ -50,7 +50,7 @@ jobs:
           set -euo pipefail
           "$GODOT_BIN" --headless --path godot --script res://tests/vehicle_game_ready_test.gd
 
-      - name: Protect existing Crown and controller behavior
+      - name: Protect existing controller and optional reference behavior
         shell: bash
         run: |
           set -euo pipefail
@@ -120,6 +120,52 @@ jobs:
           assert chaser['beta1']['source']
           assert chaser['beta2']['status'] == 'mandatory_search_and_component_match'
           print('YARDMAN_FULL_FLEET_SOURCE_POLICY_PASS')
+          PY
+
+      - name: Enforce quality-first promotion gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          cohort = json.loads(Path('godot/docs/vehicle_production/game-readiness-quality-cohort-001.json').read_text())
+          assert cohort['quality_policy']['order'] == ['quality', 'critical_observation_and_grading', 'quantity']
+          assert cohort['quality_policy']['runtime_pass_is_not_asset_acceptance'] is True
+          assert cohort['quality_policy']['dual_beta_search_required'] is True
+          assert cohort['quality_policy']['crown007_non_regression_required'] is True
+          assert cohort['quantity_release_gate']['open'] is False
+          assert cohort['runtime_validation']['run_id'] == 39061969832
+          assert cohort['runtime_validation']['conclusion'] == 'success'
+
+          vehicles = {v['id']: v for v in cohort['cohort']}
+          crown = vehicles['toyota_crown']
+          assert crown['runtime_consumable'] is True
+          assert crown['visual_status'] == 'owner_accepted_reference_baseline'
+          assert crown['private_hero_render_revalidated_in_run_39061969832'] is False
+          assert crown['asset_promotion'] == 'accepted_baseline_preserve_not_requalified'
+
+          mark_x = vehicles['toyota_mark_x']
+          assert mark_x['runtime_consumable'] is True
+          assert mark_x['catalog_hero_scene'] == ''
+          assert mark_x['asset_promotion'] == 'hold'
+          assert mark_x['grade'] == 'F_ASSET_IDENTITY'
+
+          p992 = vehicles['port_royal_992']
+          assert p992['runtime_consumable'] is True
+          assert p992['catalog_hero_scene'] == ''
+          assert p992['asset_promotion'] == 'hold'
+          assert p992['grade'] == 'F_ASSET_IDENTITY'
+
+          rr3 = json.loads(Path('godot/docs/vehicle_production/beta1-beta2-rr3-fusion-batch-003.json').read_text())
+          assert rr3['rr3_search_complete'] is True
+          assert sum(rr3['mark_x_search']['terms'].values()) == 0
+
+          porsche = json.loads(Path('godot/docs/vehicle_production/carparking-porsche-rights-refresh-001.json').read_text())
+          assert porsche['summary']['992_verified_sources'] == 0
+          assert porsche['992_gate']['status'] == 'NO_VERIFIED_992_GEOMETRY_YET'
+          print('YARDMAN_QUALITY_FIRST_PROMOTION_GATE_PASS')
           PY
 
       - name: Gate full Car Parking bundle decode without historical Porsche exclusion policy
