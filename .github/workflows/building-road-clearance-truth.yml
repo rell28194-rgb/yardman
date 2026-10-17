@@ -1,0 +1,64 @@
+name: Yardman Building Road Clearance Truth
+
+on:
+  push:
+    branches:
+      - codex/hydrology-incision-001
+    paths:
+      - 'godot/tools/resolve_building_road_conflicts.py'
+      - 'godot/tests/test_building_road_clearance.py'
+      - '.github/workflows/building-road-clearance-truth.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  national-building-clearance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile and validate national visible building envelope clearance
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4' 'osmium>=4,<5' 'numpy>=2,<3' 'rasterio>=1.4,<2' 'shapely>=2.1,<3'
+          python godot/tests/test_building_road_clearance.py
+          wget -q https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf -O /tmp/jamaica.osm.pbf
+          python godot/tools/build_jamaica_roads.py /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096
+          python godot/tools/build_terrain.py /tmp/yardman-dem godot/data/roads/manifest.json godot/data/terrain --acquire
+          python godot/tools/build_jamaica_roads.py /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096 --terrain godot/data/terrain
+          python godot/tools/build_buildings.py /tmp/jamaica.osm.pbf godot/data/terrain godot/data/buildings
+          python godot/tools/resolve_building_road_conflicts.py godot/data/roads godot/data/terrain godot/data/buildings | tee /tmp/building-road-clearance.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path('godot/data/buildings/manifest.json').read_text())
+          report = json.loads(Path('godot/data/buildings/road_clearance_report.json').read_text())
+          stats = report.get('stats', {})
+          policy = manifest.get('road_clearance', {})
+          if float(policy.get('visual_envelope_margin_m', 0.0)) < 0.159:
+              raise SystemExit(f'visible roof envelope margin missing: {policy}')
+          if int(stats.get('adjusted_buildings', 0)) <= 0:
+              raise SystemExit(f'national pass adjusted no buildings: {stats}')
+          if int(stats.get('roof_rebuild_failures', 0)) != 0:
+              raise SystemExit(f'road clearance roof rebuild failures remain: {stats}')
+          print('YARDMAN_BUILDING_VISIBLE_ENVELOPE_CLEARANCE_PASS', json.dumps(stats, sort_keys=True))
+          PY
+
+      - name: Upload clearance diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Building-Road-Clearance-Truth
+          path: |
+            godot/data/buildings/road_clearance_report.json
+            godot/data/buildings/manifest.json
+            /tmp/building-road-clearance.log
+          retention-days: 7
+          compression-level: 6
