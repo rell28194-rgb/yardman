@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Compile OSM building footprints into indexed, independently compressed cells.
 
-Only original extrusions are produced. Source footprint coordinates and recorded
-height/levels remain distinguishable from inferred height and facade appearance.
+Registered source footprints, terrain-conformed foundations, recorded height/levels,
+and source building-form tags are preserved independently from presentation inference.
 """
 from __future__ import annotations
 import argparse
@@ -41,25 +41,73 @@ KINDS = {"house": 0, "detached": 0, "residential": 0, "apartments": 1,
          "garage": 5, "garages": 5, "shed": 5, "hut": 5}
 
 
-def parse_height(value: str) -> float | None:
+def parse_length(value: str, minimum=0.05, maximum=350.0) -> float | None:
     match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*(m|metres?|meters?|ft|feet|')?\s*", str(value), re.I)
     if not match:
         return None
     result = float(match[1]) * (0.3048 if (match[2] or "").lower() in {"ft", "feet", "'"} else 1.0)
-    return result if math.isfinite(result) and 1.0 <= result <= 350.0 else None
+    return result if math.isfinite(result) and minimum <= result <= maximum else None
+
+
+def parse_height(value: str) -> float | None:
+    return parse_length(value, 1.0, 350.0)
+
+
+def parse_levels(value: str, maximum=100.0) -> float | None:
+    try:
+        result = float(value)
+    except (ValueError, TypeError):
+        return None
+    return result if math.isfinite(result) and 0.5 <= result <= maximum else None
 
 
 def building_height(tags: dict) -> tuple[float, int]:
     measured = parse_height(tags.get("height", ""))
     if measured is not None:
         return measured, HEIGHT_MEASURED
-    try:
-        levels = float(tags.get("building:levels", ""))
-    except (ValueError, TypeError):
-        levels = 0.0
-    if math.isfinite(levels) and 0.5 <= levels <= 100.0:
+    levels = parse_levels(tags.get("building:levels", ""))
+    if levels is not None:
         return round(levels * 3.15 + 0.35, 3), HEIGHT_LEVELS
     return HEIGHT_DEFAULTS.get(tags.get("building", "yes"), 4.4), HEIGHT_INFERRED
+
+
+def building_form(tags: dict) -> dict:
+    """Keep only source-declared 3D form tags needed for registered massing.
+
+    These values are provenance, not a promise that every shape is rendered yet.
+    Runtime presentation may use supported fields but must not overwrite them.
+    """
+    result = {}
+    shape = str(tags.get("roof:shape", "")).strip().lower()
+    if shape:
+        result["roof_shape"] = shape
+    roof_height = parse_length(tags.get("roof:height", ""), 0.05, 100.0)
+    if roof_height is not None:
+        result["roof_height_m"] = round(roof_height, 3)
+    roof_levels = parse_levels(tags.get("roof:levels", ""), 20.0)
+    if roof_levels is not None:
+        result["roof_levels"] = roof_levels
+    orientation = str(tags.get("roof:orientation", "")).strip().lower()
+    if orientation in {"along", "across"}:
+        result["roof_orientation"] = orientation
+    direction = str(tags.get("roof:direction", "")).strip()
+    if direction:
+        try:
+            degrees = float(direction) % 360.0
+            if math.isfinite(degrees):
+                result["roof_direction_deg"] = round(degrees, 3)
+        except (ValueError, TypeError):
+            pass
+    minimum_height = parse_length(tags.get("min_height", ""), 0.05, 350.0)
+    if minimum_height is not None:
+        result["min_height_m"] = round(minimum_height, 3)
+    minimum_level = parse_levels(tags.get("building:min_level", ""))
+    if minimum_level is not None:
+        result["min_level"] = minimum_level
+    levels = parse_levels(tags.get("building:levels", ""))
+    if levels is not None:
+        result["levels"] = levels
+    return result
 
 
 def conform_ring(points, sampler, spacing=64.0):
@@ -108,7 +156,8 @@ def make_record(identifier: str, polygon: Polygon, tags: dict, sampler, cell_siz
     rings = [conform_ring(polygon.exterior.coords, sampler, spacing)]
     rings.extend(conform_ring(interior.coords, sampler, spacing) for interior in polygon.interiors)
     height, height_source = building_height(tags)
-    # The roof is horizontal, unlike its terrain-conforming foundation.
+    # Overall source/inferred height is the maximum massing elevation. Source
+    # roof metadata is stored separately so runtime can split wall and roof mass.
     roof_y = round(max(p[1] for ring in rings for p in ring) + height, 5)
     vertices, indices, vertex_map = [], [], {}
     triangles = shapely.constrained_delaunay_triangles(polygon)
@@ -132,7 +181,8 @@ def make_record(identifier: str, polygon: Polygon, tags: dict, sampler, cell_siz
         raise ValueError("Footprint has no triangulated roof")
     local_rings = [[[round(x - ox, 4), y, round(z - oz, 4)] for x, y, z in ring] for ring in rings]
     kind = KINDS.get(tags.get("building", "yes"), 0)
-    record = [identifier, round(height, 3), height_source, kind, roof_y, local_rings, vertices, indices]
+    form = building_form(tags)
+    record = [identifier, round(height, 3), height_source, kind, roof_y, local_rings, vertices, indices, form]
     reach = max(math.hypot(x - anchor.x, z - anchor.y) for ring in rings for x, _, z in ring)
     return (cx, cz), record, reach
 
@@ -234,6 +284,13 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
                     stats[["", "source_height", "source_levels", "inferred_height"][record[2]]] += 1
                     stats["courtyards"] += len(polygon.interiors)
                     stats["roof_triangles"] += len(record[7]) // 3
+                    form = record[8]
+                    if form.get("roof_shape"):
+                        stats["source_roof_shape"] += 1
+                    if form.get("roof_height_m") is not None:
+                        stats["source_roof_height"] += 1
+                    if form.get("min_height_m") is not None or form.get("min_level") is not None:
+                        stats["source_elevated_base"] += 1
                     max_reach = max(max_reach, reach)
                     x0, z0, x1, z1 = polygon.bounds
                     bounds[:] = [min(bounds[0], x0), min(bounds[1], z0), max(bounds[2], x1), max(bounds[3], z1)]
@@ -286,16 +343,17 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
             finish_cell(current_cell, rows)
             finish_tile(current_tile)
         stats["tiles"], stats["cells"] = len(tiles), sum(len(t["cells"]) for t in tiles)
-        manifest = {"format": 1, "encoding": "YMB1: <4sI> header, <HHII> local cell x/z, byte offset/length, deterministic gzip JSON arrays",
-                    "record": "[OSM part id,height metres,height source(1=tag,2=levels,3=inferred),kind,flat roof elevation,rings[[x,y,z]],roof vertices[[x,z]],roof triangle indices]",
+        manifest = {"format": 1, "record_format": 2,
+                    "encoding": "YMB1: <4sI> header, <HHII> local cell x/z, byte offset/length, deterministic gzip JSON arrays",
+                    "record": "[OSM part id,height metres,height source(1=tag,2=levels,3=inferred),kind,maximum building elevation,rings[[x,y,z]],roof vertices[[x,z]],roof triangle indices,source form metadata]",
                     "coordinates": "X/Z relative to owning 256m content cell; Y canonical metres EGM2008",
                     "crs": "EPSG:3448", "origin": origin, "tile_size": TILE_SIZE, "cell_size": CELL_SIZE,
                     "source": "OpenStreetMap / Geofabrik Jamaica extract",
                     "source_sha256": hashlib.file_digest(input_path.open("rb"), "sha256").hexdigest(),
                     "attribution": "© OpenStreetMap contributors — https://www.openstreetmap.org/copyright (ODbL)",
                     "terrain_attribution": sampler.manifest.get("attribution", ""),
-                    "height_inference": "Source height > source building:levels × 3.15m + 0.35m > declared class estimate (default 4.4m). Flat roof above maximum sampled foundation height. DSM foundations are not surveyed bare-earth levels.",
-                    "appearance": "Original generic extrusion, deterministic inferred facade/roof colours and windows; not surveyed architecture",
+                    "height_inference": "Source height > source building:levels × 3.15m + 0.35m > declared class estimate (default 4.4m). Maximum massing elevation is above maximum sampled foundation height. DSM foundations are not surveyed bare-earth levels.",
+                    "appearance": "Registered footprint and source 3D form metadata are preserved. Unsupported source forms remain conservative extrusions until runtime support exists; presentation inference is explicitly separate from source truth.",
                     "bounds": [round(v, 3) for v in bounds], "max_footprint_reach_m": round(max_reach, 3),
                     "max_cell_uncompressed_bytes": max_cell_bytes, "max_cell_buildings": max_cell_buildings,
                     "stats": dict(stats), "tiles": tiles}
