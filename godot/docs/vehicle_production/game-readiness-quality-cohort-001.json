@@ -1,0 +1,96 @@
+{
+  "checkpoint": "game-readiness-quality-cohort-001",
+  "format_version": 1,
+  "branch": "codex/vehicle-production-001",
+  "runtime_validation": {
+    "workflow": "Yardman Vehicle Production Audit",
+    "run_id": 39061969832,
+    "run_number": 86,
+    "validated_commit": "09c9b51dc48f129c9b244ba15c25f24271aa1b60",
+    "conclusion": "success",
+    "vehicle_runtime_contract": "pass",
+    "production_fleet_lifecycle": "pass",
+    "existing_controller_reference_regression": "pass",
+    "lod_audit": "pass",
+    "source_policy": "pass",
+    "carparking_decode_policy": "pass",
+    "scope_note": "Runtime success proves vehicle-local consumption behavior in the isolated test harness. It does not by itself prove recovered hero-asset identity, visual acceptance, or private Crown media rendering."
+  },
+  "quality_policy": {
+    "order": ["quality", "critical_observation_and_grading", "quantity"],
+    "runtime_pass_is_not_asset_acceptance": true,
+    "dual_beta_search_required": true,
+    "crown007_non_regression_required": true,
+    "no_cross_model_relabeling": true,
+    "map_defects_out_of_scope": true
+  },
+  "cohort": [
+    {
+      "id": "toyota_crown",
+      "runtime_consumable": true,
+      "runtime_contract": "pass",
+      "selector_lifecycle": "pass",
+      "catalog_hero_scene": "toyota_crown_2013.glb",
+      "visual_status": "owner_accepted_reference_baseline",
+      "private_hero_render_revalidated_in_run_39061969832": false,
+      "asset_promotion": "accepted_baseline_preserve_not_requalified",
+      "grade": "A_RUNTIME_BASELINE",
+      "blocking_reasons": [],
+      "note": "Crown007 remains the accepted reference-quality baseline. This source-only CI run protects shared controller behavior but must not be misreported as a fresh private-media visual acceptance."
+    },
+    {
+      "id": "toyota_mark_x",
+      "runtime_consumable": true,
+      "runtime_contract": "pass",
+      "selector_lifecycle": "pass",
+      "catalog_hero_scene": "",
+      "visual_status": "procedural_fallback_only",
+      "asset_promotion": "hold",
+      "grade": "F_ASSET_IDENTITY",
+      "blocking_reasons": [
+        "no_verified_Mark_X_hero_scene",
+        "Beta1_no_verified_Mark_X_source",
+        "Beta2_exact_identity_search_not_complete_for_promotion",
+        "RR3_exact_directory_search_found_no_Mark_X_identity"
+      ],
+      "evidence": {
+        "roster_status": "active_identity_and_source_fusion",
+        "rr3_mark_x_match_count": 0
+      },
+      "note": "A driving procedural fallback is not a Mark X asset pass. Mark II, Chaser, Crown, or Lexus geometry must not be relabeled as Mark X."
+    },
+    {
+      "id": "port_royal_992",
+      "runtime_consumable": true,
+      "runtime_contract": "pass",
+      "selector_lifecycle": "pass",
+      "catalog_hero_scene": "",
+      "visual_status": "procedural_fallback_only",
+      "asset_promotion": "hold",
+      "grade": "F_ASSET_IDENTITY",
+      "blocking_reasons": [
+        "no_verified_992_hero_scene",
+        "no_verified_992_geometry_in_current_Car_Parking_refresh",
+        "exact_Beta1_model_generation_trim_search_open",
+        "exact_Beta2_model_generation_trim_search_open"
+      ],
+      "evidence": {
+        "carparking_992_verified_sources": 0,
+        "carparking_991_source_rejected_as_992_substitute": true,
+        "carparking_1996_era_911_rejected_as_992_substitute": true,
+        "carparking_GT3_RS_family_generation_unresolved": true
+      },
+      "note": "Porsche recovery is authorized, but permission does not relax identity discipline. Runtime fallback success cannot promote a 991, older 911, or unresolved GT3 RS family source as a 992."
+    }
+  ],
+  "quantity_release_gate": {
+    "open": false,
+    "reason": "The shared runtime pipeline is green, but the representative quality cohort still has unresolved Mark X and 992 asset-identity gates. Continue quality/source recovery before scaling production quantity.",
+    "open_when": [
+      "representative candidates have exact identity evidence",
+      "Beta1 and Beta2 searches/components are recorded",
+      "hero geometry/material/interior/rig packages pass isolated runtime import",
+      "Crown007 shared-system non-regression remains green"
+    ]
+  }
+}
