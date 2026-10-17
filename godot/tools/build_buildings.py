@@ -2,7 +2,8 @@
 """Compile OSM building footprints into indexed, independently compressed cells.
 
 Registered source footprints, terrain-conformed foundations, recorded height/levels,
-and source building-form tags are preserved independently from presentation inference.
+source building parts, and source building-form tags are preserved independently
+from presentation inference.
 """
 from __future__ import annotations
 import argparse
@@ -14,8 +15,7 @@ import re
 import shutil
 import sqlite3
 import struct
-import tempfile
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import osmium
@@ -26,6 +26,7 @@ from shapely.ops import transform
 
 TILE_SIZE = 4096
 CELL_SIZE = 256
+PART_BIN_SIZE = 512.0
 MAGIC = b"YMB1"
 INDEX = struct.Struct("<HHII")
 HEADER = struct.Struct("<4sI")
@@ -39,6 +40,23 @@ KINDS = {"house": 0, "detached": 0, "residential": 0, "apartments": 1,
          "industrial": 2, "warehouse": 2, "commercial": 3,
          "retail": 3, "school": 4, "church": 4,
          "garage": 5, "garages": 5, "shed": 5, "hut": 5}
+FALSE_VALUES = {"no", "0", "false", ""}
+
+
+def _source_type(tags: dict) -> str:
+    building = str(tags.get("building", "")).strip().lower()
+    if building not in FALSE_VALUES:
+        return building
+    part = str(tags.get("building:part", "")).strip().lower()
+    return part if part not in FALSE_VALUES else "yes"
+
+
+def _is_building(tags: dict) -> bool:
+    return str(tags.get("building", "")).strip().lower() not in FALSE_VALUES
+
+
+def _is_part(tags: dict) -> bool:
+    return str(tags.get("building:part", "")).strip().lower() not in FALSE_VALUES
 
 
 def parse_length(value: str, minimum=0.05, maximum=350.0) -> float | None:
@@ -68,16 +86,17 @@ def building_height(tags: dict) -> tuple[float, int]:
     levels = parse_levels(tags.get("building:levels", ""))
     if levels is not None:
         return round(levels * 3.15 + 0.35, 3), HEIGHT_LEVELS
-    return HEIGHT_DEFAULTS.get(tags.get("building", "yes"), 4.4), HEIGHT_INFERRED
+    return HEIGHT_DEFAULTS.get(_source_type(tags), 4.4), HEIGHT_INFERRED
 
 
 def building_form(tags: dict) -> dict:
-    """Keep only source-declared 3D form tags needed for registered massing.
-
-    These values are provenance, not a promise that every shape is rendered yet.
-    Runtime presentation may use supported fields but must not overwrite them.
-    """
+    """Keep only source-declared 3D form tags needed for registered massing."""
     result = {}
+    if _is_part(tags):
+        result["building_part"] = True
+        part_type = str(tags.get("building:part", "yes")).strip().lower()
+        if part_type and part_type != "yes":
+            result["building_part_type"] = part_type
     shape = str(tags.get("roof:shape", "")).strip().lower()
     if shape:
         result["roof_shape"] = shape
@@ -111,11 +130,7 @@ def building_form(tags: dict) -> dict:
 
 
 def conform_ring(points, sampler, spacing=64.0):
-    """Split the base at every terrain grid/diagonal crossing, then sample.
-
-    Terrain is affine inside each triangle, so an interpolated wall-base edge
-    between these points exactly matches the runtime triangle, not just its ends.
-    """
+    """Split the base at every terrain grid/diagonal crossing, then sample."""
     result = []
     points = list(points)
     if points[0] != points[-1]:
@@ -156,8 +171,6 @@ def make_record(identifier: str, polygon: Polygon, tags: dict, sampler, cell_siz
     rings = [conform_ring(polygon.exterior.coords, sampler, spacing)]
     rings.extend(conform_ring(interior.coords, sampler, spacing) for interior in polygon.interiors)
     height, height_source = building_height(tags)
-    # Overall source/inferred height is the maximum massing elevation. Source
-    # roof metadata is stored separately so runtime can split wall and roof mass.
     roof_y = round(max(p[1] for ring in rings for p in ring) + height, 5)
     vertices, indices, vertex_map = [], [], {}
     triangles = shapely.constrained_delaunay_triangles(polygon)
@@ -171,7 +184,6 @@ def make_record(identifier: str, polygon: Polygon, tags: dict, sampler, cell_siz
                 vertex_map[key] = len(vertices)
                 vertices.append(list(key))
             tri_indices.append(vertex_map[key])
-        # Positive area in X/Z corresponds to downward normal in XYZ.
         a, b, c = [vertices[i] for i in tri_indices]
         cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
         if cross > 0:
@@ -180,15 +192,29 @@ def make_record(identifier: str, polygon: Polygon, tags: dict, sampler, cell_siz
     if not indices:
         raise ValueError("Footprint has no triangulated roof")
     local_rings = [[[round(x - ox, 4), y, round(z - oz, 4)] for x, y, z in ring] for ring in rings]
-    kind = KINDS.get(tags.get("building", "yes"), 0)
+    kind = KINDS.get(_source_type(tags), 0)
     form = building_form(tags)
     record = [identifier, round(height, 3), height_source, kind, roof_y, local_rings, vertices, indices, form]
     reach = max(math.hypot(x - anchor.x, z - anchor.y) for ring in rings for x, _, z in ring)
     return (cx, cz), record, reach
 
 
+def split_parent_by_parts(parent: Polygon, part_polygons: list[Polygon]):
+    """Remove registered ground-origin building parts from their parent outline."""
+    usable = []
+    for part in part_polygons:
+        if part.is_empty or part.area < 1.0:
+            continue
+        clipped = parent.intersection(part)
+        if not clipped.is_empty and clipped.area >= part.area * 0.8:
+            usable.append(clipped)
+    if not usable:
+        return parent
+    remainder = parent.difference(shapely.union_all(usable))
+    return shapely.make_valid(remainder) if not remainder.is_valid else remainder
+
+
 def write_pack(path: Path, cells):
-    """Write one 4 km tile; values are already gzip-compressed JSON arrays."""
     cells = sorted(cells)
     offset = HEADER.size + len(cells) * INDEX.size
     with path.open("wb") as file:
@@ -231,7 +257,6 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
     if staging.exists():
         shutil.rmtree(staging)
     staging.mkdir(parents=True, exist_ok=True)
-    # SQLite is the bounded spool: there is no list of island-wide footprints.
     database = staging / "footprints.sqlite"
     if database.exists():
         database.unlink()
@@ -239,6 +264,8 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
     connection.execute("PRAGMA journal_mode=OFF")
     connection.execute("PRAGMA synchronous=OFF")
     connection.execute("PRAGMA cache_size=-16000")
+    connection.execute("CREATE TABLE raw (id TEXT PRIMARY KEY,is_part INT,tags TEXT,geometry BLOB,minx REAL,minz REAL,maxx REAL,maxz REAL)")
+    connection.execute("CREATE INDEX raw_parts ON raw(is_part)")
     connection.execute("CREATE TABLE records (cx INT,cz INT,id TEXT PRIMARY KEY,digest TEXT UNIQUE,payload TEXT)")
     connection.execute("CREATE INDEX cells ON records(cx,cz,id)")
     factory = osmium.geom.WKBFactory()
@@ -253,9 +280,8 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
 
     class Handler(osmium.SimpleHandler):
         def area(self, area):
-            nonlocal max_reach
             tags = dict(area.tags)
-            if tags.get("building", "no") in {"no", "0", "false", ""}:
+            if not _is_building(tags) and not _is_part(tags):
                 return
             stats["source_areas"] += 1
             if limit and stats["source_areas"] > limit:
@@ -269,31 +295,17 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
                 parts = [g for g in (geometry.geoms if hasattr(geometry, "geoms") else [geometry]) if isinstance(g, Polygon)]
                 parts.sort(key=lambda p: (p.bounds, shapely.to_wkb(shapely.normalize(p))))
                 source_id = ("w" if area.from_way() else "r") + str(area.orig_id())
+                is_part = 1 if _is_part(tags) else 0
+                stats["source_building_parts" if is_part else "source_building_outlines"] += 1
                 for part_index, polygon in enumerate(parts):
                     if polygon.area < 1.0:
                         stats["tiny_parts"] += 1
                         continue
                     identifier = source_id + ":" + str(part_index)
-                    (cx, cz), record, reach = make_record(identifier, polygon, tags, sampler)
-                    digest = hashlib.sha256(shapely.to_wkb(shapely.normalize(polygon))).hexdigest()
-                    result = connection.execute("INSERT OR IGNORE INTO records VALUES (?,?,?,?,?)", (cx, cz, identifier, digest, json.dumps(record, separators=(",", ":"), allow_nan=False)))
-                    if not result.rowcount:
-                        stats["duplicate_parts"] += 1
-                        continue
-                    stats["buildings"] += 1
-                    stats[["", "source_height", "source_levels", "inferred_height"][record[2]]] += 1
-                    stats["courtyards"] += len(polygon.interiors)
-                    stats["roof_triangles"] += len(record[7]) // 3
-                    form = record[8]
-                    if form.get("roof_shape"):
-                        stats["source_roof_shape"] += 1
-                    if form.get("roof_height_m") is not None:
-                        stats["source_roof_height"] += 1
-                    if form.get("min_height_m") is not None or form.get("min_level") is not None:
-                        stats["source_elevated_base"] += 1
-                    max_reach = max(max_reach, reach)
                     x0, z0, x1, z1 = polygon.bounds
-                    bounds[:] = [min(bounds[0], x0), min(bounds[1], z0), max(bounds[2], x1), max(bounds[3], z1)]
+                    connection.execute("INSERT OR IGNORE INTO raw VALUES (?,?,?,?,?,?,?,?)",
+                        (identifier, is_part, json.dumps(tags, separators=(",", ":"), sort_keys=True),
+                         sqlite3.Binary(shapely.to_wkb(polygon)), x0, z0, x1, z1))
                 if stats["source_areas"] % 20000 == 0:
                     connection.commit()
                     print("BUILDING_INGEST", dict(stats), flush=True)
@@ -304,12 +316,134 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
                 if stats["rejected_areas"] <= 8:
                     print("BUILDING_REJECT", area.orig_id(), type(error).__name__, str(error)[:180], flush=True)
 
+    def polygon_parts(geometry):
+        if geometry.is_empty:
+            return []
+        if isinstance(geometry, Polygon):
+            return [geometry]
+        return [g for g in getattr(geometry, "geoms", []) if isinstance(g, Polygon) and g.area >= 1.0]
+
+    def emit_geometry(identifier: str, geometry, tags: dict, suffix=""):
+        nonlocal max_reach
+        emitted = 0
+        pieces = polygon_parts(geometry)
+        pieces.sort(key=lambda p: (p.bounds, shapely.to_wkb(shapely.normalize(p))))
+        for index, polygon in enumerate(pieces):
+            if polygon.area < 1.0:
+                continue
+            record_id = identifier + (suffix + str(index) if suffix else ("" if len(pieces) == 1 else ":g" + str(index)))
+            (cx, cz), record, reach = make_record(record_id, polygon, tags, sampler)
+            normalized = shapely.to_wkb(shapely.normalize(polygon))
+            signature = normalized + json.dumps(tags, sort_keys=True, separators=(",", ":")).encode()
+            digest = hashlib.sha256(signature).hexdigest()
+            result = connection.execute("INSERT OR IGNORE INTO records VALUES (?,?,?,?,?)",
+                (cx, cz, record_id, digest, json.dumps(record, separators=(",", ":"), allow_nan=False)))
+            if not result.rowcount:
+                stats["duplicate_parts"] += 1
+                continue
+            emitted += 1
+            stats["buildings"] += 1
+            stats[["", "source_height", "source_levels", "inferred_height"][record[2]]] += 1
+            stats["courtyards"] += len(polygon.interiors)
+            stats["roof_triangles"] += len(record[7]) // 3
+            form = record[8]
+            if form.get("roof_shape"):
+                stats["source_roof_shape"] += 1
+            if form.get("roof_height_m") is not None:
+                stats["source_roof_height"] += 1
+            if form.get("min_height_m") is not None or form.get("min_level") is not None:
+                stats["source_elevated_base"] += 1
+            max_reach = max(max_reach, reach)
+            x0, z0, x1, z1 = polygon.bounds
+            bounds[:] = [min(bounds[0], x0), min(bounds[1], z0), max(bounds[2], x1), max(bounds[3], z1)]
+        return emitted
+
     try:
         Handler().apply_file(str(input_path), locations=True)
         connection.commit()
-        if not stats["buildings"]:
+        if not connection.execute("SELECT 1 FROM raw LIMIT 1").fetchone():
             raise ValueError("No building footprints were compiled")
-        # Iterate sorted records one cell at a time, then compress each cell.
+
+        # Keep building parts in a bounded spatial lookup. Parts are much rarer
+        # than parent outlines, so the island-wide parent set stays on disk.
+        part_rows = {}
+        part_bins = defaultdict(set)
+        for identifier, tags_json, geometry_wkb, minx, minz, maxx, maxz in connection.execute(
+                "SELECT id,tags,geometry,minx,minz,maxx,maxz FROM raw WHERE is_part=1 ORDER BY id"):
+            tags = json.loads(tags_json)
+            form = building_form(tags)
+            if form.get("min_height_m") is not None or form.get("min_level") is not None:
+                stats["deferred_elevated_parts"] += 1
+                continue
+            geometry = shapely.from_wkb(geometry_wkb)
+            part_rows[identifier] = {"tags": tags, "geometry": geometry, "area": geometry.area}
+            x0, z0 = math.floor(minx / PART_BIN_SIZE), math.floor(minz / PART_BIN_SIZE)
+            x1, z1 = math.floor(maxx / PART_BIN_SIZE), math.floor(maxz / PART_BIN_SIZE)
+            for bz in range(z0, z1 + 1):
+                for bx in range(x0, x1 + 1):
+                    part_bins[(bx, bz)].add(identifier)
+
+        def candidate_part_ids(parent):
+            minx, minz, maxx, maxz = parent.bounds
+            result = set()
+            for bz in range(math.floor(minz / PART_BIN_SIZE), math.floor(maxz / PART_BIN_SIZE) + 1):
+                for bx in range(math.floor(minx / PART_BIN_SIZE), math.floor(maxx / PART_BIN_SIZE) + 1):
+                    result.update(part_bins.get((bx, bz), ()))
+            return result
+
+        # Associate each ground-origin part with the most specific containing
+        # registered outline. This avoids rendering the same volume twice.
+        part_parent = {}
+        parent_cache = {}
+        for parent_id, tags_json, geometry_wkb in connection.execute(
+                "SELECT id,tags,geometry FROM raw WHERE is_part=0 ORDER BY id"):
+            parent = shapely.from_wkb(geometry_wkb)
+            parent_cache[parent_id] = (json.loads(tags_json), parent)
+            for part_id in candidate_part_ids(parent):
+                part = part_rows[part_id]["geometry"]
+                if part.area <= 0.0:
+                    continue
+                intersection = parent.intersection(part)
+                ratio = intersection.area / part.area if not intersection.is_empty else 0.0
+                if ratio < 0.8:
+                    continue
+                score = (ratio, -parent.area)
+                if part_id not in part_parent or score > part_parent[part_id][0]:
+                    part_parent[part_id] = (score, parent_id)
+        stats["parts_associated"] = len(part_parent)
+
+        parent_parts = defaultdict(list)
+        for part_id, info in part_rows.items():
+            tags = dict(info["tags"])
+            association = part_parent.get(part_id)
+            if association is not None:
+                parent_id = association[1]
+                parent_tags, parent_geometry = parent_cache[parent_id]
+                if not tags.get("height") and not tags.get("building:levels"):
+                    if parent_tags.get("height"):
+                        tags["height"] = parent_tags["height"]
+                        stats["part_height_inherited"] += 1
+                    elif parent_tags.get("building:levels"):
+                        tags["building:levels"] = parent_tags["building:levels"]
+                        stats["part_levels_inherited"] += 1
+                parent_parts[parent_id].append(info["geometry"])
+            if emit_geometry(part_id, info["geometry"], tags):
+                stats["building_parts_emitted"] += 1
+
+        for parent_id, (tags, parent) in parent_cache.items():
+            child_parts = parent_parts.get(parent_id, [])
+            geometry = split_parent_by_parts(parent, child_parts) if child_parts else parent
+            if child_parts:
+                stats["parent_outlines_split"] += 1
+                stats["parent_part_area_m2"] += round(parent.area - geometry.area, 3)
+            emitted = emit_geometry(parent_id, geometry, tags, ":r" if child_parts else "")
+            if child_parts and emitted == 0:
+                stats["parent_outlines_fully_replaced"] += 1
+
+        connection.commit()
+        if not stats["buildings"]:
+            raise ValueError("No building massing records were emitted")
+
         tiles = []
         current_tile, current_cell, payloads, rows = None, None, [], []
         max_cell_bytes = max_cell_buildings = 0
@@ -345,7 +479,7 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
         stats["tiles"], stats["cells"] = len(tiles), sum(len(t["cells"]) for t in tiles)
         manifest = {"format": 1, "record_format": 2,
                     "encoding": "YMB1: <4sI> header, <HHII> local cell x/z, byte offset/length, deterministic gzip JSON arrays",
-                    "record": "[OSM part id,height metres,height source(1=tag,2=levels,3=inferred),kind,maximum building elevation,rings[[x,y,z]],roof vertices[[x,z]],roof triangle indices,source form metadata]",
+                    "record": "[OSM mass id,height metres,height source(1=tag,2=levels,3=inferred),kind,maximum building elevation,rings[[x,y,z]],roof vertices[[x,z]],roof triangle indices,source form metadata]",
                     "coordinates": "X/Z relative to owning 256m content cell; Y canonical metres EGM2008",
                     "crs": "EPSG:3448", "origin": origin, "tile_size": TILE_SIZE, "cell_size": CELL_SIZE,
                     "source": "OpenStreetMap / Geofabrik Jamaica extract",
@@ -353,6 +487,7 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
                     "attribution": "© OpenStreetMap contributors — https://www.openstreetmap.org/copyright (ODbL)",
                     "terrain_attribution": sampler.manifest.get("attribution", ""),
                     "height_inference": "Source height > source building:levels × 3.15m + 0.35m > declared class estimate (default 4.4m). Maximum massing elevation is above maximum sampled foundation height. DSM foundations are not surveyed bare-earth levels.",
+                    "massing": "Ground-origin building:part polygons replace overlapping parent volume. Partial part coverage subtracts from the parent outline before residual massing is emitted. Elevated parts are preserved as deferred source evidence until runtime base-height support is validated.",
                     "appearance": "Registered footprint and source 3D form metadata are preserved. Unsupported source forms remain conservative extrusions until runtime support exists; presentation inference is explicitly separate from source truth.",
                     "bounds": [round(v, 3) for v in bounds], "max_footprint_reach_m": round(max_reach, 3),
                     "max_cell_uncompressed_bytes": max_cell_bytes, "max_cell_buildings": max_cell_buildings,
@@ -361,8 +496,6 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
     finally:
         connection.close()
     database.unlink(missing_ok=True)
-    # Some workspace providers snapshot frequently modified SQLite files.
-    # These scratch-spool derivatives are never part of the world database.
     for scratch in staging.glob(".footprints.sqlite.*"):
         scratch.unlink()
     if output.exists():
