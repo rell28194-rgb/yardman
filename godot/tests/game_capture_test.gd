@@ -57,7 +57,7 @@ func _run() -> void:
         quit(1)
         return
     scene.hud.set_menu_open(false)
-    var parish_navigation = scene.get_node_or_null("ParishNavigation")
+    var parish_navigation = scene.hud.get_node_or_null("ParishNavigation")
     if parish_navigation == null:
         push_error("CAPTURE_TEST: Parish navigation node missing")
         quit(1)
