@@ -12,6 +12,13 @@ from build_buildings import CELL_SIZE,HEADER,INDEX,MAGIC,conform_ring,write_pack
 from build_terrain import TerrainSampler
 
 CLEARANCE_MARGIN_M=.25
+# The current conservative inferred hip roof extends 0.16m outside its wall
+# footprint. Reserve that visible envelope when a severe road intrusion is
+# repaired so a corrected wall cannot still leave its eave over the carriageway.
+# Source-backed roof geometry that stays on the footprint simply gains the same
+# small safety setback; no building is moved, and shallow roadside contact is
+# still preserved by the intrusion gate below.
+VISUAL_ENVELOPE_MARGIN_M=.16
 MIN_INTRUSION_DEPTH_M=.75
 MIN_INTERSECTION_AREA_M2=.75
 MIN_RETAINED_AREA_RATIO=.68
@@ -98,7 +105,8 @@ def road_conflicts(poly,candidates,tree):
 
 def resolve_polygon_conflict(poly,conflicts):
     if not conflicts:return poly,False,False,0.0
-    exclusion=shapely.union_all([r["surface"].buffer(CLEARANCE_MARGIN_M,join_style=2) for r in conflicts])
+    envelope_margin=CLEARANCE_MARGIN_M+VISUAL_ENVELOPE_MARGIN_M
+    exclusion=shapely.union_all([r["surface"].buffer(envelope_margin,join_style=2) for r in conflicts])
     clipped=poly.difference(exclusion)
     if not clipped.is_valid:clipped=shapely.make_valid(clipped)
     parts=polygon_parts(clipped)
@@ -142,7 +150,7 @@ def rebuild_record(record,poly,sampler,cell_x,cell_z,removed_area):
         indices.extend(ti)
     local=[[[round(x-ox,4),y,round(z-oz,4)] for x,y,z in ring] for ring in rings]
     form=dict(record[8]) if len(record)==9 and isinstance(record[8],dict) else {}
-    form.update({"road_clearance_adjusted":True,"road_clearance_removed_m2":round(removed_area,3),"road_clearance_policy":"compiled_carriageway_edge_conflict"})
+    form.update({"road_clearance_adjusted":True,"road_clearance_removed_m2":round(removed_area,3),"road_clearance_policy":"compiled_carriageway_edge_and_visual_envelope_conflict"})
     return [record[0],record[1],record[2],record[3],roof_y,local,vertices,indices,form]
 
 
@@ -209,7 +217,7 @@ def compile_clearance(roads_root,terrain_root,buildings_root):
         write_pack(staging/fn,cells)
         if changed_tile:stats["tiles_rewritten"]+=1
     stats["removed_building_area_m2"]=round(stats["removed_building_area_m2"],3);bm["record_format"]=max(2,int(bm.get("record_format",1)))
-    bm["road_clearance"]={"policy":"Only severe ground-origin intersections with compiled non-bridge/non-tunnel carriageway ribbons are eligible. Shallow roadside contact is preserved. Adjustments require one dominant footprint retaining at least 68% of registered area; ambiguous or incomplete-roof cases remain unchanged and are reported.","clearance_margin_m":CLEARANCE_MARGIN_M,"minimum_intrusion_depth_m":MIN_INTRUSION_DEPTH_M,"minimum_intersection_area_m2":MIN_INTERSECTION_AREA_M2,"minimum_retained_area_ratio":MIN_RETAINED_AREA_RATIO,"unresolved_examples_file":"road_clearance_report.json"}
+    bm["road_clearance"]={"policy":"Only severe ground-origin intersections with compiled non-bridge/non-tunnel carriageway ribbons are eligible. Shallow roadside contact is preserved. Adjustments reserve the known inferred-roof visible envelope beyond the wall footprint and require one dominant footprint retaining at least 68% of registered area; ambiguous or incomplete-roof cases remain unchanged and are reported.","clearance_margin_m":CLEARANCE_MARGIN_M,"visual_envelope_margin_m":VISUAL_ENVELOPE_MARGIN_M,"total_reserved_margin_m":CLEARANCE_MARGIN_M+VISUAL_ENVELOPE_MARGIN_M,"minimum_intrusion_depth_m":MIN_INTRUSION_DEPTH_M,"minimum_intersection_area_m2":MIN_INTERSECTION_AREA_M2,"minimum_retained_area_ratio":MIN_RETAINED_AREA_RATIO,"unresolved_examples_file":"road_clearance_report.json"}
     bm.setdefault("stats",{}).update({"road_clearance_adjusted_buildings":stats["adjusted_buildings"],"road_clearance_unresolved_conflicts":stats["unresolved_conflicts"],"road_clearance_roof_rebuild_failures":stats["roof_rebuild_failures"],"road_clearance_removed_area_m2":stats["removed_building_area_m2"]})
     (staging/"manifest.json").write_text(json.dumps(bm,indent=2,sort_keys=True));(staging/"road_clearance_report.json").write_text(json.dumps({"stats":stats,"unresolved_examples":examples},indent=2,sort_keys=True))
     backup=buildings_root.with_name(buildings_root.name+".pre-roadclearance")
