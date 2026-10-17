@@ -4,8 +4,13 @@
 This stage does not invent channels. It preserves mapped OSM waterway geometry,
 projects it into EPSG:3448 / Yardman local metres, splits it exactly at runtime
 tile boundaries, and samples the existing DEM at every emitted endpoint. The
-result is the factual centerline/elevation input for later channel carving,
-banks, floodplain treatment, culverts and bridge-crossing validation.
+result is factual centerline/elevation input for later channel carving, banks,
+floodplain treatment, culverts and bridge-crossing validation.
+
+Crossing semantics are retained deliberately. A mapped waterway can be covered,
+underground or explicitly tagged as a culvert/tunnel. Those records must never
+be treated as ordinary open-channel cuts merely because their plan geometry
+intersects a road.
 """
 from __future__ import annotations
 
@@ -25,6 +30,20 @@ DEFAULT_WIDTH_M = {
     "drain": 2.5,
     "ditch": 1.5,
 }
+TRUE_TAGS = {"yes", "true", "1"}
+FALSE_TAGS = {"", "no", "false", "0"}
+
+
+def parse_bool_tag(raw) -> bool:
+    return str(raw or "").strip().lower() in TRUE_TAGS
+
+
+def parse_layer(raw) -> int:
+    try:
+        value = int(str(raw if raw is not None else "0").strip())
+    except ValueError:
+        return 0
+    return max(-20, min(20, value))
 
 
 def parse_width_m(raw: str | None, waterway: str) -> float:
@@ -40,6 +59,21 @@ def parse_width_m(raw: str | None, waterway: str) -> float:
             if math.isfinite(value) and value > 0.0:
                 return max(0.5, min(200.0, value))
     return DEFAULT_WIDTH_M.get(waterway, 3.0)
+
+
+def waterway_structure(tags) -> dict:
+    tunnel = str(tags.get("tunnel", "") or "").strip().lower()
+    culvert = tunnel == "culvert" or parse_bool_tag(tags.get("culvert"))
+    covered = parse_bool_tag(tags.get("covered")) or str(tags.get("location", "")).strip().lower() == "underground"
+    underground = culvert or covered or (tunnel not in FALSE_TAGS)
+    return {
+        "tunnel": tunnel,
+        "layer": parse_layer(tags.get("layer")),
+        "covered": covered,
+        "culvert": culvert,
+        "underground": underground,
+        "location": str(tags.get("location", "") or "").strip().lower(),
+    }
 
 
 def _interpolate(a: tuple[float, float], b: tuple[float, float], t: float) -> tuple[float, float]:
@@ -112,7 +146,7 @@ def compile_hydrology(osm_pbf: Path, terrain_root: Path, output_root: Path) -> d
             waterway = str(way.tags.get("waterway", ""))
             if waterway not in WATERWAY_CLASSES:
                 return
-            points: list[tuple[float, float]] = []
+            source_points: list[tuple[float, float, int]] = []
             for node in way.nodes:
                 try:
                     if not node.location.valid():
@@ -120,8 +154,8 @@ def compile_hydrology(osm_pbf: Path, terrain_root: Path, output_root: Path) -> d
                     easting, northing = project.transform(node.location.lon, node.location.lat)
                 except Exception:
                     continue
-                points.append((float(easting) - e0, n0 - float(northing)))
-            if len(points) < 2:
+                source_points.append((float(easting) - e0, n0 - float(northing), int(node.ref)))
+            if len(source_points) < 2:
                 stats["rejected_short_ways"] += 1
                 return
 
@@ -129,11 +163,13 @@ def compile_hydrology(osm_pbf: Path, terrain_root: Path, output_root: Path) -> d
             raw_width = way.tags.get("width")
             width_m = parse_width_m(raw_width, waterway)
             width_source = "source" if raw_width and re.search(r"[-+]?\d+(?:\.\d+)?", str(raw_width)) else "class_fallback"
-            intermittent = str(way.tags.get("intermittent", "")).lower() in {"yes", "true", "1"}
-            tidal = str(way.tags.get("tidal", "")).lower() in {"yes", "true", "1"}
+            intermittent = parse_bool_tag(way.tags.get("intermittent"))
+            tidal = parse_bool_tag(way.tags.get("tidal"))
+            structure = waterway_structure(way.tags)
             source_id = f"w{int(way.id)}"
             emitted = 0
-            for p0, p1 in zip(points, points[1:]):
+            for source_segment_index, (source_a, source_b) in enumerate(zip(source_points, source_points[1:])):
+                p0, p1 = source_a[:2], source_b[:2]
                 for (tx, tz), a, b in split_segment_by_tile(p0, p1, tile_size):
                     try:
                         ay = float(sampler(a[0], a[1]))
@@ -148,7 +184,10 @@ def compile_hydrology(osm_pbf: Path, terrain_root: Path, output_root: Path) -> d
                         round(a[0], 6), round(ay, 6), round(a[1], 6),
                         round(b[0], 6), round(by, 6), round(b[1], 6),
                         source_id, waterway, name, round(width_m, 3), width_source,
-                        intermittent, tidal,
+                        intermittent, tidal, source_segment_index,
+                        int(source_a[2]), int(source_b[2]),
+                        structure["tunnel"], structure["layer"], structure["covered"],
+                        structure["culvert"], structure["underground"], structure["location"],
                     ])
                     emitted += 1
             if emitted:
@@ -161,6 +200,10 @@ def compile_hydrology(osm_pbf: Path, terrain_root: Path, output_root: Path) -> d
                     stats["intermittent_ways"] += 1
                 if tidal:
                     stats["tidal_ways"] += 1
+                if structure["culvert"]:
+                    stats["culvert_ways"] += 1
+                elif structure["underground"]:
+                    stats["other_underground_ways"] += 1
 
     Handler().apply_file(str(osm_pbf), locations=True)
 
@@ -170,7 +213,7 @@ def compile_hydrology(osm_pbf: Path, terrain_root: Path, output_root: Path) -> d
     (staging / "tiles").mkdir(parents=True)
     tile_entries = []
     for (tx, tz), records in sorted(records_by_tile.items()):
-        records.sort(key=lambda item: (item[6], item[0], item[2], item[3], item[5]))
+        records.sort(key=lambda item: (item[6], item[13], item[0], item[2], item[3], item[5]))
         relative = f"tiles/tile_{tx}_{tz}.json"
         (staging / relative).write_text(
             json.dumps({"tile": [tx, tz], "segments": records}, separators=(",", ":")),
@@ -179,7 +222,7 @@ def compile_hydrology(osm_pbf: Path, terrain_root: Path, output_root: Path) -> d
         tile_entries.append({"x": tx, "z": tz, "file": relative, "segments": len(records)})
 
     manifest = {
-        "format": 1,
+        "format": 2,
         "crs": "EPSG:3448",
         "axis": "X east, Y elevation, Z south; real metres",
         "origin": origin,
@@ -190,6 +233,8 @@ def compile_hydrology(osm_pbf: Path, terrain_root: Path, output_root: Path) -> d
         "record_format": [
             "ax", "ay", "az", "bx", "by", "bz", "source_way", "waterway",
             "name", "width_m", "width_source", "intermittent", "tidal",
+            "source_segment_index", "source_node_a", "source_node_b", "tunnel",
+            "layer", "covered", "culvert", "underground", "location",
         ],
         "stats": dict(sorted(stats.items())),
         "tiles": tile_entries,
