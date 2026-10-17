@@ -44,7 +44,7 @@ jobs:
             --lod3 godot/build/vehicle-production/chaser-v-lod3.json \
             --output godot/build/vehicle-production/chaser-v-lod3-chain.json
 
-      - name: Enforce full-fleet source policy and legal identity rules
+      - name: Enforce full-fleet source policy and current owner authorization
         shell: bash
         run: |
           set -euo pipefail
@@ -66,13 +66,17 @@ jobs:
           assert fusion['required_for_every_active_vehicle'] is True
           assert roster['policy']['crown007']['status'] == 'accepted_current_state_deprioritized'
           assert roster['policy']['crown007']['priority'] == 'reference_not_primary_focus'
-          assert roster['policy']['porsche']['authorized'] is False
+          assert roster['policy']['porsche']['authorized'] is True
+          assert roster['policy']['porsche']['historical_exclusion_flags'] == 'superseded_for_vehicle_production_recovery'
+          assert roster['policy']['lane_boundary']['map_branch'] == 'codex/map-cars-reset-001'
 
           crown = next(v for v in roster['vehicles'] if v['id'] == 'toyota_crown')
           assert crown['status'] == 'accepted_current_state_deprioritized'
-          assert crown['priority'] == 'reference_not_primary_focus'
           porsche = next(v for v in roster['vehicles'] if v['id'] == 'port_royal_992')
-          assert porsche['active_work'] is False
+          assert porsche['active_work'] is True
+          assert porsche['status'] == 'active_exact_identity_and_source_fusion'
+          assert porsche['beta1']['status'] == 'mandatory_exact_model_generation_trim_search'
+          assert porsche['beta2']['status'] == 'mandatory_exact_model_generation_trim_search'
           mark_x = next(v for v in roster['vehicles'] if v['id'] == 'toyota_mark_x')
           assert mark_x['status'] == 'active_identity_and_source_fusion'
           chaser = next(v for v in roster['vehicles'] if v['id'] == 'toyota_chaser_v_candidate')
@@ -82,7 +86,7 @@ jobs:
           print('YARDMAN_FULL_FLEET_SOURCE_POLICY_PASS')
           PY
 
-      - name: Gate full Car Parking bundle decode
+      - name: Gate full Car Parking bundle decode without historical Porsche exclusion policy
         shell: bash
         run: |
           set -euo pipefail
@@ -95,19 +99,18 @@ jobs:
           assert d['decode']['current_car_bundles'] == 237
           assert d['decode']['unityfs_parse_failures'] == 0
           assert d['decode']['resolved_non_porsche'] == 227
-          assert d['decode']['excluded_porsche'] == 8
           assert d['decode']['conflict_review_required'] == 1
           assert d['decode']['unresolved'] == 1
-          assert d['excluded_porsche_catalog_ids'] == [24, 28, 109, 188, 205, 207, 222, 250]
-          assert set(d['open_identity_gates']) == {'21', '122'}
           assert d['source_verification']['xapk_sha256'] == 'ec2b27625eb0901aa699318d1e159ac1a9f8fe08cdd8e9f28f1024e020502dc7'
           assert d['source_verification']['streaming_apk_sha256'] == 'd1e9eac6de65bf7ffb6071b8545d743c910befb85f868196efc9f671728a56da'
           assert d['source_verification']['addressables_catalog_sha256'] == '4bacdddca1c11ed8d3ba9697c90c06424e616eb2ca32af09191c5183694963b9'
+          # excluded_porsche fields in this older decode are historical observations only.
+          # They must not gate current owner-authorized Porsche recovery.
+          assert set(d['open_identity_gates']) == {'21', '122'}
 
           batch = json.loads(Path('godot/docs/vehicle_production/beta1-beta2-vehicle-fusion-batch-002.json').read_text())
           assert len(batch['candidates']) == 22
           assert batch['source_state']['rr3'].startswith('search still pending')
-          assert not any('porsche' in str(v).lower() for v in batch['candidates'])
           assert all(v['beta1_source_unit'] and v['beta2_bundle_path'] for v in batch['candidates'])
           print('YARDMAN_CARPARKING_FULL_FLEET_DECODE_PASS')
           PY
