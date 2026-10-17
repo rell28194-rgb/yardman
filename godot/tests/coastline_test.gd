@@ -62,6 +62,16 @@ func _run() -> void:
     for index in beach_vertices.size():
         _check(is_equal_approx(beach_vertices[index].y, 2.035), "Sand changed canonical terrain rather than applying the surface offset")
         _check(beach_uvs[index].is_equal_approx(Vector2(beach_vertices[index].x, beach_vertices[index].z) / 3.0), "Sand source texture does not repeat every three metres")
+
+    var wedge := PackedVector3Array([
+        Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 0, 1),
+        Vector3(0, 0, 0), Vector3(0, 0, 1), Vector3(1, 0.5, 1),
+    ])
+    var wedge_normals := Coastline.beach_vertex_normals(wedge)
+    _check(wedge_normals.size() == wedge.size(), "Beach smoothing lost source vertices")
+    _check(wedge_normals[0].is_equal_approx(wedge_normals[3]) and wedge_normals[2].is_equal_approx(wedge_normals[4]), "Shared beach vertices did not receive the same smoothed normal")
+    _check(wedge_normals[0].x < -0.1 and wedge_normals[0].y > 0.9, "Beach shared edge kept one triangle's faceted normal")
+
     _write(directory + "/mask_0_0.bin", PackedByteArray([1, 3, 0, 0]))
     _check(CoastGeometry.read_tile(directory, Vector2i.ZERO, 3).has("error"), "Invalid mask class was accepted")
     _write(directory + "/mask_0_0.bin", PackedByteArray([1]))
@@ -73,5 +83,5 @@ func _run() -> void:
         DirAccess.remove_absolute(directory + "/" + filename)
     DirAccess.remove_absolute(directory)
     if failures == 0:
-        print("YARDMAN_COASTLINE_TEST PASS land_mask=1 clipped_land=1 ocean_extent=1 corrupt_resource=1 clockwise_normals=1 registered_uv=1 shoreline_attributes=1")
+        print("YARDMAN_COASTLINE_TEST PASS land_mask=1 clipped_land=1 ocean_extent=1 corrupt_resource=1 clockwise_normals=1 registered_uv=1 shoreline_attributes=1 smoothed_beach_normals=1")
     quit(0 if failures == 0 else 1)
