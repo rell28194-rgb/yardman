@@ -4,6 +4,7 @@ class_name YardmanVehicleController
 const ModelScript = preload("res://scripts/vehicle_model.gd")
 const Catalog = preload("res://scripts/vehicle_catalog.gd")
 const Powertrain = preload("res://scripts/vehicle_powertrain.gd")
+const RuntimeContract = preload("res://scripts/vehicle_runtime_contract.gd")
 
 var body: CharacterBody3D
 var speed_mps := 0.0
@@ -54,11 +55,35 @@ func apply_profile(requested_vehicle_id: String) -> void:
     if body != null:
         _rebuild_visual()
         _fit_profile_collision()
+        RuntimeContract.ensure_hooks(body, _profile_bounds())
     engine_rpm = float(profile.idle_rpm) if occupied else 0.0
     reset_motion()
 
 func profile_metadata() -> Dictionary:
     return profile.duplicate(true)
+
+func runtime_contract() -> Dictionary:
+    if body == null:
+        return {
+            "ready": false,
+            "missing_hooks": RuntimeContract.REQUIRED_HOOKS.duplicate(),
+            "duplicate_hooks": [],
+            "visual_rig_count": 0,
+        }
+    return RuntimeContract.audit(body)
+
+func runtime_hook(hook_name: String) -> Marker3D:
+    if body == null or not RuntimeContract.REQUIRED_HOOKS.has(hook_name):
+        return null
+    return body.get_node_or_null(hook_name) as Marker3D
+
+func enter_vehicle() -> void:
+    occupied = true
+    engine_rpm = float(profile.get("idle_rpm", 900.0))
+
+func exit_vehicle() -> void:
+    occupied = false
+    reset_motion()
 
 func audio_profile() -> String:
     return str(profile.get("audio_profile", "legacy_inline6"))
