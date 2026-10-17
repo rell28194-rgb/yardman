@@ -340,7 +340,16 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
             if polygon.area < 1.0:
                 continue
             record_id = identifier + (suffix + str(index) if suffix else ("" if len(pieces) == 1 else ":g" + str(index)))
-            (cx, cz), record, reach = make_record(record_id, polygon, tags, sampler)
+            try:
+                (cx, cz), record, reach = make_record(record_id, polygon, tags, sampler)
+            except ValueError as error:
+                if "DEM does not cover" not in str(error):
+                    raise
+                stats["rejected_geometry_pieces"] += 1
+                stats["rejected_missing_terrain"] += 1
+                if stats["rejected_geometry_pieces"] <= 8:
+                    print("BUILDING_REJECT_PIECE", record_id, type(error).__name__, str(error)[:180], flush=True)
+                continue
             normalized = shapely.to_wkb(shapely.normalize(polygon))
             signature = normalized + json.dumps(tags, sort_keys=True, separators=(",", ":")).encode()
             digest = hashlib.sha256(signature).hexdigest()
