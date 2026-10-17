@@ -6,6 +6,8 @@ class_name YardmanVehicleRuntimeContract
 const REQUIRED_HOOKS := ["CameraMount", "ExitPoint", "DriverSeat"]
 const REQUIRED_RUNTIME_CHECKS := ["forward", "reverse", "steering", "braking", "park_exit_reenter", "reset_despawn"]
 const ACCEPTANCE_SCORE := 90
+const HOOK_ROLE_META := "yardman_runtime_hook"
+const VISUAL_ROLE_META := "yardman_visual_rig"
 
 static func ensure_hooks(vehicle: Node3D, bounds: AABB) -> Dictionary:
     var result := {}
@@ -24,25 +26,49 @@ static func ensure_hooks(vehicle: Node3D, bounds: AABB) -> Dictionary:
             hook = Marker3D.new()
             hook.name = hook_name
             vehicle.add_child(hook)
+        hook.set_meta(HOOK_ROLE_META, hook_name)
         hook.position = poses[hook_name]
         result[hook_name] = hook
     return result
 
+static func _runtime_role(node: Node) -> String:
+    var tagged := str(node.get_meta(HOOK_ROLE_META, ""))
+    if REQUIRED_HOOKS.has(tagged):
+        return tagged
+    var node_name := str(node.name)
+    for hook_name in REQUIRED_HOOKS:
+        if node_name == hook_name or node_name.begins_with(hook_name):
+            return hook_name
+    return ""
+
 static func audit(vehicle: Node3D) -> Dictionary:
+    var counts := {}
+    for hook_name in REQUIRED_HOOKS:
+        counts[hook_name] = 0
+    var visual_rig_count := 0
+    for child in vehicle.get_children():
+        if child is Marker3D:
+            var role := _runtime_role(child)
+            if not role.is_empty():
+                counts[role] = int(counts.get(role, 0)) + 1
+        if child is Node3D:
+            var child_name := str(child.name)
+            if bool(child.get_meta(VISUAL_ROLE_META, false)) or child_name == "VisualRig" or child_name.begins_with("VisualRig"):
+                visual_rig_count += 1
     var duplicates := []
     var missing := []
     for hook_name in REQUIRED_HOOKS:
-        var matches := vehicle.find_children(hook_name, "Marker3D", true, false)
-        if matches.is_empty():
+        var count := int(counts.get(hook_name, 0))
+        if count == 0:
             missing.append(hook_name)
-        elif matches.size() > 1:
+        elif count > 1:
             duplicates.append(hook_name)
-    var visual_rigs := vehicle.find_children("VisualRig", "Node3D", true, false)
     return {
-        "ready": missing.is_empty() and duplicates.is_empty() and visual_rigs.size() <= 1,
+        "ready": missing.is_empty() and duplicates.is_empty() and visual_rig_count == 1,
         "missing_hooks": missing,
         "duplicate_hooks": duplicates,
-        "visual_rig_count": visual_rigs.size(),
+        "visual_rig_count": visual_rig_count,
+        "hook_counts": counts,
     }
 
 static func grade(vehicle: Node3D, evidence: Dictionary) -> Dictionary:
