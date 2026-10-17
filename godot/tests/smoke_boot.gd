@@ -18,6 +18,14 @@ func _run() -> void:
     root.add_child(scene)
     var roads := scene.get_node_or_null("JamaicaRoadStreamer")
     var car := scene.get_node_or_null("RoadQA") as CharacterBody3D
+    var vehicle = scene.get("vehicle")
+    if vehicle == null or str(vehicle.get("performance_profile")) != "crown_stage3_compound_hybrid":
+        _fail("Crown Stage 3 compound-hybrid profile is not active at boot")
+        return
+    var performance = vehicle.call("performance_state")
+    if not performance is Dictionary or absf(float(performance.get("top_speed_kmh", 0.0)) - 378.0) > 0.1:
+        _fail("Crown Stage 3 limiter contract is not 378 km/h")
+        return
     for frame in range(1800):
         await physics_frame
         # A newly streamed collision tile is ready before gravity has settled
@@ -40,7 +48,7 @@ func _run() -> void:
     if not loaded is Dictionary or loaded.is_empty():
         _fail("No real road tiles were instantiated near the spawn")
         return
-    print("YARDMAN_SMOKE_PASS loaded_tiles=%d vehicle_y=%.3f" % [loaded.size(), car.global_position.y])
+    print("YARDMAN_SMOKE_PASS loaded_tiles=%d vehicle_y=%.3f crown_stage3=1 top_speed_kmh=%.1f" % [loaded.size(), car.global_position.y, float(performance.top_speed_kmh)])
     scene.queue_free()
     await process_frame
     quit(0)
