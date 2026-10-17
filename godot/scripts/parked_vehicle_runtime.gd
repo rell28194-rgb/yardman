@@ -204,7 +204,7 @@ func _dematerialize(identifier: String) -> void:
         return
     var entry: Dictionary = parked[identifier]
     var node = entry.get("node", null)
-    if node is Node and is_instance_valid(node):
+    if is_instance_valid(node) and node is Node:
         (node as Node).queue_free()
     entry.node = null
     entry.model = null
