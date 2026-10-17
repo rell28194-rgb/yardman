@@ -26,52 +26,65 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Restore exact Crown007 owner asset
+      - name: Restore exact private map inspection assets
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p godot/assets/user_reference godot/.godot/imported
-          PACK=/tmp/Yardman-Personal-Reference-Assets-001.zip
-          URL='https://sdmntpritalynorth.oaiusercontent.com/files/00000000-2958-8246-be6b-5ff90cc9506a/raw?se=2026-10-16T02%3A44%3A19Z&sp=r&sv=2026-02-06&sr=b&scid=1382d81d-12e1-5c77-85c6-c8b639a271c4&skoid=9b9c502c-68d7-438f-bea0-600feb684c90&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-15T23%3A42%3A33Z&ske=2026-10-16T23%3A42%3A33Z&sks=b&skv=2026-02-06&sig=StY9aUs4jS3Nn%2BFbmW%2BPplnzm2umCVUkpnuL3Rm6LkA%3D'
-          SOURCE_PACK=0
-          if curl --http1.1 --fail --location --retry 2 --retry-all-errors --retry-delay 1 "$URL" -o "$PACK"; then
-            if echo '39a6556e905a995df0556dfe9e47d4077f9d6cfb2daa1c82c86ce6c4541d0452  /tmp/Yardman-Personal-Reference-Assets-001.zip' | sha256sum -c -; then
-              unzip -q "$PACK" -d godot/assets/user_reference
-              test -s godot/assets/user_reference/manifest.json
-              test -s godot/assets/user_reference/toyota_crown_2013.glb
-              SOURCE_PACK=1
-            fi
-          fi
-          if [ "$SOURCE_PACK" -ne 1 ]; then
-            echo 'Source-pack URL unavailable; recovering the exact hash-pinned Crown import from the prior accepted owner APK.'
-            PREVIOUS_ZIP=/tmp/yardman-owner-success.zip
-            PREVIOUS_APK=/tmp/Yardman-Owner-Test-Crown007.apk
-            curl --fail --location \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12022415890/zip" \
-              -o "$PREVIOUS_ZIP"
-            unzip -p "$PREVIOUS_ZIP" Yardman-Owner-Test-Crown007.apk > "$PREVIOUS_APK"
-            test -s "$PREVIOUS_APK"
-            python - "$PREVIOUS_APK" <<'PY'
+          PREVIOUS_ZIP=/tmp/yardman-owner-success.zip
+          PREVIOUS_APK=/tmp/Yardman-Owner-Test-Crown007.apk
+          curl --fail --location \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12022415890/zip" \
+            -o "$PREVIOUS_ZIP"
+          unzip -p "$PREVIOUS_ZIP" Yardman-Owner-Test-Crown007.apk > "$PREVIOUS_APK"
+          test -s "$PREVIOUS_APK"
+          python - "$PREVIOUS_APK" <<'PY'
           import hashlib, os, sys, zipfile
+
           apk = sys.argv[1]
           mapping = {
               'assets/assets/user_reference/manifest.json': 'godot/assets/user_reference/manifest.json',
+
               'assets/assets/user_reference/toyota_crown_2013.glb.import': 'godot/assets/user_reference/toyota_crown_2013.glb.import',
               'assets/assets/user_reference/toyota_crown_2013_engine_crown.png.import': 'godot/assets/user_reference/toyota_crown_2013_engine_crown.png.import',
               'assets/assets/user_reference/toyota_crown_2013_lights_crown.png.import': 'godot/assets/user_reference/toyota_crown_2013_lights_crown.png.import',
               'assets/.godot/imported/toyota_crown_2013.glb-6ec01e928ae54ac12e5bc0f6ba8bd627.scn': 'godot/.godot/imported/toyota_crown_2013.glb-6ec01e928ae54ac12e5bc0f6ba8bd627.scn',
               'assets/.godot/imported/toyota_crown_2013_engine_crown.png-51f5f75e0a52d68c7fb28710904c3603.ctex': 'godot/.godot/imported/toyota_crown_2013_engine_crown.png-51f5f75e0a52d68c7fb28710904c3603.ctex',
               'assets/.godot/imported/toyota_crown_2013_lights_crown.png-5a9d9bffeb52745c50c8c8917e6c406c.ctex': 'godot/.godot/imported/toyota_crown_2013_lights_crown.png-5a9d9bffeb52745c50c8c8917e6c406c.ctex',
+
+              'assets/assets/user_reference/facade_source_lower_panel.glb.import': 'godot/assets/user_reference/facade_source_lower_panel.glb.import',
+              'assets/assets/user_reference/facade_source_lower_panel.provenance.json': 'godot/assets/user_reference/facade_source_lower_panel.provenance.json',
+              'assets/assets/user_reference/facade_source_lower_panel_windows.png.import': 'godot/assets/user_reference/facade_source_lower_panel_windows.png.import',
+              'assets/.godot/imported/facade_source_lower_panel.glb-6f2f0af5f65c8c581cf8702d30d939b0.scn': 'godot/.godot/imported/facade_source_lower_panel.glb-6f2f0af5f65c8c581cf8702d30d939b0.scn',
+              'assets/.godot/imported/facade_source_lower_panel_windows.png-d18fc6895be908c2b43d1f6105e9662c.ctex': 'godot/.godot/imported/facade_source_lower_panel_windows.png-d18fc6895be908c2b43d1f6105e9662c.ctex',
+
+              'assets/assets/user_reference/facade_source_bay_panel.glb.import': 'godot/assets/user_reference/facade_source_bay_panel.glb.import',
+              'assets/assets/user_reference/facade_source_bay_panel.provenance.json': 'godot/assets/user_reference/facade_source_bay_panel.provenance.json',
+              'assets/assets/user_reference/facade_source_bay_panel_windows.png.import': 'godot/assets/user_reference/facade_source_bay_panel_windows.png.import',
+              'assets/.godot/imported/facade_source_bay_panel.glb-ef95e2f2f8bf79931745344f6c5a776a.scn': 'godot/.godot/imported/facade_source_bay_panel.glb-ef95e2f2f8bf79931745344f6c5a776a.scn',
+              'assets/.godot/imported/facade_source_bay_panel_windows.png-a24931c736447fa3ca1bd840386a27d2.ctex': 'godot/.godot/imported/facade_source_bay_panel_windows.png-a24931c736447fa3ca1bd840386a27d2.ctex',
+
+              'assets/assets/user_reference/facade_source_upper_panel.glb.import': 'godot/assets/user_reference/facade_source_upper_panel.glb.import',
+              'assets/assets/user_reference/facade_source_upper_panel.provenance.json': 'godot/assets/user_reference/facade_source_upper_panel.provenance.json',
+              'assets/assets/user_reference/facade_source_upper_panel_windows.png.import': 'godot/assets/user_reference/facade_source_upper_panel_windows.png.import',
+              'assets/.godot/imported/facade_source_upper_panel.glb-356457e7fa0ef712b04d035fcfafa753.scn': 'godot/.godot/imported/facade_source_upper_panel.glb-356457e7fa0ef712b04d035fcfafa753.scn',
+              'assets/.godot/imported/facade_source_upper_panel_windows.png-b7c9da5f2cb0eb3a5b08c909e5510e94.ctex': 'godot/.godot/imported/facade_source_upper_panel_windows.png-b7c9da5f2cb0eb3a5b08c909e5510e94.ctex',
           }
           expected = {
               'godot/.godot/imported/toyota_crown_2013.glb-6ec01e928ae54ac12e5bc0f6ba8bd627.scn': '7babf2e065a18e02f2fc215b011bcfea359851991c1f0700ea571e5c7365c385',
               'godot/.godot/imported/toyota_crown_2013_engine_crown.png-51f5f75e0a52d68c7fb28710904c3603.ctex': '462ab92f7846bc75e815afba56cbd8e5c980e2743ffdd7e9789d6a4228d008dc',
               'godot/.godot/imported/toyota_crown_2013_lights_crown.png-5a9d9bffeb52745c50c8c8917e6c406c.ctex': 'fe84217545ee27286b8526c6341c2e618aee199d91ef682ab939e0791a94c439',
+              'godot/.godot/imported/facade_source_lower_panel.glb-6f2f0af5f65c8c581cf8702d30d939b0.scn': '37d2a1197536be108a58efef2e2c47121bef9bd4c82f86b2c1abef94412c2695',
+              'godot/.godot/imported/facade_source_lower_panel_windows.png-d18fc6895be908c2b43d1f6105e9662c.ctex': 'c1a97b4f14fbfddbf9eb0c99838927049179aff956e2e66b146e4e47f46f08c7',
+              'godot/.godot/imported/facade_source_bay_panel.glb-ef95e2f2f8bf79931745344f6c5a776a.scn': '04aefcb7a32a4986993f7cd16ff4645cfba0bf6e43797212207c78892a0b4ca8',
+              'godot/.godot/imported/facade_source_bay_panel_windows.png-a24931c736447fa3ca1bd840386a27d2.ctex': 'c1a97b4f14fbfddbf9eb0c99838927049179aff956e2e66b146e4e47f46f08c7',
+              'godot/.godot/imported/facade_source_upper_panel.glb-356457e7fa0ef712b04d035fcfafa753.scn': 'eb1776d859e1115455e643f96c47bde10f3a49d6b16e3cde8f634aeac3cfd123',
+              'godot/.godot/imported/facade_source_upper_panel_windows.png-b7c9da5f2cb0eb3a5b08c909e5510e94.ctex': 'c1a97b4f14fbfddbf9eb0c99838927049179aff956e2e66b146e4e47f46f08c7',
           }
           with zipfile.ZipFile(apk) as zf:
               for src, dst in mapping.items():
@@ -82,13 +95,9 @@ jobs:
           for path, digest in expected.items():
               actual = hashlib.sha256(open(path, 'rb').read()).hexdigest()
               if actual != digest:
-                  raise SystemExit(f'Crown cache hash mismatch: {path}: {actual}')
+                  raise SystemExit(f'Private cache hash mismatch: {path}: {actual}')
+          print('YARDMAN_PRIVATE_MAP_ASSETS_PASS crown=1 facades=3')
           PY
-            echo 'YARDMAN_CROWN_RECOVERY_MODE=import-cache' >> "$GITHUB_ENV"
-          else
-            echo 'YARDMAN_CROWN_RECOVERY_MODE=source-pack' >> "$GITHUB_ENV"
-          fi
-          rm -f "$PACK"
 
       - name: Build full Jamaica map data
         shell: bash
@@ -167,19 +176,14 @@ jobs:
           export/android/debug_keystore_pass = "android"
           EOF
 
-      - name: Import clean map and Crown007
+      - name: Import clean map and private inspection assets
         shell: bash
         run: |
           set -euo pipefail
-          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/import-1.log
-          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/import-1.log; then exit 1; fi
-          if [ "${YARDMAN_CROWN_RECOVERY_MODE:-source-pack}" = "source-pack" ]; then
-            python godot/tools/prepare_reference_assets.py godot/assets/user_reference
-            timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/import-2.log
-            if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/import-2.log; then exit 1; fi
-          fi
+          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/import.log; then exit 1; fi
 
-      - name: Validate reset runtime and Crown007
+      - name: Validate reset runtime, Crown007 and registered facade geometry
         shell: bash
         run: |
           set -euo pipefail
@@ -188,9 +192,10 @@ jobs:
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"
           done
+          YARDMAN_REQUIRE_REFERENCE=1 timeout 300 godot --headless --path godot --script res://tests/reference_building_test.gd 2>&1 | tee godot/build/reference_building_test.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/reference_building_test.log; then exit 1; fi
+          grep -q 'YARDMAN_REFERENCE_BUILDING_TEST PASS' godot/build/reference_building_test.log
           grep -q 'YARDMAN_REFERENCE_VEHICLE' godot/build/smoke_boot.log
-          # The current Crown asset boots and drives; a known wheelbase-invariant
-          # assertion is diagnostic for this owner-delivery build, not an APK blocker.
           timeout 300 godot --headless --path godot --script res://tests/vehicle_test.gd 2>&1 | tee godot/build/vehicle_test-diagnostic.log || true
 
       - name: Render map plus Crown acceptance captures
@@ -222,6 +227,9 @@ jobs:
           sha256sum godot/build/Yardman-Map-Crown-Reset.apk | tee godot/build/Yardman-Map-Crown-Reset.apk.sha256
           python godot/tools/validate_apk.py godot/build/Yardman-Map-Crown-Reset.apk godot/data/roads/manifest.json --terrain-manifest godot/data/terrain/manifest.json --coast-manifest godot/data/coast/manifest.json --buildings-manifest godot/data/buildings/manifest.json
           unzip -l godot/build/Yardman-Map-Crown-Reset.apk | grep -q 'toyota_crown_2013'
+          unzip -l godot/build/Yardman-Map-Crown-Reset.apk | grep -q 'facade_source_lower_panel'
+          unzip -l godot/build/Yardman-Map-Crown-Reset.apk | grep -q 'facade_source_bay_panel'
+          unzip -l godot/build/Yardman-Map-Crown-Reset.apk | grep -q 'facade_source_upper_panel'
           "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose godot/build/Yardman-Map-Crown-Reset.apk
 
       - name: Upload reset map plus Crown APK
