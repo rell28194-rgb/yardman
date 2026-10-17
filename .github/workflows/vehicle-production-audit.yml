@@ -79,6 +79,10 @@ jobs:
           python godot/tools/vehicle_production/validate_lod_chain.py \
             --lod3 godot/build/vehicle-production/chaser-v-lod3.json \
             --output godot/build/vehicle-production/chaser-v-lod3-chain.json
+          python godot/tools/vehicle_production/audit_vehicle_candidate.py \
+            godot/assets/vehicle_lod/toyota_chaser_v_lod3.glb \
+            --identity ToyotaChaserV \
+            --output godot/build/vehicle-production/chaser-v-production-rig.json
 
       - name: Enforce full-fleet source policy and current owner authorization
         shell: bash
@@ -96,6 +100,15 @@ jobs:
           assert metrics['textures'] == 0
           assert metrics['estimated_geometry_bytes'] < 10000
           assert metrics['rig_contract']['pass']
+
+          strict = json.loads(Path('godot/build/vehicle-production/chaser-v-production-rig.json').read_text())
+          assert strict['contract']['pass'] is True
+          assert strict['contract']['spin_parented_to_pivot'] is True
+          assert strict['contract']['body_wheel_hierarchy_independent'] is True
+          assert strict['contract']['axle_alignment'] is True
+          assert strict['contract']['wheel_geometry'] is True
+          assert strict['contract']['metre_bounds'] is True
+          assert strict['quality']['warnings'] == []
 
           roster = json.loads(Path('godot/docs/vehicle_production/roster-2026-10-16.json').read_text())
           fusion = roster['policy']['source_fusion']
@@ -158,6 +171,22 @@ jobs:
           assert p992['asset_promotion'] == 'hold'
           assert p992['grade'] == 'F_ASSET_IDENTITY'
 
+          source_cohort = json.loads(Path('godot/docs/vehicle_production/beta1-quality-cohort-002.json').read_text())
+          assert source_cohort['summary']['candidates'] == 10
+          assert source_cohort['summary']['production_rig_contract_pass'] == 10
+          assert source_cohort['summary']['interior_evidence'] == 10
+          assert source_cohort['summary']['stock_wheel_targets_recovered_as_metadata'] == 10
+          assert source_cohort['summary']['asset_promotions'] == 0
+          assert source_cohort['summary']['quantity_gate_open'] is False
+          source_vehicles = {v['id']: v for v in source_cohort['vehicles']}
+          assert all(v['rig_pass'] for v in source_vehicles.values())
+          assert all(v['promotion'] == 'hold' for v in source_vehicles.values())
+          assert all(v['stock_wheel']['cap'] for v in source_vehicles.values())
+          assert source_vehicles['ToyotaAltezza']['geometry_warnings'] == ['suspicious_track_to_body_ratio']
+          assert source_vehicles['ToyotaMark2']['cross_source_grade'] == 'exact_model_match_not_mark_x'
+          assert source_vehicles['SilviaS13R']['cross_source_grade'] == 'directory_s13_audio_s15_conflict'
+          assert source_vehicles['SkylineR32']['cross_source_grade'] == 'directory_r32_audio_r34_conflict'
+
           rr3 = json.loads(Path('godot/docs/vehicle_production/beta1-beta2-rr3-fusion-batch-003.json').read_text())
           assert rr3['rr3_search_complete'] is True
           assert sum(rr3['mark_x_search']['terms'].values()) == 0
@@ -186,8 +215,6 @@ jobs:
           assert d['source_verification']['xapk_sha256'] == 'ec2b27625eb0901aa699318d1e159ac1a9f8fe08cdd8e9f28f1024e020502dc7'
           assert d['source_verification']['streaming_apk_sha256'] == 'd1e9eac6de65bf7ffb6071b8545d743c910befb85f868196efc9f671728a56da'
           assert d['source_verification']['addressables_catalog_sha256'] == '4bacdddca1c11ed8d3ba9697c90c06424e616eb2ca32af09191c5183694963b9'
-          # excluded_porsche fields in this older decode are historical observations only.
-          # They must not gate current owner-authorized Porsche recovery.
           assert set(d['open_identity_gates']) == {'21', '122'}
 
           batch = json.loads(Path('godot/docs/vehicle_production/beta1-beta2-vehicle-fusion-batch-002.json').read_text())
