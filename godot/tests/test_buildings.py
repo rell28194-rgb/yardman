@@ -9,19 +9,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import shapely
 from shapely.geometry import Polygon, Point
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from build_buildings import (building_form, building_height, conform_ring, make_record,
-                             parse_height, read_cell, write_pack)
+                             parse_height, read_cell, split_parent_by_parts, write_pack)
 
 
 class TriangleTerrain:
     spacing = 64.0
 
     def __call__(self, x, z):
-        # All neighbors share vertex heights, exactly like the national DEM.
         u, v = (x % 64.0) / 64.0, (z % 64.0) / 64.0
         ix, iz = math.floor(x / 64.0), math.floor(z / 64.0)
         def vertex(a, b):
@@ -40,6 +38,7 @@ class BuildingsTests(unittest.TestCase):
         self.assertEqual(building_height({"height": "12 m", "building:levels": "2"}), (12.0, 1))
         self.assertEqual(building_height({"building:levels": "2"}), (6.65, 2))
         self.assertEqual(building_height({"building": "house"}), (4.1, 3))
+        self.assertEqual(building_height({"building:part": "commercial", "height": "8 m"}), (8.0, 1))
 
     def test_source_form_metadata_survives_compilation(self):
         tags = {"building": "house", "building:levels": "2", "roof:shape": "gabled",
@@ -59,6 +58,22 @@ class BuildingsTests(unittest.TestCase):
         self.assertEqual(len(record), 9)
         self.assertEqual(record[8], form)
         self.assertEqual(record[4], 11.65)
+
+    def test_building_part_metadata_and_parent_split(self):
+        form = building_form({"building:part": "commercial", "building:levels": "3", "roof:shape": "flat"})
+        self.assertTrue(form["building_part"])
+        self.assertEqual(form["building_part_type"], "commercial")
+        parent = Polygon([(0, 0), (30, 0), (30, 20), (0, 20)])
+        west = Polygon([(0, 0), (12, 0), (12, 20), (0, 20)])
+        east = Polygon([(18, 0), (30, 0), (30, 20), (18, 20)])
+        residual = split_parent_by_parts(parent, [west, east])
+        self.assertAlmostEqual(residual.area, 120.0, places=5)
+        self.assertTrue(residual.covers(Point(15, 10)))
+        self.assertFalse(residual.covers(Point(5, 10)))
+        self.assertFalse(residual.covers(Point(25, 10)))
+        # A mostly external part must not carve a hole into the registered parent.
+        external = Polygon([(28, 0), (40, 0), (40, 20), (28, 20)])
+        self.assertAlmostEqual(split_parent_by_parts(parent, [external]).area, parent.area, places=5)
 
     def test_courtyard_roof_has_no_triangles_across_hole(self):
         polygon = Polygon([(0, 0), (30, 0), (30, 30), (0, 30)], [[(10, 10), (10, 20), (20, 20), (20, 10)]])
