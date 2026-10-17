@@ -8,8 +8,10 @@ on:
     paths:
       - 'godot/tools/build_hydrology.py'
       - 'godot/tools/build_hydrology_crossings.py'
+      - 'godot/tools/build_hydrology_channels.py'
       - 'Tests/Python/test_hydrology_geometry.py'
       - 'Tests/Python/test_hydrology_crossings.py'
+      - 'Tests/Python/test_hydrology_channels.py'
       - '.github/workflows/hydrology-truth.yml'
   workflow_dispatch:
 
@@ -19,7 +21,7 @@ permissions:
 jobs:
   national-hydrology:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -27,18 +29,20 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Compile DEM-registered Jamaica waterways and crossings
+      - name: Compile DEM-registered Jamaica waterways, crossings and channels
         shell: bash
         run: |
           set -euxo pipefail
           python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4' 'osmium>=4,<5' 'numpy>=2,<3' 'rasterio>=1.4,<2' 'shapely>=2.1,<3'
           python Tests/Python/test_hydrology_geometry.py
           python Tests/Python/test_hydrology_crossings.py
+          python Tests/Python/test_hydrology_channels.py
           wget -q https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf -O /tmp/jamaica.osm.pbf
           python godot/tools/build_jamaica_roads.py /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096
           python godot/tools/build_terrain.py /tmp/yardman-dem godot/data/roads/manifest.json godot/data/terrain --acquire
           python godot/tools/build_hydrology.py /tmp/jamaica.osm.pbf godot/data/terrain godot/data/hydrology | tee /tmp/hydrology.log
           python godot/tools/build_hydrology_crossings.py /tmp/jamaica.osm.pbf godot/data/hydrology godot/data/hydrology/crossings | tee /tmp/hydrology-crossings.log
+          python godot/tools/build_hydrology_channels.py godot/data/terrain godot/data/hydrology godot/data/hydrology/crossings godot/data/hydrology/channels | tee /tmp/hydrology-channels.log
           python - <<'PY'
           import json
           from pathlib import Path
@@ -54,6 +58,7 @@ jobs:
               raise SystemExit(f'hydrology coverage unexpectedly sparse: {stats}')
           if not manifest.get('tiles'):
               raise SystemExit('hydrology emitted no runtime tiles')
+
           crossing_path = Path('godot/data/hydrology/crossings/manifest.json')
           if not crossing_path.is_file():
               raise SystemExit('crossing manifest missing')
@@ -63,8 +68,22 @@ jobs:
               raise SystemExit(f'crossing coverage unexpectedly sparse: {crossing_stats}')
           if int(crossing_stats.get('resolved_by_source', 0)) < 10:
               raise SystemExit(f'crossing source evidence unexpectedly sparse: {crossing_stats}')
+
+          channel_path = Path('godot/data/hydrology/channels/manifest.json')
+          if not channel_path.is_file():
+              raise SystemExit('channel manifest missing')
+          channels = json.loads(channel_path.read_text())
+          channel_stats = channels.get('stats', {})
+          if int(channel_stats.get('channel_fragments', 0)) < 1000:
+              raise SystemExit(f'channel coverage unexpectedly sparse: {channel_stats}')
+          if int(channel_stats.get('fragments_clipped_for_crossing', 0)) <= 0:
+              raise SystemExit(f'crossing protection never affected channel geometry: {channel_stats}')
+          if not channels.get('tiles'):
+              raise SystemExit('channel compiler emitted no runtime tiles')
+
           print('YARDMAN_HYDROLOGY_TRUTH_PASS', json.dumps(stats, sort_keys=True), 'tiles=', len(manifest['tiles']))
           print('YARDMAN_HYDROLOGY_CROSSING_TRUTH_PASS', json.dumps(crossing_stats, sort_keys=True), 'tiles=', len(crossings.get('tiles', [])))
+          print('YARDMAN_HYDROLOGY_CHANNEL_TRUTH_PASS', json.dumps(channel_stats, sort_keys=True), 'tiles=', len(channels.get('tiles', [])))
           PY
 
       - name: Upload national hydrology truth pack
@@ -75,5 +94,6 @@ jobs:
             godot/data/hydrology/**
             /tmp/hydrology.log
             /tmp/hydrology-crossings.log
+            /tmp/hydrology-channels.log
           retention-days: 7
           compression-level: 6
