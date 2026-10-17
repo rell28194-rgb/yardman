@@ -172,6 +172,14 @@ def main() -> int:
         from build_terrain import TerrainSampler
         sampler = TerrainSampler(args.terrain)
     manifest = compile_dataset(args.input_geojson, args.output_dir, args.tile_size, height_sampler=sampler)
+    # The road build is the canonical full-island data entry point used by the
+    # reset Android workflow. Keep the authoritative admin_level=6 parish
+    # polygons beside the streamed map data whenever the source is the Jamaica
+    # PBF; GeoJSON road fixtures remain unaffected.
+    if args.input_geojson.suffix.lower() == ".pbf":
+        from build_parishes import compile_parishes
+        parish_manifest = compile_parishes(args.input_geojson, args.output_dir.parent / "parishes")
+        print("Packaged authoritative parish boundaries:", parish_manifest["stats"])
     print(json.dumps(manifest["stats"], indent=2, sort_keys=True))
     print(f"Bounds (m): {manifest['bounds']}")
     print(f"Wrote {len(manifest['tiles'])} road tiles and persistent topology to {args.output_dir}")

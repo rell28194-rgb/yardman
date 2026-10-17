@@ -56,7 +56,19 @@ func _run() -> void:
     if not await _capture("yardman-settings"):
         quit(1)
         return
-    print("YARDMAN_CAPTURE_TEST PASS actual_gl_frames=5 renderer=" + RenderingServer.get_video_adapter_name())
+    scene.hud.set_menu_open(false)
+    var parish_navigation = scene.get_node_or_null("ParishNavigation")
+    if parish_navigation == null:
+        push_error("CAPTURE_TEST: Parish navigation node missing")
+        quit(1)
+        return
+    parish_navigation.set_map_open(true)
+    if not await _capture("yardman-parish-map"):
+        push_error("CAPTURE_TEST: Parish map capture failed")
+        quit(1)
+        return
+    parish_navigation.set_map_open(false)
+    print("YARDMAN_CAPTURE_TEST PASS actual_gl_frames=6 renderer=" + RenderingServer.get_video_adapter_name())
     scene.queue_free()
     await process_frame
     quit(0)
