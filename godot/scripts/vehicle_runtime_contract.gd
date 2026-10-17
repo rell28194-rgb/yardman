@@ -4,6 +4,8 @@ class_name YardmanVehicleRuntimeContract
 # Vehicle-production boundary: this contract describes vehicle-local nodes that
 # the game may consume without depending on streamed terrain or road state.
 const REQUIRED_HOOKS := ["CameraMount", "ExitPoint", "DriverSeat"]
+const REQUIRED_RUNTIME_CHECKS := ["forward", "reverse", "steering", "braking", "park_exit_reenter", "reset_despawn"]
+const ACCEPTANCE_SCORE := 90
 
 static func ensure_hooks(vehicle: Node3D, bounds: AABB) -> Dictionary:
     var result := {}
@@ -41,4 +43,39 @@ static func audit(vehicle: Node3D) -> Dictionary:
         "missing_hooks": missing,
         "duplicate_hooks": duplicates,
         "visual_rig_count": visual_rigs.size(),
+    }
+
+static func grade(vehicle: Node3D, evidence: Dictionary) -> Dictionary:
+    var local_audit := audit(vehicle)
+    var failures := []
+    var score := 100
+    if not bool(local_audit.ready):
+        failures.append("node_contract")
+        score -= 30
+    for check_name in REQUIRED_RUNTIME_CHECKS:
+        if not bool(evidence.get(check_name, false)):
+            failures.append(check_name)
+            score -= 10
+    if not bool(evidence.get("selector_safe", false)):
+        failures.append("selector_safe")
+        score -= 10
+    if not bool(evidence.get("collider_rig_aligned", false)):
+        failures.append("collider_rig_aligned")
+        score -= 10
+    if not bool(evidence.get("identity_verified", false)):
+        failures.append("identity_verified")
+        score -= 20
+    if not bool(evidence.get("beta1_provenance", false)) or not bool(evidence.get("beta2_provenance", false)):
+        failures.append("dual_source_provenance")
+        score -= 20
+    if not bool(evidence.get("crown_non_regression", false)):
+        failures.append("crown_non_regression")
+        score -= 30
+    score = maxi(score, 0)
+    return {
+        "score": score,
+        "grade": "A" if score >= 95 else ("B" if score >= ACCEPTANCE_SCORE else ("C" if score >= 75 else "F")),
+        "accepted": score >= ACCEPTANCE_SCORE and failures.is_empty(),
+        "failures": failures,
+        "node_audit": local_audit,
     }
