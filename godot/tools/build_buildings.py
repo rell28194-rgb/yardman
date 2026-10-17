@@ -392,13 +392,12 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
             return result
 
         # Associate each ground-origin part with the most specific containing
-        # registered outline. This avoids rendering the same volume twice.
+        # registered outline. Parent geometries stay in SQLite instead of being
+        # retained island-wide in memory.
         part_parent = {}
-        parent_cache = {}
-        for parent_id, tags_json, geometry_wkb in connection.execute(
-                "SELECT id,tags,geometry FROM raw WHERE is_part=0 ORDER BY id"):
+        for parent_id, geometry_wkb in connection.execute(
+                "SELECT id,geometry FROM raw WHERE is_part=0 ORDER BY id"):
             parent = shapely.from_wkb(geometry_wkb)
-            parent_cache[parent_id] = (json.loads(tags_json), parent)
             for part_id in candidate_part_ids(parent):
                 part = part_rows[part_id]["geometry"]
                 if part.area <= 0.0:
@@ -412,25 +411,37 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
                     part_parent[part_id] = (score, parent_id)
         stats["parts_associated"] = len(part_parent)
 
+        parent_tag_cache = {}
+        def parent_tags(parent_id):
+            if parent_id not in parent_tag_cache:
+                row = connection.execute("SELECT tags FROM raw WHERE id=?", (parent_id,)).fetchone()
+                parent_tag_cache[parent_id] = json.loads(row[0]) if row else {}
+            return parent_tag_cache[parent_id]
+
         parent_parts = defaultdict(list)
         for part_id, info in part_rows.items():
             tags = dict(info["tags"])
             association = part_parent.get(part_id)
             if association is not None:
                 parent_id = association[1]
-                parent_tags, parent_geometry = parent_cache[parent_id]
+                source_parent_tags = parent_tags(parent_id)
                 if not tags.get("height") and not tags.get("building:levels"):
-                    if parent_tags.get("height"):
-                        tags["height"] = parent_tags["height"]
+                    if source_parent_tags.get("height"):
+                        tags["height"] = source_parent_tags["height"]
                         stats["part_height_inherited"] += 1
-                    elif parent_tags.get("building:levels"):
-                        tags["building:levels"] = parent_tags["building:levels"]
+                    elif source_parent_tags.get("building:levels"):
+                        tags["building:levels"] = source_parent_tags["building:levels"]
                         stats["part_levels_inherited"] += 1
                 parent_parts[parent_id].append(info["geometry"])
             if emit_geometry(part_id, info["geometry"], tags):
                 stats["building_parts_emitted"] += 1
 
-        for parent_id, (tags, parent) in parent_cache.items():
+        # Re-read parents from the bounded SQLite spool for final residual
+        # massing instead of holding the million-footprint parent set in RAM.
+        for parent_id, tags_json, geometry_wkb in connection.execute(
+                "SELECT id,tags,geometry FROM raw WHERE is_part=0 ORDER BY id"):
+            tags = json.loads(tags_json)
+            parent = shapely.from_wkb(geometry_wkb)
             child_parts = parent_parts.get(parent_id, [])
             geometry = split_parent_by_parts(parent, child_parts) if child_parts else parent
             if child_parts:
