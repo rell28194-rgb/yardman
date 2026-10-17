@@ -103,6 +103,22 @@ USE_ALIASES = {
     "garages": "outbuilding",
 }
 
+GRAMMAR_PROFILES = {
+    "residential": "jamaica_residential_v0_1",
+    "residential_light": "jamaica_residential_light_v0_1",
+    "residential_multi": "jamaica_residential_multi_v0_1",
+    "education": "jamaica_education_v0_1",
+    "medical": "jamaica_medical_v0_1",
+    "religious": "jamaica_religious_v0_1",
+    "lodging": "jamaica_lodging_v0_1",
+    "retail": "jamaica_retail_v0_1",
+    "food_service": "jamaica_food_service_v0_1",
+    "office": "jamaica_office_v0_1",
+    "commercial": "jamaica_commercial_v0_1",
+    "industrial": "jamaica_industrial_v0_1",
+    "outbuilding": "jamaica_outbuilding_v0_1",
+}
+
 
 def clean(value) -> str:
     return str(value or "").strip().lower().replace(" ", "_")
@@ -145,9 +161,36 @@ def use_class(tags: dict) -> str:
     return "unknown"
 
 
+def declared_shell_family(wall_material: str, roof_material: str) -> str:
+    """Describe only source-declared envelope combinations seen in Jamaican references."""
+    wall = material_family(wall_material)
+    roof = material_family(roof_material)
+    if not wall and not roof:
+        return ""
+    if wall == "metal" and roof == "metal":
+        return "metal_clad_lightweight"
+    if wall == "timber" and roof == "metal":
+        return "timber_metal"
+    if wall in {"masonry", "plaster", "brick", "stone"} and roof == "metal":
+        return "masonry_metal"
+    if wall in {"masonry", "plaster", "brick", "stone"} and roof == "tile":
+        return "masonry_tile"
+    if wall == "timber" and roof:
+        return "timber_" + roof
+    if wall and roof:
+        return wall + "_" + roof
+    return wall or ("roof_" + roof)
+
+
+def grammar_profile(tags: dict) -> str:
+    """National base profile; parish/settlement/local overrides are layered later."""
+    return GRAMMAR_PROFILES.get(use_class(tags), "jamaica_unclassified_v0_1")
+
+
 def source_envelope(tags: dict) -> dict:
     """Return declared envelope/use evidence; never infer a material or use."""
-    result = {"use_class": use_class(tags)}
+    use = use_class(tags)
+    result = {"use_class": use, "grammar_profile": grammar_profile(tags)}
     wall_raw = first_value(tags, WALL_KEYS)
     roof_raw = first_value(tags, ROOF_KEYS)
     if wall_raw:
@@ -156,6 +199,9 @@ def source_envelope(tags: dict) -> dict:
     if roof_raw:
         result["roof_material_raw"] = roof_raw
         result["roof_material"] = material_family(roof_raw)
+    shell = declared_shell_family(wall_raw, roof_raw)
+    if shell:
+        result["declared_shell_family"] = shell
     wall_colour = clean(tags.get("building:colour", ""))
     roof_colour = clean(tags.get("roof:colour", ""))
     if wall_colour:
