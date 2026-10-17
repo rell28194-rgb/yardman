@@ -2,8 +2,8 @@
 """Compile OSM building footprints into indexed, independently compressed cells.
 
 Registered source footprints, terrain-conformed foundations, recorded height/levels,
-source building parts, and source building-form tags are preserved independently
-from presentation inference.
+source building parts, source building-form tags and declared envelope materials are
+preserved independently from presentation inference.
 """
 from __future__ import annotations
 import argparse
@@ -23,6 +23,8 @@ import shapely
 from pyproj import Transformer
 from shapely.geometry import Polygon
 from shapely.ops import transform
+
+from building_semantics import inherit_declared_envelope, reconstruction_confidence, source_envelope
 
 TILE_SIZE = 4096
 CELL_SIZE = 256
@@ -98,8 +100,12 @@ def building_base_offset(tags: dict) -> float:
 
 
 def building_form(tags: dict) -> dict:
-    """Keep only source-declared 3D form tags needed for registered massing."""
-    result = {}
+    """Keep source-declared 3D form and envelope evidence for reconstruction."""
+    result = {"confidence": reconstruction_confidence(tags, _is_part(tags))}
+    source_type = _source_type(tags)
+    if source_type not in {"", "yes", "building"}:
+        result["building_type"] = source_type
+    result.update(source_envelope(tags))
     if _is_part(tags):
         result["building_part"] = True
         part_type = str(tags.get("building:part", "yes")).strip().lower()
@@ -364,10 +370,18 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
             stats["courtyards"] += len(polygon.interiors)
             stats["roof_triangles"] += len(record[7]) // 3
             form = record[8]
+            confidence = str(form.get("confidence", "B0"))
+            stats["confidence_" + confidence.lower()] += 1
             if form.get("roof_shape"):
                 stats["source_roof_shape"] += 1
             if form.get("roof_height_m") is not None:
                 stats["source_roof_height"] += 1
+            if form.get("wall_material"):
+                stats["source_wall_material"] += 1
+                stats["wall_material_" + str(form.wall_material)] += 1
+            if form.get("roof_material"):
+                stats["source_roof_material"] += 1
+                stats["roof_material_" + str(form.roof_material)] += 1
             if form.get("min_height_m") is not None or form.get("min_level") is not None:
                 stats["source_elevated_base"] += 1
             max_reach = max(max_reach, reach)
@@ -446,6 +460,10 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
                     elif source_parent_tags.get("building:levels"):
                         tags["building:levels"] = source_parent_tags["building:levels"]
                         stats["part_levels_inherited"] += 1
+                before_envelope = source_envelope(tags)
+                tags = inherit_declared_envelope(tags, source_parent_tags)
+                if source_envelope(tags) != before_envelope:
+                    stats["part_envelope_inherited"] += 1
                 if info["ground_origin"]:
                     ground_parent_parts[parent_id].append(info["geometry"])
 
@@ -514,7 +532,7 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
         stats["tiles"], stats["cells"] = len(tiles), sum(len(t["cells"]) for t in tiles)
         manifest = {"format": 1, "record_format": 2,
                     "encoding": "YMB1: <4sI> header, <HHII> local cell x/z, byte offset/length, deterministic gzip JSON arrays",
-                    "record": "[OSM mass id,height metres,height source(1=tag,2=levels,3=inferred),kind,maximum building elevation,rings[[x,y,z]],roof vertices[[x,z]],roof triangle indices,source form metadata]",
+                    "record": "[OSM mass id,height metres,height source(1=tag,2=levels,3=inferred),kind,maximum building elevation,rings[[x,y,z]],roof vertices[[x,z]],roof triangle indices,source form/envelope/confidence metadata]",
                     "coordinates": "X/Z relative to owning 256m content cell; Y canonical metres EGM2008",
                     "crs": "EPSG:3448", "origin": origin, "tile_size": TILE_SIZE, "cell_size": CELL_SIZE,
                     "source": "OpenStreetMap / Geofabrik Jamaica extract",
@@ -523,7 +541,7 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
                     "terrain_attribution": sampler.manifest.get("attribution", ""),
                     "height_inference": "Source height > source building:levels × 3.15m + 0.35m > declared class estimate (default 4.4m). Maximum massing elevation is above maximum sampled foundation height. DSM foundations are not surveyed bare-earth levels.",
                     "massing": "Ground-origin building:part polygons replace overlapping parent volume. Elevated parts use source min_height/building:min_level and remain stacked above the parent; they never carve away the lower parent mass. Invalid stacks whose base reaches/exceeds their top are rejected.",
-                    "appearance": "Registered footprint and source 3D form metadata are preserved. Unsupported source forms remain conservative extrusions until runtime support exists; presentation inference is explicitly separate from source truth.",
+                    "appearance": "Registered footprint, source 3D form, declared wall/cladding and roof material evidence, colour evidence and B0-B3 reconstruction confidence are preserved. Parent envelope evidence may fill missing child-part tags but never overwrites a child declaration. Unsupported source forms remain conservative extrusions until runtime support exists; regional presentation inference remains separate from source truth.",
                     "bounds": [round(v, 3) for v in bounds], "max_footprint_reach_m": round(max_reach, 3),
                     "max_cell_uncompressed_bytes": max_cell_bytes, "max_cell_buildings": max_cell_buildings,
                     "stats": dict(stats), "tiles": tiles}
