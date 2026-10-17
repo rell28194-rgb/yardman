@@ -23,6 +23,14 @@ func _source_record(identifier: String, shape: String = "gabled") -> Array:
     record.append({"roof_shape": shape, "roof_height_m": 1.2, "roof_orientation": "along"})
     return record
 
+func _geometry_build_state() -> Dictionary:
+    return {"wall_vertices": PackedVector3Array(), "wall_normals": PackedVector3Array(),
+        "wall_uvs": PackedVector2Array(), "wall_colors": PackedColorArray(),
+        "wall_uv2s": PackedVector2Array(), "wall_indices": PackedInt32Array(), "facades": [],
+        "roof_vertices": PackedVector3Array(), "roof_normals": PackedVector3Array(),
+        "roof_uvs": PackedVector2Array(), "roof_colors": PackedColorArray(),
+        "roof_indices": PackedInt32Array()}
+
 func _check_visible_winding(mesh: ArrayMesh, label: String) -> void:
     var arrays := mesh.surface_get_arrays(0)
     var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
@@ -119,6 +127,27 @@ func _run() -> void:
         var source_irregular := _source_record("source-irregular")
         source_irregular[5][0][2][0] = 14
         _check(streamer._source_roof(source_irregular).is_empty(), "Irregular source footprint was forced into a rectangular roof")
+
+        var elevated := _source_record("elevated-part")
+        elevated[1] = 12.0
+        elevated[4] = 17.0
+        elevated[8]["building_part"] = true
+        elevated[8]["min_height_m"] = 4.0
+        _check(is_equal_approx(streamer._source_base_offset(elevated), 4.0), "Source min_height did not become the part base offset")
+        _check(streamer._inferred_hip_roof(elevated).is_empty(), "Building part received an invented fallback hip roof")
+        var elevated_builder = BuildingScript.new()
+        elevated_builder._build = _geometry_build_state()
+        _check(elevated_builder._append_building(elevated), "Elevated building part could not build geometry")
+        var minimum_wall := INF
+        for point: Vector3 in elevated_builder._build.wall_vertices:
+            minimum_wall = minf(minimum_wall, point.y)
+        _check(is_equal_approx(minimum_wall, 9.0), "Elevated part wall did not start min_height above its 5m terrain foundation")
+        var level_part := _source_record("level-part")
+        level_part[8]["building_part"] = true
+        level_part[8]["min_level"] = 2.0
+        _check(is_equal_approx(elevated_builder._source_base_offset(level_part), 6.3), "building:min_level did not convert to the declared 3.15m storey pitch")
+        elevated_builder.free()
+
         var wall_material := walls.mesh.surface_get_material(0) as StandardMaterial3D
         var roof_material := roofs.mesh.surface_get_material(0) as StandardMaterial3D
         _check(wall_material != null and wall_material != wall_source and wall_material.albedo_color == wall_source.albedo_color, "Imported wall material was not copied into the merged mesh")
@@ -164,7 +193,7 @@ func _run() -> void:
         var walls := streamer._loaded["160:0"].root.get_node("Walls") as MeshInstance3D
         _check(is_equal_approx(walls.visibility_range_end, streamer.draw_distance + streamer.cell_size), "Imported material bypassed live mesh visibility settings")
         _check(walls.mesh.surface_get_material(0) is StandardMaterial3D, "Travel discarded the supplied imported wall material")
-    print("YARDMAN_BUILDING_STREAMER_TEST %s cells=1 meshes=1 collision=1 cancel=1 rebase=1 bounds=1 corruption=1 imported_materials=1 art_geometry_invariance=1 clockwise_normals=1 inferred_hip_roof=1 source_roof_massing=1 source_heights_courtyards_preserved=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_BUILDING_STREAMER_TEST %s cells=1 meshes=1 collision=1 cancel=1 rebase=1 bounds=1 corruption=1 imported_materials=1 art_geometry_invariance=1 clockwise_normals=1 inferred_hip_roof=1 source_roof_massing=1 elevated_parts=1 source_heights_courtyards_preserved=1" % ("PASS" if failures == 0 else "FAIL"))
     streamer.queue_free()
     await process_frame
     quit(0 if failures == 0 else 1)
