@@ -31,10 +31,11 @@ func _run() -> void:
     var second_audit := RuntimeContract.audit(vehicle)
     _check(bool(second_audit.ready), "reapplying hooks regressed the contract: %s" % str(second_audit))
     for hook_name in RuntimeContract.REQUIRED_HOOKS:
-        _check(vehicle.find_children(hook_name, "Marker3D", true, false).size() == 1, "reapplying hooks duplicated %s" % hook_name)
+        _check(int(second_audit.hook_counts.get(hook_name, 0)) == 1, "reapplying hooks duplicated %s" % hook_name)
 
     var duplicate_camera := Marker3D.new()
     duplicate_camera.name = "CameraMount"
+    duplicate_camera.set_meta(RuntimeContract.HOOK_ROLE_META, "CameraMount")
     vehicle.add_child(duplicate_camera)
     var bad_audit := RuntimeContract.audit(vehicle)
     _check(not bool(bad_audit.ready), "duplicate CameraMount was accepted")
@@ -43,6 +44,7 @@ func _run() -> void:
 
     var second_visual := Node3D.new()
     second_visual.name = "VisualRig"
+    second_visual.set_meta(RuntimeContract.VISUAL_ROLE_META, true)
     vehicle.add_child(second_visual)
     bad_audit = RuntimeContract.audit(vehicle)
     _check(not bool(bad_audit.ready), "duplicate VisualRig was accepted")
