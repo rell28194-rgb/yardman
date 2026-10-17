@@ -378,10 +378,10 @@ def compile_dataset(input_path: Path, terrain_root: Path, output: Path, limit=0)
                 stats["source_roof_height"] += 1
             if form.get("wall_material"):
                 stats["source_wall_material"] += 1
-                stats["wall_material_" + str(form.wall_material)] += 1
+                stats["wall_material_" + str(form.get("wall_material"))] += 1
             if form.get("roof_material"):
                 stats["source_roof_material"] += 1
-                stats["roof_material_" + str(form.roof_material)] += 1
+                stats["roof_material_" + str(form.get("roof_material"))] += 1
             if form.get("min_height_m") is not None or form.get("min_level") is not None:
                 stats["source_elevated_base"] += 1
             max_reach = max(max_reach, reach)
