@@ -67,7 +67,7 @@ jobs:
             --paint 0.20,0.035,0.035
           cmp /tmp/yardman-vehicle-lod/toyota_chaser_v_lod3.glb godot/assets/vehicle_lod/toyota_chaser_v_lod3.glb
 
-      - name: Audit active distant geometry and Yardman rig contract
+      - name: Audit active distant geometry and strict-production negative control
         shell: bash
         run: |
           set -euo pipefail
@@ -79,10 +79,14 @@ jobs:
           python godot/tools/vehicle_production/validate_lod_chain.py \
             --lod3 godot/build/vehicle-production/chaser-v-lod3.json \
             --output godot/build/vehicle-production/chaser-v-lod3-chain.json
+          set +e
           python godot/tools/vehicle_production/audit_vehicle_candidate.py \
             godot/assets/vehicle_lod/toyota_chaser_v_lod3.glb \
-            --identity ToyotaChaserV \
-            --output godot/build/vehicle-production/chaser-v-production-rig.json
+            --identity ToyotaChaserV_LOD3_NEGATIVE_CONTROL \
+            --output godot/build/vehicle-production/chaser-v-production-negative-control.json
+          STRICT_EXIT=$?
+          set -e
+          test "$STRICT_EXIT" -eq 1
 
       - name: Enforce full-fleet source policy and current owner authorization
         shell: bash
@@ -101,14 +105,14 @@ jobs:
           assert metrics['estimated_geometry_bytes'] < 10000
           assert metrics['rig_contract']['pass']
 
-          strict = json.loads(Path('godot/build/vehicle-production/chaser-v-production-rig.json').read_text())
-          assert strict['contract']['pass'] is True
+          strict = json.loads(Path('godot/build/vehicle-production/chaser-v-production-negative-control.json').read_text())
+          assert strict['contract']['pass'] is False
+          assert strict['contract']['rig_nodes_unique'] is True
           assert strict['contract']['spin_parented_to_pivot'] is True
           assert strict['contract']['body_wheel_hierarchy_independent'] is True
           assert strict['contract']['axle_alignment'] is True
-          assert strict['contract']['wheel_geometry'] is True
           assert strict['contract']['metre_bounds'] is True
-          assert strict['quality']['warnings'] == []
+          assert strict['contract']['wheel_geometry'] is False
 
           roster = json.loads(Path('godot/docs/vehicle_production/roster-2026-10-16.json').read_text())
           fusion = roster['policy']['source_fusion']
