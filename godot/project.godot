@@ -11,6 +11,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [autoload]
 MapQualityBootstrap="*res://scripts/map_quality_bootstrap.gd"
+HydrologyBootstrap="*res://scripts/hydrology_bootstrap.gd"
 
 [display]
 window/size/viewport_width=1280
