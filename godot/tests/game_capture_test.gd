@@ -6,9 +6,25 @@ var output_dir := ""
 func _initialize() -> void:
     call_deferred("_run")
 
+func _suppress_far_overview() -> void:
+    # The acceptance runner uses software OpenGL. Building all 2,537 national
+    # far-LOD sectors there can consume most of the 10-minute capture budget,
+    # even though every acceptance frame is a local gameplay view. Keep the
+    # real streamed terrain/roads/buildings and discard only the asynchronous
+    # island-overview assembly in this test process.
+    if scene == null or scene.terrain == null:
+        return
+    var terrain = scene.terrain
+    if not terrain._far_build.is_empty():
+        terrain._far_build.clear()
+    if terrain._far_root != null and terrain._far_root.get_child_count() == 0:
+        terrain._far_root.queue_free()
+        terrain._far_root = null
+
 func _wait_world() -> bool:
     for frame in range(3600):
         await process_frame
+        _suppress_far_overview()
         if scene.world_ready and scene.car.is_on_floor() and scene.roads.inflight_count() == 0 and scene.terrain.inflight_count() == 0:
             if scene.buildings != null and scene.buildings.inflight_count() > 0:
                 continue
@@ -18,6 +34,7 @@ func _wait_world() -> bool:
 func _capture(name_value: String) -> bool:
     for frame in range(8):
         await process_frame
+        _suppress_far_overview()
     await RenderingServer.frame_post_draw
     var picture := root.get_texture().get_image()
     if picture == null or picture.is_empty():
