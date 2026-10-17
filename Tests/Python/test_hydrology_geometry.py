@@ -6,7 +6,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "godot" / "tools"))
 
-from build_hydrology import parse_width_m, split_segment_by_tile
+from build_hydrology import (
+    parse_bool_tag,
+    parse_layer,
+    parse_width_m,
+    split_segment_by_tile,
+    waterway_structure,
+)
 
 
 class HydrologyGeometryTests(unittest.TestCase):
@@ -46,6 +52,36 @@ class HydrologyGeometryTests(unittest.TestCase):
         self.assertEqual(parse_width_m(None, "river"), 18.0)
         self.assertEqual(parse_width_m("unknown", "stream"), 5.0)
         self.assertTrue(math.isfinite(parse_width_m(None, "ditch")))
+
+    def test_bool_and_layer_tags_are_conservative(self):
+        self.assertTrue(parse_bool_tag("yes"))
+        self.assertTrue(parse_bool_tag("1"))
+        self.assertFalse(parse_bool_tag("no"))
+        self.assertFalse(parse_bool_tag("culvert"))
+        self.assertEqual(parse_layer("-2"), -2)
+        self.assertEqual(parse_layer("garbage"), 0)
+        self.assertEqual(parse_layer("99"), 20)
+
+    def test_culvert_is_underground_crossing_evidence(self):
+        structure = waterway_structure({"tunnel": "culvert", "layer": "-1"})
+        self.assertTrue(structure["culvert"])
+        self.assertTrue(structure["underground"])
+        self.assertFalse(structure["covered"])
+        self.assertEqual(structure["layer"], -1)
+
+    def test_covered_or_underground_location_is_not_open_channel(self):
+        covered = waterway_structure({"covered": "yes"})
+        underground = waterway_structure({"location": "underground"})
+        self.assertTrue(covered["underground"])
+        self.assertTrue(underground["underground"])
+        self.assertTrue(underground["covered"])
+
+    def test_plain_stream_remains_open_channel_candidate(self):
+        structure = waterway_structure({"waterway": "stream"})
+        self.assertFalse(structure["culvert"])
+        self.assertFalse(structure["covered"])
+        self.assertFalse(structure["underground"])
+        self.assertEqual(structure["layer"], 0)
 
 
 if __name__ == "__main__":
