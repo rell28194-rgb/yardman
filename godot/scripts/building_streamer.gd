@@ -90,8 +90,6 @@ func _ready() -> void:
 
 func _resolve_material(override_material: Material, roof: bool) -> Material:
     if override_material != null:
-        # Copy only the material resource. Imported textures remain shared;
-        # cell streams do not duplicate texture memory or change source assets.
         var copy := override_material.duplicate() as Material
         _set_material_visibility(copy)
         return copy
@@ -113,8 +111,6 @@ func _resolve_material(override_material: Material, roof: bool) -> Material:
     return material
 
 func _set_material_visibility(material: Material) -> void:
-    # Imported StandardMaterial3D and unrelated shaders are valid inputs.
-    # Do not invent uniform names on an imported material.
     if material is ShaderMaterial and material.shader == BuildingShader:
         material.set_shader_parameter("visibility_distance", draw_distance)
 
@@ -335,6 +331,16 @@ func _prepare_geometry() -> void:
         if Time.get_ticks_usec() - started >= geometry_budget_us:
             break
 
+func _source_base_offset(record: Array) -> float:
+    if record.size() < 9 or not record[8] is Dictionary:
+        return 0.0
+    var form: Dictionary = record[8]
+    if form.has("min_height_m"):
+        return maxf(0.0, float(form.min_height_m))
+    if form.has("min_level"):
+        return maxf(0.0, float(form.min_level) * 3.15)
+    return 0.0
+
 func _append_building(record: Variant) -> bool:
     if not record is Array or record.size() < 8 or record.size() > 9 or not record[5] is Array or not record[6] is Array or not record[7] is Array or not is_finite(float(record[4])):
         return false
@@ -349,17 +355,19 @@ func _append_building(record: Variant) -> bool:
     var identifier := str(record[0])
     var variant := absi(identifier.hash()) % PALETTE.size()
     var color: Color = PALETTE[variant]
-    # Alpha carries a deterministic material family in the merged cell mesh.
-    # It is not opacity and does not create a separate draw call per building.
     color.a = float(variant) / float(PALETTE.size() - 1)
     var roof_color := Color(0.43, 0.45, 0.43).lerp(Color(0.61, 0.33, 0.24), float(variant % 3) * 0.28)
     var roof_y := float(record[4])
+    var base_offset := _source_base_offset(record)
     var roof_detail := _source_roof(record)
     if roof_detail.is_empty():
         roof_detail = _inferred_hip_roof(record)
     var wall_top: float = float(roof_detail.get("eaves_y", roof_y))
     roof_color.a = 1.0 if not roof_detail.is_empty() else 0.0
-    var facade := _plan_facade(record, wall_top)
+    # Imported facade modules are not vertically inferred onto elevated source
+    # parts. Their source massing remains authoritative until a measured facade
+    # host exists for that part.
+    var facade := {} if base_offset > 0.001 else _plan_facade(record, wall_top)
     if not facade.is_empty():
         _build.facades.append(facade)
     var ring_index := 0
@@ -380,12 +388,17 @@ func _append_building(record: Variant) -> bool:
             var after: Variant = ring[(index + 1) % ring.size()]
             if not before is Array or before.size() != 3 or not after is Array or after.size() != 3:
                 return false
-            var a := Vector3(float(before[0]), float(before[1]), float(before[2]))
-            var b := Vector3(float(after[0]), float(after[1]), float(after[2]))
+            var a := Vector3(float(before[0]), float(before[1]) + base_offset, float(before[2]))
+            var b := Vector3(float(after[0]), float(after[1]) + base_offset, float(after[2]))
             if not a.is_finite() or not b.is_finite():
                 return false
             var length := Vector2(b.x - a.x, b.z - a.z).length()
             if length < 0.0001:
+                continue
+            # Invalid source stacks do not grow inverted walls. The roof can
+            # still remain visible as source evidence if its top is valid.
+            if wall_top <= maxf(a.y, b.y) + 0.05:
+                station += length
                 continue
             var normal := Vector3(b.z - a.z, 0.0, a.x - b.x).normalized() * normal_sign
             var offset: int = _build.wall_vertices.size()
@@ -431,9 +444,6 @@ func _append_building(record: Variant) -> bool:
 
 func _append_clockwise(kind: String, a: int, b: int, c: int, normal: Vector3) -> void:
     var vertices: PackedVector3Array = _build[kind + "_vertices"]
-    # Godot's visible side is clockwise: the geometric cross product points
-    # opposite its outward shading normal. Correct source triangulations at
-    # ingestion, instead of hiding inverted faces with cull_disabled.
     if (vertices[b] - vertices[a]).cross(vertices[c] - vertices[a]).dot(normal) > 0.0:
         var swap := b
         b = c
@@ -476,7 +486,7 @@ func _source_rectangle_frame(record: Array) -> Dictionary:
     return {"center": center, "axis": axis, "across": across,
         "half_length": edges[long_index].length() * 0.5,
         "half_width": edges[(long_index + 1) % 4].length() * 0.5,
-        "foundation": foundation}
+        "foundation": foundation + _source_base_offset(record)}
 
 func _source_roof(record: Array) -> Dictionary:
     if record.size() < 9 or not record[8] is Dictionary:
@@ -506,20 +516,20 @@ func _source_roof(record: Array) -> Dictionary:
         var old_length := half_length
         half_length = half_width
         half_width = old_length
-    var height := float(record[1])
+    var body_height := maxf(0.0, float(record[1]) - _source_base_offset(record))
     var rise := 0.0
     if form.has("roof_height_m"):
         rise = float(form.roof_height_m)
     elif form.has("roof_levels"):
         rise = float(form.roof_levels) * 2.4
     else:
-        rise = clampf(minf(half_width * 0.42, height * 0.28), 0.45, 2.8)
-    rise = minf(rise, height - 1.8)
+        rise = clampf(minf(half_width * 0.42, body_height * 0.28), 0.45, 2.8)
+    rise = minf(rise, body_height - 0.35)
     if rise < 0.25:
         return {}
     var roof_y := float(record[4])
     var eaves_y := roof_y - rise
-    if eaves_y - float(frame.foundation) < 1.8:
+    if eaves_y - float(frame.foundation) < 0.2:
         return {}
     var center: Vector2 = frame.center
     var x := axis * half_length
@@ -535,9 +545,8 @@ func _source_roof(record: Array) -> Dictionary:
         "eaves_y": eaves_y, "roof_y": roof_y, "source": true}
 
 func _inferred_hip_roof(record: Array) -> Dictionary:
-    # Source heights/levels, courtyards and irregular footprints retain the
-    # compiled roof. Only small rectangular inferred houses/sheds get this
-    # declared presentation detail; the registered maximum height is retained.
+    if record.size() >= 9 and record[8] is Dictionary and bool(record[8].get("building_part", false)):
+        return {}
     if int(record[2]) != 3 or int(record[3]) not in [0, 5] or record[5].size() != 1:
         return {}
     var height := float(record[1])
@@ -580,8 +589,6 @@ func _inferred_hip_roof(record: Array) -> Dictionary:
     var eaves_y := roof_y - rise
     if eaves_y - foundation < 1.8:
         return {}
-    # Sixteen centimetres of eave cover are inferred roof detail. Building
-    # ownership, foundation footprint and source record remain unchanged.
     var x := axis * (half_length + 0.16)
     var z := across * (half_width + 0.16)
     var points: Array[Vector2] = [center - x - z, center + x - z, center + x + z, center - x + z]
@@ -661,7 +668,6 @@ func _load_facade_meshes() -> void:
         _bake_facade_surfaces(source, Transform3D.IDENTITY, baked)
         source.free()
         var bounds := baked.get_aabb()
-        # Reject unexpected geometry rather than resize it to fit a real host.
         if baked.get_surface_count() != 1 or bounds.size.x < 0.2 or bounds.size.x > 3.0 or bounds.size.y < 0.2 or bounds.size.y > 2.8 or bounds.size.z > 0.65:
             _facade_meshes.clear()
             return
@@ -688,8 +694,6 @@ func _bake_facade_surfaces(node: Node, parent_pose: Transform3D, mesh: ArrayMesh
 func _plan_facade(record: Array, wall_top: float) -> Dictionary:
     if _facade_meshes.size() != 3 or record[5].is_empty() or _build.facades.size() >= MAX_FACADE_HOSTS_PER_CELL:
         return {}
-    # One longest fitting external edge and three consecutive inferred modules.
-    # Source height/DSM foundation remain authoritative; inner rings stay plain.
     var ring: Array = record[5][0]
     var area := 0.0
     for index in range(ring.size()):
@@ -732,7 +736,6 @@ func _plan_facade(record: Array, wall_top: float) -> Dictionary:
 func _attach_facades(cell_root: Node3D) -> StaticBody3D:
     if _build.facades.is_empty():
         return null
-    # Three draws per cell, sharing exactly three cached meshes across cells.
     for component in range(3):
         var multimesh := MultiMesh.new()
         multimesh.transform_format = MultiMesh.TRANSFORM_3D
@@ -826,8 +829,6 @@ func _refresh_collision() -> void:
             body.collision_layer = 0
             collider.shape = null
         elif collider.shape == null and not created:
-            # A distant visible cell does not retain a physics BVH. Prepare
-            # one nearby merged collider per pass, then discard it on retreat.
             var faces := PackedVector3Array()
             for mesh in _loaded[key].meshes:
                 faces.append_array(mesh.get_faces())
