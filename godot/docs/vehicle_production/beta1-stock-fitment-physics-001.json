@@ -1,0 +1,93 @@
+{
+  "checkpoint": "beta1-stock-fitment-physics-001",
+  "format_version": 1,
+  "source_checkpoint_sha256": "6a32c638e94dd9fb129c49ba598aaeb5251bcd6a11e7f051af0eda91dfa8c4f3",
+  "scope": "Exact CarX stock Desc payloads recovered from selected Beta1 UnityFS source cache and compared to current Yardman recovered LOD0 wheel pivots.",
+  "policy": {
+    "source_desc_overrides_generic_fitment_assumptions": true,
+    "current_shared_wheelstyle1_is_not_stock_acceptance": true,
+    "private_source_media_committed": false,
+    "promotion_requires_fitment_revalidation": true
+  },
+  "summary": {
+    "exact_stock_desc_recovered": 3,
+    "vehicles_compared": 3,
+    "fitment_matches_without_material_delta": 0,
+    "requires_revalidation_or_rerig": 3
+  },
+  "vehicles": [
+    {
+      "id": "ToyotaMark2",
+      "source": {
+        "file": "63a0bae9e90585445be7a540672f5fb9.gz",
+        "bytes": 1797,
+        "sha256": "0a31f0865387e27ac8349166380ebd06f87b4b1f96ed41c3ce8a85f1214fe333",
+        "payload_sha256": "2f83ed6da2b232d19ba5036432fba2bd576c6236370be49c6e24225185d70b56",
+        "stock_name": "ToyotaMark2Stock"
+      },
+      "stock": {
+        "base_y_m": 0.416,
+        "front_track_m": 1.48500012,
+        "rear_track_m": 1.585,
+        "front_axle_z_m": 1.67800009,
+        "rear_axle_z_m": -1.0,
+        "wheelbase_m": 2.67800009,
+        "front_tyre": {"width_mm": 225, "profile_percent": 50, "rim_in": 17},
+        "rear_tyre": {"width_mm": 225, "profile_percent": 50, "rim_in": 17}
+      },
+      "current_lod0": {"front_track_m": 1.472, "rear_track_m": 1.472, "wheelbase_m": 2.676},
+      "delta_current_minus_stock_m": {"front_track": -0.01300012, "rear_track": -0.113, "wheelbase": -0.00200009},
+      "assessment": "wheelbase_near_source_but_rear_track_stagger_lost",
+      "promotion": "hold_for_exact_stock_fitment"
+    },
+    {
+      "id": "SkylineR32",
+      "source": {
+        "file": "00e6fbdf0ce09fc489d65dd8b0f4513b.gz",
+        "bytes": 1772,
+        "sha256": "9e7a98b3f21001db5edb362169715fe349aaa4631a6edf7a10c2c9833eb5e3b9",
+        "payload_sha256": "4bc934b99fcdd402873d5af97e0083c85550eed7593454f0056e3eaa7daf6256",
+        "stock_name": "SkylineR32Stock"
+      },
+      "stock": {
+        "base_y_m": 0.390000015,
+        "front_track_m": 1.475,
+        "rear_track_m": 1.485,
+        "front_axle_z_m": 0.963000059,
+        "rear_axle_z_m": -1.62900007,
+        "wheelbase_m": 2.592000129,
+        "front_tyre": {"width_mm": 245, "profile_percent": 40, "rim_in": 17},
+        "rear_tyre": {"width_mm": 235, "profile_percent": 40, "rim_in": 17}
+      },
+      "current_lod0": {"front_track_m": 1.568, "rear_track_m": 1.568, "wheelbase_m": 2.722},
+      "delta_current_minus_stock_m": {"front_track": 0.093, "rear_track": 0.083, "wheelbase": 0.129999871},
+      "assessment": "current_pivots_materially_wider_and_longer_than_stock_desc",
+      "promotion": "hold_for_identity_and_rerig"
+    },
+    {
+      "id": "HondaS2000",
+      "source": {
+        "file": "dfeb43623b0f33a42a2e72758cce3855.gz",
+        "bytes": 1686,
+        "sha256": "390d823f325fde7fedea0f991f6479cda59cb5d2eda653fd3f16f63c8299aeac",
+        "payload_sha256": "a96e2e22d8b4c4e02704250ad146262e87c5de4c87fe1c0025621b9a6ee7aee7",
+        "stock_name": "HondaS2000Stock"
+      },
+      "stock": {
+        "base_y_m": 0.405000031,
+        "front_track_m": 1.475,
+        "rear_track_m": 1.475,
+        "front_axle_z_m": 1.21100008,
+        "rear_axle_z_m": -1.13500011,
+        "wheelbase_m": 2.34600019,
+        "front_tyre": {"width_mm": 205, "profile_percent": 55, "rim_in": 16},
+        "rear_tyre": {"width_mm": 225, "profile_percent": 50, "rim_in": 16}
+      },
+      "current_lod0": {"front_track_m": 1.456, "rear_track_m": 1.456, "wheelbase_m": 2.312},
+      "delta_current_minus_stock_m": {"front_track": -0.019, "rear_track": -0.019, "wheelbase": -0.03400019},
+      "assessment": "close_but_not_exact_source_fitment_and_staggered_tyre_width_missing_from_shared_wheel_assembly",
+      "promotion": "hold_for_exact_stock_fitment"
+    }
+  ],
+  "next_action": "Recover the remaining seven exact Stock Desc payloads from Beta1 source volumes, then rebuild wheel pivots/tyre assemblies from per-axle source values before visual promotion."
+}
