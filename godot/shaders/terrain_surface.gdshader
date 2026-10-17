@@ -11,6 +11,8 @@ uniform bool has_reference_ground = false;
 uniform bool has_reference_rock = false;
 uniform sampler2D tunnel_portal_mask : filter_nearest, repeat_disable;
 uniform bool tunnel_portal_mask_enabled = false;
+uniform sampler2D hydrology_channel_mask : filter_nearest, repeat_disable;
+uniform bool hydrology_channel_mask_enabled = false;
 uniform float terrain_tile_size = 4096.0;
 uniform vec2 tile_origin = vec2(0.0);
 uniform bool overview = false;
@@ -27,14 +29,18 @@ void vertex() {
 }
 
 void fragment() {
-    // Only true negative-layer tunnel portals receive a mask. The mountain
-    // remains intact over the tunnel interior; this removes just the opening
-    // where the profiled road deck passes beneath the terrain surface.
-    if (tunnel_portal_mask_enabled) {
-        vec2 portal_uv = clamp(tile_position / max(terrain_tile_size, 1.0), vec2(0.0), vec2(1.0));
-        if (texture(tunnel_portal_mask, portal_uv).r > 0.5) {
-            discard;
-        }
+    vec2 terrain_uv = clamp(tile_position / max(terrain_tile_size, 1.0), vec2(0.0), vec2(1.0));
+    // Only true negative-layer tunnel portals receive this mask. The mountain
+    // remains intact over the tunnel interior; only the entrance is removed.
+    if (tunnel_portal_mask_enabled && texture(tunnel_portal_mask, terrain_uv).r > 0.5) {
+        discard;
+    }
+    // Open waterways use a separate source-backed mask. The replacement bank
+    // and bed mesh occupies this exact corridor, so rivers are incised into the
+    // terrain instead of rendered as a surface decal. Culvert/underground and
+    // unresolved road-crossing protection never enter this mask.
+    if (hydrology_channel_mask_enabled && texture(hydrology_channel_mask, terrain_uv).r > 0.5) {
+        discard;
     }
 
     vec3 blend = pow(abs(normalize(ground_normal)), vec3(5.0));
@@ -65,9 +71,7 @@ void fragment() {
             + texture(reference_dry_grass, p.xy / 8.0).rgb * blend.z;
         grass = mix(wet, dry_texture, dry);
     }
-    // The acceptance captures exposed a fluorescent lime response on flat
-    // lowland ground. Keep the recovered texture variation but constrain its
-    // lighting range and saturation before the Android sun/ambient pass.
+    // Keep recovered texture variation but constrain its lighting response.
     grass *= mix(0.78, 1.12, patch.r) * mix(0.88, 1.08, macro);
     float grass_luma = dot(grass, vec3(0.2126, 0.7152, 0.0722));
     grass = mix(vec3(grass_luma), grass, 0.78) * 0.88;
@@ -86,7 +90,6 @@ void fragment() {
     ALBEDO = color * grain;
     ROUGHNESS = mix(0.96, 0.87, rocky);
     SPECULAR = 0.14;
-    // A subtle texture normal adds surface detail without changing geography.
     if (!overview) {
         vec2 normal_xy = (detail.rg - vec2(0.5)) * (0.16 + rocky * 0.13);
         NORMAL_MAP = vec3(normal_xy + vec2(0.5), 1.0);
