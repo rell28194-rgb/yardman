@@ -9,6 +9,10 @@ on:
       - 'godot/tools/build_hydrology.py'
       - 'godot/tools/build_hydrology_crossings.py'
       - 'godot/tools/build_hydrology_channels.py'
+      - 'godot/scripts/hydrology_geometry.gd'
+      - 'godot/scripts/hydrology_bootstrap.gd'
+      - 'godot/shaders/terrain_surface.gdshader'
+      - 'godot/project.godot'
       - 'Tests/Python/test_hydrology_geometry.py'
       - 'Tests/Python/test_hydrology_crossings.py'
       - 'Tests/Python/test_hydrology_channels.py'
@@ -18,10 +22,14 @@ on:
 permissions:
   contents: read
 
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+
 jobs:
   national-hydrology:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -86,6 +94,22 @@ jobs:
           print('YARDMAN_HYDROLOGY_CHANNEL_TRUTH_PASS', json.dumps(channel_stats, sort_keys=True), 'tiles=', len(channels.get('tiles', [])))
           PY
 
+      - name: Validate hydrology runtime import in Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          rm -rf /tmp/godot-bin && mkdir -p /tmp/godot-bin
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee /tmp/godot-hydrology-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|Shader error|^ERROR:' /tmp/godot-hydrology-import.log; then
+            exit 1
+          fi
+          grep -F '4.7.2' <(godot --version)
+
       - name: Upload national hydrology truth pack
         uses: actions/upload-artifact@v4
         with:
@@ -95,5 +119,6 @@ jobs:
             /tmp/hydrology.log
             /tmp/hydrology-crossings.log
             /tmp/hydrology-channels.log
+            /tmp/godot-hydrology-import.log
           retention-days: 7
           compression-level: 6
