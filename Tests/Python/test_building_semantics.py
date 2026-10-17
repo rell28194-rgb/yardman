@@ -10,6 +10,7 @@ from building_semantics import (
     material_family,
     reconstruction_confidence,
     source_envelope,
+    use_class,
 )
 
 
@@ -30,12 +31,13 @@ class BuildingSemanticsTests(unittest.TestCase):
         self.assertEqual(result["roof_material"], "metal")
 
     def test_parent_evidence_only_fills_missing_part_tags(self):
-        parent = {"building:material": "concrete", "roof:material": "zinc", "building:colour": "cream"}
+        parent = {"building:material": "concrete", "roof:material": "zinc", "building:colour": "cream", "tourism": "hotel"}
         child = {"building:part": "yes", "building:material": "wood"}
         merged = inherit_declared_envelope(child, parent)
         self.assertEqual(merged["building:material"], "wood")
         self.assertEqual(merged["roof:material"], "zinc")
         self.assertEqual(merged["building:colour"], "cream")
+        self.assertEqual(merged["tourism"], "hotel")
 
     def test_confidence_tiers_follow_reconstruction_spec(self):
         self.assertEqual(reconstruction_confidence({"building": "yes"}), "B0")
@@ -47,6 +49,16 @@ class BuildingSemanticsTests(unittest.TestCase):
         result = source_envelope({"building:material": "wattle_and_daub"})
         self.assertEqual(result["wall_material"], "wattle_and_daub")
         self.assertEqual(result["wall_material_raw"], "wattle_and_daub")
+
+    def test_use_context_outranks_generic_building_yes(self):
+        self.assertEqual(use_class({"building": "yes", "amenity": "school"}), "education")
+        self.assertEqual(use_class({"building": "yes", "tourism": "hotel"}), "lodging")
+        self.assertEqual(use_class({"building": "yes", "shop": "supermarket"}), "retail")
+        self.assertEqual(use_class({"building": "apartments"}), "residential_multi")
+
+    def test_source_envelope_keeps_construction_state(self):
+        result = source_envelope({"building": "construction", "construction": "house"})
+        self.assertEqual(result["construction_state"], "house")
 
 
 if __name__ == "__main__":
