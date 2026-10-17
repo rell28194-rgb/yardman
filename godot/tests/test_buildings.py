@@ -13,7 +13,7 @@ import shapely
 from shapely.geometry import Polygon, Point
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from build_buildings import (building_height, conform_ring, make_record,
+from build_buildings import (building_form, building_height, conform_ring, make_record,
                              parse_height, read_cell, write_pack)
 
 
@@ -41,10 +41,30 @@ class BuildingsTests(unittest.TestCase):
         self.assertEqual(building_height({"building:levels": "2"}), (6.65, 2))
         self.assertEqual(building_height({"building": "house"}), (4.1, 3))
 
+    def test_source_form_metadata_survives_compilation(self):
+        tags = {"building": "house", "building:levels": "2", "roof:shape": "gabled",
+                "roof:height": "1.2 m", "roof:levels": "1", "roof:orientation": "across",
+                "roof:direction": "370", "min_height": "0.6 m", "building:min_level": "1"}
+        form = building_form(tags)
+        self.assertEqual(form["roof_shape"], "gabled")
+        self.assertEqual(form["roof_height_m"], 1.2)
+        self.assertEqual(form["roof_levels"], 1.0)
+        self.assertEqual(form["roof_orientation"], "across")
+        self.assertEqual(form["roof_direction_deg"], 10.0)
+        self.assertEqual(form["min_height_m"], 0.6)
+        self.assertEqual(form["min_level"], 1.0)
+        self.assertEqual(form["levels"], 2.0)
+        polygon = Polygon([(0, 0), (12, 0), (12, 8), (0, 8)])
+        _, record, _ = make_record("w70:0", polygon, tags, lambda x, z: 5.0)
+        self.assertEqual(len(record), 9)
+        self.assertEqual(record[8], form)
+        self.assertEqual(record[4], 11.65)
+
     def test_courtyard_roof_has_no_triangles_across_hole(self):
         polygon = Polygon([(0, 0), (30, 0), (30, 30), (0, 30)], [[(10, 10), (10, 20), (20, 20), (20, 10)]])
         cell, record, reach = make_record("r500:0", polygon, {"height": "9"}, lambda x, z: x * .1 + z * .05)
         self.assertEqual(cell, (0, 0))
+        self.assertEqual(len(record), 9)
         self.assertEqual(len(record[5]), 2)
         roof_area = 0.0
         for index in range(0, len(record[7]), 3):
