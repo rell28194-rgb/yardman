@@ -2,10 +2,14 @@ extends RefCounted
 class_name YardmanVehicleController
 
 const ModelScript = preload("res://scripts/vehicle_model.gd")
-const MAX_FORWARD_MPS := 42.0
-const MAX_REVERSE_MPS := 7.0
+const PROFILE_CROWN_STAGE3 := "crown_stage3_compound_hybrid"
+const MAX_FORWARD_MPS := 105.0
+const MAX_REVERSE_MPS := 12.0
 const GRASS_LIMIT_MPS := 18.0
 const WHEELBASE_M := 2.56
+const FRONT_ELECTRIC_CUTOFF_MPS := 52.0
+const DOWNFORCE_COEFFICIENT := 0.0032
+const MAX_DOWNFORCE_ACCEL := 28.0
 
 var body: CharacterBody3D
 var speed_mps := 0.0
@@ -18,6 +22,10 @@ var engine_rpm := 900.0
 var steering_angle := 0.0
 var wheelbase_m := WHEELBASE_M
 var visual: Node3D
+var performance_profile := PROFILE_CROWN_STAGE3
+var front_electric_assist := 0.0
+var compound_boost := 0.0
+var downforce_accel := 0.0
 var _steer := 0.0
 var _ground_basis := Basis.IDENTITY
 var _last_acceleration := 0.0
@@ -26,7 +34,7 @@ var _last_throttle := 0.0
 
 func configure(vehicle: CharacterBody3D) -> void:
     body = vehicle
-    body.floor_snap_length = 0.7
+    body.floor_snap_length = 0.9
     body.floor_max_angle = deg_to_rad(52.0)
     body.floor_stop_on_slope = true
     body.floor_constant_speed = true
@@ -58,6 +66,24 @@ func _fit_reference_collision() -> void:
         collision.position = Vector3(centre.x, shape.size.y * 0.5, centre.z)
         break
 
+func _boost_components(speed_abs: float) -> Dictionary:
+    # Stage 3 compound boost: the supercharger fills the low/mid-range while
+    # the twins take over as airflow rises. Twin front motors fill launch torque.
+    var fraction := clampf(speed_abs / MAX_FORWARD_MPS, 0.0, 1.0)
+    var supercharger := 4.8 * (1.0 - smoothstep(22.0, 58.0, speed_abs))
+    var twin_turbos := 6.5 * smoothstep(6.0, 28.0, speed_abs) * (1.0 - 0.48 * fraction)
+    var front_motors := 7.5 * (1.0 - smoothstep(12.0, FRONT_ELECTRIC_CUTOFF_MPS, speed_abs))
+    return {"supercharger": supercharger, "twin_turbos": twin_turbos, "front_motors": front_motors}
+
+func performance_state() -> Dictionary:
+    return {
+        "profile": performance_profile,
+        "top_speed_kmh": MAX_FORWARD_MPS * 3.6,
+        "front_electric_assist": front_electric_assist,
+        "compound_boost": compound_boost,
+        "downforce_accel": downforce_accel,
+    }
+
 func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
     # A parked car outside collision residency must not fall or change pose.
     # Its canonical double-precision position belongs to the world state.
@@ -68,6 +94,9 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
     turn = clampf(turn, -1.0, 1.0) if occupied else 0.0
     _last_throttle = throttle
     var previous_speed := speed_mps
+    var speed_abs := absf(speed_mps)
+    var road_downforce := minf(speed_abs * speed_abs * DOWNFORCE_COEFFICIENT, MAX_DOWNFORCE_ACCEL)
+    downforce_accel = road_downforce if on_road else road_downforce * 0.16
     var braking := clampf(brake_input, 0.0, 1.0)
     var reverse_braking := (throttle < -0.02 and speed_mps > 0.18) or (throttle > 0.02 and speed_mps < -0.18)
     if reverse_braking:
@@ -78,24 +107,37 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
         braking = maxf(braking, 0.85)
     var traction := body.is_on_floor()
     if braking > 0.01:
-        var brake_deceleration := (10.8 if on_road else 6.6) * braking
+        # Carbon-ceramic service braking, regen and aero load all contribute.
+        var brake_deceleration := ((20.0 + downforce_accel * 0.30) if on_road else 8.5) * braking
         if not traction:
             brake_deceleration *= 0.1
         speed_mps = move_toward(speed_mps, 0.0, brake_deceleration * dt)
+        front_electric_assist = 0.0
+        compound_boost = 0.0
     elif absf(throttle) > 0.02 and traction:
         var limit := MAX_REVERSE_MPS if throttle < 0.0 else (MAX_FORWARD_MPS if on_road else GRASS_LIMIT_MPS)
-        var speed_fraction := clampf(absf(speed_mps) / MAX_FORWARD_MPS, 0.0, 1.0)
-        # Usable torque from standstill through the gears replaces a desired
-        # speed lerp. The service brake is independent of reverse selection.
-        var acceleration := (6.7 - 2.2 * speed_fraction) * absf(throttle)
+        var speed_fraction := clampf(speed_abs / MAX_FORWARD_MPS, 0.0, 1.0)
+        var boost := _boost_components(speed_abs)
+        var base_engine := 7.4 - 2.8 * speed_fraction
+        compound_boost = float(boost.supercharger) + float(boost.twin_turbos)
+        front_electric_assist = float(boost.front_motors) if throttle > 0.0 and on_road else 0.0
+        var acceleration := (base_engine + compound_boost + front_electric_assist) * absf(throttle)
         if throttle < 0.0:
-            acceleration *= 0.70
+            acceleration = base_engine * 0.52 * absf(throttle)
+            compound_boost = 0.0
+            front_electric_assist = 0.0
         if not on_road:
-            acceleration *= 0.72
-        if absf(speed_mps) < limit:
+            acceleration *= 0.52
+            compound_boost *= 0.40
+        if speed_abs < limit:
             speed_mps += signf(throttle) * acceleration * dt
             speed_mps = clampf(speed_mps, -MAX_REVERSE_MPS, MAX_FORWARD_MPS)
-    var rolling_drag := 0.10 + absf(speed_mps) * absf(speed_mps) * 0.0012
+    else:
+        front_electric_assist = move_toward(front_electric_assist, 0.0, 18.0 * dt)
+        compound_boost = move_toward(compound_boost, 0.0, 15.0 * dt)
+    # The Stage 3 car has enough power to pull against real aero load at the
+    # 378 km/h limiter; this term represents rolling + body drag, not downforce.
+    var rolling_drag := 0.12 + absf(speed_mps) * absf(speed_mps) * 0.00045
     if not on_road:
         rolling_drag += 0.62 + absf(speed_mps) * absf(speed_mps) * 0.0035
         if speed_mps > GRASS_LIMIT_MPS:
@@ -104,28 +146,28 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
         speed_mps = move_toward(speed_mps, 0.0, rolling_drag * dt)
     if absf(speed_mps) < 0.055 and absf(throttle) < 0.02:
         speed_mps = 0.0
-    _steer = move_toward(_steer, turn, dt * 5.8)
-    var steering_limit := lerpf(deg_to_rad(34.0), deg_to_rad(10.0), clampf(absf(speed_mps) / MAX_FORWARD_MPS, 0.0, 1.0))
+    _steer = move_toward(_steer, turn, dt * 7.0)
+    var steering_limit := lerpf(deg_to_rad(34.0), deg_to_rad(7.5), clampf(absf(speed_mps) / MAX_FORWARD_MPS, 0.0, 1.0))
     steering_angle = -_steer * steering_limit
     var yaw_rate := speed_mps * tan(steering_angle) / wheelbase_m
-    # Tyre grip bounds lateral acceleration at speed. Full-lock input cannot
-    # spin a 150 km/h car around its centre as the previous controller did.
-    var grip := 8.4 if on_road else 4.8
+    # Active aero turns speed into usable tyre load. At Vmax this adds roughly
+    # 2.85 g of vertical load and lifts the lateral grip ceiling accordingly.
+    var grip := (11.5 + downforce_accel * 0.65) if on_road else 4.8
     if handbrake:
-        grip *= 0.68
-    var yaw_limit := minf(1.12, grip / maxf(absf(speed_mps), 1.0))
+        grip *= 0.62
+    var yaw_limit := minf(1.28, grip / maxf(absf(speed_mps), 1.0))
     yaw_rate = clampf(yaw_rate, -yaw_limit, yaw_limit) if traction else 0.0
     body.rotate_y(yaw_rate * dt)
     _last_yaw_rate = yaw_rate
     var forward := -body.global_transform.basis.z
     var desired_horizontal := Vector2(forward.x, forward.z).normalized() * speed_mps
     var horizontal := Vector2(body.velocity.x, body.velocity.z)
-    var response := (13.0 if on_road else 7.0) * (0.45 if handbrake else 1.0)
+    var response := ((19.0 + minf(downforce_accel * 0.16, 4.0)) if on_road else 7.0) * (0.38 if handbrake else 1.0)
     if traction:
         horizontal = horizontal.lerp(desired_horizontal, 1.0 - exp(-response * dt))
     body.velocity.x = horizontal.x
     body.velocity.z = horizontal.y
-    body.velocity.y = -1.2 if traction else body.velocity.y - 23.0 * dt
+    body.velocity.y = -(2.0 + downforce_accel) if traction else body.velocity.y - (23.0 + downforce_accel * 0.35) * dt
     var before := body.global_position
     body.move_and_slide()
     odometer_m += Vector2(body.global_position.x - before.x, body.global_position.z - before.z).length()
@@ -133,10 +175,10 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
         speed_mps = Vector2(body.velocity.x, body.velocity.z).dot(Vector2(forward.x, forward.z))
     _last_acceleration = (speed_mps - previous_speed) / dt
     _update_visual(dt, forward, braking)
-    var ratios := [400.0, 230.0, 170.0, 135.0, 106.0]
+    var ratios := [480.0, 320.0, 235.0, 185.0, 145.0, 105.0, 72.0]
     var ratio: float = ratios[_gear_index()]
-    var target_rpm := clampf(950.0 + absf(speed_mps) * ratio + absf(throttle) * 350.0, 850.0, 6500.0) if occupied else 0.0
-    engine_rpm = lerpf(engine_rpm, target_rpm, 1.0 - exp(-dt * 8.0))
+    var target_rpm := clampf(1000.0 + absf(speed_mps) * ratio + absf(throttle) * 700.0, 900.0, 8200.0) if occupied else 0.0
+    engine_rpm = lerpf(engine_rpm, target_rpm, 1.0 - exp(-dt * 10.0))
 
 func _update_visual(delta: float, forward: Vector3, braking: float) -> void:
     if visual == null:
@@ -148,21 +190,25 @@ func _update_visual(delta: float, forward: Vector3, braking: float) -> void:
             var desired_basis := body.global_basis.inverse() * Basis.looking_at(ahead, up)
             _ground_basis = _ground_basis.slerp(desired_basis, 1.0 - exp(-delta * 7.0)).orthonormalized()
     visual.basis = _ground_basis
-    var body_pitch := clampf(_last_acceleration * 0.0038, -0.055, 0.035)
-    var body_roll := clampf(-_last_yaw_rate * speed_mps * 0.0060, -0.07, 0.07)
+    var body_pitch := clampf(_last_acceleration * 0.0030, -0.060, 0.038)
+    var body_roll := clampf(-_last_yaw_rate * speed_mps * 0.0046, -0.065, 0.065)
     visual.call("update_motion", delta, speed_mps, steering_angle, braking, speed_mps < -0.15, occupied, body_pitch, body_roll)
 
 func _gear_index() -> int:
     var forward_speed := absf(speed_mps)
-    if forward_speed < 8.0:
+    if forward_speed < 9.0:
         return 0
-    if forward_speed < 15.0:
+    if forward_speed < 17.0:
         return 1
-    if forward_speed < 23.0:
+    if forward_speed < 28.0:
         return 2
-    if forward_speed < 32.0:
+    if forward_speed < 42.0:
         return 3
-    return 4
+    if forward_speed < 60.0:
+        return 4
+    if forward_speed < 82.0:
+        return 5
+    return 6
 
 func gear_label() -> String:
     if not occupied and absf(speed_mps) < 0.2:
@@ -179,6 +225,9 @@ func reset_motion() -> void:
     steering_angle = 0.0
     brake_input = 0.0
     handbrake = false
+    front_electric_assist = 0.0
+    compound_boost = 0.0
+    downforce_accel = 0.0
     _last_throttle = 0.0
     _last_acceleration = 0.0
     _last_yaw_rate = 0.0

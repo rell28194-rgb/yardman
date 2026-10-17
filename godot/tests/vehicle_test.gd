@@ -134,6 +134,7 @@ func _run() -> void:
     _check(car.is_on_floor(), "Vehicle did not settle on the collision floor")
     _check(car.get_node("VisualRig") == controller.visual and controller.visual != blockout, "Model did not replace the old blockout")
     _check(controller.visual.get("wheels").size() == 4 and controller.visual.get("front_pivots").size() == 2, "Four independent wheels/front steering are missing")
+    _check(controller.performance_profile == VehicleScript.PROFILE_CROWN_STAGE3, "Crown Stage 3 performance profile is not active")
     var reference_model: bool = controller.visual.get("is_reference_model")
     if OS.get_environment("YARDMAN_REQUIRE_REFERENCE") == "1":
         _check(reference_model, "Private preview requested without its actual sedan asset")
@@ -141,28 +142,43 @@ func _run() -> void:
         _check_reference_model(scene, collision)
     else:
         _check_fallback_panels()
-    await _step_frames(420, 1.0)
+
+    await _step_frames(60, 1.0)
+    var launch_state: Dictionary = controller.performance_state()
+    _check(float(launch_state.front_electric_assist) > 0.5, "Front electric motors are not contributing launch torque")
+    _check(float(launch_state.compound_boost) > 0.5, "Supercharger/twin-turbo compound boost is not active")
+    await _step_frames(120, 1.0)
     var acceleration_speed: float = controller.speed_mps
-    _check(acceleration_speed > 27.8 and acceleration_speed < 42.01, "Seven seconds of road acceleration did not reach 100 km/h within its cap")
-    _check(controller.odometer_m > 60.0 and car.position.z < -60.0, "Engine input advanced speed without moving the actual car")
-    _check(controller.engine_rpm > 1500.0 and controller.gear_label().begins_with("D"), "RPM/gear indicators did not follow driving")
+    _check(acceleration_speed > 27.8 and acceleration_speed < 105.01, "Stage 3 Crown did not clear 100 km/h inside three seconds")
+    _check(controller.odometer_m > 25.0 and car.position.z < -25.0, "Stage 3 power advanced speed without moving the actual car")
+    _check(controller.engine_rpm > 2000.0 and controller.gear_label().begins_with("D"), "RPM/gear indicators did not follow Stage 3 driving")
     var spin: Node3D = controller.visual.get("wheels")[0]
     _check(absf(spin.rotation.x) > 0.01, "Wheel animation did not follow travel")
+
+    await _step_frames(300, 1.0)
+    var high_speed: float = controller.speed_mps
+    _check(high_speed > 75.0 and high_speed <= 105.01, "Stage 3 Crown did not reach its expected 270+ km/h high-speed band")
+    _check(controller.downforce_accel > 10.0, "High-speed active aero is not generating substantial downforce")
+    _check(absf(float(controller.performance_state().top_speed_kmh) - 378.0) < 0.1, "Stage 3 limiter contract is not 378 km/h")
+
     controller.brake_input = 1.0
-    await _step_frames(240, 1.0)
-    _check(absf(controller.speed_mps) < 0.05, "Service brake failed to stop while throttle remained pressed")
+    await _step_frames(300, 1.0)
+    _check(absf(controller.speed_mps) < 0.05, "Stage 3 service brakes and regen failed to stop while throttle remained pressed")
     await _step_frames(90, 0.0)
     _check(controller.speed_mps >= 0.0, "Service brake selected reverse")
     controller.brake_input = 0.0
     await _step_frames(150, -1.0)
-    _check(controller.speed_mps < -3.0 and controller.speed_mps >= -7.01 and controller.gear_label() == "R", "Reverse did not work within its separate cap")
+    _check(controller.speed_mps < -3.0 and controller.speed_mps >= -12.01 and controller.gear_label() == "R", "Reverse did not work within its separate Stage 3 cap")
     var reverse_material: StandardMaterial3D = controller.visual.get("reverse_material")
     _check(reverse_material != null and reverse_material.emission_energy_multiplier > 1.0, "Reverse lamps did not illuminate")
+
     await _reset()
-    controller.speed_mps = 35.0
-    car.velocity = Vector3(0, -1.2, -35.0)
+    controller.speed_mps = 85.0
+    car.velocity = Vector3(0, -1.2, -85.0)
     await _step_frames(6, 0.0, 1.0)
-    _check(absf(controller.steering_angle) > 0.01, "Steering input did not reach the front axle")
+    _check(absf(controller.steering_angle) > 0.01, "Steering input did not reach the front axle at high speed")
+    _check(controller.downforce_accel > 15.0, "High-speed steering test lost the active-aero load")
+
     controller.on_road = false
     await _reset()
     controller.on_road = false
@@ -172,5 +188,5 @@ func _run() -> void:
     var parked := car.global_position
     await _step_frames(30, 1.0, 1.0, false)
     _check(car.global_position.is_equal_approx(parked), "Parked vehicle moved outside collision residency")
-    print("YARDMAN_VEHICLE_TEST %s acceleration_kmh=%.1f braking=1 reverse=1 steering=1 grass=1 freeze=1 reference_model=%s triangles=%d textured_surfaces=%d" % ["PASS" if failures == 0 else "FAIL", acceleration_speed * 3.6, str(reference_model), reference_triangles, reference_textured_surfaces])
+    print("YARDMAN_VEHICLE_TEST %s launch_kmh=%.1f high_speed_kmh=%.1f downforce_mps2=%.1f stage3=1 braking=1 reverse=1 steering=1 grass=1 freeze=1 reference_model=%s triangles=%d textured_surfaces=%d" % ["PASS" if failures == 0 else "FAIL", acceleration_speed * 3.6, high_speed * 3.6, controller.downforce_accel, str(reference_model), reference_triangles, reference_textured_surfaces])
     quit(0 if failures == 0 else 1)
