@@ -6,7 +6,9 @@ on:
       - codex/hydrology-incision-001
     paths:
       - 'godot/tools/build_road_earthworks.py'
+      - 'godot/tools/build_source_road_earthwork_geometry.py'
       - 'Tests/Python/test_road_earthworks.py'
+      - 'Tests/Python/test_source_road_earthwork_geometry.py'
       - '.github/workflows/earthworks-truth.yml'
   workflow_dispatch:
 
@@ -24,16 +26,18 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Compile Jamaica road earthwork evidence
+      - name: Compile Jamaica road earthwork evidence and source-only geometry
         shell: bash
         run: |
           set -euxo pipefail
           python -m pip install --disable-pip-version-check 'pyproj>=3.7,<4' 'osmium>=4,<5' 'numpy>=2,<3' 'rasterio>=1.4,<2' 'shapely>=2.1,<3'
           python Tests/Python/test_road_earthworks.py
+          python Tests/Python/test_source_road_earthwork_geometry.py
           wget -q https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf -O /tmp/jamaica.osm.pbf
           python godot/tools/build_jamaica_roads.py /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096
           python godot/tools/build_terrain.py /tmp/yardman-dem godot/data/roads/manifest.json godot/data/terrain --acquire
           python godot/tools/build_road_earthworks.py /tmp/jamaica.osm.pbf godot/data/terrain godot/data/earthworks | tee /tmp/road-earthworks.log
+          python godot/tools/build_source_road_earthwork_geometry.py godot/data/terrain godot/data/earthworks godot/data/earthworks/geometry | tee /tmp/road-earthwork-geometry.log
           python - <<'PY'
           import json
           from pathlib import Path
@@ -48,7 +52,25 @@ jobs:
               raise SystemExit(f'no source-resolved road structures/earthworks found: {stats}')
           if int(stats.get('dem_review_candidates', 0)) <= 0:
               raise SystemExit(f'no DEM review candidates found: {stats}')
+
+          geometry_path = Path('godot/data/earthworks/geometry/manifest.json')
+          if not geometry_path.is_file():
+              raise SystemExit('source road earthwork geometry manifest missing')
+          geometry = json.loads(geometry_path.read_text())
+          geometry_stats = geometry.get('stats', {})
+          seen = int(geometry_stats.get('source_records_seen', 0))
+          emitted = int(geometry_stats.get('geometry_fragments', 0))
+          if seen <= 0:
+              raise SystemExit(f'source earthwork geometry saw no explicit cut/fill records: {geometry_stats}')
+          if emitted <= 0:
+              raise SystemExit(f'no explicit cut/fill records had sufficient DEM support: {geometry_stats}')
+          if emitted > seen:
+              raise SystemExit(f'geometry emitted more fragments than explicit source records: {geometry_stats}')
+          if int(geometry_stats.get('geometry_source_cutting', 0)) + int(geometry_stats.get('geometry_source_embankment', 0)) != emitted:
+              raise SystemExit(f'non-source earthwork entered physical geometry: {geometry_stats}')
+
           print('YARDMAN_ROAD_EARTHWORK_TRUTH_PASS', json.dumps(stats, sort_keys=True), 'tiles=', len(manifest.get('tiles', [])))
+          print('YARDMAN_SOURCE_ROAD_EARTHWORK_GEOMETRY_PASS', json.dumps(geometry_stats, sort_keys=True), 'tiles=', len(geometry.get('tiles', [])))
           PY
 
       - name: Upload road earthwork truth pack
@@ -58,5 +80,6 @@ jobs:
           path: |
             godot/data/earthworks/**
             /tmp/road-earthworks.log
+            /tmp/road-earthwork-geometry.log
           retention-days: 7
           compression-level: 6
