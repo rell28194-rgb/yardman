@@ -99,7 +99,7 @@ void write_payload(uint base, vec3 custom_data, uint layer) {
         far_records.data[base + 15u] = 1.0;
         far_records.data[base + 16u] = custom_data.x;
         far_records.data[base + 17u] = custom_data.y;
-        far_records.data[base + 18u] = 0.5;
+        far_records.data[base + 18u] = custom_data.z;
         far_records.data[base + 19u] = 1.0;
     } else {
         grass_records.data[base + 12u] = 1.0;
