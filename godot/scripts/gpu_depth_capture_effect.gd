@@ -22,7 +22,7 @@ var _snapshot: Dictionary = {}
 var _release_done := false
 
 func _init() -> void:
-    effect_callback_type = EFFECT_CALLBACK_TYPE_POST_OPAQUE
+    effect_callback_type = EFFECT_CALLBACK_TYPE_PRE_TRANSPARENT
     access_resolved_depth = true
     _rd = RenderingServer.get_rendering_device()
 
@@ -58,7 +58,7 @@ func release_done() -> bool:
     return done
 
 func _render_callback(callback_type: EffectCallbackType, render_data: RenderData) -> void:
-    if _rd == null or callback_type != EFFECT_CALLBACK_TYPE_POST_OPAQUE:
+    if _rd == null or callback_type != EFFECT_CALLBACK_TYPE_PRE_TRANSPARENT:
         return
     if not _ensure_pipeline():
         return
