@@ -228,13 +228,26 @@ func _free_global_rd_resources(rd: RenderingDevice) -> void:
 
 func _cleanup_and_flush() -> void:
     if _multimesh.is_valid():
+        # Explicitly resize to zero before freeing the MultiMesh. This forces
+        # MeshStorage to retire both the instance SSBO and indirect command
+        # SSBO while the RenderingServer is still alive instead of leaving
+        # their teardown until process-finalization.
+        _mm_buffer = RID()
+        _command_buffer = RID()
+        RenderingServer.multimesh_set_mesh(_multimesh, RID())
+        RenderingServer.multimesh_allocate_data(
+            _multimesh, 0, RenderingServer.MULTIMESH_TRANSFORM_3D,
+            false, false, false)
+        RenderingServer.force_draw(false, 0.0)
+        await process_frame
+        RenderingServer.force_sync()
         RenderingServer.free_rid(_multimesh)
         _multimesh = RID()
-    _mm_buffer = RID()
-    _command_buffer = RID()
     _mesh = null
-    # Let deferred renderer destruction retire its internal storage buffers.
+    # Flush deferred RendererServer destruction before SceneTree quits. This is
+    # intentionally test-only; production must never force-sync every frame.
     for _frame in range(3):
+        RenderingServer.force_draw(false, 0.0)
         await process_frame
     RenderingServer.force_sync()
 
