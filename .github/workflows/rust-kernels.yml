@@ -91,3 +91,49 @@ jobs:
             native/yardman_rust/Cargo.lock.ci
           if-no-files-found: ignore
           retention-days: 14
+
+  android-arm64-compile:
+    needs: linux-rust-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      RUST_VERSION: '1.94.0'
+      ANDROID_API: '35'
+      ANDROID_NDK_VERSION: '27.2.12479018'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin Rust Android target
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST_VERSION" --profile minimal --target aarch64-linux-android
+          rustup default "$RUST_VERSION"
+          rustc --version
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-35 ndk;27.2.12479018'
+          log-accepted-android-sdk-licenses: 'false'
+      - name: Compile Yardman Rust adapter for Android arm64
+        shell: bash
+        run: |
+          set -euo pipefail
+          NDK="$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
+          TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          test -x "$TOOLCHAIN/clang"
+          test -x "$TOOLCHAIN/aarch64-linux-android${ANDROID_API}-clang"
+          export CLANG_PATH="$TOOLCHAIN/clang"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/aarch64-linux-android${ANDROID_API}-clang"
+          cargo build --manifest-path native/yardman_rust/Cargo.toml --target aarch64-linux-android
+          test -s native/yardman_rust/target/aarch64-linux-android/debug/libyardman_native_rust.so
+          file native/yardman_rust/target/aarch64-linux-android/debug/libyardman_native_rust.so | tee android-arm64-native.txt
+          grep -Eq 'ARM aarch64|ARM64|aarch64' android-arm64-native.txt
+      - name: Preserve Android native compile evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Rust-Android-arm64-${{ github.sha }}
+          path: |
+            android-arm64-native.txt
+            native/yardman_rust/target/aarch64-linux-android/debug/libyardman_native_rust.so
+          if-no-files-found: error
+          retention-days: 14
