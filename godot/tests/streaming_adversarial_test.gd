@@ -2,8 +2,22 @@ extends SceneTree
 
 const Harness = preload("res://scripts/streaming_adversarial_harness.gd")
 const RetryPolicy = preload("res://scripts/stream_retry_policy.gd")
+const RecoveryRuntime = preload("res://scripts/stream_recovery_runtime.gd")
 
 var failures := 0
+
+class FakeStreamer:
+    extends Node
+    var _failed: Dictionary = {}
+    var _loaded: Dictionary = {}
+    var _wanted: Dictionary = {}
+    var _world_position := Vector2(10.0, 20.0)
+    var refresh_calls := 0
+    var last_refresh := Vector3.ZERO
+
+    func update_world(x: float, z: float, force: bool = false) -> void:
+        refresh_calls += 1
+        last_refresh = Vector3(x, z, 1.0 if force else 0.0)
 
 func _initialize() -> void:
     call_deferred("_run")
@@ -21,7 +35,8 @@ func _run() -> void:
     _test_retry_timing_and_stale_cleanup()
     _test_legacy_failure_conversion()
     _test_loaded_tile_clears_failure()
-    print("YARDMAN_STREAMING_ADVERSARIAL_TEST %s schema=1 deterministic=1 backoff=1 repeated_failure=1 retry=1 stale=1 orphan_cleanup=1 legacy=1 loaded_failure_oracle=1" % (
+    _test_recovery_runtime_integration()
+    print("YARDMAN_STREAMING_ADVERSARIAL_TEST %s schema=1 deterministic=1 backoff=1 repeated_failure=1 retry=1 stale=1 orphan_cleanup=1 legacy=1 loaded_failure_oracle=1 runtime_integration=1" % (
         "PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
 
@@ -173,3 +188,52 @@ func _test_loaded_tile_clears_failure() -> void:
     var stats: Dictionary = result.get("stats", {})
     _check(int(stats.get("loaded_failures_cleared", 0)) == 1,
         "loaded failure reconciliation metric did not record the cleanup")
+
+func _test_recovery_runtime_integration() -> void:
+    var runtime := RecoveryRuntime.new()
+    var streamer := FakeStreamer.new()
+    root.add_child(runtime)
+    root.add_child(streamer)
+    streamer._wanted["tile:runtime"] = true
+    streamer._failed["tile:runtime"] = true
+
+    var first: Dictionary = runtime._service_streamer(streamer, "near-buildings", 0)
+    _check(int(first.get("active_failures", 0)) == 1, "runtime did not convert initial legacy failure")
+    _check(int(first.get("tracked_attempts", 0)) == 1, "runtime lost first retry attempt")
+    _check(streamer.refresh_calls == 0, "runtime refreshed before retry deadline")
+
+    runtime._service_streamer(streamer, "near-buildings", 999)
+    _check(streamer.refresh_calls == 0, "runtime refreshed one millisecond before deadline")
+    var released: Dictionary = runtime._service_streamer(streamer, "near-buildings", 1000)
+    _check(streamer.refresh_calls == 1, "runtime did not force refresh when retry became due")
+    _check(int(released.get("retries_released", 0)) == 1, "runtime retry release accounting mismatch")
+    _check(is_equal_approx(streamer.last_refresh.x, 10.0) and is_equal_approx(streamer.last_refresh.y, 20.0),
+        "runtime passed wrong world position into forced refresh")
+    _check(is_equal_approx(streamer.last_refresh.z, 1.0), "runtime forced-refresh flag was lost")
+
+    streamer._failed["tile:runtime"] = true
+    runtime._service_streamer(streamer, "near-buildings", 1000)
+    runtime._service_streamer(streamer, "near-buildings", 2999)
+    _check(streamer.refresh_calls == 1, "second retry ignored exponential backoff")
+    var second_release: Dictionary = runtime._service_streamer(streamer, "near-buildings", 3000)
+    _check(streamer.refresh_calls == 2, "second retry did not release at its exponential deadline")
+    _check(int(second_release.get("retries_released", 0)) == 2, "runtime lost cumulative retry-release accounting")
+
+    streamer._failed["tile:runtime"] = true
+    streamer._loaded["tile:runtime"] = true
+    var loaded_cleanup: Dictionary = runtime._service_streamer(streamer, "near-buildings", 3000)
+    _check(streamer.refresh_calls == 2, "already-loaded tile triggered redundant forced refresh")
+    _check(not streamer._failed.has("tile:runtime"), "runtime left loaded tile in failed set")
+    _check(int(loaded_cleanup.get("tracked_attempts", -1)) == 0, "runtime retained retry history for loaded tile")
+    _check(int(loaded_cleanup.get("loaded_failures_cleared", 0)) == 1, "runtime did not report loaded failure reconciliation")
+
+    streamer._loaded.clear()
+    streamer._wanted.clear()
+    streamer._failed["tile:runtime"] = true
+    var stale_cleanup: Dictionary = runtime._service_streamer(streamer, "near-buildings", 3000)
+    _check(streamer.refresh_calls == 2, "unwanted failure triggered forced refresh")
+    _check(not streamer._failed.has("tile:runtime"), "runtime retained unwanted failure")
+    _check(int(stale_cleanup.get("active_failures", -1)) == 0, "runtime stale cleanup left active failure accounting")
+
+    streamer.queue_free()
+    runtime.queue_free()
