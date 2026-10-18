@@ -1,0 +1,26 @@
+name: Yardman RDX Stream Priority Eval
+
+on:
+  push:
+    branches:
+      - codex/rdx-stream-priority-eval-001
+    paths:
+      - 'godot/tools/rdx_stream_priority_eval.py'
+      - '.github/workflows/rdx-stream-priority-eval.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frozen-trace-eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run frozen streaming-priority evaluator
+        shell: bash
+        run: |
+          mkdir -p godot/build
+          python3 godot/tools/rdx_stream_priority_eval.py | tee godot/build/rdx-stream-priority-eval.log
+          grep -q 'result=PASS' godot/build/rdx-stream-priority-eval.log
