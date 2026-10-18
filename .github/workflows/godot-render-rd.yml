@@ -9,8 +9,10 @@ on:
       - 'godot/scripts/predictive_streaming_runtime.gd'
       - 'godot/scripts/gpu_visibility_probe.gd'
       - 'godot/shaders/gpu_visibility.glsl'
+      - 'godot/shaders/gpu_multimesh_indirect.glsl'
       - 'godot/tests/streaming_priority_test.gd'
       - 'godot/tests/gpu_visibility_test.gd'
+      - 'godot/tests/gpu_multimesh_indirect_test.gd'
       - 'godot/project.godot'
       - '.github/workflows/godot-render-rd.yml'
   workflow_dispatch:
@@ -72,7 +74,7 @@ jobs:
           chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
           sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
           godot --version
-      - name: Import compute shader with Vulkan Mobile
+      - name: Import compute shaders with Vulkan Mobile
         shell: bash
         run: |
           set -euo pipefail
@@ -86,3 +88,10 @@ jobs:
           timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_visibility_test.gd 2>&1 | tee godot/build/gpu-visibility.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL|OpArrayLength|ObjectDB instances were leaked' godot/build/gpu-visibility.log; then exit 1; fi
           grep -q 'YARDMAN_GPU_VISIBILITY_TEST PASS' godot/build/gpu-visibility.log
+      - name: Validate GPU-resident indirect MultiMesh bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_multimesh_indirect_test.gd 2>&1 | tee godot/build/gpu-multimesh-indirect.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL|ObjectDB instances were leaked' godot/build/gpu-multimesh-indirect.log; then exit 1; fi
+          grep -q 'YARDMAN_GPU_MULTIMESH_INDIRECT_TEST PASS' godot/build/gpu-multimesh-indirect.log
