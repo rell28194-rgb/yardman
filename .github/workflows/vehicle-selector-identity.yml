@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/vehicle-selector-identity.yml'
       - 'godot/data/vehicle_fleet_supplemental.json'
+      - 'godot/tests/vehicle_game_ready_test.gd'
       - 'godot/tools/vehicle_production/validate_fleet_selector_identity.py'
       - 'godot/tools/vehicle_production/run_vehicle_game_ready_clean.sh'
   workflow_dispatch:
