@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "godot" / "tools"))
 
-from build_hydrology import parse_width_m, split_segment_by_tile
+from build_hydrology import channel_seed_depth_m, parse_width_m, segment_grade_permille, split_segment_by_tile
 
 
 class HydrologyGeometryTests(unittest.TestCase):
@@ -46,6 +46,17 @@ class HydrologyGeometryTests(unittest.TestCase):
         self.assertEqual(parse_width_m(None, "river"), 18.0)
         self.assertEqual(parse_width_m("unknown", "stream"), 5.0)
         self.assertTrue(math.isfinite(parse_width_m(None, "ditch")))
+
+    def test_dem_grade_is_signed_and_scale_independent(self):
+        self.assertAlmostEqual(segment_grade_permille((0.0, 0.0), (100.0, 0.0), 10.0, 5.0), -50.0)
+        self.assertAlmostEqual(segment_grade_permille((0.0, 0.0), (0.0, 100.0), 5.0, 10.0), 50.0)
+        self.assertEqual(segment_grade_permille((1.0, 1.0), (1.0, 1.0), 5.0, 9.0), 0.0)
+
+    def test_channel_seed_depth_is_bounded_and_class_specific(self):
+        self.assertEqual(channel_seed_depth_m("river", 200.0), 2.5)
+        self.assertGreater(channel_seed_depth_m("river", 18.0), channel_seed_depth_m("stream", 5.0))
+        self.assertLessEqual(channel_seed_depth_m("ditch", 200.0), 0.5)
+        self.assertGreater(channel_seed_depth_m("stream", 0.5), 0.0)
 
 
 if __name__ == "__main__":
