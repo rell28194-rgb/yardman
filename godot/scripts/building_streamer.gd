@@ -5,6 +5,7 @@ signal cell_ready(cell: Vector2i, building_count: int)
 signal cell_removed(cell: Vector2i)
 const BuildingShader = preload("res://shaders/building_surface.gdshader")
 const ReferenceAssets = preload("res://scripts/reference_assets.gd")
+const StreamingPriority = preload("res://scripts/streaming_priority.gd")
 const FACADE_FILES := ["facade_source_lower_panel.glb", "facade_source_bay_panel.glb", "facade_source_upper_panel.glb"]
 const FACADE_MODULE_WIDTH := 3.2
 const FACADE_MODULE_HEIGHT := 3.15
@@ -205,6 +206,11 @@ func _has_cell(cell: Vector2i) -> bool:
     var tile_key := _key(address.tile)
     return _tile_cells.get(tile_key, {}).has(_key(address.local))
 
+func _sort_queue_by_motion(target_world: Vector2, velocity_world: Vector2) -> void:
+    _queue.sort_custom(func(a: String, b: String) -> bool:
+        return StreamingPriority.less(
+            _cell(a), _cell(b), target_world, velocity_world, cell_size))
+
 func update_world(x: float, z: float, force := false) -> void:
     if manifest.is_empty() or not is_finite(x) or not is_finite(z):
         return
@@ -231,6 +237,7 @@ func update_world(x: float, z: float, force := false) -> void:
         _wanted[key] = true
         if not _loaded.has(key) and not _jobs.has(key) and str(_build.get("key", "")) != key and not _failed.has(key):
             _queue.append(key)
+    _sort_queue_by_motion(_world_position, StreamingPriority.target_velocity(target))
     for key in _loaded.keys():
         if not _wanted.has(key):
             _loaded[key].root.queue_free()
