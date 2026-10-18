@@ -14,6 +14,20 @@ def test_zero_intersection_never_authorizes():
     assert morphology_tokens([r]) == ()
 
 
+def test_invalid_numeric_intersections_fail_closed():
+    for value in (float("nan"), float("inf"), float("-inf"), "not-a-number", None):
+        r = attach_spatial_evidence(source="wra", source_feature_id="wmu-26-lm", layer="wmu", mapped_unit="Black River Lower Morass", intersection_fraction=value)
+        assert r.intersection_fraction == 0.0
+        assert not r.authorizes_morphology
+        assert morphology_tokens([r]) == ()
+
+
+def test_finite_intersection_is_clamped_for_auditability():
+    r = attach_spatial_evidence(source="wra", source_feature_id="wmu-26-lm", layer="wmu", mapped_unit="Black River Lower Morass", intersection_fraction=1.2)
+    assert r.intersection_fraction == 1.0
+    assert r.authorizes_morphology
+
+
 def test_missing_source_feature_id_never_authorizes():
     r = attach_spatial_evidence(source="wra", source_feature_id="", layer="wmu", mapped_unit="Black River Lower Morass", intersection_fraction=0.9)
     assert not r.authorizes_morphology
