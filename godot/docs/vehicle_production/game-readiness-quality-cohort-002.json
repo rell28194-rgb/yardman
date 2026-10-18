@@ -1,0 +1,128 @@
+{
+  "checkpoint": "game-readiness-quality-cohort-002",
+  "format_version": 2,
+  "branch": "codex/vehicle-production-001",
+  "runtime_validation": {
+    "workflow": "Yardman Vehicle Production Audit",
+    "run_id": 39130755081,
+    "run_number": 111,
+    "validated_commit": "103a8dba148f60ef614cf856c665b8f0c7d236da",
+    "conclusion": "success",
+    "main_audit": "pass",
+    "fleet_lifecycle_shards": 8,
+    "fleet_lifecycle_shards_passed": 8,
+    "production_selector_total": 49,
+    "identity_safe_selector_to_hero_gate": "pass",
+    "vehicle_runtime_contract": "pass",
+    "scope_note": "This is real Godot 4.7.2 source-only runtime evidence. Private hero media are intentionally absent from public CI, so it does not claim private GLB import/render acceptance."
+  },
+  "private_media_structural_validation": {
+    "pack": "Yardman-Personal-Reference-Assets-FleetReady-001.zip",
+    "pack_bytes": 165215231,
+    "pack_sha256": "5dd937a99bef9d77ce81f077a9bd544d956d4cabb98a6d32882af7ff07eb0905",
+    "zip_members": 270,
+    "zip_crc": "pass",
+    "validator": "godot/tools/vehicle_production/validate_private_fleet_pack.py",
+    "library_evidence": "Yardman-Private-Fleet-Pack-Validation-002.json",
+    "fleet_hero_glbs": 45,
+    "fleet_provenance_files": 45,
+    "fleet_rig_contract_passed": 45,
+    "fleet_interior_evidence": 45,
+    "duplicate_runtime_ids": 0,
+    "duplicate_glb_hashes": 0,
+    "beta2_matched_or_candidate": 21,
+    "beta2_pending": 24,
+    "crown_reference_rig": "pass",
+    "chaser_reference_rig": "pass",
+    "accepted_structurally": true,
+    "godot_private_import_runtime": "pending",
+    "claim_boundary": "Structural validation is not a substitute for actual Godot private-media import/runtime/render validation."
+  },
+  "quality_policy": {
+    "order": ["quality", "critical_observation_and_grading", "quantity"],
+    "runtime_pass_is_not_asset_acceptance": true,
+    "dual_beta_search_required": true,
+    "crown007_non_regression_required": true,
+    "no_cross_model_relabeling": true,
+    "map_defects_out_of_scope": true
+  },
+  "cohort": [
+    {
+      "id": "toyota_crown",
+      "runtime_consumable": true,
+      "runtime_contract": "pass",
+      "selector_lifecycle": "pass",
+      "catalog_hero_scene": "toyota_crown_2013.glb",
+      "private_structural_rig": "pass",
+      "visual_status": "owner_accepted_reference_baseline",
+      "asset_promotion": "accepted_baseline_preserve_not_requalified",
+      "grade": "A_RUNTIME_BASELINE",
+      "blocking_reasons": [],
+      "note": "Crown007 remains protected. The current pass proves shared runtime identity/lifecycle behavior and structural pack integrity, not a new private visual acceptance."
+    },
+    {
+      "id": "toyota_mark_x",
+      "runtime_consumable": true,
+      "runtime_contract": "pass",
+      "selector_lifecycle": "pass",
+      "catalog_hero_scene": "toyota_mark_x.glb",
+      "private_named_hero_present": false,
+      "identity_safe_missing_hero_behavior": "pass_procedural_fallback_without_cross_model_substitution",
+      "visual_status": "dedicated_target_missing_procedural_fallback_only",
+      "asset_promotion": "hold",
+      "grade": "F_ASSET_IDENTITY",
+      "blocking_reasons": [
+        "no_verified_Mark_X_hero_scene",
+        "Beta1_exact_identity_dependency_closure_open",
+        "Beta2_exact_identity_search_not_complete_for_promotion"
+      ],
+      "note": "The selector now explicitly requests toyota_mark_x.glb. It cannot silently load Chaser road_car.glb."
+    },
+    {
+      "id": "port_royal_992",
+      "runtime_consumable": true,
+      "runtime_contract": "pass",
+      "selector_lifecycle": "pass",
+      "catalog_hero_scene": "port_royal_992.glb",
+      "private_named_hero_present": false,
+      "identity_safe_missing_hero_behavior": "pass_procedural_fallback_without_cross_model_substitution",
+      "visual_status": "dedicated_target_missing_procedural_fallback_only",
+      "asset_promotion": "hold",
+      "grade": "F_ASSET_IDENTITY",
+      "blocking_reasons": [
+        "no_verified_992_hero_scene",
+        "exact_Beta1_model_generation_trim_dependency_closure_open",
+        "exact_Beta2_model_generation_trim_search_open"
+      ],
+      "note": "Porsche recovery is authorized, but exact 992 generation/trim evidence remains mandatory. The selector now explicitly requests port_royal_992.glb and cannot substitute Chaser or another 911 generation."
+    }
+  ],
+  "next_conversion_cohort": [
+    {
+      "source_root_name": "DeloreanDMC12",
+      "source_unit": "be8711d97a1d56f4b8906574ecaa341a",
+      "beta1_source_sha256": "0f0d2e1f12bf5cd8c9da48c6ebd3480fca7573adb1089371a6f943bf5b2be763",
+      "beta2_identity": "223 DeLorean DMC-12",
+      "identity_status": "exact_dual_source_match",
+      "promotion": "hold_until_geometry_dependency_closure_and_private_import"
+    },
+    {
+      "source_root_name": "CorvetteC7",
+      "source_unit": "9d999f0d345f05e40bf98c0515d10635",
+      "beta1_source_sha256": "a73a025b211c05e74514899f98511195742121168cb187473c41bbc7ae1b0c67",
+      "beta2_identity": "40 corvette c7",
+      "identity_status": "exact_dual_source_match",
+      "promotion": "hold_until_geometry_dependency_closure_and_private_import"
+    }
+  ],
+  "quantity_release_gate": {
+    "open": false,
+    "reason": "The shared 49-selector runtime pipeline is green and private recovered media are structurally clean, but actual private Godot import remains pending and the protected representative Mark X/992 identity gates remain unresolved.",
+    "open_when": [
+      "private recovered heroes pass actual Godot import/runtime validation",
+      "representative unresolved core candidates have exact identity evidence and dedicated heroes",
+      "Beta1 and Beta2 evidence remains recorded per candidate",
+      "Crown007 shared-system non-regression remains green"
+    ]
+  }
+}
