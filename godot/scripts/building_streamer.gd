@@ -313,15 +313,20 @@ func _poll_jobs() -> void:
         cell_root.position = coordinates.world_to_local(float(cell.x) * cell_size, float(cell.y) * cell_size)
         _build = {"key": key, "cell": cell, "root": cell_root, "records": result.records, "cursor": 0,
             "wall_vertices": PackedVector3Array(), "wall_normals": PackedVector3Array(), "wall_uvs": PackedVector2Array(), "wall_colors": PackedColorArray(), "wall_uv2s": PackedVector2Array(), "facades": [], "wall_indices": PackedInt32Array(),
-            "roof_vertices": PackedVector3Array(), "roof_normals": PackedVector3Array(), "roof_uvs": PackedVector2Array(), "roof_colors": PackedColorArray(), "roof_indices": PackedInt32Array()}
+            "roof_vertices": PackedVector3Array(), "roof_normals": PackedVector3Array(), "roof_uvs": PackedVector2Array(), "roof_colors": PackedColorArray(), "roof_indices": PackedInt32Array(),
+            "finalize_phase": -1, "finalize_step_count": 0, "finalize_start_frame": -1,
+            "building_count": 0, "meshes": [], "body": null, "collider": null, "facade_body": null}
 
 func _prepare_geometry() -> void:
     if _build.is_empty():
         return
+    if int(_build.get("finalize_phase", -1)) >= 0:
+        _prepare_cell_finalize()
+        return
     var started := Time.get_ticks_usec()
     for index in range(max_buildings_per_frame):
         if _build.cursor >= _build.records.size():
-            _complete_cell()
+            _begin_cell_finalize()
             return
         var record: Variant = _build.records[_build.cursor]
         if not _append_building(record):
@@ -655,36 +660,101 @@ func _make_mesh(kind: String, material: Material) -> ArrayMesh:
     mesh.surface_set_material(0, material)
     return mesh
 
-func _complete_cell() -> void:
-    var cell_root: Node3D = _build.root
-    var meshes: Array[ArrayMesh] = []
-    for kind in ["wall", "roof"]:
-        var material := _wall_material if kind == "wall" else _roof_material
-        var mesh := _make_mesh(kind, material)
-        if mesh.get_surface_count() == 0:
-            continue
+func _release_mesh_source(kind: String) -> void:
+    _build[kind + "_vertices"] = PackedVector3Array()
+    _build[kind + "_indices"] = PackedInt32Array()
+    _build[kind + "_normals"] = PackedVector3Array()
+    _build[kind + "_uvs"] = PackedVector2Array()
+    _build[kind + "_colors"] = PackedColorArray()
+    if kind == "wall":
+        _build.wall_uv2s = PackedVector2Array()
+
+func _begin_cell_finalize() -> void:
+    if _build.is_empty() or int(_build.get("finalize_phase", -1)) >= 0:
+        return
+    _build.building_count = _build.records.size()
+    # The parsed JSON records are no longer needed after all source geometry and
+    # facade plans have been compiled. Releasing them before GPU integration
+    # keeps the temporary peak bounded while the cell is finalized over frames.
+    _build.records = []
+    _build.finalize_phase = 0
+    _build.finalize_step_count = 0
+    _build.finalize_start_frame = Engine.get_process_frames()
+
+func _finalize_cell_mesh(kind: String, material: Material, label: String) -> void:
+    var mesh := _make_mesh(kind, material)
+    if mesh.get_surface_count() > 0:
         var instance := MeshInstance3D.new()
-        instance.name = "Walls" if kind == "wall" else "Roofs"
+        instance.name = label
         instance.mesh = mesh
         instance.visibility_range_end = draw_distance + cell_size
         instance.visibility_range_end_margin = 96.0
-        cell_root.add_child(instance)
-        meshes.append(mesh)
-    var body := StaticBody3D.new()
-    body.name = "NearCollision"
-    body.collision_layer = 0
-    body.collision_mask = 0
-    var collider := CollisionShape3D.new()
-    body.add_child(collider)
-    cell_root.add_child(body)
-    var facade_body := _attach_facades(cell_root)
-    add_child(cell_root)
+        _build.root.add_child(instance)
+        _build.meshes.append(mesh)
+    _release_mesh_source(kind)
+
+func _prepare_cell_finalize() -> void:
+    if _build.is_empty():
+        return
+    _build.finalize_step_count = int(_build.get("finalize_step_count", 0)) + 1
+    match int(_build.get("finalize_phase", 0)):
+        0:
+            _finalize_cell_mesh("wall", _wall_material, "Walls")
+            _build.finalize_phase = 1
+        1:
+            _finalize_cell_mesh("roof", _roof_material, "Roofs")
+            _build.finalize_phase = 2
+        2:
+            var body := StaticBody3D.new()
+            body.name = "NearCollision"
+            body.collision_layer = 0
+            body.collision_mask = 0
+            var collider := CollisionShape3D.new()
+            body.add_child(collider)
+            _build.root.add_child(body)
+            _build.body = body
+            _build.collider = collider
+            _build.finalize_phase = 3
+        3:
+            # Facade work is separately bounded by MAX_FACADE_HOSTS_PER_CELL and
+            # no longer shares a frame with either merged mesh upload or the
+            # physics-body setup.
+            _build.facade_body = _attach_facades(_build.root)
+            _build.finalize_phase = 4
+        4:
+            _publish_cell()
+
+func _publish_cell() -> void:
+    var cell_root: Node3D = _build.root
     var cell: Vector2i = _build.cell
-    var count: int = _build.records.size()
-    _loaded[_build.key] = {"root": cell_root, "body": body, "collider": collider, "meshes": meshes, "count": count, "facade_body": facade_body, "facades": _build.facades}
+    var key := str(_build.key)
+    var count := int(_build.get("building_count", 0))
+    var meshes: Array = _build.meshes
+    var body: StaticBody3D = _build.body
+    var collider: CollisionShape3D = _build.collider
+    var facade_body: StaticBody3D = _build.facade_body
+    var facades: Array = _build.facades
+    cell_root.set_meta("yardman_budgeted_finalize", true)
+    cell_root.set_meta("yardman_finalize_steps", int(_build.get("finalize_step_count", 0)))
+    var start_frame := int(_build.get("finalize_start_frame", Engine.get_process_frames()))
+    cell_root.set_meta("yardman_finalize_frame_span", maxi(0, Engine.get_process_frames() - start_frame))
+    add_child(cell_root)
+    _loaded[key] = {"root": cell_root, "body": body, "collider": collider, "meshes": meshes,
+        "count": count, "facade_body": facade_body, "facades": facades}
     _build.clear()
+    # Collision activation now only starts a staged collision job here. It no
+    # longer expands faces or cooks a concave BVH on the publication frame.
     _refresh_collision()
     cell_ready.emit(cell, count)
+
+func _complete_cell() -> void:
+    # Preserve the legacy entry point for tests/tools while enforcing the same
+    # one-major-step-per-call publication contract as the runtime path.
+    if _build.is_empty():
+        return
+    if int(_build.get("finalize_phase", -1)) < 0:
+        _begin_cell_finalize()
+    _prepare_cell_finalize()
 
 func _collision_active(key: String) -> bool:
     var cell := _cell(key)
