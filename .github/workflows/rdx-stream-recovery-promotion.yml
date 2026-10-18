@@ -9,6 +9,7 @@ on:
       - 'godot/scripts/stream_recovery_runtime.gd'
       - 'godot/scripts/streaming_adversarial_harness.gd'
       - 'godot/tests/streaming_adversarial_test.gd'
+      - 'godot/tests/streaming_retry_model_test.gd'
       - 'godot/tools/rdx_stream_retry_mutation.py'
       - '.github/workflows/rdx-stream-recovery-promotion.yml'
   workflow_dispatch:
@@ -46,6 +47,12 @@ jobs:
           timeout 120 godot --headless --path godot --script res://tests/streaming_adversarial_test.gd 2>&1 | tee godot/build/rdx-stream-promotion-oracle.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|STREAMING_ADVERSARIAL_TEST:.*' godot/build/rdx-stream-promotion-oracle.log; then exit 1; fi
           grep -q 'YARDMAN_STREAMING_ADVERSARIAL_TEST PASS' godot/build/rdx-stream-promotion-oracle.log
+      - name: Run randomized reference-model oracle
+        shell: bash
+        run: |
+          timeout 120 godot --headless --path godot --script res://tests/streaming_retry_model_test.gd 2>&1 | tee godot/build/rdx-stream-promotion-model.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|STREAM_RETRY_MODEL_TEST:.*' godot/build/rdx-stream-promotion-model.log; then exit 1; fi
+          grep -q 'YARDMAN_STREAM_RETRY_MODEL_TEST PASS seeds=256 random_actions=96' godot/build/rdx-stream-promotion-model.log
       - name: Mutation-grade promoted retry policy
         shell: bash
         run: |
