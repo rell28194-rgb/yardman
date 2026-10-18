@@ -5,6 +5,7 @@ const CoordinatesScript = preload("res://scripts/world_coordinates.gd")
 const GraphScript = preload("res://scripts/road_graph.gd")
 const RoadShader = preload("res://shaders/road_surface.gdshader")
 const References = preload("res://scripts/reference_assets.gd")
+const StreamingPriority = preload("res://scripts/streaming_priority.gd")
 const SURFACE_CELL_SIZE := 128.0
 signal tile_ready(tile: Vector2i)
 signal tile_removed(tile: Vector2i)
@@ -116,11 +117,22 @@ func _key_tile(key: String) -> Vector2i:
     var parts := key.split(":")
     return Vector2i(int(parts[0]), int(parts[1]))
 
+func _target_world_xz() -> Vector2:
+    if target == null or not is_instance_valid(target):
+        return Vector2.ZERO
+    var world: PackedFloat64Array = coordinates.local_to_world(target.global_position)
+    return Vector2(float(world[0]), float(world[2]))
+
 func _target_tile() -> Vector2i:
     if target == null:
         return Vector2i.ZERO
     var world: PackedFloat64Array = coordinates.local_to_world(target.global_position)
     return coordinates.tile_for(world[0], world[2])
+
+func _sort_queue_by_motion(target_world: Vector2, velocity_world: Vector2) -> void:
+    _queue.sort_custom(func(a: String, b: String) -> bool:
+        return StreamingPriority.less(
+            _key_tile(a), _key_tile(b), target_world, velocity_world, tile_size))
 
 func _refresh_tiles(force: bool) -> void:
     if target == null or _tile_files.is_empty():
@@ -140,8 +152,7 @@ func _refresh_tiles(force: bool) -> void:
                 _wanted[key] = true
                 if not _loaded.has(key) and not _jobs.has(key) and str(_building.get("key", "")) != key and not _failed.has(key):
                     _queue.append(key)
-    _queue.sort_custom(func(a: String, b: String) -> bool:
-        return _key_tile(a).distance_squared_to(current) < _key_tile(b).distance_squared_to(current))
+    _sort_queue_by_motion(_target_world_xz(), StreamingPriority.target_velocity(target))
     for key in _loaded.keys():
         var tile := _key_tile(str(key))
         if maxi(absi(tile.x - current.x), absi(tile.y - current.y)) > load_radius + 1:
