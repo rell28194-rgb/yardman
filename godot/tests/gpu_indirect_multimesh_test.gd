@@ -31,10 +31,19 @@ func _run() -> void:
     _mesh = BoxMesh.new()
     _mesh.size = Vector3.ONE
     _multimesh = RenderingServer.multimesh_create()
-    RenderingServer.multimesh_set_mesh(_multimesh, _mesh.get_rid())
+
+    # Godot 4.7.2 initializes an indirect command buffer when a mesh is bound
+    # after indirect allocation. Binding the mesh first can leave that buffer
+    # invalid, so this ordering is a hard contract for Yardman's GPU path.
     RenderingServer.multimesh_allocate_data(_multimesh, PROBE_COUNT,
         RenderingServer.MULTIMESH_TRANSFORM_3D, false, false, true)
+    RenderingServer.multimesh_set_mesh(_multimesh, _mesh.get_rid())
     RenderingServer.multimesh_set_custom_aabb(_multimesh, AABB(Vector3(-260, -210, -310), Vector3(520, 420, 620)))
+
+    _check(RenderingServer.multimesh_get_buffer_rd_rid(_multimesh).is_valid(),
+        "instance RD buffer did not initialize after indirect allocation")
+    _check(RenderingServer.multimesh_get_command_buffer_rd_rid(_multimesh).is_valid(),
+        "command RD buffer did not initialize after post-allocation mesh bind")
 
     var probe := Probe.new()
     _check(probe.begin(_multimesh, PROBE_COUNT), "probe did not start")
@@ -71,5 +80,5 @@ func _run() -> void:
     _multimesh = RID()
     _mesh = null
     await process_frame
-    print("YARDMAN_GPU_INDIRECT_MULTIMESH_TEST %s global_rd=1 direct_buffer=1 indirect_count=1 no_runtime_readback=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_GPU_INDIRECT_MULTIMESH_TEST %s global_rd=1 direct_buffer=1 indirect_count=1 init_order=1 no_runtime_readback=1" % ("PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
