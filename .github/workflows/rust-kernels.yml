@@ -9,6 +9,7 @@ on:
       - 'native/yardman_rust/**'
       - 'native/RUST_ECOSYSTEM_INTAKE.md'
       - 'godot/tests/rust_kernel_smoke_test.gd'
+      - 'godot/tools/check_godot_log.py'
       - '.github/workflows/rust-kernels.yml'
   pull_request:
     paths:
@@ -16,6 +17,7 @@ on:
       - 'native/yardman_rust/**'
       - 'native/RUST_ECOSYSTEM_INTAKE.md'
       - 'godot/tests/rust_kernel_smoke_test.gd'
+      - 'godot/tools/check_godot_log.py'
       - '.github/workflows/rust-kernels.yml'
   workflow_dispatch:
 
@@ -36,6 +38,8 @@ jobs:
       RUST_VERSION: '1.94.0'
     steps:
       - uses: actions/checkout@v4
+      - name: Validate shared Godot log policy
+        run: python3 godot/tools/check_godot_log.py --self-test
       - name: Pin Rust toolchain
         shell: bash
         run: |
@@ -87,11 +91,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p godot/build/rust-kernel
-          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/rust-kernel/import.log
-          if grep -E 'SCRIPT ERROR|Parse Error|Unicode parsing error|^ERROR:' godot/build/rust-kernel/import.log; then exit 1; fi
-          timeout 180 godot --headless --path godot --script res://tests/rust_kernel_smoke_test.gd 2>&1 | tee godot/build/rust-kernel/smoke.log
-          if grep -E 'SCRIPT ERROR|Parse Error|Unicode parsing error|^ERROR:|FAIL' godot/build/rust-kernel/smoke.log; then exit 1; fi
-          grep -Fq 'YARDMAN_RUST_KERNEL_SMOKE PASS' godot/build/rust-kernel/smoke.log
+          IMPORT_LOG="godot/build/rust-kernel/import.log"
+          SMOKE_LOG="godot/build/rust-kernel/smoke.log"
+          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee "$IMPORT_LOG"
+          python3 godot/tools/check_godot_log.py "$IMPORT_LOG"
+          timeout 180 godot --headless --path godot --script res://tests/rust_kernel_smoke_test.gd 2>&1 | tee "$SMOKE_LOG"
+          python3 godot/tools/check_godot_log.py "$SMOKE_LOG" --token FAIL
+          grep -Fq 'YARDMAN_RUST_KERNEL_SMOKE PASS' "$SMOKE_LOG"
       - name: Preserve Rust benchmark and lock evidence
         if: always()
         uses: actions/upload-artifact@v4
