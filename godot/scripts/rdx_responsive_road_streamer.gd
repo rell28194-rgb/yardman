@@ -3,6 +3,12 @@ class_name YardmanResponsiveRoadStreamerRDX
 
 const RDXStreamingPriority = preload("res://scripts/streaming_priority.gd")
 
+# Test-only lifecycle boundary. This R&D subclass is instantiated without the
+# production Jamaica road manifest in CI. Promotion folds the queue behavior
+# into the production streamer; it does not ship this readiness bypass.
+func _ready() -> void:
+    pass
+
 # R&D override: the production streamer currently returns early while the
 # target remains inside the same 4 km tile. Keep membership/lifecycle exactly
 # unchanged, but re-rank any remaining queued work from the latest position and
