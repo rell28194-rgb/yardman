@@ -96,6 +96,56 @@ static func stream_integration_budget_for(quality: String, thermal_stage: int) -
         "assigned_us": assigned_us,
     }
 
+static func shadow_profile_for(quality: String, thermal_stage: int) -> Dictionary:
+    var name := quality if quality in ["Performance", "Balanced", "Quality", "Ultra", "Custom"] else "Balanced"
+    var stage := clampi(thermal_stage, 0, 5)
+    # PSSM is treated as a finite GPU budget, not a free quality toggle. Cool
+    # Quality/Ultra reserve four splits so road, player, car and curb contact
+    # shadows keep useful texel density. Lower tiers and warm states use two;
+    # the final thermal stage collapses to one orthogonal map to guarantee an
+    # escape path under sustained pressure.
+    if stage >= 5:
+        return {
+            "mode": DirectionalLight3D.SHADOW_ORTHOGONAL,
+            "split_1": 0.30,
+            "split_2": 0.55,
+            "split_3": 0.78,
+            "fade_start": 0.68,
+            "blend_splits": false,
+        }
+    if stage >= 3 or name in ["Performance", "Balanced"]:
+        return {
+            "mode": DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS,
+            "split_1": 0.26 if name == "Performance" else 0.22,
+            "split_2": 0.50,
+            "split_3": 0.72,
+            "fade_start": 0.72,
+            "blend_splits": false,
+        }
+    var ultra := name == "Ultra"
+    return {
+        "mode": DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS,
+        "split_1": 0.07 if ultra else 0.08,
+        "split_2": 0.18 if ultra else 0.20,
+        "split_3": 0.42 if ultra else 0.46,
+        "fade_start": 0.76,
+        "blend_splits": false,
+    }
+
+static func apply_shadow_policy_to_light(sun: DirectionalLight3D, active: Dictionary) -> void:
+    if sun == null:
+        return
+    var profile := shadow_profile_for(
+        str(active.get("quality", "Balanced")),
+        int(active.get("thermal_stage", 0)))
+    sun.directional_shadow_max_distance = maxf(10.0, float(active.get("shadow_distance", 82.0)))
+    sun.directional_shadow_mode = int(profile.mode) as DirectionalLight3D.ShadowMode
+    sun.directional_shadow_split_1 = float(profile.split_1)
+    sun.directional_shadow_split_2 = float(profile.split_2)
+    sun.directional_shadow_split_3 = float(profile.split_3)
+    sun.directional_shadow_fade_start = float(profile.fade_start)
+    sun.directional_shadow_blend_splits = bool(profile.blend_splits)
+
 func _apply_scene_budgets(scene: Node) -> void:
     if scene == null or not _configured:
         return
@@ -105,8 +155,7 @@ func _apply_scene_budgets(scene: Node) -> void:
     active["thermal_stage"] = manager.thermal_stage
     var sun_value = scene.get("sun")
     if sun_value is DirectionalLight3D:
-        var sun := sun_value as DirectionalLight3D
-        sun.directional_shadow_max_distance = float(active.shadow_distance)
+        apply_shadow_policy_to_light(sun_value as DirectionalLight3D, active)
     apply_streamer_material_policy(scene, active)
     for node in get_tree().get_nodes_in_group("yardman_render_quality"):
         if node.has_method("apply_render_policy"):
@@ -208,5 +257,6 @@ func runtime_snapshot() -> Dictionary:
     result["thermal_stage"] = manager.thermal_stage
     result["configured"] = _configured
     result["stream_integration"] = stream_integration_budget_for(manager.quality, manager.thermal_stage)
+    result["shadow_profile"] = shadow_profile_for(manager.quality, manager.thermal_stage)
     result.merge(manager.timing_snapshot())
     return result
