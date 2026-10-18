@@ -27,8 +27,42 @@ func _has_static_body(node: Node) -> bool:
             return true
     return false
 
+func _write_json(path: String, value: Dictionary) -> void:
+    var file := FileAccess.open(path, FileAccess.WRITE)
+    file.store_string(JSON.stringify(value))
+    file.close()
+
 func _run() -> void:
+    # Terrain._ready() validates registered terrain/coast manifests even though
+    # this test injects its geometry job directly. Give it a tiny valid fixture
+    # so any ERROR in the log represents the finalize path rather than setup.
+    var fixture := "user://terrain_finalize_budget_%d" % Time.get_ticks_msec()
+    var terrain_root := fixture + "/terrain"
+    var coast_root := fixture + "/coast"
+    DirAccess.make_dir_recursive_absolute(terrain_root)
+    DirAccess.make_dir_recursive_absolute(coast_root)
+    var origin := {"easting": 800000.0, "northing": 650000.0}
+    _write_json(terrain_root + "/manifest.json", {
+        "format": 1,
+        "crs": "EPSG:3448",
+        "origin": origin,
+        "tile_size": 2.0,
+        "resolution": 3,
+        "sample_spacing_m": 1.0,
+        "max_height": 0.0,
+        "tiles": [],
+    })
+    _write_json(coast_root + "/manifest.json", {
+        "format": 1,
+        "crs": "EPSG:3448",
+        "origin": origin,
+        "tile_size": 2.0,
+        "resolution": 3,
+    })
+
     var terrain := Terrain.new()
+    terrain.data_root = terrain_root
+    terrain.coast_root = coast_root
     terrain.set_process(false)
     terrain.resolution = 3
     terrain.spacing = 1.0
@@ -92,6 +126,11 @@ func _run() -> void:
         _check(int(ready.get_meta("yardman_collision_face_chunks", 0)) == 1, "ready tile lost collision-chunk diagnostics")
 
     terrain.queue_free()
+    for path in [terrain_root + "/manifest.json", coast_root + "/manifest.json"]:
+        DirAccess.remove_absolute(path)
+    DirAccess.remove_absolute(terrain_root)
+    DirAccess.remove_absolute(coast_root)
+    DirAccess.remove_absolute(fixture)
     if failures == 0:
         print("YARDMAN_TERRAIN_FINALIZE_BUDGET_TEST PASS geometry_frame=isolated mesh=isolated collision_faces=chunked collision_cook=isolated coast=isolated publish=isolated")
     quit(0 if failures == 0 else 1)
