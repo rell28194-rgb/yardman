@@ -1,7 +1,21 @@
 name: World compiler and core
 on:
   push:
+    paths:
+      - 'Assets/Yardman/**'
+      - 'Assets/StreamingAssets/**'
+      - 'Tools/**'
+      - 'Tests/Python/**'
+      - 'Tests/Core/**'
+      - '.github/workflows/core.yml'
   pull_request:
+    paths:
+      - 'Assets/Yardman/**'
+      - 'Assets/StreamingAssets/**'
+      - 'Tools/**'
+      - 'Tests/Python/**'
+      - 'Tests/Core/**'
+      - '.github/workflows/core.yml'
   workflow_dispatch:
 permissions:
   contents: read
