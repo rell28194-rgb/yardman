@@ -36,7 +36,7 @@ def _load_water(hydrology: Path) -> list[dict]:
 
 
 def _source_bool(edge: dict, *keys: str) -> bool:
-    """Read only explicit source evidence; absence never becomes inference."""
+    """Read only explicit positive source evidence; absence/``no`` stay false."""
     for key in keys:
         value = edge.get(key)
         if isinstance(value, bool):
@@ -85,11 +85,16 @@ def build_inventory(roads: Path, hydrology: Path, output: Path) -> dict:
             if key in seen:
                 continue
             seen.add(key)
+            # Never use Python truthiness for source tags: strings such as
+            # ``bridge=no`` and ``tunnel=no`` are truthy and would otherwise
+            # fabricate approved grade separation at real road/water crossings.
+            road_bridge = _source_bool(edge, "bridge", "osm_bridge", "source_bridge")
+            road_tunnel = _source_bool(edge, "tunnel", "osm_tunnel", "source_tunnel")
             explicit_ford = _source_bool(edge, "ford", "osm_ford", "source_ford")
             explicit_culvert = _source_bool(edge, "culvert", "osm_culvert", "source_culvert")
             engineered_drain = _source_bool(edge, "engineered_drain_record", "authoritative_engineered_drain")
-            decision = classify_crossing(road_bridge=bool(edge.get("bridge")),
-                                         road_tunnel=bool(edge.get("tunnel")),
+            decision = classify_crossing(road_bridge=road_bridge,
+                                         road_tunnel=road_tunnel,
                                          road_layer=edge.get("layer", 0),
                                          explicit_ford=explicit_ford,
                                          explicit_culvert=explicit_culvert,
@@ -98,7 +103,8 @@ def build_inventory(roads: Path, hydrology: Path, output: Path) -> dict:
                       "road_edge": edge["id"], "road_source_way": edge.get("source_way"),
                       "water_source_way": water_record["source_way"],
                       "waterway": water_record["waterway"], "water_name": water_record.get("name", ""),
-                      "source_crossing_evidence": {"ford": explicit_ford, "culvert": explicit_culvert,
+                      "source_crossing_evidence": {"bridge": road_bridge, "tunnel": road_tunnel,
+                                                   "ford": explicit_ford, "culvert": explicit_culvert,
                                                    "engineered_drain": engineered_drain},
                       **decision.to_dict()}
             records.append(record)
@@ -106,6 +112,10 @@ def build_inventory(roads: Path, hydrology: Path, output: Path) -> dict:
             stats[f"kind_{decision.kind}"] += 1
             stats[f"status_{decision.status}"] += 1
             stats[f"waterway_{water_record['waterway']}"] += 1
+            if road_bridge:
+                stats["evidence_bridge"] += 1
+            if road_tunnel:
+                stats["evidence_tunnel"] += 1
             if explicit_ford:
                 stats["evidence_ford"] += 1
             if explicit_culvert:
@@ -114,8 +124,8 @@ def build_inventory(roads: Path, hydrology: Path, output: Path) -> dict:
                 stats["evidence_engineered_drain"] += 1
     records.sort(key=lambda r: (r["road_edge"], r["water_source_way"], r["x"], r["z"]))
     output.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"format": 2,
-               "geometry_status": "registered geometric intersections; structures only where explicit source evidence supports classification",
+    payload = {"format": 3,
+               "geometry_status": "registered geometric intersections; structures only where explicit positive source evidence supports classification",
                "terrain_mutation_policy": "unresolved crossings authorize no destructive DEM mutation",
                "stats": dict(sorted(stats.items())), "crossings": records}
     output.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
