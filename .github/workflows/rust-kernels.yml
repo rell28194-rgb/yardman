@@ -5,11 +5,13 @@ on:
     branches:
       - 'codex/world-quality-*'
     paths:
+      - 'native/yardman_core/**'
       - 'native/yardman_rust/**'
       - 'godot/tests/rust_kernel_smoke_test.gd'
       - '.github/workflows/rust-kernels.yml'
   pull_request:
     paths:
+      - 'native/yardman_core/**'
       - 'native/yardman_rust/**'
       - 'godot/tests/rust_kernel_smoke_test.gd'
       - '.github/workflows/rust-kernels.yml'
@@ -40,7 +42,12 @@ jobs:
           rustup default "$RUST_VERSION"
           rustc --version
           cargo --version
-      - name: Build Rust kernel for Godot 4.7 API
+      - name: Test engine-independent Yardman core
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --manifest-path native/yardman_core/Cargo.toml
+      - name: Build Rust Godot adapter for 4.7 API
         shell: bash
         run: |
           set -euo pipefail
@@ -64,7 +71,7 @@ jobs:
           mkdir -p godot/native_rust/bin
           cp native/yardman_rust/target/debug/libyardman_native_rust.so godot/native_rust/bin/libyardman_native_rust.linux.debug.x86_64.so
           cp native/yardman_rust/yardman_rust.gdextension godot/native_rust/yardman_rust.gdextension
-      - name: Import and smoke-test Rust kernel
+      - name: Import and smoke-test Rust adapter
         shell: bash
         run: |
           set -euo pipefail

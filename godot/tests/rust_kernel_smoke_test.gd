@@ -41,7 +41,7 @@ func _run() -> void:
     if kernel == null:
         quit(1)
         return
-    _check(str(kernel.call("build_id")) == "yardman-rust/api-4.7/kernel-v1", "Unexpected Rust build identity")
+    _check(str(kernel.call("build_id")) == "yardman-rust/api-4.7/core-v1", "Unexpected Rust build identity")
 
     const POINT_COUNT := 120000
     var points := PackedVector2Array()

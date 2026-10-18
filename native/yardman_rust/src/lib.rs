@@ -1,4 +1,5 @@
 use godot::prelude::*;
+use yardman_core::{Point2, count_points_in_radius, filter_indices_in_radius};
 
 #[derive(GodotClass)]
 #[class(init)]
@@ -13,21 +14,16 @@ impl YardmanRustKernels {
         center: Vector2,
         radius: f64,
     ) -> PackedInt32Array {
-        if radius < 0.0 || points.is_empty() {
-            return PackedInt32Array::new();
-        }
-
-        let radius_sq = radius * radius;
-        points
-            .as_slice()
-            .iter()
-            .enumerate()
-            .filter_map(|(index, point)| {
-                let dx = f64::from(point.x - center.x);
-                let dy = f64::from(point.y - center.y);
-                (dx * dx + dy * dy <= radius_sq).then_some(index as i32)
-            })
-            .collect()
+        filter_indices_in_radius(
+            points
+                .as_slice()
+                .iter()
+                .map(|point| Point2::new(point.x, point.y)),
+            Point2::new(center.x, center.y),
+            radius,
+        )
+        .into_iter()
+        .collect()
     }
 
     #[func]
@@ -37,25 +33,19 @@ impl YardmanRustKernels {
         center: Vector2,
         radius: f64,
     ) -> i64 {
-        if radius < 0.0 || points.is_empty() {
-            return 0;
-        }
-
-        let radius_sq = radius * radius;
-        points
-            .as_slice()
-            .iter()
-            .filter(|point| {
-                let dx = f64::from(point.x - center.x);
-                let dy = f64::from(point.y - center.y);
-                dx * dx + dy * dy <= radius_sq
-            })
-            .count() as i64
+        count_points_in_radius(
+            points
+                .as_slice()
+                .iter()
+                .map(|point| Point2::new(point.x, point.y)),
+            Point2::new(center.x, center.y),
+            radius,
+        )
     }
 
     #[func]
     fn build_id(&self) -> GString {
-        "yardman-rust/api-4.7/kernel-v1".into()
+        "yardman-rust/api-4.7/core-v1".into()
     }
 }
 
