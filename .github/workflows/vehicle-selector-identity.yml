@@ -7,6 +7,7 @@ on:
       - '.github/workflows/vehicle-selector-identity.yml'
       - 'godot/data/vehicle_fleet_supplemental.json'
       - 'godot/tools/vehicle_production/validate_fleet_selector_identity.py'
+      - 'godot/tools/vehicle_production/run_vehicle_game_ready_clean.sh'
   workflow_dispatch:
 
 permissions:
@@ -26,3 +27,37 @@ jobs:
           set -euo pipefail
           python godot/tools/vehicle_production/validate_fleet_selector_identity.py \
             godot/data/vehicle_fleet_supplemental.json
+
+  clean-fleet-lifecycle:
+    name: clean-fleet-lifecycle-${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned Godot 4.7.2 desktop runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip'
+          EXPECTED='cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4'
+          wget -q "$URL" -O /tmp/Godot_v4.7.2-stable_linux.x86_64.zip
+          echo "$EXPECTED  /tmp/Godot_v4.7.2-stable_linux.x86_64.zip" | sha256sum -c -
+          mkdir -p /tmp/yardman-godot
+          unzip -q /tmp/Godot_v4.7.2-stable_linux.x86_64.zip -d /tmp/yardman-godot
+          GODOT_BIN="$(find /tmp/yardman-godot -maxdepth 2 -type f -name 'Godot*' -print -quit)"
+          test -n "$GODOT_BIN"
+          chmod +x "$GODOT_BIN"
+          echo "GODOT_BIN=$GODOT_BIN" >> "$GITHUB_ENV"
+          "$GODOT_BIN" --version
+      - name: Exercise recovered fleet selector lifecycle in clean harness
+        shell: bash
+        env:
+          YARDMAN_VEHICLE_TEST_SHARD_TOTAL: '8'
+          YARDMAN_VEHICLE_TEST_SHARD_INDEX: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          bash godot/tools/vehicle_production/run_vehicle_game_ready_clean.sh
