@@ -1,0 +1,47 @@
+name: Yardman Building Collision Budget
+
+on:
+  push:
+    branches:
+      - codex/world-quality-20261018
+    paths:
+      - 'godot/scripts/building_streamer.gd'
+      - 'godot/tests/building_collision_budget_test.gd'
+      - '.github/workflows/building-collision-budget.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  building-collision-budget:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Godot 4.7.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+      - name: Import scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee /tmp/yardman-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' /tmp/yardman-import.log; then exit 1; fi
+      - name: Validate staged building collision
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/building_collision_budget_test.gd 2>&1 | tee /tmp/building-collision-budget.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' /tmp/building-collision-budget.log; then exit 1; fi
+          grep -q 'YARDMAN_BUILDING_COLLISION_BUDGET_TEST PASS' /tmp/building-collision-budget.log

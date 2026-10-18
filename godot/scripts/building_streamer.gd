@@ -12,6 +12,7 @@ const NO_FACADE_MASK := Vector2(-1000.0, -1000.0)
 const MAX_FACADE_HOSTS_PER_CELL := 32
 const FACADE_DISTANCE := 100.0
 const MAX_CELL_BYTES := 32 * 1024 * 1024
+const COLLISION_FACE_CHUNK := 4095
 const PALETTE := [Color(0.78, 0.73, 0.59), Color(0.67, 0.72, 0.66), Color(0.72, 0.48, 0.38), Color(0.64, 0.72, 0.78), Color(0.87, 0.83, 0.71), Color(0.54, 0.64, 0.51)]
 
 # Optional small source components retain their baked metre dimensions. Whole
@@ -67,6 +68,7 @@ var _jobs: Dictionary = {}
 var _failed: Dictionary = {}
 var _queue: Array[String] = []
 var _build: Dictionary = {}
+var _collision_build: Dictionary = {}
 var _last_cell := Vector2i(999999, 999999)
 var _world_position := Vector2.ZERO
 var _refresh_clock := 0.0
@@ -185,6 +187,7 @@ func _exit_tree() -> void:
         if thread.is_started():
             thread.wait_to_finish()
     _jobs.clear()
+    _collision_build.clear()
     if not _build.is_empty():
         _build.root.free()
         _build.clear()
@@ -233,6 +236,8 @@ func update_world(x: float, z: float, force := false) -> void:
             _queue.append(key)
     for key in _loaded.keys():
         if not _wanted.has(key):
+            if str(_collision_build.get("key", "")) == str(key):
+                _collision_build.clear()
             _loaded[key].root.queue_free()
             _loaded.erase(key)
             cell_removed.emit(_cell(str(key)))
@@ -681,35 +686,151 @@ func _complete_cell() -> void:
     _refresh_collision()
     cell_ready.emit(cell, count)
 
+func _collision_active(key: String) -> bool:
+    var cell := _cell(key)
+    var center := (Vector2(cell) + Vector2.ONE * 0.5) * cell_size
+    return center.distance_to(_world_position) <= collision_distance + cell_size * 0.71
+
+func _start_collision_build(key: String) -> void:
+    if not _loaded.has(key):
+        return
+    var entry: Dictionary = _loaded[key]
+    var meshes: Array = entry.meshes
+    if meshes.is_empty():
+        return
+    _collision_build = {
+        "key": key,
+        "phase": 0,
+        "mesh_cursor": 0,
+        "index_cursor": 0,
+        "vertices": PackedVector3Array(),
+        "indices": PackedInt32Array(),
+        "faces": PackedVector3Array(),
+        "steps": 0,
+        "face_chunks": 0,
+    }
+
+func _advance_collision_build() -> void:
+    if _collision_build.is_empty():
+        return
+    var key := str(_collision_build.get("key", ""))
+    if key.is_empty() or not _loaded.has(key) or not _collision_active(key):
+        _collision_build.clear()
+        return
+    var entry: Dictionary = _loaded[key]
+    var collider: CollisionShape3D = entry.collider
+    if collider.shape != null:
+        _collision_build.clear()
+        return
+    _collision_build.steps = int(_collision_build.get("steps", 0)) + 1
+    match int(_collision_build.get("phase", 0)):
+        0:
+            var meshes: Array = entry.meshes
+            var mesh_cursor := int(_collision_build.get("mesh_cursor", 0))
+            if mesh_cursor >= meshes.size():
+                _collision_build.phase = 2
+                return
+            var mesh: ArrayMesh = meshes[mesh_cursor]
+            if mesh == null or mesh.get_surface_count() == 0:
+                _collision_build.mesh_cursor = mesh_cursor + 1
+                return
+            # Array acquisition is isolated from face expansion and BVH cooking.
+            # This prevents a near-cell activation from doing all three in one
+            # gameplay frame when the player crosses the physics bubble.
+            var arrays := mesh.surface_get_arrays(0)
+            var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+            var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+            if vertices.is_empty() or indices.is_empty():
+                _collision_build.mesh_cursor = mesh_cursor + 1
+                return
+            _collision_build.vertices = vertices
+            _collision_build.indices = indices
+            _collision_build.index_cursor = 0
+            _collision_build.phase = 1
+        1:
+            var vertices: PackedVector3Array = _collision_build.get("vertices", PackedVector3Array())
+            var indices: PackedInt32Array = _collision_build.get("indices", PackedInt32Array())
+            var cursor := int(_collision_build.get("index_cursor", 0))
+            var faces: PackedVector3Array = _collision_build.get("faces", PackedVector3Array())
+            var copied := 0
+            var started := Time.get_ticks_usec()
+            while cursor < indices.size() and copied < COLLISION_FACE_CHUNK:
+                var source_index := int(indices[cursor])
+                if source_index < 0 or source_index >= vertices.size():
+                    push_error("Building collision source index out of bounds")
+                    _collision_build.clear()
+                    return
+                faces.append(vertices[source_index])
+                cursor += 1
+                copied += 1
+                if copied >= 3 and Time.get_ticks_usec() - started >= geometry_budget_us:
+                    break
+            _collision_build.index_cursor = cursor
+            _collision_build.faces = faces
+            if copied > 0:
+                _collision_build.face_chunks = int(_collision_build.get("face_chunks", 0)) + 1
+            if cursor >= indices.size():
+                _collision_build.vertices = PackedVector3Array()
+                _collision_build.indices = PackedInt32Array()
+                _collision_build.index_cursor = 0
+                _collision_build.mesh_cursor = int(_collision_build.get("mesh_cursor", 0)) + 1
+                if int(_collision_build.mesh_cursor) >= entry.meshes.size():
+                    _collision_build.phase = 2
+                else:
+                    _collision_build.phase = 0
+        2:
+            var faces: PackedVector3Array = _collision_build.get("faces", PackedVector3Array())
+            if faces.is_empty():
+                _collision_build.clear()
+                return
+            var shape := ConcavePolygonShape3D.new()
+            shape.backface_collision = true
+            shape.set_faces(faces)
+            collider.shape = shape
+            var body: StaticBody3D = entry.body
+            body.collision_layer = 1
+            body.set_meta("yardman_budgeted_collision", true)
+            body.set_meta("yardman_collision_build_steps", int(_collision_build.get("steps", 0)))
+            body.set_meta("yardman_collision_face_chunks", int(_collision_build.get("face_chunks", 0)))
+            _collision_build.clear()
+
 func _refresh_collision() -> void:
-    var created := false
-    for key in _loaded:
-        var cell := _cell(str(key))
+    var build_key := str(_collision_build.get("key", ""))
+    var nearest_key := ""
+    var nearest_distance := INF
+    for key in _loaded.keys():
+        var key_string := str(key)
+        var cell := _cell(key_string)
         var center := (Vector2(cell) + Vector2.ONE * 0.5) * cell_size
-        var active := center.distance_to(_world_position) <= collision_distance + cell_size * 0.71
-        var facade_body: StaticBody3D = _loaded[key].facade_body
+        var distance := center.distance_to(_world_position)
+        var active := distance <= collision_distance + cell_size * 0.71
+        var entry: Dictionary = _loaded[key]
+        var facade_body: StaticBody3D = entry.facade_body
         if facade_body != null:
             facade_body.collision_layer = 1 if active else 0
-        var body: StaticBody3D = _loaded[key].body
-        var collider: CollisionShape3D = _loaded[key].collider
+        var body: StaticBody3D = entry.body
+        var collider: CollisionShape3D = entry.collider
         if not active:
             body.collision_layer = 0
             collider.shape = null
-        elif collider.shape == null and not created:
-            # A distant visible cell does not retain a physics BVH. Prepare
-            # one nearby merged collider per pass, then discard it on retreat.
-            var faces := PackedVector3Array()
-            for mesh in _loaded[key].meshes:
-                faces.append_array(mesh.get_faces())
-            if not faces.is_empty():
-                var shape := ConcavePolygonShape3D.new()
-                shape.backface_collision = true
-                shape.set_faces(faces)
-                collider.shape = shape
-                body.collision_layer = 1
-            created = true
+            if build_key == key_string:
+                _collision_build.clear()
+                build_key = ""
         elif collider.shape != null:
             body.collision_layer = 1
+        else:
+            body.collision_layer = 0
+            if build_key.is_empty() and not entry.meshes.is_empty() and distance < nearest_distance:
+                nearest_distance = distance
+                nearest_key = key_string
+    if not _collision_build.is_empty():
+        _advance_collision_build()
+        return
+    if not nearest_key.is_empty():
+        # Starting a job is intentionally cheap. Surface-array acquisition,
+        # bounded face expansion and the unavoidable concave-shape cook each
+        # occur on later calls/frames, nearest active cell first.
+        _start_collision_build(nearest_key)
 
 func rebase_by(shift: Vector3) -> void:
     for entry in _loaded.values():
