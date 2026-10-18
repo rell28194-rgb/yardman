@@ -89,6 +89,16 @@ jobs:
           timeout 180 xvfb-run -a -s '-screen 0 640x480x24' godot --path godot --audio-driver Dummy --script res://tests/water_shore_render_test.gd 2>&1 | tee "$LOG"
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|FAIL' "$LOG"; then exit 1; fi
           grep -Fq 'YARDMAN_WATER_SHORE_RENDER PASS' "$LOG"
+      - name: Render high asphalt response
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build/world-quality/road-material
+          export YARDMAN_ROAD_MATERIAL_CAPTURE_DIR="$GITHUB_WORKSPACE/godot/build/world-quality/road-material"
+          LOG="godot/build/world-quality/road_material_render.log"
+          timeout 180 xvfb-run -a -s '-screen 0 720x480x24' godot --path godot --audio-driver Dummy --script res://tests/road_material_render_test.gd 2>&1 | tee "$LOG"
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|FAIL' "$LOG"; then exit 1; fi
+          grep -Fq 'YARDMAN_ROAD_MATERIAL_RENDER PASS' "$LOG"
       - name: Preserve world quality diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -98,5 +108,6 @@ jobs:
             godot/build/world-quality/*.log
             godot/build/world-quality/terrain-montane/*.png
             godot/build/world-quality/water-shore/*.png
+            godot/build/world-quality/road-material/*.png
           if-no-files-found: ignore
           retention-days: 14
