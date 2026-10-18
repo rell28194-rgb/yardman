@@ -3,6 +3,12 @@ class_name YardmanResponsiveBuildingStreamerRDX
 
 const RDXStreamingPriority = preload("res://scripts/streaming_priority.gd")
 
+# Test-only lifecycle boundary. This R&D subclass is instantiated without the
+# production national building manifest/material setup in CI. Promotion folds
+# only the queue re-ranking behavior into the real streamer.
+func _ready() -> void:
+    pass
+
 # R&D override: preserve the existing building wanted-set, residency caps and
 # lifecycle. While the target stays in the same 256 m cell, only re-rank the
 # remaining I/O queue from current position/velocity instead of leaving the
