@@ -10,9 +10,11 @@ on:
       - 'godot/tools/hydrology_crossings.py'
       - 'godot/tools/build_hydrology_crossings.py'
       - 'godot/tools/hydrology_terrain_plan.py'
+      - 'godot/tools/hydrology_terrain_delta.py'
       - 'Tests/Python/test_hydrology_geometry.py'
       - 'Tests/Python/test_hydrology_channel_model.py'
       - 'Tests/Python/test_hydrology_terrain_plan.py'
+      - 'Tests/Python/test_hydrology_terrain_delta.py'
       - 'godot/tests/test_hydrology_crossings.py'
       - 'godot/tests/test_hydrology_crossing_inventory.py'
       - '.github/workflows/hydrology-truth.yml'
@@ -40,6 +42,7 @@ jobs:
           python Tests/Python/test_hydrology_geometry.py
           python Tests/Python/test_hydrology_channel_model.py
           python Tests/Python/test_hydrology_terrain_plan.py
+          python Tests/Python/test_hydrology_terrain_delta.py
           python godot/tests/test_hydrology_crossings.py
           python godot/tests/test_hydrology_crossing_inventory.py
           wget -q https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf -O /tmp/jamaica.osm.pbf
