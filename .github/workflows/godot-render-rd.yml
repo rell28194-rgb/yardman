@@ -9,7 +9,6 @@ on:
       - 'godot/scripts/road_streamer.gd'
       - 'godot/scripts/terrain_streamer.gd'
       - 'godot/scripts/building_streamer.gd'
-      - 'godot/scripts/predictive_streaming_runtime.gd'
       - 'godot/scripts/gpu_visibility_probe.gd'
       - 'godot/scripts/gpu_driven_capabilities.gd'
       - 'godot/scripts/gpu_indirect_contract.gd'
