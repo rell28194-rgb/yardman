@@ -26,7 +26,6 @@ static func run_probe(count: int = 4096) -> Dictionary:
         sphere_values[base + 2] = float((index * 199) % 501) - 250.0
         sphere_values[base + 3] = 0.5 + float(index % 9) * 0.35
 
-    # Six inward-facing planes enclosing an axis-aligned 100 m test volume.
     var plane_values := PackedFloat32Array([
         1.0, 0.0, 0.0, 50.0,
         -1.0, 0.0, 0.0, 50.0,
@@ -60,23 +59,20 @@ static func run_probe(count: int = 4096) -> Dictionary:
             buffers.append(shader_rid)
             return _fail(rd, buffers, "storage buffer creation failed")
 
-    var sphere_uniform := _storage_uniform(0, sphere_buffer)
-    var plane_uniform := _storage_uniform(1, plane_buffer)
-    var visibility_uniform := _storage_uniform(2, visibility_buffer)
-    var params_uniform := _storage_uniform(3, params_buffer)
-    var visible_index_uniform := _storage_uniform(4, visible_index_buffer)
-    var counter_uniform := _storage_uniform(5, counter_buffer)
-
     var uniform_set := rd.uniform_set_create([
-        sphere_uniform, plane_uniform, visibility_uniform, params_uniform,
-        visible_index_uniform, counter_uniform], shader_rid, 0)
+        _storage_uniform(0, sphere_buffer),
+        _storage_uniform(1, plane_buffer),
+        _storage_uniform(2, visibility_buffer),
+        _storage_uniform(3, params_buffer),
+        _storage_uniform(4, visible_index_buffer),
+        _storage_uniform(5, counter_buffer),
+    ], shader_rid, 0)
     var pipeline := rd.compute_pipeline_create(shader_rid)
     if not uniform_set.is_valid() or not pipeline.is_valid():
         return _fail(rd, [uniform_set, pipeline, sphere_buffer, plane_buffer,
             visibility_buffer, params_buffer, visible_index_buffer, counter_buffer,
             shader_rid], "compute pipeline creation failed")
 
-    # Warm once so the measured dispatch does not include first-use pipeline work.
     _dispatch(rd, pipeline, uniform_set, count)
     rd.sync()
     rd.buffer_update(counter_buffer, 0, zero_counter.size(), zero_counter)
@@ -85,10 +81,12 @@ static func run_probe(count: int = 4096) -> Dictionary:
     rd.sync()
     var gpu_us := Time.get_ticks_usec() - gpu_started
 
+    var readback_started := Time.get_ticks_usec()
     var gpu_values := rd.buffer_get_data(visibility_buffer).to_int32_array()
     var gpu_counter_values := rd.buffer_get_data(counter_buffer).to_int32_array()
     var gpu_visible_count := int(gpu_counter_values[0]) if not gpu_counter_values.is_empty() else -1
     var gpu_compacted := rd.buffer_get_data(visible_index_buffer).to_int32_array()
+    var readback_us := Time.get_ticks_usec() - readback_started
     gpu_compacted.resize(clampi(gpu_visible_count, 0, count))
     gpu_compacted.sort()
 
@@ -121,6 +119,8 @@ static func run_probe(count: int = 4096) -> Dictionary:
         "mismatches": mismatches,
         "compact_mismatches": compact_mismatches,
         "gpu_dispatch_us": gpu_us,
+        "gpu_readback_us": readback_us,
+        "gpu_total_with_readback_us": gpu_us + readback_us,
         "cpu_reference_us": cpu_us,
     }
     _free_rids(rd, [uniform_set, pipeline, sphere_buffer, plane_buffer,
