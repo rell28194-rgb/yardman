@@ -75,7 +75,7 @@ void fragment() {
     // registered shore readable without pretending the 40 m distance channel
     // contains measured underwater depth.
     float shoreline_tint = 1.0 - smoothstep(1.0, 18.0, shore_m);
-    water = mix(water, vec3(0.10, 0.43, 0.42), shoreline_tint * 0.14);
+    water = mix(water, vec3(0.10, 0.43, 0.42), shoreline_tint * 0.10);
     water *= 0.97 + swell.x * 0.06;
     if (has_reference_surface) {
         vec2 flow = ocean_uv * 2.1 + vec2(0.0, TIME * 0.0031);
@@ -93,24 +93,28 @@ void fragment() {
     water = mix(water, vec3(0.22, 0.37, 0.42), fresnel * 0.30);
 
     float foam_phase = shore_m * 2.6 + swell.x * 3.0 - TIME * 0.78;
-    float edge_surf = (1.0 - smoothstep(0.20, 1.9, shore_m))
-        * smoothstep(0.22, 0.82, sin(foam_phase) * 0.5 + 0.5);
-    // A second narrow shoreline wash band breaks up the old single bright rim.
-    // Its envelope is driven only by registered horizontal shore distance.
-    float wash_envelope = smoothstep(0.35, 1.6, shore_m)
-        * (1.0 - smoothstep(4.2, 7.5, shore_m));
-    float wash_phase = sin(shore_m * 1.45
-        + dot(ocean_uv, vec2(0.70, -0.40)) * 5.0
-        + swell.x * 2.7 - TIME * 0.58) * 0.5 + 0.5;
-    float shoreline_wash = wash_envelope * smoothstep(0.35, 0.78, wash_phase);
-    float surf = max(edge_surf, shoreline_wash * 0.68);
+    float edge_surf = (1.0 - smoothstep(0.16, 1.25, shore_m))
+        * smoothstep(0.28, 0.84, sin(foam_phase) * 0.5 + 0.5);
+    // The secondary wash is one soft coastal envelope broken in two world-UV
+    // directions, avoiding the parallel contour-line ribbons produced by a
+    // shore-distance-only phase.
+    float wash_envelope = smoothstep(0.65, 1.8, shore_m)
+        * (1.0 - smoothstep(3.4, 5.4, shore_m));
+    float along_a = sin(dot(ocean_uv, vec2(8.7, 17.3)) + TIME * 0.41) * 0.5 + 0.5;
+    float along_b = sin(dot(ocean_uv, vec2(-15.1, 6.4)) - TIME * 0.29) * 0.5 + 0.5;
+    float breakup = smoothstep(0.30, 0.76, along_a * 0.64 + along_b * 0.36);
+    float wash_phase = sin(shore_m * 0.72
+        + dot(ocean_uv, vec2(0.70, -0.40)) * 2.1
+        + swell.x * 1.8 - TIME * 0.46) * 0.5 + 0.5;
+    float shoreline_wash = wash_envelope * breakup * smoothstep(0.32, 0.76, wash_phase);
+    float surf = max(edge_surf * 0.45, shoreline_wash * 0.38);
     if (has_reference_foam) {
         float foam = texture(reference_foam,
             ocean_uv * 6.1 + vec2(0.0, TIME * 0.011)).r;
-        surf *= 0.56 + smoothstep(0.10, 0.46, foam) * 0.64;
+        surf *= 0.60 + smoothstep(0.10, 0.46, foam) * 0.52;
     }
-    float foam_response = clamp(surf * 0.92 + (1.0 - shore_fade) * 0.06, 0.0, 1.0);
-    ALBEDO = mix(water, vec3(0.78, 0.85, 0.82), surf * 0.47);
+    float foam_response = clamp(surf * 0.92 + (1.0 - shore_fade) * 0.04, 0.0, 1.0);
+    ALBEDO = mix(water, vec3(0.78, 0.85, 0.82), surf * 0.36);
     ROUGHNESS = mix(0.30, 0.47, foam_response);
     SPECULAR = mix(0.54, 0.30, foam_response);
     METALLIC = 0.0;
