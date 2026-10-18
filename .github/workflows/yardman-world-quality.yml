@@ -51,7 +51,7 @@ jobs:
           set -euo pipefail
           mkdir -p godot/build/world-quality
           timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/world-quality/import.log
-          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/world-quality/import.log; then exit 1; fi
+          if grep -E 'SCRIPT ERROR|Parse Error|Unicode parsing error|^ERROR:' godot/build/world-quality/import.log; then exit 1; fi
       - name: Test terrain seams, parish truth, visual continuity, routing, and live population contraction
         shell: bash
         run: |
@@ -61,7 +61,7 @@ jobs:
           for TEST in terrain_normal_seam population_budget_regression terrain_coast road_corridor_terrain road_graph_routing streaming_budget building_hlod vegetation_lod_tint reflection_budget traffic_runtime pedestrian_runtime parked_vehicle traffic_pedestrian_safety pedestrian_destination location_tracker parish_runtime parish_map_runtime; do
             LOG="godot/build/world-quality/${TEST}.log"
             timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "$LOG"
-            if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|FAIL' "$LOG"; then exit 1; fi
+            if grep -E 'SCRIPT ERROR|Parse Error|Unicode parsing error|^ERROR:|FAIL' "$LOG"; then exit 1; fi
             case "$TEST" in
               terrain_normal_seam) MARKER='TERRAIN NORMAL SEAM: PASS' ;;
               population_budget_regression) MARKER='YARDMAN_POPULATION_BUDGET_REGRESSION PASS' ;;
@@ -77,7 +77,7 @@ jobs:
           export YARDMAN_TERRAIN_MONTANE_CAPTURE_DIR="$GITHUB_WORKSPACE/godot/build/world-quality/terrain-montane"
           LOG="godot/build/world-quality/terrain_montane_render.log"
           timeout 180 xvfb-run -a -s '-screen 0 1024x768x24' godot --path godot --audio-driver Dummy --script res://tests/terrain_montane_render_test.gd 2>&1 | tee "$LOG"
-          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|FAIL' "$LOG"; then exit 1; fi
+          if grep -E 'SCRIPT ERROR|Parse Error|Unicode parsing error|^ERROR:|FAIL' "$LOG"; then exit 1; fi
           grep -Fq 'YARDMAN_TERRAIN_MONTANE_RENDER PASS' "$LOG"
       - name: Render shoreline water response
         shell: bash
@@ -87,7 +87,7 @@ jobs:
           export YARDMAN_WATER_SHORE_CAPTURE_DIR="$GITHUB_WORKSPACE/godot/build/world-quality/water-shore"
           LOG="godot/build/world-quality/water_shore_render.log"
           timeout 180 xvfb-run -a -s '-screen 0 640x480x24' godot --path godot --audio-driver Dummy --script res://tests/water_shore_render_test.gd 2>&1 | tee "$LOG"
-          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|FAIL' "$LOG"; then exit 1; fi
+          if grep -E 'SCRIPT ERROR|Parse Error|Unicode parsing error|^ERROR:|FAIL' "$LOG"; then exit 1; fi
           grep -Fq 'YARDMAN_WATER_SHORE_RENDER PASS' "$LOG"
       - name: Render high asphalt response
         shell: bash
@@ -97,7 +97,7 @@ jobs:
           export YARDMAN_ROAD_MATERIAL_CAPTURE_DIR="$GITHUB_WORKSPACE/godot/build/world-quality/road-material"
           LOG="godot/build/world-quality/road_material_render.log"
           timeout 180 xvfb-run -a -s '-screen 0 720x480x24' godot --path godot --audio-driver Dummy --script res://tests/road_material_render_test.gd 2>&1 | tee "$LOG"
-          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|FAIL' "$LOG"; then exit 1; fi
+          if grep -E 'SCRIPT ERROR|Parse Error|Unicode parsing error|^ERROR:|FAIL' "$LOG"; then exit 1; fi
           grep -Fq 'YARDMAN_ROAD_MATERIAL_RENDER PASS' "$LOG"
       - name: Preserve world quality diagnostics
         if: always()
