@@ -1,5 +1,6 @@
 extends SceneTree
 
+const HLOD = preload("res://scripts/building_hlod_runtime.gd")
 var failures := 0
 
 func _initialize() -> void:
@@ -82,6 +83,28 @@ func _run() -> void:
         "Rust spatial result budget was not enforced"
     )
 
+    # Exercise the first real runtime consumer with the extension loaded. The
+    # HLOD system must select exactly the same authoritative building cells as
+    # its source-only GDScript fallback before native acceleration is accepted.
+    var hlod := HLOD.new()
+    root.add_child(hlod)
+    hlod._configure_manifest({
+        "cell_size": 256.0,
+        "tiles": [{
+            "x": 0,
+            "z": 0,
+            "file": "synthetic.ymb",
+            "cells": [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [3, 2]],
+        }],
+    })
+    hlod._world_position = Vector2(128.0, 128.0)
+    var reference_cells: Array[String] = hlod._candidate_keys_fallback(Vector2i.ZERO, 0.0, 800.0)
+    var native_cells: Array[String] = hlod._candidate_keys(Vector2i.ZERO, 0.0, 800.0)
+    _check(str(hlod.get_meta("yardman_hlod_spatial_backend", "")) == "rust-rstar", "Building HLOD did not activate Rust spatial backend")
+    _check(native_cells == reference_cells, "Building HLOD Rust relevance differs from GDScript fallback")
+    _check(native_cells == ["0:0", "0:1", "1:0", "1:1", "2:0"], "Building HLOD deterministic ordering changed")
+    hlod.queue_free()
+
     const LOOPS := 8
     var rust_started := Time.get_ticks_usec()
     var rust_checksum := 0
@@ -101,7 +124,7 @@ func _run() -> void:
 
     if failures == 0:
         var ratio := float(gd_us) / float(maxi(rust_us, 1))
-        print("YARDMAN_RUST_KERNEL_SMOKE PASS points=%d loops=%d rust_us=%d gdscript_us=%d ratio=%.2f build=%s" % [
+        print("YARDMAN_RUST_KERNEL_SMOKE PASS points=%d loops=%d rust_us=%d gdscript_us=%d ratio=%.2f hlod_parity=1 build=%s" % [
             POINT_COUNT, LOOPS, rust_us, gd_us, ratio, str(kernel.call("build_id"))
         ])
     quit(0 if failures == 0 else 1)
