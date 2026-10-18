@@ -65,7 +65,7 @@ jobs:
         run: |
           set -euxo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq mesa-vulkan-drivers
+          sudo apt-get install -y -qq mesa-vulkan-drivers xvfb
           BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
           wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
           unzip -q /tmp/godot.zip -d /tmp/godot-bin
@@ -77,12 +77,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p godot/build
-          timeout 120 godot --headless --path godot --rendering-method mobile --rendering-driver vulkan --editor --quit 2>&1 | tee godot/build/gpu-rd-import.log
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --editor --quit 2>&1 | tee godot/build/gpu-rd-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/gpu-rd-import.log; then exit 1; fi
       - name: Validate GPU visibility against CPU reference
         shell: bash
         run: |
           set -euo pipefail
-          timeout 120 godot --headless --path godot --rendering-method mobile --rendering-driver vulkan --script res://tests/gpu_visibility_test.gd 2>&1 | tee godot/build/gpu-visibility.log
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_visibility_test.gd 2>&1 | tee godot/build/gpu-visibility.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/gpu-visibility.log; then exit 1; fi
           grep -q 'YARDMAN_GPU_VISIBILITY_TEST PASS' godot/build/gpu-visibility.log
