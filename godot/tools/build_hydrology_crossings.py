@@ -3,8 +3,9 @@
 
 Geometry finds candidate intersections only. Structural classification is delegated
 to hydrology_crossings, so an intersection cannot invent a bridge, culvert, ford,
-or DEM mutation. Road bridge/tunnel/layer semantics come from the persistent OSM
-road graph; water identity and geometry come from the compiled hydrology truth pack.
+or DEM mutation. Road bridge/tunnel/layer semantics and any explicit ford/culvert
+provenance come from the persistent OSM road graph; water identity and geometry
+come from the compiled hydrology truth pack.
 """
 from __future__ import annotations
 
@@ -32,6 +33,21 @@ def _load_water(hydrology: Path) -> list[dict]:
         for raw in payload.get("segments", []):
             result.append(dict(zip(fields, raw)))
     return result
+
+
+def _source_bool(edge: dict, *keys: str) -> bool:
+    """Read only explicit source evidence; absence never becomes inference."""
+    for key in keys:
+        value = edge.get(key)
+        if isinstance(value, bool):
+            if value:
+                return True
+            continue
+        if value is None:
+            continue
+        if str(value).strip().lower() in {"yes", "true", "1", "ford", "culvert"}:
+            return True
+    return False
 
 
 def build_inventory(roads: Path, hydrology: Path, output: Path) -> dict:
@@ -69,23 +85,37 @@ def build_inventory(roads: Path, hydrology: Path, output: Path) -> dict:
             if key in seen:
                 continue
             seen.add(key)
+            explicit_ford = _source_bool(edge, "ford", "osm_ford", "source_ford")
+            explicit_culvert = _source_bool(edge, "culvert", "osm_culvert", "source_culvert")
+            engineered_drain = _source_bool(edge, "engineered_drain_record", "authoritative_engineered_drain")
             decision = classify_crossing(road_bridge=bool(edge.get("bridge")),
                                          road_tunnel=bool(edge.get("tunnel")),
-                                         road_layer=edge.get("layer", 0))
+                                         road_layer=edge.get("layer", 0),
+                                         explicit_ford=explicit_ford,
+                                         explicit_culvert=explicit_culvert,
+                                         engineered_drain_record=engineered_drain)
             record = {"x": round(point.x, 3), "z": round(point.y, 3),
                       "road_edge": edge["id"], "road_source_way": edge.get("source_way"),
                       "water_source_way": water_record["source_way"],
                       "waterway": water_record["waterway"], "water_name": water_record.get("name", ""),
+                      "source_crossing_evidence": {"ford": explicit_ford, "culvert": explicit_culvert,
+                                                   "engineered_drain": engineered_drain},
                       **decision.to_dict()}
             records.append(record)
             stats["crossings"] += 1
             stats[f"kind_{decision.kind}"] += 1
             stats[f"status_{decision.status}"] += 1
             stats[f"waterway_{water_record['waterway']}"] += 1
+            if explicit_ford:
+                stats["evidence_ford"] += 1
+            if explicit_culvert:
+                stats["evidence_culvert"] += 1
+            if engineered_drain:
+                stats["evidence_engineered_drain"] += 1
     records.sort(key=lambda r: (r["road_edge"], r["water_source_way"], r["x"], r["z"]))
     output.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"format": 1,
-               "geometry_status": "registered geometric intersections; structures only where source road evidence supports classification",
+    payload = {"format": 2,
+               "geometry_status": "registered geometric intersections; structures only where explicit source evidence supports classification",
                "terrain_mutation_policy": "unresolved crossings authorize no destructive DEM mutation",
                "stats": dict(sorted(stats.items())), "crossings": records}
     output.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
