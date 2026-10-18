@@ -261,6 +261,31 @@ def _speed(tags):
         return None
 
 
+def _graph_stops(refs, references):
+    """Return deterministic graph splits without collapsing closed OSM loops.
+
+    A closed way normally starts and ends at the same real OSM node. If that
+    loop has no shared junction inside it, the ordinary junction splitter would
+    emit one self-loop edge, which is unusable for routing. Split only that
+    interval at a real interior source node nearest its midpoint. This preserves
+    source identity, geometry and direction while giving the graph two distinct
+    endpoints and a traversable directed cycle.
+    """
+    stops = [0] + [i for i in range(1, len(refs) - 1) if references[refs[i]] > 1] + [len(refs) - 1]
+    expanded = [stops[0]]
+    for last in stops[1:]:
+        first = expanded[-1]
+        if refs[first] == refs[last] and last - first > 1:
+            midpoint = (first + last) / 2.0
+            candidates = [i for i in range(first + 1, last) if refs[i] != refs[first]]
+            if candidates:
+                split = min(candidates, key=lambda i: (abs(i - midpoint), i))
+                expanded.append(split)
+        if expanded[-1] != last:
+            expanded.append(last)
+    return expanded
+
+
 def build_network(features, transformer, origin, tile_size, widths, classes,
                   flag_function, anchors, height_sampler=None):
     ways = []
@@ -317,7 +342,7 @@ def build_network(features, transformer, origin, tile_size, widths, classes,
         # Compute joins/stationing once on the complete source way. A graph
         # junction split or a tile unload cannot alter a shared cross-section.
         sections, stations = ribbon_cross_sections(points, width)
-        stops = [0] + [i for i in range(1, len(refs) - 1) if references[refs[i]] > 1] + [len(refs) - 1]
+        stops = _graph_stops(refs, references)
         had_edge = False
         for first, last in zip(stops, stops[1:]):
             path = points[first:last + 1]
