@@ -3,6 +3,7 @@ class_name JamaicaTerrainStreamer
 
 const CoastGeometryScript = preload("res://scripts/coast_geometry.gd")
 const CoastlineScript = preload("res://scripts/coastline.gd")
+const COLLISION_FACE_CHUNK := 4095
 var resolution := 65
 var spacing := 64.0
 var coast_root := "res://data/coast"
@@ -151,10 +152,15 @@ func _poll_jobs() -> void:
         _building = {"key": key, "tile": tile, "root": tile_root, "heights": payload.heights,
             "coast": payload.coast, "cursor": 0, "land_cursor": 0,
             "vertices": PackedVector3Array(), "indices": PackedInt32Array(),
-            "normals": PackedVector3Array(), "colors": PackedColorArray()}
+            "normals": PackedVector3Array(), "colors": PackedColorArray(),
+            "finalize_phase": -1, "finalize_step_count": 0, "finalize_start_frame": -1,
+            "collision_cursor": 0, "collision_faces": PackedVector3Array(), "collision_face_chunks": 0}
 
 func _prepare_geometry() -> void:
     if _building.is_empty():
+        return
+    if int(_building.get("finalize_phase", -1)) >= 0:
+        _prepare_near_finalize()
         return
     var start := Time.get_ticks_usec()
     while int(_building.cursor) < resolution:
@@ -168,7 +174,14 @@ func _prepare_geometry() -> void:
         _building.land_cursor += 3
         if Time.get_ticks_usec() - start >= geometry_budget_us:
             return
-    _complete_near()
+    # Finalization used to upload the mesh, expand every collision index into a
+    # face, cook the concave shape, instantiate coastline geometry and publish
+    # the tile in this same call. Those are individually expensive main-thread
+    # operations and together they defeat the streaming budget exactly when the
+    # player enters a new area. Hand the completed arrays to a phased finalize
+    # state machine and do no more integration work on this frame.
+    _building.finalize_phase = 0
+    _building.finalize_start_frame = Engine.get_process_frames()
 
 func _height_color(height: float, slope: float) -> Color:
     if height < 2.0:
@@ -243,28 +256,92 @@ func _mesh(job: Dictionary, origin: Vector2, overview: bool = false) -> ArrayMes
     return mesh
 
 func _complete_near() -> void:
+    # Keep the legacy entry point for tests/tools, but never collapse all terrain
+    # integration back into one frame. One invocation advances one finalize step.
+    if _building.is_empty():
+        return
+    if int(_building.get("finalize_phase", -1)) < 0:
+        _building.finalize_phase = 0
+        _building.finalize_start_frame = Engine.get_process_frames()
+    _prepare_near_finalize()
+
+func _prepare_near_finalize() -> void:
+    if _building.is_empty():
+        return
+    _building.finalize_step_count = int(_building.get("finalize_step_count", 0)) + 1
+    match int(_building.get("finalize_phase", 0)):
+        0:
+            _finalize_near_mesh()
+            _building.finalize_phase = 1
+        1:
+            _finalize_near_collision_faces()
+        2:
+            _finalize_near_collision_shape()
+            _building.finalize_phase = 3
+        3:
+            var tile: Vector2i = _building.tile
+            coastline.instantiate_tile(tile, _building.coast, _building.root, tile_size)
+            _building.finalize_phase = 4
+        4:
+            _publish_near_tile()
+
+func _finalize_near_mesh() -> void:
+    var tile: Vector2i = _building.tile
+    var mesh := _mesh(_building, Vector2(float(tile.x) * tile_size, float(tile.y) * tile_size))
+    if mesh.get_surface_count() <= 0:
+        return
+    var instance := MeshInstance3D.new()
+    instance.name = "RegisteredLand"
+    instance.mesh = mesh
+    _building.root.add_child(instance)
+
+func _finalize_near_collision_faces() -> void:
+    var indices: PackedInt32Array = _building.indices
+    if indices.is_empty():
+        _building.finalize_phase = 2
+        return
+    var cursor := int(_building.get("collision_cursor", 0))
+    var faces: PackedVector3Array = _building.get("collision_faces", PackedVector3Array())
+    var copied := 0
+    var start := Time.get_ticks_usec()
+    while cursor < indices.size() and copied < COLLISION_FACE_CHUNK:
+        faces.append(_building.vertices[indices[cursor]])
+        cursor += 1
+        copied += 1
+        if copied >= 3 and Time.get_ticks_usec() - start >= geometry_budget_us:
+            break
+    _building.collision_cursor = cursor
+    _building.collision_faces = faces
+    if copied > 0:
+        _building.collision_face_chunks = int(_building.get("collision_face_chunks", 0)) + 1
+    if cursor >= indices.size():
+        _building.finalize_phase = 2
+
+func _finalize_near_collision_shape() -> void:
+    var faces: PackedVector3Array = _building.get("collision_faces", PackedVector3Array())
+    if faces.is_empty():
+        return
+    var shape := ConcavePolygonShape3D.new()
+    shape.backface_collision = true
+    shape.set_faces(faces)
+    var collider := CollisionShape3D.new()
+    collider.shape = shape
+    var body := StaticBody3D.new()
+    body.add_child(collider)
+    _building.root.add_child(body)
+    # The PhysicsServer shape owns its cooked data now; release the duplicate
+    # expanded face array before publishing the tile to keep peak RAM bounded.
+    _building.collision_faces = PackedVector3Array()
+
+func _publish_near_tile() -> void:
     var tile_root: Node3D = _building.root
     var tile: Vector2i = _building.tile
     var key: String = _building.key
-    var mesh := _mesh(_building, Vector2(float(tile.x) * tile_size, float(tile.y) * tile_size))
-    if mesh.get_surface_count() > 0:
-        var instance := MeshInstance3D.new()
-        instance.name = "RegisteredLand"
-        instance.mesh = mesh
-        tile_root.add_child(instance)
-    if not _building.indices.is_empty():
-        var faces := PackedVector3Array()
-        for index in _building.indices:
-            faces.append(_building.vertices[index])
-        var shape := ConcavePolygonShape3D.new()
-        shape.backface_collision = true
-        shape.set_faces(faces)
-        var collider := CollisionShape3D.new()
-        collider.shape = shape
-        var body := StaticBody3D.new()
-        body.add_child(collider)
-        tile_root.add_child(body)
-    coastline.instantiate_tile(tile, _building.coast, tile_root, tile_size)
+    tile_root.set_meta("yardman_budgeted_finalize", true)
+    tile_root.set_meta("yardman_finalize_steps", int(_building.get("finalize_step_count", 0)))
+    tile_root.set_meta("yardman_collision_face_chunks", int(_building.get("collision_face_chunks", 0)))
+    var start_frame := int(_building.get("finalize_start_frame", Engine.get_process_frames()))
+    tile_root.set_meta("yardman_finalize_frame_span", maxi(0, Engine.get_process_frames() - start_frame))
     _height_data[key] = _building.heights
     _coast_data[key] = _building.coast
     add_child(tile_root)
