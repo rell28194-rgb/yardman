@@ -5,6 +5,7 @@ on:
     branches:
       - codex/render-rd-001
       - codex/render-rd-indirect-001
+      - 'codex/render-rd-indirect-*'
     paths:
       - 'godot/scripts/streaming_priority.gd'
       - 'godot/scripts/predictive_streaming_runtime.gd'
@@ -48,16 +49,19 @@ jobs:
           chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
           sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
       - name: Parse and import R&D runtime
+        shell: bash
         run: |
           mkdir -p godot/build
           timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/render-rd-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/render-rd-import.log; then exit 1; fi
       - name: Test predictive streaming priority
+        shell: bash
         run: |
           timeout 120 godot --headless --path godot --script res://tests/streaming_priority_test.gd 2>&1 | tee godot/build/streaming-priority.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/streaming-priority.log; then exit 1; fi
           grep -q 'YARDMAN_STREAMING_PRIORITY_TEST PASS' godot/build/streaming-priority.log
       - name: Enforce indirect GPU production memory contract
+        shell: bash
         run: |
           timeout 120 godot --headless --path godot --script res://tests/gpu_indirect_budget_test.gd 2>&1 | tee godot/build/gpu-indirect-budget.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/gpu-indirect-budget.log; then exit 1; fi
@@ -65,11 +69,12 @@ jobs:
 
   gpu-visibility:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     env: { GODOT_VERSION: '4.7.2', GODOT_CHANNEL: stable }
     steps:
       - uses: actions/checkout@v4
       - name: Install Vulkan software device and Godot 4.7.2
+        shell: bash
         run: |
           set -euxo pipefail
           sudo apt-get update -qq
