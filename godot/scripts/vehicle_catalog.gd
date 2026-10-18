@@ -1,6 +1,8 @@
 extends RefCounted
 class_name YardmanVehicleCatalog
 
+const FleetRegistry = preload("res://scripts/vehicle_fleet_registry.gd")
+
 # Physics/tuning data are deliberately separate from controller code so adding a
 # vehicle does not fork the solver. Values are game tuning baselines, not claims
 # of exact homologation specifications for a particular trim/year.
@@ -107,21 +109,35 @@ const VEHICLES := {
 }
 
 static func profile(vehicle_id: String) -> Dictionary:
-    var key := vehicle_id if VEHICLES.has(vehicle_id) else DEFAULT_ID
-    return VEHICLES[key].duplicate(true)
+    if VEHICLES.has(vehicle_id):
+        return VEHICLES[vehicle_id].duplicate(true)
+    if FleetRegistry.has(vehicle_id):
+        var result: Dictionary = VEHICLES[DEFAULT_ID].duplicate(true)
+        var recovered := FleetRegistry.entry(vehicle_id)
+        for key in recovered.keys():
+            result[key] = recovered[key]
+        return result
+    return VEHICLES[DEFAULT_ID].duplicate(true)
 
 static func has(vehicle_id: String) -> bool:
-    return VEHICLES.has(vehicle_id)
+    return VEHICLES.has(vehicle_id) or FleetRegistry.has(vehicle_id)
 
 static func ids(include_legacy: bool = true) -> Array:
     var result: Array = []
     if include_legacy:
         result.append(DEFAULT_ID)
     result.append_array(PRODUCTION_IDS)
+    for vehicle_id in FleetRegistry.ids():
+        if not result.has(vehicle_id):
+            result.append(vehicle_id)
     return result
 
 static func production_ids() -> Array:
-    return PRODUCTION_IDS.duplicate()
+    var result: Array = PRODUCTION_IDS.duplicate()
+    for vehicle_id in FleetRegistry.ids():
+        if not result.has(vehicle_id):
+            result.append(vehicle_id)
+    return result
 
 static func next_id(current_id: String, include_legacy: bool = false) -> String:
     var order := ids(include_legacy)
