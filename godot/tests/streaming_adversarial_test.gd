@@ -17,7 +17,7 @@ func _run() -> void:
     _test_deterministic_replay()
     _test_retry_timing_and_stale_cleanup()
     _test_loaded_tile_clears_failure()
-    print("YARDMAN_STREAMING_ADVERSARIAL_TEST %s schema=1 deterministic=1 retry=1 stale=1 loaded_failure_oracle=1" % (
+    print("YARDMAN_STREAMING_ADVERSARIAL_TEST %s schema=1 deterministic=1 retry=1 stale=1 orphan_cleanup=1 loaded_failure_oracle=1" % (
         "PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
 
@@ -80,7 +80,8 @@ func _test_retry_timing_and_stale_cleanup() -> void:
     _check((result.get("invariant_errors", []) as Array).is_empty(), "timing scenario violated invariants")
     var stats: Dictionary = result.get("stats", {})
     _check(int(stats.get("retries_released", 0)) == 2, "first retry deadline did not release both due failures")
-    _check(int(stats.get("stale_failures_dropped", 0)) == 1, "unwanted retry state was not dropped")
+    _check(int(stats.get("stale_failures_dropped", 0)) == 1, "unwanted active failure was not dropped")
+    _check(int(stats.get("stale_attempts_dropped", 0)) == 1, "orphan retry-attempt history was not dropped")
     _check((result.get("failed", {}) as Dictionary).is_empty(), "stale cleanup left failed entries")
     _check((result.get("attempts", {}) as Dictionary).is_empty(), "stale cleanup left retry attempts")
 
@@ -103,3 +104,6 @@ func _test_loaded_tile_clears_failure() -> void:
         "loaded tile still exists in failed set")
     _check(not (result.get("attempts", {}) as Dictionary).has("tile:loaded"),
         "loaded tile still has retry attempts")
+    var stats: Dictionary = result.get("stats", {})
+    _check(int(stats.get("loaded_failures_cleared", 0)) == 1,
+        "loaded failure reconciliation metric did not record the cleanup")
