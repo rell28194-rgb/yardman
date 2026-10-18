@@ -55,6 +55,16 @@ void fragment() {
     float west = 1.0 - smoothstep(-90000.0, 15000.0, national_position.x);
     float regional_dryness = 0.12 + south * 0.30 + west * south * 0.18;
     float dry = clamp(regional_dryness + (patch.g - 0.5) * 0.43 - highland * 0.17, 0.0, 0.8);
+
+    // Keep terrain geometry authoritative and add ecological relief only in the
+    // material. Montane ground becomes cooler, denser and less bare with height;
+    // upper exposed slopes gain restrained rock prominence. These terms are
+    // continuous in elevation/slope so streamed tile boundaries cannot reveal
+    // a biome edge, and lowland source-reference grading remains unchanged.
+    float montane = smoothstep(500.0, 1150.0, p.y);
+    float upper_montane = smoothstep(1100.0, 1900.0, p.y);
+    float humid_highland = montane * (1.0 - dry);
+
     vec3 wet_grass = vec3(0.24, 0.34, 0.105);
     vec3 dry_grass = vec3(0.48, 0.40, 0.19);
     vec3 grass = mix(wet_grass, dry_grass, dry);
@@ -70,7 +80,11 @@ void fragment() {
         grass = mix(wet, dry_texture, dry);
     }
     grass *= mix(0.73, 1.29, patch.r) * mix(0.84, 1.14, macro);
+    grass *= mix(vec3(1.0), vec3(0.82, 0.96, 0.86), humid_highland * 0.30);
+
     vec3 soil = mix(vec3(0.30, 0.22, 0.12), vec3(0.53, 0.38, 0.24), patch.b);
+    soil *= mix(vec3(1.0), vec3(0.84, 0.88, 0.82), humid_highland * 0.24);
+
     vec3 rock = mix(vec3(0.34, 0.34, 0.28), vec3(0.61, 0.60, 0.49), detail.r);
     if (has_reference_rock) {
         rock = texture(reference_rock, p.yz / 8.0).rgb * blend.x
@@ -78,13 +92,23 @@ void fragment() {
             + texture(reference_rock, p.xy / 8.0).rgb * blend.z;
         rock *= 1.12;
     }
+    float exposed_highland = clamp(montane * (0.35 + slope * 0.65), 0.0, 1.0);
+    rock *= mix(vec3(1.0), vec3(0.90, 0.95, 0.92), exposed_highland * 0.28);
+
     float bare = smoothstep(0.66, 0.85, patch.g) * (0.16 + dry * 0.65);
+    bare *= mix(1.0, 0.76, humid_highland * (1.0 - slope));
     float rocky = smoothstep(0.22, 0.59, slope) * mix(0.72, 1.0, patch.b);
+    rocky = clamp(rocky + upper_montane * smoothstep(0.15, 0.55, slope) * 0.12, 0.0, 1.0);
+
     vec3 color = mix(mix(grass, soil, bare), rock, rocky);
     float grain = overview ? 1.0 : mix(0.85, 1.14, detail.g);
+    grain *= mix(1.0, mix(0.96, 1.04, patch.b), montane * 0.22);
     ALBEDO = color * grain;
-    ROUGHNESS = mix(0.96, 0.87, rocky);
-    SPECULAR = 0.14;
+
+    float highland_moisture = humid_highland * (1.0 - rocky);
+    ROUGHNESS = clamp(mix(0.96, 0.87, rocky) - highland_moisture * 0.025, 0.82, 0.98);
+    SPECULAR = mix(0.14, 0.16, highland_moisture);
+
     // Surface normals add material depth without moving the Jamaica terrain mesh.
     // The recovered scrub-grass source contributes only where grass is dominant;
     // rock/soil slopes keep their procedural signal and overview remains flat.
