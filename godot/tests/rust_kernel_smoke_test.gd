@@ -1,6 +1,7 @@
 extends SceneTree
 
 const HLOD = preload("res://scripts/building_hlod_runtime.gd")
+const RoadGraph = preload("res://scripts/road_graph.gd")
 const ROUTE_PACK_HEX := "594d52470100200014001c0002000000010000001a000000000000000000000000000000050000000000000000000000000000000500000005000000000020410000803f000000000a0000001000020100000000010000000000204100005841030000006f736d3a316f736d3a3277313a303a6f736d3a313a6f736d3a32"
 var failures := 0
 
@@ -113,6 +114,35 @@ func _run() -> void:
     _check(int(kernel.call("route_pack_node_count")) == 0, "Failed route reconfigure retained stale topology")
     _check(bool(kernel.call("configure_route_pack", route_bytes, 13.888889)), "Could not restore valid route pack")
 
+    # Exercise the production-facing YardmanRoadGraph bridge, including the
+    # manifest SHA/count checks used by JamaicaRoadStreamer at world startup.
+    var route_root := "user://rust_route_bridge_%d" % Time.get_ticks_usec()
+    _check(DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(route_root)) == OK,
+        "Could not create native route bridge fixture directory")
+    var pack_path := route_root + "/routes.ymr"
+    var route_file := FileAccess.open(pack_path, FileAccess.WRITE)
+    _check(route_file != null, "Could not write native route bridge fixture")
+    if route_file != null:
+        route_file.store_buffer(route_bytes)
+        route_file.close()
+    var road_graph := RoadGraph.new()
+    road_graph.configure(route_root, {
+        "nodes": 2,
+        "edges": 1,
+        "route_pack": {
+            "file": "routes.ymr",
+            "sha256": FileAccess.get_sha256(pack_path),
+        },
+    })
+    _check(road_graph.route_backend() == "rust-route-pack", "YardmanRoadGraph did not activate Rust route pack")
+    _check(road_graph.has_native_routing(), "YardmanRoadGraph native route state is not ready")
+    _check(
+        road_graph.route_edge_ids("osm:1", "osm:2", false) == PackedStringArray(["w1:0:osm:1:osm:2"]),
+        "YardmanRoadGraph native bridge changed stable route identity"
+    )
+    _check(road_graph.route_edge_ids("osm:2", "osm:1", false).is_empty(),
+        "YardmanRoadGraph native bridge violated one-way direction")
+
     # Exercise the first real runtime consumer with the extension loaded. The
     # HLOD system must select exactly the same authoritative building cells as
     # its source-only GDScript fallback before native acceleration is accepted.
@@ -156,7 +186,7 @@ func _run() -> void:
 
     if failures == 0:
         var ratio := float(gd_us) / float(maxi(rust_us, 1))
-        print("YARDMAN_RUST_KERNEL_SMOKE PASS points=%d loops=%d rust_us=%d gdscript_us=%d ratio=%.2f hlod_parity=1 route_pack=1 build=%s" % [
+        print("YARDMAN_RUST_KERNEL_SMOKE PASS points=%d loops=%d rust_us=%d gdscript_us=%d ratio=%.2f hlod_parity=1 route_pack=1 road_graph_bridge=1 build=%s" % [
             POINT_COUNT, LOOPS, rust_us, gd_us, ratio, str(kernel.call("build_id"))
         ])
     quit(0 if failures == 0 else 1)
