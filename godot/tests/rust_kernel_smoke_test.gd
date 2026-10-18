@@ -41,7 +41,7 @@ func _run() -> void:
     if kernel == null:
         quit(1)
         return
-    _check(str(kernel.call("build_id")) == "yardman-rust/api-4.7/core-v1", "Unexpected Rust build identity")
+    _check(str(kernel.call("build_id")) == "yardman-rust/api-4.7/core-v2-spatial", "Unexpected Rust build identity")
 
     const POINT_COUNT := 120000
     var points := PackedVector2Array()
@@ -59,6 +59,29 @@ func _run() -> void:
     _check(int(kernel.call("count_points_in_radius", points, center, radius)) == expected.size(), "Rust count differs from reference filter")
     _check((kernel.call("filter_points_in_radius", points, center, -1.0) as PackedInt32Array).is_empty(), "Negative radius must fail closed")
 
+    var indexed_points := PackedVector2Array([
+        Vector2(10.0, 0.0),
+        Vector2(0.0, 0.0),
+        Vector2(3.0, 4.0),
+        Vector2(-1.0, -1.0),
+        Vector2(0.0, 5.0),
+    ])
+    var indexed_ids := PackedInt32Array([200, 100, 300, 400, 500])
+    _check(bool(kernel.call("configure_spatial_index", indexed_points, indexed_ids)), "Could not bulk-load Rust spatial index")
+    _check(int(kernel.call("spatial_index_len")) == 5, "Rust spatial index length mismatch")
+    _check(
+        kernel.call("query_spatial_radius", Vector2.ZERO, 5.0, 16) == PackedInt32Array([100, 400, 300, 500]),
+        "Rust spatial radius query is not distance/id deterministic"
+    )
+    _check(
+        kernel.call("query_spatial_annulus", Vector2.ZERO, 2.0, 5.0, 16) == PackedInt32Array([300, 500]),
+        "Rust spatial annulus query differs from expected bounds"
+    )
+    _check(
+        kernel.call("query_spatial_radius", Vector2.ZERO, 5.0, 2) == PackedInt32Array([100, 400]),
+        "Rust spatial result budget was not enforced"
+    )
+
     const LOOPS := 8
     var rust_started := Time.get_ticks_usec()
     var rust_checksum := 0
@@ -72,6 +95,9 @@ func _run() -> void:
         gd_checksum += _gdscript_count(points, center + Vector2(iteration, -iteration), radius)
     var gd_us := Time.get_ticks_usec() - gd_started
     _check(rust_checksum == gd_checksum, "Benchmark paths produced different results")
+
+    kernel.call("clear_spatial_index")
+    _check(int(kernel.call("spatial_index_len")) == 0, "Rust spatial index did not clear")
 
     if failures == 0:
         var ratio := float(gd_us) / float(maxi(rust_us, 1))

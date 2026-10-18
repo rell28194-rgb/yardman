@@ -1,3 +1,5 @@
+use rstar::{RTree, primitives::GeomWithData};
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Point2 {
     pub x: f32,
@@ -13,6 +15,10 @@ impl Point2 {
         let dx = f64::from(self.x - other.x);
         let dy = f64::from(self.y - other.y);
         dx * dx + dy * dy
+    }
+
+    fn is_finite(self) -> bool {
+        self.x.is_finite() && self.y.is_finite()
     }
 }
 
@@ -39,7 +45,7 @@ pub fn filter_indices_in_radius<I>(points: I, center: Point2, radius: f64) -> Ve
 where
     I: IntoIterator<Item = Point2>,
 {
-    if radius < 0.0 || !radius.is_finite() {
+    if radius < 0.0 || !radius.is_finite() || !center.is_finite() {
         return Vec::new();
     }
     let radius_sq = radius * radius;
@@ -47,7 +53,7 @@ where
         .into_iter()
         .enumerate()
         .filter_map(|(index, point)| {
-            (point.distance_squared(center) <= radius_sq).then_some(index as i32)
+            (point.is_finite() && point.distance_squared(center) <= radius_sq).then_some(index as i32)
         })
         .collect()
 }
@@ -56,13 +62,13 @@ pub fn count_points_in_radius<I>(points: I, center: Point2, radius: f64) -> i64
 where
     I: IntoIterator<Item = Point2>,
 {
-    if radius < 0.0 || !radius.is_finite() {
+    if radius < 0.0 || !radius.is_finite() || !center.is_finite() {
         return 0;
     }
     let radius_sq = radius * radius;
     points
         .into_iter()
-        .filter(|point| point.distance_squared(center) <= radius_sq)
+        .filter(|point| point.is_finite() && point.distance_squared(center) <= radius_sq)
         .count() as i64
 }
 
@@ -82,6 +88,7 @@ where
 {
     if cell_size <= 0.0
         || !cell_size.is_finite()
+        || !world_position.is_finite()
         || !min_distance.is_finite()
         || !max_distance.is_finite()
         || max_distance < min_distance.max(0.0)
@@ -107,6 +114,105 @@ where
     });
     selected.truncate(max_cells);
     selected.into_iter().map(|(_, cell)| cell).collect()
+}
+
+type IndexedPoint = GeomWithData<[f32; 2], i32>;
+
+/// Persistent mostly-static 2D R-tree for world relevance queries. Build once
+/// from authoritative cell/entity centers and query many times. Results are
+/// explicitly re-sorted so callers never depend on rstar's iterator order.
+pub struct SpatialIndex2D {
+    tree: RTree<IndexedPoint>,
+}
+
+impl Default for SpatialIndex2D {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SpatialIndex2D {
+    pub fn new() -> Self {
+        Self { tree: RTree::new() }
+    }
+
+    pub fn bulk_load<I>(entries: I) -> Self
+    where
+        I: IntoIterator<Item = (i32, Point2)>,
+    {
+        let points = entries
+            .into_iter()
+            .filter_map(|(id, point)| {
+                point
+                    .is_finite()
+                    .then_some(IndexedPoint::new([point.x, point.y], id))
+            })
+            .collect();
+        Self {
+            tree: RTree::bulk_load(points),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.tree.size()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.tree.size() == 0
+    }
+
+    pub fn query_radius(
+        &self,
+        center: Point2,
+        radius: f32,
+        max_results: usize,
+    ) -> Vec<i32> {
+        self.query_annulus(center, 0.0, radius, max_results)
+    }
+
+    pub fn query_annulus(
+        &self,
+        center: Point2,
+        min_distance: f32,
+        max_distance: f32,
+        max_results: usize,
+    ) -> Vec<i32> {
+        if self.is_empty()
+            || !center.is_finite()
+            || !min_distance.is_finite()
+            || !max_distance.is_finite()
+            || max_distance < min_distance.max(0.0)
+            || max_results == 0
+        {
+            return Vec::new();
+        }
+
+        let min_sq = f64::from(min_distance.max(0.0)).powi(2);
+        let max_sq_f32 = max_distance * max_distance;
+        if !max_sq_f32.is_finite() {
+            return Vec::new();
+        }
+
+        let mut hits: Vec<(f64, i32)> = self
+            .tree
+            .locate_within_distance([center.x, center.y], max_sq_f32)
+            .filter_map(|entry| {
+                let point = entry.geom();
+                let dx = f64::from(point[0] - center.x);
+                let dy = f64::from(point[1] - center.y);
+                let distance_sq = dx * dx + dy * dy;
+                (distance_sq >= min_sq).then_some((distance_sq, entry.data))
+            })
+            .collect();
+
+        hits.sort_by(|(distance_a, id_a), (distance_b, id_b)| {
+            distance_a
+                .total_cmp(distance_b)
+                .then_with(|| id_a.cmp(id_b))
+        });
+        hits.truncate(max_results);
+        hits.into_iter().map(|(_, id)| id).collect()
+    }
 }
 
 #[cfg(test)]
@@ -170,5 +276,38 @@ mod tests {
             8,
         )
         .is_empty());
+    }
+
+    #[test]
+    fn spatial_index_is_deterministic_and_respects_annulus() {
+        let index = SpatialIndex2D::bulk_load([
+            (200, Point2::new(10.0, 0.0)),
+            (100, Point2::new(0.0, 0.0)),
+            (300, Point2::new(3.0, 4.0)),
+            (400, Point2::new(-1.0, -1.0)),
+            (500, Point2::new(0.0, 5.0)),
+        ]);
+        assert_eq!(index.len(), 5);
+        assert_eq!(
+            index.query_radius(Point2::default(), 5.0, 16),
+            vec![100, 400, 300, 500]
+        );
+        assert_eq!(
+            index.query_annulus(Point2::default(), 2.0, 5.0, 16),
+            vec![300, 500]
+        );
+        assert_eq!(
+            index.query_radius(Point2::default(), 5.0, 2),
+            vec![100, 400]
+        );
+    }
+
+    #[test]
+    fn spatial_index_fails_closed_for_invalid_queries() {
+        let index = SpatialIndex2D::bulk_load([(7, Point2::new(1.0, 2.0))]);
+        assert!(index.query_radius(Point2::default(), -1.0, 8).is_empty());
+        assert!(index.query_annulus(Point2::default(), 10.0, 2.0, 8).is_empty());
+        assert!(index.query_radius(Point2::new(f32::NAN, 0.0), 10.0, 8).is_empty());
+        assert!(index.query_radius(Point2::default(), 10.0, 0).is_empty());
     }
 }
