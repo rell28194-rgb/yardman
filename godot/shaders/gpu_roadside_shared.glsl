@@ -22,6 +22,7 @@ layout(set = 0, binding = 4, std430) buffer CounterBuffer {
     uint reserved;
 } counters;
 layout(set = 0, binding = 5, std430) readonly buffer ParamsBuffer {
+    // x = source count, y = deterministic density budget in permille [0,1000].
     uvec4 data;
 } params;
 layout(set = 0, binding = 6, std430) readonly buffer RangeBuffer {
@@ -30,6 +31,20 @@ layout(set = 0, binding = 6, std430) readonly buffer RangeBuffer {
 
 const uint SOURCE_STRIDE = 8u;
 const uint DESTINATION_STRIDE = 20u;
+
+uint stable_hash(uint x) {
+    x ^= x >> 16u;
+    x *= 0x7feb352du;
+    x ^= x >> 15u;
+    x *= 0x846ca68bu;
+    x ^= x >> 16u;
+    return x;
+}
+
+bool density_selected(uint source_index) {
+    uint budget = min(params.data.y, 1000u);
+    return budget >= 1000u || (stable_hash(source_index) % 1000u) < budget;
+}
 
 bool sphere_visible(vec3 position, float radius) {
     return position.x + 50.0 >= -radius && -position.x + 50.0 >= -radius
@@ -122,7 +137,7 @@ void write_layer(uint slot, vec3 position, float yaw, float scale, vec3 custom_d
 void main() {
     uint source_index = gl_GlobalInvocationID.x;
     uint count = params.data.x;
-    if (source_index >= count) {
+    if (source_index >= count || !density_selected(source_index)) {
         return;
     }
 
