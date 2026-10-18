@@ -183,8 +183,15 @@ func _append_height_row(job: Dictionary, z: int) -> void:
     var mask: PackedByteArray = job.coast.mask
     for x in range(resolution):
         var y := float(heights[z * resolution + x])
-        var dx := (float(heights[z * resolution + maxi(x - 1, 0)]) - float(heights[z * resolution + mini(x + 1, resolution - 1)])) / (2.0 * spacing)
-        var dz := (float(heights[maxi(z - 1, 0) * resolution + x]) - float(heights[mini(z + 1, resolution - 1) * resolution + x])) / (2.0 * spacing)
+        # Interior samples span two intervals; tile edges only span one.
+        # Dividing both by two flattens border normals and slope colours,
+        # leaving a visible grid even on an otherwise continuous planar DEM.
+        var left := maxi(x - 1, 0)
+        var right := mini(x + 1, resolution - 1)
+        var above := maxi(z - 1, 0)
+        var below := mini(z + 1, resolution - 1)
+        var dx := (float(heights[z * resolution + left]) - float(heights[z * resolution + right])) / (float(right - left) * spacing)
+        var dz := (float(heights[above * resolution + x]) - float(heights[below * resolution + x])) / (float(below - above) * spacing)
         job.vertices.append(Vector3(float(x) * spacing, y, float(z) * spacing))
         job.normals.append(Vector3(dx, 1.0, dz).normalized())
         job.colors.append(_height_color(y, Vector2(dx, dz).length()))
