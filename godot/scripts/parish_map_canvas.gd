@@ -89,7 +89,7 @@ func _project_ring(raw_ring: Variant, map_area: Rect2) -> PackedVector2Array:
     var result := PackedVector2Array()
     if not raw_ring is Array:
         return result
-    var limit := raw_ring.size()
+    var limit: int = raw_ring.size()
     if limit > 1 and raw_ring[0] is Array and raw_ring[limit - 1] is Array:
         var first: Array = raw_ring[0]
         var last: Array = raw_ring[limit - 1]
