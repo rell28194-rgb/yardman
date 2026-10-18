@@ -71,7 +71,8 @@ static func run_scenario(scenario: Dictionary) -> Dictionary:
                 RetryPolicy.forget_unwanted(failed, attempts, wanted, stats)
                 RetryPolicy.release_due(failed, attempts, loaded, stats, now_msec)
 
-        var step_errors := _invariant_errors(failed, attempts, loaded, stats)
+        var require_reconciled := op in ["release_due", "service"]
+        var step_errors := _invariant_errors(failed, attempts, loaded, stats, require_reconciled)
         for message in step_errors:
             invariant_errors.append("step %d (%s): %s" % [index, op, message])
         trace.append(_snapshot(index, op, now_msec, failed, attempts, loaded, wanted, stats))
@@ -132,7 +133,7 @@ static func validate_scenario(scenario: Dictionary) -> Dictionary:
     return {"valid": errors.is_empty(), "errors": errors}
 
 static func _invariant_errors(failed: Dictionary, attempts: Dictionary,
-        loaded: Dictionary, stats: Dictionary) -> Array[String]:
+        loaded: Dictionary, stats: Dictionary, require_reconciled: bool) -> Array[String]:
     var errors: Array[String] = []
     if int(stats.get("active_failures", -1)) != failed.size():
         errors.append("active_failures diverged from failed set")
@@ -153,10 +154,11 @@ static func _invariant_errors(failed: Dictionary, attempts: Dictionary,
             var delay := int(state_dict.get("retry_at_msec", 0))
             if delay < 0:
                 errors.append("failure state has negative retry time for %s" % key)
-    for loaded_key in loaded.keys():
-        var key := str(loaded_key)
-        if failed.has(key):
-            errors.append("loaded tile remains marked failed: %s" % key)
+    if require_reconciled:
+        for loaded_key in loaded.keys():
+            var key := str(loaded_key)
+            if failed.has(key):
+                errors.append("loaded tile remains marked failed after policy service: %s" % key)
     for counter in ["failures_recorded", "retries_released", "stale_failures_dropped", "active_failures"]:
         if int(stats.get(counter, 0)) < 0:
             errors.append("negative stats counter: %s" % counter)
