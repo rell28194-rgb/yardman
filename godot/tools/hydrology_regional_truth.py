@@ -5,6 +5,10 @@ This module never assigns morphology from parish name alone. A segment must carr
 explicit regional evidence tokens supplied by authoritative/project GIS joins.
 The registry only maps those approved evidence tokens to terrain-delta families.
 Unknown, ambiguous, or conflicting evidence remains non-destructive downstream.
+
+Source contracts are intentionally spatially specific. A token names an
+authoritative mapped unit/context; it is not permission to apply the morphology
+across an entire parish, basin, protected area, or named region.
 """
 from __future__ import annotations
 
@@ -26,11 +30,33 @@ class RegionalMorphologyDecision:
 # Tokens are contracts for upstream GIS joins, not claims that every feature in
 # the named region has this morphology.
 EVIDENCE_FAMILY = {
-    "wra:black_river_lowland_wetland": "lowland_wetland",
+    # WRA National Water Resources Master Plan 2022, Black River Basin map:
+    # Lower Black River -> Lower Morass is explicitly mapped as a WMU sub-unit,
+    # with swamp/marsh/mangrove among the mapped hydrostratigraphic units.
+    "wra:black_river_lower_morass_wmu": "lowland_wetland",
+    # NEPA Black River Protected Landscape evidence explicitly identifies the
+    # Upper/Lower Morass wetland systems. Requires a spatial protected-area /
+    # wetland intersection upstream; the protected-area name alone is not enough.
     "nepa:black_river_morass_wetland": "lowland_wetland",
+    # Legacy aliases retained so existing compiled truth packs remain readable.
+    "wra:black_river_lowland_wetland": "lowland_wetland",
+    # Blue/John Crow tokens remain evidence contracts pending authoritative GIS
+    # spatial joins; neither parish membership nor protected-area membership is
+    # sufficient by itself to authorize steep-channel terrain mutation.
     "wra:blue_john_crow_steep_wet_drainage": "steep_wet_mountain",
     "mgd:blue_john_crow_steep_mountain_terrain": "steep_wet_mountain",
 }
+
+# Context labels that are useful for reporting/joins but must never authorize a
+# destructive morphology decision on their own.
+CONTEXT_ONLY_PREFIXES = (
+    "parish:",
+    "basin:",
+    "wmu:",
+    "protected_area:",
+    "land_cover:",
+    "geology:",
+)
 
 
 def resolve_regional_morphology(evidence_tokens: list[str] | tuple[str, ...]) -> RegionalMorphologyDecision:
