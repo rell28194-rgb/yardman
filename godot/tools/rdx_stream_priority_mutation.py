@@ -1,28 +1,28 @@
 #!/usr/bin/env python3
-"""Mutation-grade the predictive stream priority policy against independent Godot oracles."""
+"""Mutation-grade the short-horizon predictive stream priority policy."""
 
 from __future__ import annotations
 
 import argparse
 import subprocess
-import sys
 from pathlib import Path
 
 MUTANTS = [
-    ("drop_near_prediction", 'const WEIGHT_NEAR := 0.60', 'const WEIGHT_NEAR := 0.0'),
-    ("drop_far_prediction", 'const WEIGHT_FAR := 0.30', 'const WEIGHT_FAR := 0.0'),
+    ("drop_prediction", 'const WEIGHT_PREDICTED := 0.20', 'const WEIGHT_PREDICTED := 0.0'),
     ("drop_current_distance", 'const WEIGHT_NOW := 1.0', 'const WEIGHT_NOW := 0.0'),
-    ("near_horizon_zero", 'const HORIZON_NEAR_S := 10.0', 'const HORIZON_NEAR_S := 0.0'),
-    ("far_horizon_near", 'const HORIZON_FAR_S := 30.0', 'const HORIZON_FAR_S := 10.0'),
+    ("zero_horizon", 'const PREDICTION_HORIZON_S := 2.0', 'const PREDICTION_HORIZON_S := 0.0'),
+    ("long_horizon", 'const PREDICTION_HORIZON_S := 2.0', 'const PREDICTION_HORIZON_S := 10.0'),
+    ("reverse_prediction", 'var predicted := world_xz + velocity * PREDICTION_HORIZON_S', 'var predicted := world_xz - velocity * PREDICTION_HORIZON_S'),
     ("disable_speed_clamp", 'if speed <= MAX_PREDICTION_SPEED_MPS:\n        return velocity_mps', 'if true:\n        return velocity_mps'),
     ("low_speed_clamp", 'const MAX_PREDICTION_SPEED_MPS := 120.0', 'const MAX_PREDICTION_SPEED_MPS := 20.0'),
-    ("predict_backward_near", 'var predicted_near := world_xz + velocity * HORIZON_NEAR_S', 'var predicted_near := world_xz - velocity * HORIZON_NEAR_S'),
-    ("predict_backward_far", 'var predicted_far := world_xz + velocity * HORIZON_FAR_S', 'var predicted_far := world_xz - velocity * HORIZON_FAR_S'),
     ("invalid_tile_open", 'if tile_size <= 0.0:\n        return INF', 'if tile_size < 0.0:\n        return INF'),
-    ("east_aabb_sign", 'dx = min_x - world_xz.x', 'dx = world_xz.x - min_x'),
-    ("west_aabb_sign", 'dx = world_xz.x - max_x', 'dx = max_x - world_xz.x'),
+    ("west_aabb_sign", 'dx = min_x - world_xz.x', 'dx = world_xz.x - min_x'),
+    ("east_aabb_sign", 'dx = world_xz.x - max_x', 'dx = max_x - world_xz.x'),
+    ("north_aabb_sign", 'dz = min_z - world_xz.y', 'dz = world_xz.y - min_z'),
+    ("south_aabb_sign", 'dz = world_xz.y - max_z', 'dz = max_z - world_xz.y'),
     ("tie_break_reverse_y", 'return a.y < b.y', 'return a.y > b.y'),
     ("tie_break_reverse_x", 'return a.x < b.x', 'return a.x > b.x'),
+    ("elapsed_guard_removed", 'if elapsed_seconds <= 0.000001 or not is_finite(elapsed_seconds):', 'if elapsed_seconds < 0.0 or not is_finite(elapsed_seconds):'),
 ]
 
 
@@ -68,29 +68,25 @@ def main() -> int:
         print(baseline_output)
         return 2
 
-    killed = 0
-    survived = 0
-    invalid = 0
-    survivor_names: list[str] = []
+    killed = survived = invalid = 0
+    survivors: list[str] = []
     invalid_names: list[str] = []
     try:
         for name, needle, replacement in MUTANTS:
             if needle not in original:
-                print(f"MUTANT_INVALID name={name} reason=needle_missing")
                 invalid += 1
                 invalid_names.append(name)
+                print(f"MUTANT_INVALID name={name} reason=needle_missing")
                 continue
-            mutated = original.replace(needle, replacement, 1)
-            policy.write_text(mutated, encoding="utf-8")
+            policy.write_text(original.replace(needle, replacement, 1), encoding="utf-8")
             passed, output = oracle_passes(args.godot_binary, godot_root, args.timeout)
-            parse_invalid = "Parse Error" in output or "Could not parse" in output
-            if parse_invalid:
+            if "Parse Error" in output or "Could not parse" in output:
                 invalid += 1
                 invalid_names.append(name)
                 print(f"MUTANT_INVALID name={name} reason=parse")
             elif passed:
                 survived += 1
-                survivor_names.append(name)
+                survivors.append(name)
                 print(f"MUTANT_SURVIVED name={name}")
             else:
                 killed += 1
@@ -105,8 +101,8 @@ def main() -> int:
         f"score={score:.4f} killed={killed} valid={valid} survivors={survived} "
         f"invalid={invalid} threshold={args.threshold:.4f}"
     )
-    if survivor_names:
-        print("SURVIVORS " + ",".join(survivor_names))
+    if survivors:
+        print("SURVIVORS " + ",".join(survivors))
     if invalid_names:
         print("INVALID " + ",".join(invalid_names))
     return 0 if valid > 0 and score >= args.threshold else 1

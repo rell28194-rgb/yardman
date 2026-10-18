@@ -14,22 +14,41 @@ func _check(condition: bool, message: String) -> void:
 
 func _run() -> void:
     _test_aabb_distance()
+    _test_exact_score_contract()
     _test_stationary_symmetry()
     _test_cardinal_prediction()
     _test_diagonal_prediction()
     _test_velocity_clamp()
     _test_stable_tie_break()
-    print("YARDMAN_STREAM_PRIORITY_POLICY_TEST %s aabb=1 stationary=1 cardinal=1 diagonal=1 clamp=1 deterministic=1" % (
+    print("YARDMAN_STREAM_PRIORITY_POLICY_TEST %s aabb=1 exact_score=1 stationary=1 cardinal=1 diagonal=1 clamp=1 deterministic=1" % (
         "PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
 
 func _test_aabb_distance() -> void:
     _check(is_zero_approx(Priority.distance_squared_to_tile_aabb(Vector2(100.0, 200.0), Vector2i.ZERO, TILE)),
         "point inside tile should have zero AABB distance")
+    _check(is_equal_approx(Priority.distance_squared_to_tile_aabb(Vector2(-10.0, 200.0), Vector2i.ZERO, TILE), 100.0),
+        "10 m west of tile should be 100 square metres away")
     _check(is_equal_approx(Priority.distance_squared_to_tile_aabb(Vector2(4106.0, 200.0), Vector2i.ZERO, TILE), 100.0),
         "10 m east of tile should be 100 square metres away")
+    _check(is_equal_approx(Priority.distance_squared_to_tile_aabb(Vector2(200.0, -10.0), Vector2i.ZERO, TILE), 100.0),
+        "10 m north of tile should be 100 square metres away")
+    _check(is_equal_approx(Priority.distance_squared_to_tile_aabb(Vector2(200.0, 4106.0), Vector2i.ZERO, TILE), 100.0),
+        "10 m south of tile should be 100 square metres away")
     _check(is_inf(Priority.distance_squared_to_tile_aabb(Vector2.ZERO, Vector2i.ZERO, 0.0)),
         "invalid tile size did not fail closed")
+
+func _test_exact_score_contract() -> void:
+    # 96 m from the east tile now, 56 m after exactly two seconds at 20 m/s.
+    # 96^2 + 0.2 * 56^2 = 9843.2. This pins the real-data-selected short
+    # horizon and weights without depending on the implementation expression.
+    var score := Priority.score(Vector2i(1, 0), TILE, Vector2(4000.0, 2000.0), Vector2(20.0, 0.0))
+    _check(is_equal_approx(score, 9843.2),
+        "short-horizon score contract changed: %f" % score)
+    _check(is_equal_approx(Priority.PREDICTION_HORIZON_S, 2.0),
+        "prediction horizon drifted from national-trace candidate")
+    _check(is_equal_approx(Priority.WEIGHT_PREDICTED, 0.20),
+        "prediction weight drifted from national-trace candidate")
 
 func _test_stationary_symmetry() -> void:
     var center := Vector2(TILE * 0.5, TILE * 0.5)
@@ -80,6 +99,10 @@ func _test_velocity_clamp() -> void:
 func _test_stable_tie_break() -> void:
     var center := Vector2(TILE * 0.5, TILE * 0.5)
     _check(Priority.less(Vector2i(-1, 0), Vector2i(1, 0), TILE, center, Vector2.ZERO),
-        "equal-score tie did not resolve deterministically by coordinate")
+        "equal-score x tie did not resolve deterministically")
     _check(not Priority.less(Vector2i(1, 0), Vector2i(-1, 0), TILE, center, Vector2.ZERO),
-        "deterministic tie-break is not antisymmetric")
+        "deterministic x tie-break is not antisymmetric")
+    _check(Priority.less(Vector2i(0, -1), Vector2i(0, 1), TILE, center, Vector2.ZERO),
+        "equal-score y tie did not resolve deterministically")
+    _check(not Priority.less(Vector2i(0, 1), Vector2i(0, -1), TILE, center, Vector2.ZERO),
+        "deterministic y tie-break is not antisymmetric")

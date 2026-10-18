@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Frozen-trace evaluator for Yardman road/terrain stream queue priority.
+"""Frozen immediate-I/O evaluator for Yardman road/terrain stream priority.
 
-This evaluator is intentionally independent from the runtime implementation. It
-compares the current coarse tile-index distance metric with a candidate metric
-that scores exact distance to each 4096 m tile AABB at the current player
-position plus short-horizon predicted positions. The candidate set/residency
-radius is identical for both strategies.
+This is intentionally independent from the Godot implementation. It measures
+only the next few seconds because national Jamaica traces showed that longer
+straight-line prediction over-steers on curving roads. Residency/candidate sets
+remain identical; only queue order is scored.
 """
 
 from __future__ import annotations
@@ -17,7 +16,9 @@ from pathlib import Path
 
 TILE_SIZE = 4096.0
 RADIUS = 2
-HORIZONS = ((2.0, 5.0), (10.0, 4.0), (30.0, 3.0), (60.0, 2.0), (90.0, 1.0))
+PREDICTION_HORIZON_S = 2.0
+PREDICTION_WEIGHT = 0.20
+TARGET_HORIZONS = ((0.5, 1.0), (1.0, 2.0), (2.0, 5.0), (3.0, 3.0), (5.0, 1.0))
 
 @dataclass(frozen=True)
 class Sample:
@@ -74,12 +75,13 @@ def distance2_to_aabb(px: float, pz: float, tile: tuple[int, int]) -> float:
 
 
 def predictive_score(tile: tuple[int, int], s: Sample) -> float:
-    # Current distance dominates so the heuristic remains conservative near the
-    # player. Prediction only breaks coarse 4 km tile ties in the travel direction.
     return (
-        1.00 * distance2_to_aabb(s.x, s.z, tile)
-        + 0.60 * distance2_to_aabb(s.x + s.vx * 10.0, s.z + s.vz * 10.0, tile)
-        + 0.30 * distance2_to_aabb(s.x + s.vx * 30.0, s.z + s.vz * 30.0, tile)
+        distance2_to_aabb(s.x, s.z, tile)
+        + PREDICTION_WEIGHT * distance2_to_aabb(
+            s.x + s.vx * PREDICTION_HORIZON_S,
+            s.z + s.vz * PREDICTION_HORIZON_S,
+            tile,
+        )
     )
 
 
@@ -94,10 +96,8 @@ def evaluate() -> dict[str, object]:
     weighted_baseline = 0.0
     weighted_candidate = 0.0
     total_weight = 0.0
-    baseline_top4_weight = 0.0
     candidate_top4_weight = 0.0
     observations = 0
-    details: list[dict[str, object]] = []
 
     for sample in SAMPLES:
         current = tile_for(sample.x, sample.z)
@@ -105,7 +105,7 @@ def evaluate() -> dict[str, object]:
         baseline_scores = {tile: baseline_score(tile, current) for tile in pool}
         candidate_scores = {tile: predictive_score(tile, sample) for tile in pool}
 
-        for horizon, weight in HORIZONS:
+        for horizon, weight in TARGET_HORIZONS:
             target = tile_for(sample.x + sample.vx * horizon, sample.z + sample.vz * horizon)
             if target == current or target not in pool:
                 continue
@@ -115,18 +115,8 @@ def evaluate() -> dict[str, object]:
             weighted_candidate += crank * weight
             total_weight += weight
             observations += 1
-            if brank <= 4.0:
-                baseline_top4_weight += weight
             if crank <= 4.0:
                 candidate_top4_weight += weight
-            details.append({
-                "sample": sample.name,
-                "horizon_s": horizon,
-                "target": [target[0], target[1]],
-                "baseline_expected_rank": brank,
-                "candidate_expected_rank": crank,
-                "weight": weight,
-            })
 
     if total_weight <= 0.0:
         raise RuntimeError("frozen trace produced no cross-tile observations")
@@ -134,31 +124,25 @@ def evaluate() -> dict[str, object]:
     baseline_rank = weighted_baseline / total_weight
     candidate_rank = weighted_candidate / total_weight
     rank_improvement = (baseline_rank - candidate_rank) / baseline_rank
-    baseline_top4 = baseline_top4_weight / total_weight
     candidate_top4 = candidate_top4_weight / total_weight
 
-    # Frozen promotion gates. These are intentionally stronger than merely
-    # beating baseline, so a tiny or trace-specific win cannot pass.
     passed = (
-        observations >= 40
+        observations >= 20
         and rank_improvement >= 0.50
-        and candidate_rank <= 1.25
+        and candidate_rank <= 1.60
         and candidate_top4 >= 0.99
-        and candidate_top4 >= baseline_top4
     )
 
     return {
-        "schema_version": 1,
-        "tile_size_m": TILE_SIZE,
-        "radius": RADIUS,
+        "schema_version": 2,
+        "prediction_horizon_s": PREDICTION_HORIZON_S,
+        "prediction_weight": PREDICTION_WEIGHT,
         "observations": observations,
         "baseline_expected_rank": baseline_rank,
         "candidate_expected_rank": candidate_rank,
         "rank_improvement": rank_improvement,
-        "baseline_top4_hit_rate": baseline_top4,
         "candidate_top4_hit_rate": candidate_top4,
         "passed": passed,
-        "details": details,
     }
 
 

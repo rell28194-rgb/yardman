@@ -1,13 +1,13 @@
 extends RefCounted
 class_name YardmanStreamPriorityPolicy
 
-# Conservative predictive ordering for already-wanted stream cells.
-# This never expands residency; it only ranks the existing candidate set.
-const HORIZON_NEAR_S := 10.0
-const HORIZON_FAR_S := 30.0
+# Immediate-I/O ordering for already-wanted stream cells. This never expands
+# residency; it only ranks the existing candidate set. National Jamaica traces
+# showed long straight-line extrapolation over-steers on curving roads, so the
+# production candidate intentionally uses only a short 2 s horizon.
+const PREDICTION_HORIZON_S := 2.0
 const WEIGHT_NOW := 1.0
-const WEIGHT_NEAR := 0.60
-const WEIGHT_FAR := 0.30
+const WEIGHT_PREDICTED := 0.20
 const MAX_PREDICTION_SPEED_MPS := 120.0
 const SCORE_EPSILON := 0.000001
 
@@ -50,12 +50,10 @@ static func score(tile: Vector2i, tile_size: float, world_xz: Vector2,
     if tile_size <= 0.0:
         return INF
     var velocity := clamp_prediction_velocity(velocity_mps)
-    var predicted_near := world_xz + velocity * HORIZON_NEAR_S
-    var predicted_far := world_xz + velocity * HORIZON_FAR_S
+    var predicted := world_xz + velocity * PREDICTION_HORIZON_S
     return (
         WEIGHT_NOW * distance_squared_to_tile_aabb(world_xz, tile, tile_size)
-        + WEIGHT_NEAR * distance_squared_to_tile_aabb(predicted_near, tile, tile_size)
-        + WEIGHT_FAR * distance_squared_to_tile_aabb(predicted_far, tile, tile_size)
+        + WEIGHT_PREDICTED * distance_squared_to_tile_aabb(predicted, tile, tile_size)
     )
 
 static func less(a: Vector2i, b: Vector2i, tile_size: float, world_xz: Vector2,
