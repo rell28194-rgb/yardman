@@ -1,0 +1,83 @@
+name: Yardman Stream Priority Promotion 002
+
+on:
+  push:
+    branches:
+      - codex/stream-priority-promotion-002
+    paths:
+      - 'godot/scripts/road_streamer.gd'
+      - 'godot/scripts/road_streamer_base.gd'
+      - 'godot/scripts/stream_priority_policy.gd'
+      - 'godot/tests/stream_priority_policy_test.gd'
+      - 'godot/tests/stream_priority_integration_test.gd'
+      - 'godot/tools/rdx_stream_priority_eval.py'
+      - 'godot/tools/rdx_stream_priority_mutation.py'
+      - 'godot/tools/rdx_stream_priority_national_eval.py'
+      - 'godot/docs/rdx/stream_priority_national_evidence.json'
+      - '.github/workflows/stream-priority-promotion-002.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  promotion-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+      NATIONAL_ARTIFACT_ID: '12146648928'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download preserved national Jamaica production artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${NATIONAL_ARTIFACT_ID}/zip" > /tmp/yardman-national.zip
+          echo "885ed9a1dcfdbb52c33e50400a003fbc96983445fde62d87ed5ef5f0bca8d4d9  /tmp/yardman-national.zip" | sha256sum -c -
+      - name: Re-evaluate real Jamaica stream priority
+        shell: bash
+        run: |
+          mkdir -p godot/build
+          python3 godot/tools/rdx_stream_priority_national_eval.py /tmp/yardman-national.zip --output godot/build/rdx-stream-priority-national.json \
+            | tee godot/build/rdx-stream-priority-national.log
+          grep -q 'result=PASS' godot/build/rdx-stream-priority-national.log
+          diff -u godot/docs/rdx/stream_priority_national_evidence.json godot/build/rdx-stream-priority-national.json
+      - name: Run frozen streaming-priority evaluator
+        shell: bash
+        run: |
+          python3 godot/tools/rdx_stream_priority_eval.py | tee godot/build/rdx-stream-priority-eval.log
+          grep -q 'result=PASS' godot/build/rdx-stream-priority-eval.log
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+      - name: Import and parse promotion branch
+        shell: bash
+        run: |
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/stream-priority-promotion-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/stream-priority-promotion-import.log; then exit 1; fi
+      - name: Run policy oracle
+        shell: bash
+        run: |
+          timeout 120 godot --headless --path godot --script res://tests/stream_priority_policy_test.gd 2>&1 | tee godot/build/stream-priority-policy.log
+          grep -q 'YARDMAN_STREAM_PRIORITY_POLICY_TEST PASS' godot/build/stream-priority-policy.log
+      - name: Run shared road terrain scheduler oracle
+        shell: bash
+        run: |
+          timeout 120 godot --headless --path godot --script res://tests/stream_priority_integration_test.gd 2>&1 | tee godot/build/stream-priority-integration.log
+          grep -q 'YARDMAN_STREAM_PRIORITY_INTEGRATION_TEST PASS' godot/build/stream-priority-integration.log
+      - name: Mutation-grade promotion policy
+        shell: bash
+        run: |
+          python3 godot/tools/rdx_stream_priority_mutation.py --godot-binary godot --threshold 0.90 --timeout 30 \
+            | tee godot/build/stream-priority-mutation.log
+          grep -q 'score=1.0000' godot/build/stream-priority-mutation.log

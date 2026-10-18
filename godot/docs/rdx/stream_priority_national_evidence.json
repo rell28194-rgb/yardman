@@ -1,0 +1,79 @@
+{
+  "artifact_sha256": "885ed9a1dcfdbb52c33e50400a003fbc96983445fde62d87ed5ef5f0bca8d4d9",
+  "manifest_stats": {
+    "graph_edges": 120412,
+    "graph_nodes": 101656,
+    "tiles": 713
+  },
+  "overall": {
+    "baseline_mean_rank": 2.519005196733482,
+    "candidate_mean_rank": 1.0219747587230883,
+    "candidate_top1_rate": 0.9812917594654789,
+    "candidate_top4_rate": 1.0,
+    "candidate_worse_rate": 0.0,
+    "edges": 772,
+    "rank_improvement": 0.5942943031446171,
+    "source_ways": 561,
+    "traces": 6735
+  },
+  "passed": true,
+  "schema_version": 1,
+  "source_pbf_sha256": "ecffc063bc9aa7bb5eea371f115bfad567a1ffae85afd130fd121d5f21637ebb",
+  "source_way_holdout_folds": [
+    {
+      "baseline_mean_rank": 2.532,
+      "candidate_mean_rank": 1.0264,
+      "candidate_top1_rate": 0.9784,
+      "candidate_top4_rate": 1.0,
+      "candidate_worse_rate": 0.0,
+      "edges": 138,
+      "rank_improvement": 0.5946287519747235,
+      "source_ways": 98,
+      "traces": 1250
+    },
+    {
+      "baseline_mean_rank": 2.5258064516129033,
+      "candidate_mean_rank": 1.032258064516129,
+      "candidate_top1_rate": 0.9727598566308244,
+      "candidate_top4_rate": 1.0,
+      "candidate_worse_rate": 0.0,
+      "edges": 164,
+      "rank_improvement": 0.5913154533844189,
+      "source_ways": 108,
+      "traces": 1395
+    },
+    {
+      "baseline_mean_rank": 2.5211500330469265,
+      "candidate_mean_rank": 1.0270984798413747,
+      "candidate_top1_rate": 0.976867151354924,
+      "candidate_top4_rate": 1.0,
+      "candidate_worse_rate": 0.0,
+      "edges": 169,
+      "rank_improvement": 0.5926071569012977,
+      "source_ways": 124,
+      "traces": 1513
+    },
+    {
+      "baseline_mean_rank": 2.513651877133106,
+      "candidate_mean_rank": 1.0136518771331058,
+      "candidate_top1_rate": 0.9880546075085325,
+      "candidate_top4_rate": 1.0,
+      "candidate_worse_rate": 0.0,
+      "edges": 141,
+      "rank_improvement": 0.5967413441955194,
+      "source_ways": 115,
+      "traces": 1172
+    },
+    {
+      "baseline_mean_rank": 2.502846975088968,
+      "candidate_mean_rank": 1.009252669039146,
+      "candidate_top1_rate": 0.9914590747330961,
+      "candidate_top4_rate": 1.0,
+      "candidate_worse_rate": 0.0,
+      "edges": 160,
+      "rank_improvement": 0.5967581401962179,
+      "source_ways": 116,
+      "traces": 1405
+    }
+  ]
+}
