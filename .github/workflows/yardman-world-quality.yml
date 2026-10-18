@@ -1,0 +1,77 @@
+name: Yardman World Quality Gate
+
+on:
+  push:
+    branches:
+      - 'codex/world-quality-*'
+    paths:
+      - 'godot/scripts/**'
+      - 'godot/tests/**'
+      - 'godot/project.godot'
+      - '.github/workflows/yardman-world-quality.yml'
+  pull_request:
+    paths:
+      - 'godot/scripts/**'
+      - 'godot/tests/**'
+      - 'godot/project.godot'
+      - '.github/workflows/yardman-world-quality.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yardman-world-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  world-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download canonical Godot runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          curl --fail --location --retry 3 "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+      - name: Parse project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build/world-quality
+          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/world-quality/import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/world-quality/import.log; then exit 1; fi
+      - name: Test terrain seams and live population contraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          # These tests use deterministic local fixtures: no island data download,
+          # private vehicle assets, Android SDK, or production APK is required.
+          for TEST in terrain_normal_seam population_budget_regression terrain_coast road_corridor_terrain streaming_budget traffic_runtime pedestrian_runtime parked_vehicle traffic_pedestrian_safety pedestrian_destination; do
+            LOG="godot/build/world-quality/${TEST}.log"
+            timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "$LOG"
+            if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|FAIL' "$LOG"; then exit 1; fi
+            case "$TEST" in
+              terrain_normal_seam) MARKER='TERRAIN NORMAL SEAM: PASS' ;;
+              population_budget_regression) MARKER='YARDMAN_POPULATION_BUDGET_REGRESSION PASS' ;;
+              *) MARKER="YARDMAN_${TEST^^}_TEST PASS" ;;
+            esac
+            grep -Fq "$MARKER" "$LOG"
+          done
+      - name: Preserve world quality diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-World-Quality-${{ github.sha }}
+          path: godot/build/world-quality/*.log
+          if-no-files-found: ignore
+          retention-days: 14
