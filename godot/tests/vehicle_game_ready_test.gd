@@ -13,6 +13,10 @@ func _check(condition: bool, message: String) -> void:
         failures += 1
         push_error("VEHICLE_GAME_READY_TEST: " + message)
 
+func _env_int(name: String, fallback: int) -> int:
+    var raw := OS.get_environment(name).strip_edges()
+    return int(raw) if not raw.is_empty() else fallback
+
 func _step_frames(controller, frames: int, throttle: float = 0.0, turn: float = 0.0, ready: bool = true) -> void:
     for frame in range(frames):
         await physics_frame
@@ -130,10 +134,26 @@ func _run() -> void:
 
     var production_ids: Array = Catalog.production_ids()
     _check(not production_ids.is_empty(), "production catalog is empty")
-    for index in range(production_ids.size()):
-        await _exercise_vehicle(scene, str(production_ids[index]), index)
 
-    print("YARDMAN_VEHICLE_GAME_READY_TEST %s vehicles=%d hooks=1 drive=1 reverse=1 steering=1 braking=1 park_exit_reenter=1 reset_despawn=1" % ["PASS" if failures == 0 else "FAIL", production_ids.size()])
+    var shard_total := maxi(_env_int("YARDMAN_VEHICLE_TEST_SHARD_TOTAL", 1), 1)
+    var shard_index := _env_int("YARDMAN_VEHICLE_TEST_SHARD_INDEX", 0)
+    if shard_index < 0 or shard_index >= shard_total:
+        _check(false, "invalid shard index %d for shard total %d" % [shard_index, shard_total])
+        scene.queue_free()
+        await process_frame
+        quit(1)
+        return
+
+    var selected_ids: Array = []
+    for index in range(production_ids.size()):
+        if index % shard_total == shard_index:
+            selected_ids.append(production_ids[index])
+    _check(not selected_ids.is_empty(), "shard %d/%d selected no vehicles from fleet size %d" % [shard_index, shard_total, production_ids.size()])
+
+    for local_index in range(selected_ids.size()):
+        await _exercise_vehicle(scene, str(selected_ids[local_index]), local_index)
+
+    print("YARDMAN_VEHICLE_GAME_READY_TEST %s vehicles=%d fleet_total=%d shard=%d/%d hooks=1 drive=1 reverse=1 steering=1 braking=1 park_exit_reenter=1 reset_despawn=1" % ["PASS" if failures == 0 else "FAIL", selected_ids.size(), production_ids.size(), shard_index, shard_total])
     scene.queue_free()
     await process_frame
     quit(0 if failures == 0 else 1)
