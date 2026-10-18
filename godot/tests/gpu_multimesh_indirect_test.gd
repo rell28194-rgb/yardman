@@ -79,13 +79,14 @@ func _run() -> void:
 
     var ok := bool(_result.get("supported", false)) \
         and int(_result.get("expected_visible", -1)) == int(_result.get("gpu_visible", -2)) \
-        and int(_result.get("invalid_transform_rows", -1)) == 0
+        and int(_result.get("invalid_transform_rows", -1)) == 0 \
+        and bool(_result.get("indirect_buffer_retired", false))
     if not ok:
         push_error("GPU_MULTIMESH_INDIRECT_TEST: " + str(_result))
     else:
         print("YARDMAN_GPU_MULTIMESH_INDIRECT_METRICS count=%d visible=%d record_us=%d" % [
             INSTANCE_COUNT, int(_result.gpu_visible), int(_result.record_us)])
-    print("YARDMAN_GPU_MULTIMESH_INDIRECT_TEST %s gpu_resident_compaction=1 indirect_count=1 global_rd=1" % ("PASS" if ok else "FAIL"))
+    print("YARDMAN_GPU_MULTIMESH_INDIRECT_TEST %s gpu_resident_compaction=1 indirect_count=1 global_rd=1 clean_retire=1" % ("PASS" if ok else "FAIL"))
     await _cleanup_and_flush()
     quit(0 if ok else 1)
 
@@ -182,6 +183,17 @@ func _render_thread_readback() -> void:
                 or not is_equal_approx(transforms[base + 10], 1.0):
             invalid_rows += 1
 
+    # Godot 4.7's RD MultiMesh reallocation path frees the instance SSBO but
+    # overwrites command_buffer with an invalid RID without freeing the old
+    # indirect SSBO. Retire it explicitly while we still own the exposed RID.
+    # This is safe here because the test MultiMesh is not attached to a scene;
+    # the subsequent allocate_data(0) clears MeshStorage's stale handle.
+    var retired_indirect := false
+    if _command_buffer.is_valid():
+        rd.free_rid(_command_buffer)
+        _command_buffer = RID()
+        retired_indirect = true
+
     _result = {
         "supported": true,
         "expected_visible": _expected_visible_count(),
@@ -189,6 +201,7 @@ func _render_thread_readback() -> void:
         "invalid_transform_rows": invalid_rows,
         "record_us": _record_us,
         "command_words": command_values.size(),
+        "indirect_buffer_retired": retired_indirect,
     }
     _free_global_rd_resources(rd)
     _readback_done = true
@@ -228,24 +241,16 @@ func _free_global_rd_resources(rd: RenderingDevice) -> void:
 
 func _cleanup_and_flush() -> void:
     if _multimesh.is_valid():
-        # Explicitly resize to zero before freeing the MultiMesh. This forces
-        # MeshStorage to retire both the instance SSBO and indirect command
-        # SSBO while the RenderingServer is still alive instead of leaving
-        # their teardown until process-finalization.
         _mm_buffer = RID()
-        _command_buffer = RID()
-        RenderingServer.multimesh_set_mesh(_multimesh, RID())
+        # Instance allocation to zero releases the normal instance SSBO and
+        # clears MeshStorage's stale command-buffer handle after the explicit
+        # RD retirement above.
         RenderingServer.multimesh_allocate_data(
             _multimesh, 0, RenderingServer.MULTIMESH_TRANSFORM_3D,
             false, false, false)
-        RenderingServer.force_draw(false, 0.0)
-        await process_frame
-        RenderingServer.force_sync()
         RenderingServer.free_rid(_multimesh)
         _multimesh = RID()
     _mesh = null
-    # Flush deferred RendererServer destruction before SceneTree quits. This is
-    # intentionally test-only; production must never force-sync every frame.
     for _frame in range(3):
         RenderingServer.force_draw(false, 0.0)
         await process_frame
