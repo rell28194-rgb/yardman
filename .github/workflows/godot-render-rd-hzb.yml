@@ -7,11 +7,13 @@ on:
     paths:
       - 'godot/scripts/gpu_hzb_probe.gd'
       - 'godot/scripts/gpu_depth_capture_effect.gd'
+      - 'godot/scripts/gpu_preopaque_indirect_effect.gd'
       - 'godot/shaders/gpu_hzb_reduce.glsl'
       - 'godot/shaders/gpu_hzb_cull.glsl'
       - 'godot/shaders/gpu_depth_capture.glsl'
       - 'godot/tests/gpu_hzb_test.gd'
       - 'godot/tests/gpu_real_depth_test.gd'
+      - 'godot/tests/gpu_preopaque_indirect_test.gd'
       - '.github/workflows/godot-render-rd-hzb.yml'
   workflow_dispatch:
 
@@ -54,3 +56,9 @@ jobs:
           timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_real_depth_test.gd 2>&1 | tee godot/build/gpu-real-depth-test.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|GPU_REAL_DEPTH_TEST:|OpArrayLength|ObjectDB instances were leaked|RID of type .* was leaked|Attempted to free invalid ID' godot/build/gpu-real-depth-test.log; then exit 1; fi
           grep -q 'YARDMAN_GPU_REAL_DEPTH_TEST PASS' godot/build/gpu-real-depth-test.log
+      - name: Prove PRE_OPAQUE same-frame indirect consumption
+        shell: bash
+        run: |
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_preopaque_indirect_test.gd 2>&1 | tee godot/build/gpu-preopaque-indirect-test.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|GPU_PREOPAQUE_INDIRECT_TEST:|ObjectDB instances were leaked|RID of type .* was leaked|Attempted to free invalid ID' godot/build/gpu-preopaque-indirect-test.log; then exit 1; fi
+          grep -q 'YARDMAN_GPU_PREOPAQUE_INDIRECT_TEST PASS' godot/build/gpu-preopaque-indirect-test.log
