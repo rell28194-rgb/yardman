@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "test_only": true,
+  "description": "Deterministic R&D traces for comparing stale queue ordering with periodic predictive re-ranking. These fixtures are not production geography or telemetry.",
+  "scenarios": [
+    {
+      "name": "building_straight_backlog",
+      "split": "discovery",
+      "kind": "turns",
+      "cell_size": 256.0,
+      "speed_mps": 25.0,
+      "horizon_s": 24.0,
+      "dt_s": 0.25,
+      "radius": 5,
+      "service_interval_s": 2.5,
+      "events": []
+    },
+    {
+      "name": "building_left_turn_backlog",
+      "split": "discovery",
+      "kind": "turns",
+      "cell_size": 256.0,
+      "speed_mps": 25.0,
+      "horizon_s": 24.0,
+      "dt_s": 0.25,
+      "radius": 5,
+      "service_interval_s": 2.5,
+      "events": [
+        {"start_s": 3.0, "duration_s": 2.0, "delta_degrees": 90.0}
+      ]
+    },
+    {
+      "name": "building_uturn_holdout",
+      "split": "holdout",
+      "kind": "turns",
+      "cell_size": 256.0,
+      "speed_mps": 28.0,
+      "horizon_s": 24.0,
+      "dt_s": 0.25,
+      "radius": 5,
+      "service_interval_s": 3.0,
+      "events": [
+        {"start_s": 4.0, "duration_s": 2.0, "delta_degrees": 180.0}
+      ]
+    },
+    {
+      "name": "building_s_turn_holdout",
+      "split": "holdout",
+      "kind": "turns",
+      "cell_size": 256.0,
+      "speed_mps": 30.0,
+      "horizon_s": 26.0,
+      "dt_s": 0.25,
+      "radius": 5,
+      "service_interval_s": 3.0,
+      "events": [
+        {"start_s": 3.0, "duration_s": 2.0, "delta_degrees": 90.0},
+        {"start_s": 9.0, "duration_s": 2.0, "delta_degrees": -90.0}
+      ]
+    },
+    {
+      "name": "building_brake_reverse_holdout",
+      "split": "holdout",
+      "kind": "brake_reverse",
+      "cell_size": 256.0,
+      "speed_mps": 25.0,
+      "horizon_s": 20.0,
+      "dt_s": 0.25,
+      "radius": 5,
+      "service_interval_s": 3.0,
+      "events": []
+    },
+    {
+      "name": "road_straight_backlog",
+      "split": "discovery",
+      "kind": "turns",
+      "cell_size": 4096.0,
+      "speed_mps": 35.0,
+      "horizon_s": 140.0,
+      "dt_s": 0.5,
+      "radius": 2,
+      "service_interval_s": 9.0,
+      "events": []
+    },
+    {
+      "name": "road_turn_holdout",
+      "split": "holdout",
+      "kind": "turns",
+      "cell_size": 4096.0,
+      "speed_mps": 35.0,
+      "horizon_s": 140.0,
+      "dt_s": 0.5,
+      "radius": 2,
+      "service_interval_s": 9.0,
+      "events": [
+        {"start_s": 45.0, "duration_s": 8.0, "delta_degrees": 90.0}
+      ]
+    },
+    {
+      "name": "road_uturn_holdout",
+      "split": "holdout",
+      "kind": "turns",
+      "cell_size": 4096.0,
+      "speed_mps": 40.0,
+      "horizon_s": 120.0,
+      "dt_s": 0.5,
+      "radius": 2,
+      "service_interval_s": 10.0,
+      "events": [
+        {"start_s": 35.0, "duration_s": 8.0, "delta_degrees": 180.0}
+      ]
+    }
+  ]
+}
