@@ -4,7 +4,6 @@ class_name YardmanRoadGraph
 # This database belongs to the world, not to tile Nodes. LRU eviction changes
 # residency only; stable identities and adjacency remain in packaged shards.
 const DEFAULT_ROUTE_SPEED_MPS := 13.888889
-const COST_EPSILON := 0.000001
 
 var data_root := "res://data/roads/graph"
 var max_cached_partitions := 12
@@ -118,7 +117,9 @@ func _route_edge_ids_fallback(start_node: String, goal_node: String, fastest: bo
             var current_id := frontier[best_index]
             var candidate_cost := float(best.get(candidate_id, INF))
             var current_cost := float(best.get(current_id, INF))
-            if candidate_cost < current_cost - COST_EPSILON or (is_equal_approx(candidate_cost, current_cost) and candidate_id < current_id):
+            # Match the Rust queue contract: exact lower cost first, then the
+            # lexicographically lower stable node ID for an exact cost tie.
+            if candidate_cost < current_cost or (candidate_cost == current_cost and candidate_id < current_id):
                 best_index = index
         var current: String = frontier.pop_at(best_index)
         if settled.has(current):
@@ -143,13 +144,13 @@ func _route_edge_ids_fallback(start_node: String, goal_node: String, fastest: bo
                 weight = length_m / speed
             var candidate := float(best.get(current, INF)) + weight
             var prior := float(best.get(next, INF))
-            var edge_id := str(edge.get("id", ""))
-            var tie_key := "%s\u0000%s" % [edge_id, current]
-            var prior_key := "%s\u0000%s" % [str(parent_edge.get(next, "~")), str(parent_node.get(next, "~"))]
-            if candidate < prior - COST_EPSILON or (is_equal_approx(candidate, prior) and tie_key < prior_key):
+            # Outgoing edges and the frontier are already stably sorted. Keeping
+            # the first parent on an equal cost mirrors the Rust Dijkstra path
+            # rule and avoids embedding sentinel/control characters in source.
+            if candidate < prior:
                 best[next] = candidate
                 parent_node[next] = current
-                parent_edge[next] = edge_id
+                parent_edge[next] = str(edge.get("id", ""))
                 if not frontier.has(next):
                     frontier.append(next)
 
