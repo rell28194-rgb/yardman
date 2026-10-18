@@ -12,14 +12,18 @@ on:
       - 'godot/scripts/gpu_indirect_multimesh_probe.gd'
       - 'godot/scripts/gpu_indirect_multimesh_lifecycle.gd'
       - 'godot/scripts/gpu_indirect_budget.gd'
+      - 'godot/scripts/gpu_roadside_shared_probe.gd'
       - 'godot/shaders/gpu_visibility.glsl'
       - 'godot/shaders/gpu_indirect_multimesh.glsl'
       - 'godot/shaders/gpu_indirect_multimesh_finalize.glsl'
+      - 'godot/shaders/gpu_roadside_shared.glsl'
+      - 'godot/shaders/gpu_roadside_shared_finalize.glsl'
       - 'godot/tests/streaming_priority_test.gd'
       - 'godot/tests/gpu_visibility_test.gd'
       - 'godot/tests/gpu_indirect_multimesh_test.gd'
       - 'godot/tests/gpu_indirect_raster_test.gd'
       - 'godot/tests/gpu_indirect_budget_test.gd'
+      - 'godot/tests/gpu_roadside_shared_test.gd'
       - 'godot/project.godot'
       - '.github/workflows/godot-render-rd.yml'
   workflow_dispatch:
@@ -90,6 +94,11 @@ jobs:
           timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_indirect_multimesh_test.gd 2>&1 | tee godot/build/gpu-indirect-multimesh.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL|ObjectDB instances were leaked|RID of type .* was leaked|OpArrayLength' godot/build/gpu-indirect-multimesh.log; then exit 1; fi
           grep -q 'YARDMAN_GPU_INDIRECT_MULTIMESH_TEST PASS' godot/build/gpu-indirect-multimesh.log
+      - name: Validate packed shared roadside source
+        run: |
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_roadside_shared_test.gd 2>&1 | tee godot/build/gpu-roadside-shared.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL|ObjectDB instances were leaked|RID of type .* was leaked|Attempted to free invalid ID|OpArrayLength' godot/build/gpu-roadside-shared.log; then exit 1; fi
+          grep -q 'YARDMAN_GPU_ROADSIDE_SHARED_TEST PASS' godot/build/gpu-roadside-shared.log
       - name: Validate renderer consumes indirect instance count
         run: |
           timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_indirect_raster_test.gd 2>&1 | tee godot/build/gpu-indirect-raster.log
