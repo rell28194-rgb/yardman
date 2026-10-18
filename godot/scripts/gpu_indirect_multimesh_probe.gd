@@ -183,7 +183,10 @@ func _storage_uniform(binding: int, rid: RID) -> RDUniform:
     return uniform
 
 func _free_owned(rd: RenderingDevice, rids: Array) -> void:
-    for rid_value in rids:
+    # Pipelines/uniform sets reference shaders and buffers. Tear down in strict
+    # reverse creation order so dependent RIDs cannot outlive their owners.
+    for index in range(rids.size() - 1, -1, -1):
+        var rid_value = rids[index]
         if rid_value is RID and (rid_value as RID).is_valid():
             rd.free_rid(rid_value)
 
