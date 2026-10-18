@@ -88,9 +88,9 @@ jobs:
           set -euo pipefail
           mkdir -p godot/build/rust-kernel
           timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/rust-kernel/import.log
-          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/rust-kernel/import.log; then exit 1; fi
+          if grep -E 'SCRIPT ERROR|Parse Error|Unicode parsing error|^ERROR:' godot/build/rust-kernel/import.log; then exit 1; fi
           timeout 180 godot --headless --path godot --script res://tests/rust_kernel_smoke_test.gd 2>&1 | tee godot/build/rust-kernel/smoke.log
-          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|FAIL' godot/build/rust-kernel/smoke.log; then exit 1; fi
+          if grep -E 'SCRIPT ERROR|Parse Error|Unicode parsing error|^ERROR:|FAIL' godot/build/rust-kernel/smoke.log; then exit 1; fi
           grep -Fq 'YARDMAN_RUST_KERNEL_SMOKE PASS' godot/build/rust-kernel/smoke.log
       - name: Preserve Rust benchmark and lock evidence
         if: always()
