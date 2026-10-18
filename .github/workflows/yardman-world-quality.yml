@@ -57,13 +57,13 @@ jobs:
           LOG="godot/build/world-quality/import.log"
           timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee "$LOG"
           python3 godot/tools/check_godot_log.py "$LOG"
-      - name: Test terrain seams, parish truth, visual continuity, routing, and live population contraction
+      - name: Test terrain seams, parish truth, visual continuity, routing, recovery, and live population contraction
         shell: bash
         run: |
           set -euo pipefail
           # These tests use deterministic local fixtures: no island data download,
           # private vehicle assets, Android SDK, or production APK is required.
-          for TEST in terrain_normal_seam population_budget_regression terrain_coast road_corridor_terrain road_graph_routing streaming_budget building_hlod vegetation_lod_tint reflection_budget traffic_runtime pedestrian_runtime parked_vehicle traffic_pedestrian_safety pedestrian_destination location_tracker parish_runtime parish_map_runtime; do
+          for TEST in terrain_normal_seam population_budget_regression terrain_coast road_corridor_terrain road_graph_routing stream_retry streaming_budget building_hlod vegetation_lod_tint reflection_budget traffic_runtime pedestrian_runtime parked_vehicle traffic_pedestrian_safety pedestrian_destination location_tracker parish_runtime parish_map_runtime; do
             LOG="godot/build/world-quality/${TEST}.log"
             timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "$LOG"
             python3 godot/tools/check_godot_log.py "$LOG" --token FAIL
