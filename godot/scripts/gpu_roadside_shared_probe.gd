@@ -10,14 +10,40 @@ const NEAR_END := 28.0
 const FAR_BEGIN := 28.0
 const FAR_END := 60.0
 const GRASS_END := 16.0
+const FRUSTUM_PLANE_COUNT := 6
+const CAMERA_PARAM_FLOATS := 28
 
 var _mutex := Mutex.new()
 var _started := false
 var _done := false
 var _result: Dictionary = {}
 
+# Legacy validation entry point. The visibility volume is encoded as plane data
+# instead of being hard-coded in the shader, keeping the older parity test stable.
 func begin(near_multimesh: RID, far_multimesh: RID, grass_multimesh: RID,
         count: int, surface_count: int) -> bool:
+    return begin_frustum(near_multimesh, far_multimesh, grass_multimesh,
+        count, surface_count, Vector3.ZERO, _legacy_cube_planes())
+
+# Production-shaped entry point: positions, camera and planes must all use the
+# same coordinate space (for roadside cells this should be cell-local space).
+func begin_frustum(near_multimesh: RID, far_multimesh: RID, grass_multimesh: RID,
+        count: int, surface_count: int, camera_position: Vector3,
+        frustum_planes: Array) -> bool:
+    if frustum_planes.size() != FRUSTUM_PLANE_COUNT:
+        return false
+    var normalized_planes: Array = []
+    for plane_value in frustum_planes:
+        if not plane_value is Vector4:
+            return false
+        var normalized := _normalized_plane(plane_value as Vector4)
+        if Vector3(normalized.x, normalized.y, normalized.z).length_squared() < 0.99:
+            return false
+        normalized_planes.append(normalized)
+    var camera_values := _encode_camera(camera_position, normalized_planes)
+    if camera_values.size() != CAMERA_PARAM_FLOATS:
+        return false
+
     _mutex.lock()
     if _started:
         _mutex.unlock()
@@ -26,8 +52,17 @@ func begin(near_multimesh: RID, far_multimesh: RID, grass_multimesh: RID,
     _mutex.unlock()
     RenderingServer.call_on_render_thread(_run_render.bind(
         near_multimesh, far_multimesh, grass_multimesh,
-        clampi(count, 64, 262144), clampi(surface_count, 1, 64)))
+        clampi(count, 64, 262144), clampi(surface_count, 1, 64), camera_values))
     return true
+
+func begin_camera(near_multimesh: RID, far_multimesh: RID, grass_multimesh: RID,
+        count: int, surface_count: int, camera_transform: Transform3D,
+        fov_y_degrees: float, aspect: float, near_distance: float,
+        far_distance: float) -> bool:
+    var planes := perspective_frustum(camera_transform, fov_y_degrees, aspect,
+        near_distance, far_distance)
+    return begin_frustum(near_multimesh, far_multimesh, grass_multimesh,
+        count, surface_count, camera_transform.origin, planes)
 
 func is_done() -> bool:
     _mutex.lock()
@@ -41,8 +76,79 @@ func result() -> Dictionary:
     _mutex.unlock()
     return value
 
+static func perspective_frustum(camera_transform: Transform3D,
+        fov_y_degrees: float, aspect: float, near_distance: float,
+        far_distance: float) -> Array:
+    var fov := deg_to_rad(clampf(fov_y_degrees, 1.0, 179.0))
+    var tan_y := tan(fov * 0.5)
+    var tan_x := tan_y * maxf(aspect, 0.01)
+    var near_m := maxf(near_distance, 0.001)
+    var far_m := maxf(far_distance, near_m + 0.001)
+    var local_planes := [
+        Vector4(0.0, 0.0, -1.0, -near_m),
+        Vector4(0.0, 0.0, 1.0, far_m),
+        Vector4(1.0, 0.0, -tan_x, 0.0),
+        Vector4(-1.0, 0.0, -tan_x, 0.0),
+        Vector4(0.0, -1.0, -tan_y, 0.0),
+        Vector4(0.0, 1.0, -tan_y, 0.0),
+    ]
+    var basis := camera_transform.basis.orthonormalized()
+    var result: Array = []
+    for plane_value: Vector4 in local_planes:
+        var plane := _normalized_plane(plane_value)
+        var local_normal := Vector3(plane.x, plane.y, plane.z)
+        var world_normal := basis * local_normal
+        var world_d := plane.w - world_normal.dot(camera_transform.origin)
+        result.append(Vector4(world_normal.x, world_normal.y, world_normal.z, world_d))
+    return result
+
+static func sphere_visible(position: Vector3, radius: float, frustum_planes: Array) -> bool:
+    if frustum_planes.size() != FRUSTUM_PLANE_COUNT:
+        return false
+    for plane_value in frustum_planes:
+        if not plane_value is Vector4:
+            return false
+        var plane := plane_value as Vector4
+        if Vector3(plane.x, plane.y, plane.z).dot(position) + plane.w < -radius:
+            return false
+    return true
+
+static func _legacy_cube_planes() -> Array:
+    return [
+        Vector4(1.0, 0.0, 0.0, 50.0),
+        Vector4(-1.0, 0.0, 0.0, 50.0),
+        Vector4(0.0, 1.0, 0.0, 50.0),
+        Vector4(0.0, -1.0, 0.0, 50.0),
+        Vector4(0.0, 0.0, 1.0, 50.0),
+        Vector4(0.0, 0.0, -1.0, 50.0),
+    ]
+
+static func _normalized_plane(plane: Vector4) -> Vector4:
+    var normal := Vector3(plane.x, plane.y, plane.z)
+    var length := normal.length()
+    if length <= 0.000001:
+        return Vector4.ZERO
+    var inverse := 1.0 / length
+    return Vector4(plane.x * inverse, plane.y * inverse, plane.z * inverse, plane.w * inverse)
+
+static func _encode_camera(camera_position: Vector3, frustum_planes: Array) -> PackedFloat32Array:
+    var values := PackedFloat32Array()
+    values.resize(CAMERA_PARAM_FLOATS)
+    values[0] = camera_position.x
+    values[1] = camera_position.y
+    values[2] = camera_position.z
+    values[3] = 1.0
+    for index in range(FRUSTUM_PLANE_COUNT):
+        var plane: Vector4 = frustum_planes[index]
+        var base := 4 + index * 4
+        values[base + 0] = plane.x
+        values[base + 1] = plane.y
+        values[base + 2] = plane.z
+        values[base + 3] = plane.w
+    return values
+
 func _run_render(near_multimesh: RID, far_multimesh: RID, grass_multimesh: RID,
-        count: int, surface_count: int) -> void:
+        count: int, surface_count: int, camera_values: PackedFloat32Array) -> void:
     var rd := RenderingServer.get_rendering_device()
     if rd == null:
         _finish({"supported": false, "reason": "global RenderingDevice unavailable"})
@@ -79,15 +185,17 @@ func _run_render(near_multimesh: RID, far_multimesh: RID, grass_multimesh: RID,
     var count_params := PackedInt32Array([count, 0, 0, 0]).to_byte_array()
     var range_params := PackedFloat32Array([NEAR_END, FAR_BEGIN, FAR_END, GRASS_END]).to_byte_array()
     var surface_params := PackedInt32Array([surface_count, surface_count, surface_count, 0]).to_byte_array()
+    var camera_bytes := camera_values.to_byte_array()
 
     var source_buffer := rd.storage_buffer_create(source_bytes.size(), source_bytes)
     var counter_buffer := rd.storage_buffer_create(zero_counts.size(), zero_counts)
     var count_buffer := rd.storage_buffer_create(count_params.size(), count_params)
     var range_buffer := rd.storage_buffer_create(range_params.size(), range_params)
     var surface_buffer := rd.storage_buffer_create(surface_params.size(), surface_params)
+    var camera_buffer := rd.storage_buffer_create(camera_bytes.size(), camera_bytes)
     var owned := [source_buffer, counter_buffer, count_buffer, range_buffer, surface_buffer,
-        compact_shader, finalize_shader]
-    for rid_value in [source_buffer, counter_buffer, count_buffer, range_buffer, surface_buffer]:
+        camera_buffer, compact_shader, finalize_shader]
+    for rid_value in [source_buffer, counter_buffer, count_buffer, range_buffer, surface_buffer, camera_buffer]:
         if not (rid_value as RID).is_valid():
             _free_owned(rd, owned)
             _finish({"supported": false, "reason": "packed roadside storage buffer creation failed"})
@@ -101,6 +209,7 @@ func _run_render(near_multimesh: RID, far_multimesh: RID, grass_multimesh: RID,
         _storage_uniform(4, counter_buffer),
         _storage_uniform(5, count_buffer),
         _storage_uniform(6, range_buffer),
+        _storage_uniform(7, camera_buffer),
     ], compact_shader, 0)
     var finalize_set := rd.uniform_set_create([
         _storage_uniform(0, counter_buffer),
@@ -153,6 +262,7 @@ func _run_render(near_multimesh: RID, far_multimesh: RID, grass_multimesh: RID,
         "source_bytes": source_bytes.size(),
         "source_stride_floats": SOURCE_STRIDE_FLOATS,
         "destination_stride_floats": DESTINATION_STRIDE_FLOATS,
+        "camera_param_floats": camera_values.size(),
         "near_count": near_count,
         "far_count": far_count,
         "grass_count": grass_count,

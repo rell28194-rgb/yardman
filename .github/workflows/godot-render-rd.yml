@@ -25,6 +25,7 @@ on:
       - 'godot/tests/gpu_indirect_raster_test.gd'
       - 'godot/tests/gpu_indirect_budget_test.gd'
       - 'godot/tests/gpu_roadside_shared_test.gd'
+      - 'godot/tests/gpu_roadside_frustum_test.gd'
       - 'godot/project.godot'
       - '.github/workflows/godot-render-rd.yml'
   workflow_dispatch:
@@ -104,6 +105,11 @@ jobs:
           timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_roadside_shared_test.gd 2>&1 | tee godot/build/gpu-roadside-shared.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL|ObjectDB instances were leaked|RID of type .* was leaked|Attempted to free invalid ID|OpArrayLength' godot/build/gpu-roadside-shared.log; then exit 1; fi
           grep -q 'YARDMAN_GPU_ROADSIDE_SHARED_TEST PASS' godot/build/gpu-roadside-shared.log
+      - name: Validate real-camera roadside frustum input
+        run: |
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_roadside_frustum_test.gd 2>&1 | tee godot/build/gpu-roadside-frustum.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL|ObjectDB instances were leaked|RID of type .* was leaked|Attempted to free invalid ID|OpArrayLength' godot/build/gpu-roadside-frustum.log; then exit 1; fi
+          grep -q 'YARDMAN_GPU_ROADSIDE_FRUSTUM_TEST PASS' godot/build/gpu-roadside-frustum.log
       - name: Validate renderer consumes indirect instance count
         run: |
           timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_indirect_raster_test.gd 2>&1 | tee godot/build/gpu-indirect-raster.log

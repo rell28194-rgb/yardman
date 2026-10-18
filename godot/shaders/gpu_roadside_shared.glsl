@@ -27,14 +27,22 @@ layout(set = 0, binding = 5, std430) readonly buffer ParamsBuffer {
 layout(set = 0, binding = 6, std430) readonly buffer RangeBuffer {
     vec4 data;
 } ranges;
+layout(set = 0, binding = 7, std430) readonly buffer CameraBuffer {
+    vec4 data[7];
+} camera_data;
 
 const uint SOURCE_STRIDE = 8u;
 const uint DESTINATION_STRIDE = 20u;
+const uint FRUSTUM_PLANE_COUNT = 6u;
 
 bool sphere_visible(vec3 position, float radius) {
-    return position.x + 50.0 >= -radius && -position.x + 50.0 >= -radius
-        && position.y + 50.0 >= -radius && -position.y + 50.0 >= -radius
-        && position.z + 50.0 >= -radius && -position.z + 50.0 >= -radius;
+    for (uint index = 0u; index < FRUSTUM_PLANE_COUNT; index++) {
+        vec4 plane = camera_data.data[index + 1u];
+        if (dot(plane.xyz, position) + plane.w < -radius) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void write_transform(uint base, vec3 position, float yaw, float scale, uint layer) {
@@ -143,7 +151,8 @@ void main() {
         return;
     }
 
-    float distance_xz = length(position.xz);
+    vec2 camera_delta_xz = position.xz - camera_data.data[0].xz;
+    float distance_xz = length(camera_delta_xz);
     if (distance_xz <= ranges.data.x) {
         uint slot = atomicAdd(counters.near_count, 1u);
         write_layer(slot, position, yaw, scale, custom_data, 0u);
