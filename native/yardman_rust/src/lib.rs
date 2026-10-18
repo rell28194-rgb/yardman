@@ -1,12 +1,16 @@
 use godot::prelude::*;
 use yardman_core::{
     Point2, SpatialIndex2D, count_points_in_radius, filter_indices_in_radius,
+    route_pack::RoutePack,
+    routing::{RoadRouteGraph, RouteMetric},
 };
 
 #[derive(GodotClass)]
 #[class(init)]
 struct YardmanRustKernels {
     spatial_index: SpatialIndex2D,
+    route_pack: Option<RoutePack>,
+    route_graph: Option<RoadRouteGraph>,
 }
 
 #[godot_api]
@@ -127,9 +131,96 @@ impl YardmanRustKernels {
             .collect()
     }
 
+    /// Parse and validate one complete deterministic route pack. A failed
+    /// reconfiguration clears any previous graph so callers can never continue
+    /// routing on stale topology after a corrupt or mismatched world update.
+    #[func]
+    fn configure_route_pack(
+        &mut self,
+        bytes: PackedByteArray,
+        fallback_speed_mps: f64,
+    ) -> bool {
+        self.route_pack = None;
+        self.route_graph = None;
+        if !fallback_speed_mps.is_finite() || fallback_speed_mps <= 0.0 {
+            return false;
+        }
+        let fallback_speed = fallback_speed_mps as f32;
+        if !fallback_speed.is_finite() || fallback_speed <= 0.0 {
+            return false;
+        }
+        let Ok(pack) = RoutePack::parse(bytes.as_slice()) else {
+            return false;
+        };
+        let Ok(graph) = pack.build_route_graph(fallback_speed) else {
+            return false;
+        };
+        self.route_pack = Some(pack);
+        self.route_graph = Some(graph);
+        true
+    }
+
+    #[func]
+    fn clear_route_pack(&mut self) {
+        self.route_graph = None;
+        self.route_pack = None;
+    }
+
+    #[func]
+    fn route_pack_node_count(&self) -> i64 {
+        self.route_pack
+            .as_ref()
+            .map_or(0, |pack| pack.nodes.len() as i64)
+    }
+
+    #[func]
+    fn route_pack_edge_count(&self) -> i64 {
+        self.route_pack
+            .as_ref()
+            .map_or(0, |pack| pack.edges.len() as i64)
+    }
+
+    /// Return stable packaged road-edge IDs, never internal adjacency IDs.
+    /// `fastest=false` minimizes metres; `fastest=true` minimizes travel time.
+    #[func]
+    fn route_edge_ids(
+        &self,
+        start_node: GString,
+        goal_node: GString,
+        fastest: bool,
+    ) -> PackedStringArray {
+        let mut output = PackedStringArray::new();
+        let (Some(pack), Some(graph)) = (&self.route_pack, &self.route_graph) else {
+            return output;
+        };
+        let start_text = start_node.to_string();
+        let goal_text = goal_node.to_string();
+        let (Some(start), Some(goal)) = (
+            pack.node_index(&start_text),
+            pack.node_index(&goal_text),
+        ) else {
+            return output;
+        };
+        let metric = if fastest {
+            RouteMetric::TravelTime
+        } else {
+            RouteMetric::Distance
+        };
+        let Some(route) = graph.shortest_path(start, goal, metric) else {
+            return output;
+        };
+        for edge_index in route.edges {
+            let Some(stable_id) = pack.stable_edge_id(edge_index) else {
+                return PackedStringArray::new();
+            };
+            output.push(stable_id);
+        }
+        output
+    }
+
     #[func]
     fn build_id(&self) -> GString {
-        "yardman-rust/api-4.7/core-v2-spatial".into()
+        "yardman-rust/api-4.7/core-v3-route-pack".into()
     }
 }
 

@@ -57,6 +57,9 @@ impl RoutePack {
         if node_count == 0 {
             return Err("route pack requires at least one node");
         }
+        if node_count > i32::MAX as usize {
+            return Err("route pack node count exceeds routing ID range");
+        }
         if edge_count > i32::MAX as usize {
             return Err("route pack edge count exceeds routing ID range");
         }
@@ -163,6 +166,20 @@ impl RoutePack {
         )
     }
 
+    pub fn node_index(&self, stable_node_id: &str) -> Option<i32> {
+        self.nodes
+            .binary_search_by(|node| node.id.as_str().cmp(stable_node_id))
+            .ok()
+            .and_then(|index| i32::try_from(index).ok())
+    }
+
+    pub fn stable_node_id(&self, route_node_id: i32) -> Option<&str> {
+        usize::try_from(route_node_id)
+            .ok()
+            .and_then(|index| self.nodes.get(index))
+            .map(|node| node.id.as_str())
+    }
+
     pub fn stable_edge_id(&self, route_edge_id: i32) -> Option<&str> {
         usize::try_from(route_edge_id)
             .ok()
@@ -230,6 +247,10 @@ mod tests {
         assert_eq!(pack.edges.len(), 1);
         assert_eq!(pack.nodes[0].id, "osm:1");
         assert_eq!(pack.nodes[1].position, [10.0, 1.0, 0.0]);
+        assert_eq!(pack.node_index("osm:1"), Some(0));
+        assert_eq!(pack.node_index("osm:2"), Some(1));
+        assert_eq!(pack.node_index("missing"), None);
+        assert_eq!(pack.stable_node_id(1), Some("osm:2"));
         assert_eq!(pack.edges[0].id, "w1:0:osm:1:osm:2");
         assert_eq!(pack.edges[0].class_id, 2);
         assert_eq!(pack.edges[0].direction, 1);

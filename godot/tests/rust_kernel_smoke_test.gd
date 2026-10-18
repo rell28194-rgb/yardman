@@ -1,6 +1,7 @@
 extends SceneTree
 
 const HLOD = preload("res://scripts/building_hlod_runtime.gd")
+const ROUTE_PACK_HEX := "594d52470100200014001c0002000000010000001a000000000000000000000000000000050000000000000000000000000000000500000005000000000020410000803f000000000a0000001000020100000000010000000000204100005841030000006f736d3a316f736d3a3277313a303a6f736d3a313a6f736d3a32"
 var failures := 0
 
 func _initialize() -> void:
@@ -42,7 +43,7 @@ func _run() -> void:
     if kernel == null:
         quit(1)
         return
-    _check(str(kernel.call("build_id")) == "yardman-rust/api-4.7/core-v2-spatial", "Unexpected Rust build identity")
+    _check(str(kernel.call("build_id")) == "yardman-rust/api-4.7/core-v3-route-pack", "Unexpected Rust build identity")
 
     const POINT_COUNT := 120000
     var points := PackedVector2Array()
@@ -83,6 +84,35 @@ func _run() -> void:
         "Rust spatial result budget was not enforced"
     )
 
+    # Route-pack adapter contract: stable world IDs enter and stable edge IDs
+    # leave. Internal integer adjacency IDs never cross the GDExtension boundary.
+    var route_bytes: PackedByteArray = ROUTE_PACK_HEX.hex_decode()
+    _check(route_bytes.size() == 126, "Route-pack golden fixture length changed")
+    _check(bool(kernel.call("configure_route_pack", route_bytes, 13.888889)), "Could not configure Rust route pack")
+    _check(int(kernel.call("route_pack_node_count")) == 2, "Route-pack node count mismatch")
+    _check(int(kernel.call("route_pack_edge_count")) == 1, "Route-pack edge count mismatch")
+    _check(
+        kernel.call("route_edge_ids", "osm:1", "osm:2", false) == PackedStringArray(["w1:0:osm:1:osm:2"]),
+        "Distance route did not preserve stable edge identity"
+    )
+    _check(
+        kernel.call("route_edge_ids", "osm:1", "osm:2", true) == PackedStringArray(["w1:0:osm:1:osm:2"]),
+        "Fastest route did not preserve stable edge identity"
+    )
+    _check(
+        (kernel.call("route_edge_ids", "osm:2", "osm:1", false) as PackedStringArray).is_empty(),
+        "Route adapter violated one-way direction"
+    )
+    _check(
+        (kernel.call("route_edge_ids", "missing", "osm:2", false) as PackedStringArray).is_empty(),
+        "Unknown route node must fail closed"
+    )
+    var corrupt_route_bytes: PackedByteArray = ROUTE_PACK_HEX.hex_decode()
+    corrupt_route_bytes[0] = 0
+    _check(not bool(kernel.call("configure_route_pack", corrupt_route_bytes, 13.888889)), "Corrupt route pack was accepted")
+    _check(int(kernel.call("route_pack_node_count")) == 0, "Failed route reconfigure retained stale topology")
+    _check(bool(kernel.call("configure_route_pack", route_bytes, 13.888889)), "Could not restore valid route pack")
+
     # Exercise the first real runtime consumer with the extension loaded. The
     # HLOD system must select exactly the same authoritative building cells as
     # its source-only GDScript fallback before native acceleration is accepted.
@@ -119,12 +149,14 @@ func _run() -> void:
     var gd_us := Time.get_ticks_usec() - gd_started
     _check(rust_checksum == gd_checksum, "Benchmark paths produced different results")
 
+    kernel.call("clear_route_pack")
+    _check(int(kernel.call("route_pack_node_count")) == 0, "Rust route pack did not clear")
     kernel.call("clear_spatial_index")
     _check(int(kernel.call("spatial_index_len")) == 0, "Rust spatial index did not clear")
 
     if failures == 0:
         var ratio := float(gd_us) / float(maxi(rust_us, 1))
-        print("YARDMAN_RUST_KERNEL_SMOKE PASS points=%d loops=%d rust_us=%d gdscript_us=%d ratio=%.2f hlod_parity=1 build=%s" % [
+        print("YARDMAN_RUST_KERNEL_SMOKE PASS points=%d loops=%d rust_us=%d gdscript_us=%d ratio=%.2f hlod_parity=1 route_pack=1 build=%s" % [
             POINT_COUNT, LOOPS, rust_us, gd_us, ratio, str(kernel.call("build_id"))
         ])
     quit(0 if failures == 0 else 1)
