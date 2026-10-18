@@ -1,0 +1,13 @@
+#!/usr/bin/env python
+
+env = SConscript("godot-cpp/SConstruct", {"api_version": "4.7"})
+env.Append(CPPPATH=["src/"])
+sources = Glob("src/*.cpp")
+
+library = env.SharedLibrary(
+    "bin/libyardman_native{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
+    source=sources,
+)
+
+env.NoCache(library)
+Default(library)

@@ -1,0 +1,92 @@
+name: Yardman Native Kernel Gate
+
+on:
+  push:
+    branches:
+      - 'codex/world-quality-*'
+    paths:
+      - 'native/yardman_native/**'
+      - 'godot/tests/native_kernel_smoke_test.gd'
+      - '.github/workflows/native-kernels.yml'
+      - '.gitignore'
+  pull_request:
+    paths:
+      - 'native/yardman_native/**'
+      - 'godot/tests/native_kernel_smoke_test.gd'
+      - '.github/workflows/native-kernels.yml'
+      - '.gitignore'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yardman-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-native-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+      GODOT_CPP_SHA: '2bb1acf6f8ae1ce96ac7b9ba3a10b499c59c49ec'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install SCons
+        run: python -m pip install --disable-pip-version-check 'scons>=4.8,<5'
+      - name: Fetch pinned godot-cpp
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native/yardman_native/godot-cpp
+          git -C native/yardman_native/godot-cpp init
+          git -C native/yardman_native/godot-cpp remote add origin https://github.com/godotengine/godot-cpp.git
+          git -C native/yardman_native/godot-cpp fetch --depth=1 origin "$GODOT_CPP_SHA"
+          git -C native/yardman_native/godot-cpp checkout --detach FETCH_HEAD
+          test "$(git -C native/yardman_native/godot-cpp rev-parse HEAD)" = "$GODOT_CPP_SHA"
+      - name: Build native kernel against Godot 4.7 API
+        shell: bash
+        run: |
+          set -euo pipefail
+          scons -C native/yardman_native -j2 target=template_debug platform=linux arch=x86_64
+          test -f native/yardman_native/bin/libyardman_native.linux.template_debug.x86_64.so
+      - name: Download canonical Godot runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          curl --fail --location --retry 3 "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+      - name: Stage extension only for native smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/native/bin
+          cp native/yardman_native/bin/libyardman_native.linux.template_debug.x86_64.so godot/native/bin/
+          cp native/yardman_native/yardman_native.gdextension godot/native/yardman_native.gdextension
+      - name: Import and smoke-test native kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build/native-kernel
+          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/native-kernel/import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/native-kernel/import.log; then exit 1; fi
+          timeout 180 godot --headless --path godot --script res://tests/native_kernel_smoke_test.gd 2>&1 | tee godot/build/native-kernel/smoke.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|FAIL' godot/build/native-kernel/smoke.log; then exit 1; fi
+          grep -Fq 'YARDMAN_NATIVE_KERNEL_SMOKE PASS' godot/build/native-kernel/smoke.log
+      - name: Preserve native benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Native-Kernel-${{ github.sha }}
+          path: godot/build/native-kernel/*.log
+          if-no-files-found: ignore
+          retention-days: 14

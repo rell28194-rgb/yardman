@@ -42,5 +42,9 @@ godot/data/coast/
 
 godot/data/coast.staging/
 
+# Native GDExtension dependencies and build products are reproducible CI inputs,
+# not source. The pinned godot-cpp revision is documented in the native lane.
+native/yardman_native/godot-cpp/
+
 # Owner-supplied reference art is staged for personal builds, outside Git.
 godot/assets/user_reference/
