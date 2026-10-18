@@ -29,6 +29,29 @@ boot, a green public fallback build, or a completed agent badge.
    `--require final_packaging`; do not deliver a final APK with either library
    or visual/runtime acceptance unfinished.
 
+## Production-data and placeholder rule
+
+Missing production content is an execution task, not permission to invent a
+substitute. If required world data, assets, compiled packs, metadata, tools, or
+runtime artifacts do not exist, trace the declared source and build/acquisition
+pipeline and create the real artifact with provenance. Do not silently fill a
+production gap with synthetic geometry, fake geography, guessed measurements,
+placeholder art, fabricated source records, or test data.
+
+Synthetic fixtures remain allowed only inside clearly named tests and isolated
+validation harnesses. They must be explicitly marked `fixture`, `synthetic`, or
+`test-only`; they must not be packaged as production data, counted as visual or
+geographic acceptance evidence, or used to claim that a missing real layer is
+complete. Production acceptance requires the real source-derived/private asset
+path appropriate to that subsystem plus its provenance and runtime validation.
+
+When a source is public, preserve its URL/provider, source hash, attribution,
+coordinate/datum information, compiler version/commit, and output manifest. When
+a source is owner-supplied/private, preserve the existing private provenance
+ledger and keep restricted media outside public Git. If a real source cannot be
+acquired or legally used, report the gap plainly and leave the production layer
+incomplete rather than disguising it with a placeholder.
+
 The user has explicitly authorized parallel agent work. Give agents separate
 file ownership and coordinate shared imports, asset pack replacements and Git
 publishing. All agents follow the same milestone gates and save discipline.
