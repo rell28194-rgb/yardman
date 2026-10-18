@@ -9,8 +9,12 @@ on:
       - 'godot/scripts/road_streamer.gd'
       - 'godot/scripts/terrain_streamer.gd'
       - 'godot/scripts/building_streamer.gd'
+      - 'godot/scripts/rdx_responsive_road_streamer.gd'
+      - 'godot/scripts/rdx_responsive_building_streamer.gd'
       - 'godot/tests/streaming_priority_test.gd'
       - 'godot/tests/streaming_enqueue_integration_test.gd'
+      - 'godot/tests/streaming_responsive_priority_test.gd'
+      - 'godot/tests/fixtures/stream_priority_rdx_traces.json'
       - 'godot/tools/rdx_stream_priority_eval.py'
       - '.github/workflows/rdx-stream-priority.yml'
   workflow_dispatch:
@@ -48,14 +52,20 @@ jobs:
           timeout 120 godot --headless --path godot --script res://tests/streaming_priority_test.gd 2>&1 | tee godot/build/rdx-stream-priority.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|STREAMING_PRIORITY_TEST:.*' godot/build/rdx-stream-priority.log; then exit 1; fi
           grep -q 'YARDMAN_STREAMING_PRIORITY_TEST PASS' godot/build/rdx-stream-priority.log
-      - name: Test streamer integration
+      - name: Test streamer enqueue integration
         shell: bash
         run: |
           timeout 120 godot --headless --path godot --script res://tests/streaming_enqueue_integration_test.gd 2>&1 | tee godot/build/rdx-stream-enqueue.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|STREAMING_ENQUEUE_INTEGRATION_TEST:.*' godot/build/rdx-stream-enqueue.log; then exit 1; fi
           grep -q 'YARDMAN_STREAMING_ENQUEUE_INTEGRATION_TEST PASS' godot/build/rdx-stream-enqueue.log
+      - name: Test responsive same-cell queue re-ranking
+        shell: bash
+        run: |
+          timeout 120 godot --headless --path godot --script res://tests/streaming_responsive_priority_test.gd 2>&1 | tee godot/build/rdx-stream-responsive.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|STREAMING_RESPONSIVE_PRIORITY_TEST:.*' godot/build/rdx-stream-responsive.log; then exit 1; fi
+          grep -q 'YARDMAN_STREAMING_RESPONSIVE_PRIORITY_TEST PASS' godot/build/rdx-stream-responsive.log
       - name: Evaluate frozen streaming traces
-        if: ${{ hashFiles('godot/tools/rdx_stream_priority_eval.py') != '' }}
         shell: bash
         run: |
           python3 godot/tools/rdx_stream_priority_eval.py | tee godot/build/rdx-stream-priority-eval.log
+          grep -q 'YARDMAN_RDX_STREAM_PRIORITY_EVAL PASS' godot/build/rdx-stream-priority-eval.log
