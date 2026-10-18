@@ -95,6 +95,10 @@ func _grade_variant(label: String, picture: Image, camera: Camera3D) -> Dictiona
     _check(float(wash.avg) > float(deep.avg) + 0.015, label + " mapped shoreline no longer separates from offshore water")
     _check(delta > 0.045, label + " shoreline/offshore colour response collapsed")
     _check(float(wash.peak) > float(wash.avg) + 0.010, label + " shoreline wash became a flat colour strip")
+    # A dark/grey UI overlay can accidentally satisfy luminance deltas. Both
+    # sampled regions must retain the blue-green chroma of the actual water.
+    _check(wash_rgb.z > wash_rgb.x * 1.25 and deep_rgb.z > deep_rgb.x * 1.25,
+        label + " capture does not contain the expected water chroma")
     return {"wash": wash, "deep": deep, "delta": delta}
 
 func _run() -> void:
@@ -103,6 +107,12 @@ func _run() -> void:
         quit(1)
         return
     root.size = Vector2i(640, 480)
+    var startup_menu := root.get_node_or_null("StartupMenu")
+    if startup_menu != null:
+        if startup_menu.has_method("_set_open"):
+            startup_menu.call("_set_open", false)
+        if startup_menu is CanvasItem:
+            startup_menu.visible = false
     output_dir = OS.get_environment("YARDMAN_WATER_SHORE_CAPTURE_DIR")
     if not output_dir.is_empty():
         DirAccess.make_dir_recursive_absolute(output_dir)
