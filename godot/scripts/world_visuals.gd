@@ -376,8 +376,9 @@ func _make_plant_cell(roadside: Node3D, group: Dictionary, tile_origin: Vector2)
             pose.origin -= center
             far_multi.set_instance_transform(i, pose)
             far_multi.set_instance_color(i, Color.WHITE)
-            var seed_point := int(plants[i].seed)
-            far_multi.set_instance_custom_data(i, Color(float(seed_point % 997) / 997.0, float(seed_point % 421) / 421.0, 0.5, 1.0))
+            # Preserve the canonical geographic tint/variation channels across
+            # the mesh LOD boundary instead of snapping dryness to a neutral 0.5.
+            far_multi.set_instance_custom_data(i, multi.get_instance_custom_data(i))
         var distant := MultiMeshInstance3D.new()
         distant.name = instance.name + "_Distant"
         distant.position = center
