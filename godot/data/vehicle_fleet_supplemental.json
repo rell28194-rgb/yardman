@@ -13,6 +13,42 @@
       "wheelbase_m": 2.673,
       "track_width_m": 1.542,
       "wheel_radius_m": 0.353
+    },
+    {
+      "id": "delorean_dmc12",
+      "manufacturer": "DeLorean",
+      "display_name": "DeLorean DMC-12",
+      "drivetrain": "RWD",
+      "hero_scene": "delorean_dmc12.glb",
+      "source_identity": "DeloreanDMC12",
+      "source_unit": "be8711d97a1d56f4b8906574ecaa341a",
+      "source_sha256": "0f0d2e1f12bf5cd8c9da48c6ebd3480fca7573adb1089371a6f943bf5b2be763",
+      "beta2_car_id": 223,
+      "beta2_identity": "DeLorean DMC-12",
+      "dimensions_m": [1.982683, 1.136133, 4.199109],
+      "wheelbase_m": 2.419,
+      "use_visual_wheelbase": false,
+      "track_width_m": 1.573,
+      "wheel_radius_m": 0.381,
+      "visual_scale": [1.0, 1.0, 1.0]
+    },
+    {
+      "id": "corvette_c7",
+      "manufacturer": "Chevrolet",
+      "display_name": "Chevrolet Corvette C7",
+      "drivetrain": "RWD",
+      "hero_scene": "corvette_c7.glb",
+      "source_identity": "CorvetteC7",
+      "source_unit": "9d999f0d345f05e40bf98c0515d10635",
+      "source_sha256": "a73a025b211c05e74514899f98511195742121168cb187473c41bbc7ae1b0c67",
+      "beta2_car_id": 40,
+      "beta2_identity": "corvette c7",
+      "dimensions_m": [2.188337, 1.155505, 4.551151],
+      "wheelbase_m": 2.718,
+      "use_visual_wheelbase": false,
+      "track_width_m": 1.664,
+      "wheel_radius_m": 0.300,
+      "visual_scale": [1.0, 1.0, 1.0]
     }
   ]
 }
