@@ -74,14 +74,14 @@ jobs:
             esac
             grep -Fq "$MARKER" "$LOG"
           done
-      - name: Benchmark YMB1 building decode baseline
+      - name: Exercise synthetic YMB1 decoder fixture only
         shell: bash
         run: |
           set -euo pipefail
-          LOG="godot/build/world-quality/building_decode_benchmark.log"
-          timeout 120 godot --headless --path godot --script res://tests/building_decode_benchmark_test.gd 2>&1 | tee "$LOG"
+          LOG="godot/build/world-quality/building_decode_fixture.log"
+          timeout 120 godot --headless --path godot --script res://tests/building_decode_fixture_test.gd 2>&1 | tee "$LOG"
           python3 godot/tools/check_godot_log.py "$LOG" --token FAIL
-          grep -Fq 'YARDMAN_BUILDING_DECODE_BENCH PASS' "$LOG"
+          grep -Fq 'YARDMAN_BUILDING_DECODE_FIXTURE_TEST PASS synthetic_only=1 production_evidence=0' "$LOG"
       - name: Render lowland and montane terrain zoning
         shell: bash
         run: |
