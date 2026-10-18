@@ -93,5 +93,5 @@ jobs:
         run: |
           set -euo pipefail
           timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_multimesh_indirect_test.gd 2>&1 | tee godot/build/gpu-multimesh-indirect.log
-          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL|ObjectDB instances were leaked' godot/build/gpu-multimesh-indirect.log; then exit 1; fi
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL|ObjectDB instances were leaked|Only local devices can submit and sync|RID.*was leaked' godot/build/gpu-multimesh-indirect.log; then exit 1; fi
           grep -q 'YARDMAN_GPU_MULTIMESH_INDIRECT_TEST PASS' godot/build/gpu-multimesh-indirect.log
