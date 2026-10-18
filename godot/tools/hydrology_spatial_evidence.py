@@ -21,6 +21,10 @@ class SpatialEvidence:
     intersection_fraction: float
     evidence_token: str
     authorizes_morphology: bool
+    geometry_valid: bool = True
+    geometry_repaired: bool = False
+    segment_length_m: float = 0.0
+    intersection_length_m: float = 0.0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -42,12 +46,7 @@ def _norm(value: object) -> str:
 
 
 def _safe_fraction(value: object) -> float:
-    """Return a finite [0, 1] overlap fraction; invalid GIS numerics become zero.
-
-    NaN/inf can leak from invalid or empty geometries in GIS pipelines. Treating
-    them as evidence would make destructive terrain authorization non-auditable,
-    so fail closed instead of guessing.
-    """
+    """Return a finite [0, 1] overlap fraction; invalid GIS numerics become zero."""
     try:
         fraction = float(value)
     except (TypeError, ValueError):
@@ -57,6 +56,17 @@ def _safe_fraction(value: object) -> float:
     return max(0.0, min(1.0, fraction))
 
 
+def _safe_nonnegative(value: object) -> float:
+    """Return a finite non-negative GIS length; malformed numerics fail closed."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(number) or number < 0.0:
+        return 0.0
+    return number
+
+
 def attach_spatial_evidence(
     *,
     source: str,
@@ -64,22 +74,43 @@ def attach_spatial_evidence(
     layer: str,
     mapped_unit: str,
     intersection_fraction: float,
+    geometry_valid: bool = True,
+    geometry_repaired: bool = False,
+    segment_length_m: float = 0.0,
+    intersection_length_m: float = 0.0,
 ) -> SpatialEvidence:
     """Convert a real GIS intersection into a provenance-bearing evidence record.
 
-    `intersection_fraction` is the fraction of the hydrology segment intersecting
-    the mapped feature. It is recorded for auditability, not used to invent a
-    morphology threshold. Authorization requires an exact approved mapped-unit
-    contract and a positive, finite spatial intersection.
+    Authorization requires an exact approved mapped-unit contract, a concrete
+    source feature, positive overlap, and valid unrepaired source geometry.
+    Geometry repaired upstream may still be retained for audit/context, but it
+    cannot authorize destructive terrain morphology until separately reviewed.
+    Optional metric lengths are retained to make segment-to-polygon joins
+    auditable; impossible length relationships fail closed.
     """
     src = _norm(source)
     lyr = _norm(layer)
     unit = _norm(mapped_unit)
     fid = str(source_feature_id or "").strip()
     fraction = _safe_fraction(intersection_fraction)
+    seg_len = _safe_nonnegative(segment_length_m)
+    hit_len = _safe_nonnegative(intersection_length_m)
+    valid = bool(geometry_valid)
+    repaired = bool(geometry_repaired)
+
+    # If metric provenance is supplied, it must describe a possible line/polygon
+    # intersection. A hit longer than its source segment indicates a broken join.
+    lengths_consistent = not (seg_len > 0.0 and hit_len > seg_len + 1e-6)
 
     token = AUTHORITATIVE_UNITS.get((src, lyr, unit), "")
-    authorizes = bool(fid and fraction > 0.0 and token)
+    authorizes = bool(
+        fid
+        and fraction > 0.0
+        and token
+        and valid
+        and not repaired
+        and lengths_consistent
+    )
 
     # Broad contextual overlays are never excavation permission by themselves.
     if lyr in CONTEXT_LAYERS:
@@ -94,6 +125,10 @@ def attach_spatial_evidence(
         intersection_fraction=fraction,
         evidence_token=token,
         authorizes_morphology=authorizes,
+        geometry_valid=valid,
+        geometry_repaired=repaired,
+        segment_length_m=seg_len,
+        intersection_length_m=hit_len,
     )
 
 
