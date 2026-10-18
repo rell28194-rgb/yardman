@@ -183,11 +183,16 @@ func _render_thread_readback() -> void:
                 or not is_equal_approx(transforms[base + 10], 1.0):
             invalid_rows += 1
 
-    # Godot 4.7's RD MultiMesh reallocation path frees the instance SSBO but
+    # Release descriptors/pipeline while their referenced buffers are still
+    # valid. Freeing the command buffer first invalidates its uniform set and
+    # turns later cleanup into a double-free attempt on Godot's global RD.
+    _free_global_rd_resources(rd)
+
+    # Godot 4.7.2's RD MultiMesh reallocation path frees the instance SSBO but
     # overwrites command_buffer with an invalid RID without freeing the old
     # indirect SSBO. Retire it explicitly while we still own the exposed RID.
-    # This is safe here because the test MultiMesh is not attached to a scene;
-    # the subsequent allocate_data(0) clears MeshStorage's stale handle.
+    # The test MultiMesh is not attached to a scene; allocate_data(0) on the
+    # main thread immediately clears MeshStorage's stale handle afterward.
     var retired_indirect := false
     if _command_buffer.is_valid():
         rd.free_rid(_command_buffer)
@@ -203,7 +208,6 @@ func _render_thread_readback() -> void:
         "command_words": command_values.size(),
         "indirect_buffer_retired": retired_indirect,
     }
-    _free_global_rd_resources(rd)
     _readback_done = true
 
 func _expected_visible_count() -> int:
@@ -242,9 +246,6 @@ func _free_global_rd_resources(rd: RenderingDevice) -> void:
 func _cleanup_and_flush() -> void:
     if _multimesh.is_valid():
         _mm_buffer = RID()
-        # Instance allocation to zero releases the normal instance SSBO and
-        # clears MeshStorage's stale command-buffer handle after the explicit
-        # RD retirement above.
         RenderingServer.multimesh_allocate_data(
             _multimesh, 0, RenderingServer.MULTIMESH_TRANSFORM_3D,
             false, false, false)
