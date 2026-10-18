@@ -1,0 +1,54 @@
+{
+  "format_version": 1,
+  "vehicle_source_identity": "CommodoreOld",
+  "status": "hold_not_game_ready",
+  "source_unit": "02ed87bbfe782b34fa10cb304c2845ce",
+  "source_sha256": "bca1383b8d290a8e347e8088024a4a8ef969935a41ec343e5736e7f85ae15fbf",
+  "source_member": "assets/bin/Data/02ed87bbfe782b34fa10cb304c2845ce",
+  "dependency_closure": {
+    "file_count": 49,
+    "total_uncompressed_bytes": 5451476,
+    "unresolved_external_basenames": [
+      "globalgamemanagers.assets"
+    ],
+    "closure_regeneration_verified": true
+  },
+  "recovered_runtime_geometry": {
+    "wheel_anchors": 4,
+    "wheelbase_m": 2.826,
+    "track_width_m": 1.478,
+    "body_shell_present": false,
+    "interior_bound_to_root": false,
+    "calipers_present": 4
+  },
+  "root_mesh_pointer_diagnosis": {
+    "exterior": "local MeshFilter PPtr path_id=0",
+    "exterior_low": "local MeshFilter PPtr path_id=0",
+    "glass": "local MeshFilter PPtr path_id=0",
+    "interior": "local MeshFilter PPtr path_id=0",
+    "interior_low": "local MeshFilter PPtr path_id=0",
+    "diver_wheel_hi": "local MeshFilter PPtr path_id=0"
+  },
+  "closure_mesh_evidence": {
+    "known_high_detail_interior": {
+      "source_unit": "552465cca3a06cb419ae61da3533aedc",
+      "path_id": 3,
+      "mesh_name": "HD_interior",
+      "vertex_count": 8832
+    },
+    "body_mesh_uniquely_linked": false
+  },
+  "full_obb_body_scan": {
+    "car_sized_body_mesh_candidates": 123,
+    "unique_source_link_to_commodore_old": false,
+    "newer_commodore_body_is_not_accepted_as_substitute": true,
+    "newer_commodore_source_unit": "fdbf0b8370d00c34a853b0f600d23117",
+    "newer_commodore_wheelbase_m": 2.676
+  },
+  "decision": {
+    "promote_selector": false,
+    "allow_cosmetic_relabel": false,
+    "allow_newer_commodore_body_substitution": false,
+    "next_required_evidence": "Recover the exact body mesh assignment path from the original Unity runtime/configuration data or another source artifact with a content-addressed link to CommodoreOld."
+  }
+}
