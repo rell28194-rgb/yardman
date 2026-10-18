@@ -1,0 +1,39 @@
+name: Yardman Vehicle Private Harness Source
+
+on:
+  push:
+    branches: [codex/vehicle-production-001]
+    paths:
+      - '.github/workflows/vehicle-private-harness-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  retain-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage vehicle-local harness source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p vehicle-harness-source/godot/tests
+          cp -a godot/scripts vehicle-harness-source/godot/
+          cp -a godot/data vehicle-harness-source/godot/
+          cp godot/tests/vehicle_game_ready_test.gd vehicle-harness-source/godot/tests/
+          if [ -d godot/assets/vehicle_lod ]; then
+            mkdir -p vehicle-harness-source/godot/assets
+            cp -a godot/assets/vehicle_lod vehicle-harness-source/godot/assets/
+          fi
+          find vehicle-harness-source -type f -print0 | sort -z | xargs -0 sha256sum > vehicle-harness-source/SHA256SUMS
+      - name: Retain vehicle-local source
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Vehicle-Private-Harness-Source
+          path: vehicle-harness-source/**
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 30
