@@ -23,7 +23,7 @@ func _payload() -> Dictionary:
         "shore_distance": PackedFloat32Array([0, 40, 0, 40, 40, 0]),
     }
 
-func _freeze_variant(coast: Node, renderer: String, quality: String) -> void:
+func _freeze_variant(coast, renderer: String, quality: String) -> void:
     coast.apply_render_policy({"quality": quality}, renderer)
     var source: Shader = coast.water_material.shader
     _check(source != null, "Missing %s water shader" % renderer)
@@ -88,7 +88,9 @@ func _grade_variant(label: String, picture: Image, camera: Camera3D) -> Dictiona
     # 1.5-7 m shoreline band with genuinely offshore samples.
     var wash := _region_stats(picture, camera, 1.5, 7.0, 4.0, 36.0)
     var deep := _region_stats(picture, camera, 24.0, 38.0, 4.0, 36.0)
-    var delta := (wash.rgb as Vector3).distance_to(deep.rgb as Vector3)
+    var wash_rgb: Vector3 = wash.rgb
+    var deep_rgb: Vector3 = deep.rgb
+    var delta := wash_rgb.distance_to(deep_rgb)
     _check(int(wash.pixels) > 100 and int(deep.pixels) > 100, label + " sample regions too small")
     _check(float(wash.avg) > float(deep.avg) + 0.015, label + " mapped shoreline no longer separates from offshore water")
     _check(delta > 0.045, label + " shoreline/offshore colour response collapsed")
