@@ -69,11 +69,23 @@ jobs:
             esac
             grep -Fq "$MARKER" "$LOG"
           done
+      - name: Render lowland and montane terrain zoning
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build/world-quality/terrain-montane
+          export YARDMAN_TERRAIN_MONTANE_CAPTURE_DIR="$GITHUB_WORKSPACE/godot/build/world-quality/terrain-montane"
+          LOG="godot/build/world-quality/terrain_montane_render.log"
+          timeout 180 xvfb-run -a -s '-screen 0 1024x768x24' godot --path godot --audio-driver Dummy --script res://tests/terrain_montane_render_test.gd 2>&1 | tee "$LOG"
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|FAIL' "$LOG"; then exit 1; fi
+          grep -Fq 'YARDMAN_TERRAIN_MONTANE_RENDER PASS' "$LOG"
       - name: Preserve world quality diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Yardman-World-Quality-${{ github.sha }}
-          path: godot/build/world-quality/*.log
+          path: |
+            godot/build/world-quality/*.log
+            godot/build/world-quality/terrain-montane/*.png
           if-no-files-found: ignore
           retention-days: 14
