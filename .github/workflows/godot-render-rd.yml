@@ -17,6 +17,7 @@ on:
       - 'godot/tests/streaming_priority_test.gd'
       - 'godot/tests/gpu_visibility_test.gd'
       - 'godot/tests/gpu_indirect_multimesh_test.gd'
+      - 'godot/tests/gpu_indirect_raster_test.gd'
       - 'godot/project.godot'
       - '.github/workflows/godot-render-rd.yml'
   workflow_dispatch:
@@ -82,3 +83,8 @@ jobs:
           timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_indirect_multimesh_test.gd 2>&1 | tee godot/build/gpu-indirect-multimesh.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL|ObjectDB instances were leaked|RID of type .* was leaked|OpArrayLength' godot/build/gpu-indirect-multimesh.log; then exit 1; fi
           grep -q 'YARDMAN_GPU_INDIRECT_MULTIMESH_TEST PASS' godot/build/gpu-indirect-multimesh.log
+      - name: Validate renderer consumes indirect instance count
+        run: |
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_indirect_raster_test.gd 2>&1 | tee godot/build/gpu-indirect-raster.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL|ObjectDB instances were leaked|RID of type .* was leaked|Attempted to free invalid ID' godot/build/gpu-indirect-raster.log; then exit 1; fi
+          grep -q 'YARDMAN_GPU_INDIRECT_RASTER_TEST PASS' godot/build/gpu-indirect-raster.log
