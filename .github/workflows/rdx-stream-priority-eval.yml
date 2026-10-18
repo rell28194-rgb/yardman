@@ -11,6 +11,7 @@ on:
       - 'godot/tests/stream_priority_policy_test.gd'
       - 'godot/tests/stream_priority_integration_test.gd'
       - 'godot/tools/rdx_stream_priority_eval.py'
+      - 'godot/tools/rdx_stream_priority_mutation.py'
       - '.github/workflows/rdx-stream-priority-eval.yml'
   workflow_dispatch:
 
@@ -20,7 +21,7 @@ permissions:
 jobs:
   frozen-trace-eval:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       GODOT_VERSION: '4.7.2'
       GODOT_CHANNEL: stable
@@ -58,3 +59,9 @@ jobs:
           timeout 120 godot --headless --path godot --script res://tests/stream_priority_integration_test.gd 2>&1 | tee godot/build/rdx-stream-priority-integration.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|STREAM_PRIORITY_INTEGRATION_TEST:.*' godot/build/rdx-stream-priority-integration.log; then exit 1; fi
           grep -q 'YARDMAN_STREAM_PRIORITY_INTEGRATION_TEST PASS' godot/build/rdx-stream-priority-integration.log
+      - name: Mutation-grade stream priority policy
+        shell: bash
+        run: |
+          python3 godot/tools/rdx_stream_priority_mutation.py --godot-binary godot --threshold 0.90 --timeout 30 \
+            | tee godot/build/rdx-stream-priority-mutation.log
+          grep -q 'YARDMAN_RDX_STREAM_PRIORITY_MUTATION' godot/build/rdx-stream-priority-mutation.log
