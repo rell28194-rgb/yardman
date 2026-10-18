@@ -1,0 +1,86 @@
+name: Streaming priority contract
+
+on:
+  push:
+    branches:
+      - codex/stream-priority-promotion-001
+    paths:
+      - 'godot/scripts/streaming_priority.gd'
+      - 'godot/scripts/stream_priority_runtime.gd'
+      - 'godot/scripts/road_streamer.gd'
+      - 'godot/scripts/terrain_streamer.gd'
+      - 'godot/scripts/building_streamer.gd'
+      - 'godot/scripts/stream_recovery_runtime.gd'
+      - 'godot/scripts/streaming_budget_runtime.gd'
+      - 'godot/tests/streaming_priority_test.gd'
+      - 'godot/tests/stream_priority_runtime_test.gd'
+      - 'godot/tests/streaming_budget_test.gd'
+      - 'godot/tests/stream_recovery_runtime_test.gd'
+      - 'godot/tests/building_streamer_test.gd'
+      - 'godot/tests/building_hlod_test.gd'
+      - 'godot/project.godot'
+      - '.github/workflows/stream-priority-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stream-priority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+      - name: Import and parse production project
+        shell: bash
+        run: |
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/stream-priority-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/stream-priority-import.log; then exit 1; fi
+      - name: Predictive priority invariants
+        shell: bash
+        run: |
+          timeout 120 godot --headless --path godot --script res://tests/streaming_priority_test.gd 2>&1 | tee godot/build/stream-priority-core.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|STREAMING_PRIORITY_TEST:.*' godot/build/stream-priority-core.log; then exit 1; fi
+          grep -q 'YARDMAN_STREAMING_PRIORITY_TEST PASS' godot/build/stream-priority-core.log
+      - name: Responsive coordinator integration
+        shell: bash
+        run: |
+          timeout 120 godot --headless --path godot --script res://tests/stream_priority_runtime_test.gd 2>&1 | tee godot/build/stream-priority-runtime.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|STREAM_PRIORITY_RUNTIME_TEST:.*' godot/build/stream-priority-runtime.log; then exit 1; fi
+          grep -q 'YARDMAN_STREAM_PRIORITY_RUNTIME_TEST PASS' godot/build/stream-priority-runtime.log
+      - name: Streaming budget regression
+        shell: bash
+        run: |
+          timeout 120 godot --headless --path godot --script res://tests/streaming_budget_test.gd 2>&1 | tee godot/build/stream-priority-budget.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|STREAMING_BUDGET_TEST:.*' godot/build/stream-priority-budget.log; then exit 1; fi
+          grep -q 'YARDMAN_STREAMING_BUDGET_TEST PASS' godot/build/stream-priority-budget.log
+      - name: Stream recovery regression
+        shell: bash
+        run: |
+          timeout 120 godot --headless --path godot --script res://tests/stream_recovery_runtime_test.gd 2>&1 | tee godot/build/stream-priority-recovery.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|STREAM_RECOVERY_RUNTIME_TEST:.*' godot/build/stream-priority-recovery.log; then exit 1; fi
+      - name: Building streamer regression
+        shell: bash
+        run: |
+          timeout 120 godot --headless --path godot --script res://tests/building_streamer_test.gd 2>&1 | tee godot/build/stream-priority-buildings.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|BUILDING_STREAMER_TEST:.*' godot/build/stream-priority-buildings.log; then exit 1; fi
+          grep -q 'YARDMAN_BUILDING_STREAMER_TEST PASS' godot/build/stream-priority-buildings.log
+      - name: Building HLOD regression
+        shell: bash
+        run: |
+          timeout 120 godot --headless --path godot --script res://tests/building_hlod_test.gd 2>&1 | tee godot/build/stream-priority-hlod.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|BUILDING_HLOD_TEST:.*' godot/build/stream-priority-hlod.log; then exit 1; fi
+          grep -q 'YARDMAN_BUILDING_HLOD_TEST PASS' godot/build/stream-priority-hlod.log
