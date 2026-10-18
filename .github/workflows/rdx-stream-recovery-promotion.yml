@@ -1,0 +1,54 @@
+name: Yardman Stream Recovery Promotion
+
+on:
+  push:
+    branches:
+      - codex/rdx-stream-recovery-promotion-001
+    paths:
+      - 'godot/scripts/stream_retry_policy.gd'
+      - 'godot/scripts/stream_recovery_runtime.gd'
+      - 'godot/scripts/streaming_adversarial_harness.gd'
+      - 'godot/tests/streaming_adversarial_test.gd'
+      - 'godot/tools/rdx_stream_retry_mutation.py'
+      - '.github/workflows/rdx-stream-recovery-promotion.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stream-recovery-promotion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+      - name: Import and parse production-derived project
+        shell: bash
+        run: |
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/rdx-stream-promotion-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/rdx-stream-promotion-import.log; then exit 1; fi
+      - name: Run adversarial retry oracle
+        shell: bash
+        run: |
+          timeout 120 godot --headless --path godot --script res://tests/streaming_adversarial_test.gd 2>&1 | tee godot/build/rdx-stream-promotion-oracle.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|STREAMING_ADVERSARIAL_TEST:.*' godot/build/rdx-stream-promotion-oracle.log; then exit 1; fi
+          grep -q 'YARDMAN_STREAMING_ADVERSARIAL_TEST PASS' godot/build/rdx-stream-promotion-oracle.log
+      - name: Mutation-grade promoted retry policy
+        shell: bash
+        run: |
+          python3 godot/tools/rdx_stream_retry_mutation.py --godot-binary godot --threshold 1.0 --timeout 30 \
+            | tee godot/build/rdx-stream-promotion-mutation.log
+          grep -q 'YARDMAN_RDX_MUTATION_SCORE score=1.0000' godot/build/rdx-stream-promotion-mutation.log
