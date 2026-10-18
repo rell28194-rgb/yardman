@@ -6,6 +6,9 @@ on:
       - codex/render-rd-001
     paths:
       - 'godot/scripts/streaming_priority.gd'
+      - 'godot/scripts/road_streamer.gd'
+      - 'godot/scripts/terrain_streamer.gd'
+      - 'godot/scripts/building_streamer.gd'
       - 'godot/scripts/predictive_streaming_runtime.gd'
       - 'godot/scripts/gpu_visibility_probe.gd'
       - 'godot/scripts/gpu_driven_capabilities.gd'
@@ -13,6 +16,7 @@ on:
       - 'godot/shaders/gpu_visibility.glsl'
       - 'godot/shaders/gpu_multimesh_indirect.glsl'
       - 'godot/tests/streaming_priority_test.gd'
+      - 'godot/tests/streaming_enqueue_integration_test.gd'
       - 'godot/tests/gpu_visibility_test.gd'
       - 'godot/tests/gpu_multimesh_indirect_test.gd'
       - 'godot/tests/gpu_multimesh_render_test.gd'
@@ -58,6 +62,13 @@ jobs:
           timeout 120 godot --headless --path godot --script res://tests/streaming_priority_test.gd 2>&1 | tee godot/build/streaming-priority.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/streaming-priority.log; then exit 1; fi
           grep -q 'YARDMAN_STREAMING_PRIORITY_TEST PASS' godot/build/streaming-priority.log
+      - name: Test enqueue-time streamer integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/streaming_enqueue_integration_test.gd 2>&1 | tee godot/build/streaming-enqueue-integration.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/streaming-enqueue-integration.log; then exit 1; fi
+          grep -q 'YARDMAN_STREAMING_ENQUEUE_INTEGRATION_TEST PASS' godot/build/streaming-enqueue-integration.log
       - name: Verify Compatibility fails closed
         shell: bash
         run: |
