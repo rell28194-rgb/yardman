@@ -6,6 +6,8 @@ const GraphScript = preload("res://scripts/road_graph.gd")
 const RoadShader = preload("res://shaders/road_surface.gdshader")
 const References = preload("res://scripts/reference_assets.gd")
 const SURFACE_CELL_SIZE := 128.0
+const STREAM_RETRY_BASE_MS := 1000
+const STREAM_RETRY_MAX_MS := 30000
 signal tile_ready(tile: Vector2i)
 signal tile_removed(tile: Vector2i)
 signal tile_content_ready(tile: Vector2i, tile_root: Node3D, segments: Array)
@@ -32,6 +34,7 @@ var _queue: Array[String] = []
 var _jobs: Dictionary = {}
 var _building: Dictionary = {}
 var _failed: Dictionary = {}
+var _failure_attempts: Dictionary = {}
 var _asphalt_material: ShaderMaterial
 var _dirt_material: ShaderMaterial
 var _surface_indices: Dictionary = {}
@@ -122,11 +125,40 @@ func _target_tile() -> Vector2i:
     var world: PackedFloat64Array = coordinates.local_to_world(target.global_position)
     return coordinates.tile_for(world[0], world[2])
 
+static func _failure_retry_delay_ms(attempts: int) -> int:
+    var exponent := clampi(attempts - 1, 0, 10)
+    return mini(STREAM_RETRY_MAX_MS, STREAM_RETRY_BASE_MS * (1 << exponent))
+
+# Road and terrain share this base scheduler. A one-off thread/read failure must
+# not poison an island tile for the rest of the session, but a genuinely broken
+# packaged tile must also not hot-loop disk/JSON work every frame.
+func _release_retryable_failures(now_msec: int = -1) -> bool:
+    var now := Time.get_ticks_msec() if now_msec < 0 else now_msec
+    for loaded_key in _loaded.keys():
+        _failure_attempts.erase(str(loaded_key))
+    var released := false
+    for key_value in _failed.keys():
+        var key := str(key_value)
+        var failure = _failed[key_value]
+        if not failure is Dictionary:
+            var attempts := int(_failure_attempts.get(key, 0)) + 1
+            _failure_attempts[key] = attempts
+            _failed[key_value] = {
+                "attempts": attempts,
+                "retry_at_msec": now + _failure_retry_delay_ms(attempts),
+            }
+            continue
+        if now >= int((failure as Dictionary).get("retry_at_msec", now)):
+            _failed.erase(key_value)
+            released = true
+    return released
+
 func _refresh_tiles(force: bool) -> void:
     if target == null or _tile_files.is_empty():
         return
     var current := _target_tile()
-    if not force and current == _last_tile and load_radius == _last_radius:
+    var retry_due := _release_retryable_failures()
+    if not force and not retry_due and current == _last_tile and load_radius == _last_radius:
         return
     generation += 1
     _last_tile = current
@@ -149,6 +181,10 @@ func _refresh_tiles(force: bool) -> void:
             _loaded.erase(key)
             _surface_indices.erase(key)
             tile_removed.emit(tile)
+    for key in _failed.keys():
+        if not _wanted.has(str(key)):
+            _failed.erase(key)
+            _failure_attempts.erase(str(key))
     if not _building.is_empty() and not _wanted.has(_building.key):
         _building.root.free()
         _building.clear()
