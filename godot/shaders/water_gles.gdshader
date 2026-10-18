@@ -37,6 +37,10 @@ void fragment() {
 
     float depth_tint = smoothstep(0.0, 0.75, shore_fraction);
     vec3 water = mix(coastal_color, ocean_color, depth_tint);
+    // Horizontal distance to the mapped coast is only a presentation signal;
+    // it is deliberately not treated as measured water depth.
+    float shoreline_tint = 1.0 - smoothstep(1.0, 18.0, shore_m);
+    water = mix(water, vec3(0.10, 0.43, 0.42), shoreline_tint * 0.12);
     if (has_reference_surface) {
         vec2 flow = ocean_uv * 1.75 + vec2(TIME * 0.0018, TIME * 0.0030);
         float detail = dot(texture(reference_surface, flow).rgb, vec3(0.2126, 0.7152, 0.0722));
@@ -45,14 +49,22 @@ void fragment() {
     float fresnel = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 3.0);
     water = mix(water, vec3(0.22, 0.37, 0.42), fresnel * 0.24);
 
-    float surf = (1.0 - smoothstep(0.18, 1.8, shore_m))
+    float edge_surf = (1.0 - smoothstep(0.18, 1.8, shore_m))
         * smoothstep(0.25, 0.80, sin(shore_m * 2.4 - TIME * 0.72) * 0.5 + 0.5);
+    float wash_envelope = smoothstep(0.35, 1.6, shore_m)
+        * (1.0 - smoothstep(4.2, 7.0, shore_m));
+    float wash_phase = sin(shore_m * 1.40
+        + dot(ocean_uv, vec2(0.62, -0.31)) * 4.3
+        - TIME * 0.52) * 0.5 + 0.5;
+    float shoreline_wash = wash_envelope * smoothstep(0.36, 0.77, wash_phase);
+    float surf = max(edge_surf, shoreline_wash * 0.56);
     if (has_reference_foam) {
         float foam = texture(reference_foam, ocean_uv * 5.0 + vec2(0.0, TIME * 0.008)).r;
         surf *= 0.60 + smoothstep(0.10, 0.46, foam) * 0.54;
     }
-    ALBEDO = mix(water, vec3(0.76, 0.82, 0.79), surf * 0.40);
-    ROUGHNESS = 0.36;
-    SPECULAR = 0.44;
+    float foam_response = clamp(surf * 0.88 + (1.0 - shore_fade) * 0.05, 0.0, 1.0);
+    ALBEDO = mix(water, vec3(0.78, 0.85, 0.82), surf * 0.44);
+    ROUGHNESS = mix(0.34, 0.47, foam_response);
+    SPECULAR = mix(0.46, 0.30, foam_response);
     METALLIC = 0.0;
 }
