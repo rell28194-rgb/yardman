@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Manager = preload("res://scripts/render_quality_manager.gd")
+const RenderRuntime = preload("res://scripts/render_runtime.gd")
 var failures := 0
 
 func _initialize() -> void:
@@ -27,6 +28,8 @@ func _run() -> void:
     var corrupt := Manager.policy_for("Custom", "gles", {"target_fps": NAN, "resolution_min": -5.0, "resolution_max": INF, "resolution_default": "invalid", "shadow_distance": -100.0, "road_visibility": 90000.0})
     _check(int(corrupt.target_fps) == 30 and float(corrupt.resolution_min) >= 0.5 and float(corrupt.resolution_max) <= 0.82, "Corrupt custom settings escaped safe resolution/FPS bounds")
     _check(float(corrupt.shadow_distance) == 10.0 and float(corrupt.road_visibility) <= 2200.0, "Corrupt custom settings escaped world budgets")
+
+    _test_shadow_policy()
 
     var manager = Manager.new()
     manager.configure("Performance", {}, "vulkan_mobile")
@@ -88,5 +91,26 @@ func _run() -> void:
         manager.update_frame(1.0 / 60.0, null, true, 4.0)
     _check(manager.thermal_stage < 2, "Measured GPU headroom under frame cap could not recover thermal/performance stage")
 
-    print("YARDMAN_RENDER_QUALITY_TEST %s renderer_policy=1 adaptive=1 thermal=1 frame_pacing=1 auto_pressure=1 material_ladder=1 refresh_cadence=1 gpu_headroom=1 invalid_preferences=1 resume=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_RENDER_QUALITY_TEST %s renderer_policy=1 adaptive=1 thermal=1 frame_pacing=1 auto_pressure=1 material_ladder=1 shadow_distribution=1 refresh_cadence=1 gpu_headroom=1 invalid_preferences=1 resume=1" % ("PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
+
+func _test_shadow_policy() -> void:
+    var performance := RenderRuntime.shadow_profile_for("Performance", 0)
+    var ultra := RenderRuntime.shadow_profile_for("Ultra", 0)
+    var warm := RenderRuntime.shadow_profile_for("Ultra", 3)
+    var critical := RenderRuntime.shadow_profile_for("Ultra", 5)
+    _check(int(performance.mode) == DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS, "Performance shadows retained four-split cost")
+    _check(int(ultra.mode) == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS, "Cool Ultra lost four-split near-field shadow detail")
+    _check(float(ultra.split_1) < 0.10 and float(ultra.split_3) < 0.50, "Ultra shadow splits no longer prioritize the near road/player field")
+    _check(int(warm.mode) == DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS, "Warm Ultra did not shed two PSSM splits")
+    _check(int(critical.mode) == DirectionalLight3D.SHADOW_ORTHOGONAL, "Critical thermal stage retained split-shadow cost")
+    _check(not bool(ultra.blend_splits), "Ultra enabled split blending despite its extra mobile cost")
+
+    var sun := DirectionalLight3D.new()
+    RenderRuntime.apply_shadow_policy_to_light(sun, {"quality": "Ultra", "thermal_stage": 0, "shadow_distance": 136.0})
+    _check(sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS, "Ultra shadow mode was not applied to the actual light")
+    _check(is_equal_approx(sun.directional_shadow_max_distance, 136.0), "Quality shadow distance was not applied")
+    _check(is_equal_approx(sun.directional_shadow_split_1, float(ultra.split_1)), "Near shadow split was not applied")
+    _check(is_equal_approx(sun.directional_shadow_split_3, float(ultra.split_3)), "Far shadow split was not applied")
+    _check(is_equal_approx(sun.directional_shadow_fade_start, float(ultra.fade_start)), "Shadow fade start was not applied")
+    sun.free()
