@@ -1,6 +1,6 @@
 {
   "checkpoint": "fleet-game-ready-baseline-001",
-  "format_version": 1,
+  "format_version": 2,
   "lane": "codex/vehicle-production-001",
   "goal": "Make every recoverable vehicle game-ready before the maximum-detail art pass.",
   "source_checkpoint": {
@@ -8,18 +8,33 @@
     "sha256": "6a32c638e94dd9fb129c49ba598aaeb5251bcd6a11e7f051af0eda91dfa8c4f3"
   },
   "runtime_registry": {
-    "data": "godot/data/vehicle_fleet_runtime.json",
+    "primary_data": "godot/data/vehicle_fleet_runtime.json",
+    "supplemental_data": "godot/data/vehicle_fleet_supplemental.json",
     "loader": "godot/scripts/vehicle_fleet_registry.gd",
-    "recovered_private_hero_selectors": 45,
+    "recovered_private_hero_selectors": 46,
     "existing_core_selectors": 3,
-    "current_production_selector_total": 48
+    "current_production_selector_total": 49,
+    "explicit_chaser_selector": "toyota_chaser_v"
   },
   "recovered_source_evidence": {
-    "lod0_vehicles": 45,
-    "interior_evidence": 45,
-    "stock_wheel_mesh_evidence": 45,
-    "beta2_cross_source_matches": 21,
-    "beta2_pending": 24
+    "converted_lod0_vehicles": 45,
+    "explicit_recovered_chaser": 1,
+    "converted_or_explicit_full_base_vehicles": 46,
+    "converted_interior_evidence": 45,
+    "converted_stock_wheel_mesh_evidence": 45,
+    "beta2_cross_source_matches_in_converted_batch": 21,
+    "beta2_pending_in_converted_batch": 24,
+    "additional_full_carx_roots_staged": 20,
+    "additional_full_carx_roots_sha_verified": 20,
+    "additional_full_carx_roots_status": "identity_and_dependency_resolution_active"
+  },
+  "restored_carx_source": {
+    "apk_sha256": "854f523a867a625bb5459bd8e6ff0b8a447af85f457d3ff9376b5fb3999b5e4c",
+    "obb_wrapper_sha256": "f6e2608fdc6a4094f81f2f065036e225d0e90b20f457a3ff44342738abcee23d",
+    "inner_obb_sha256": "e7fbb1ad41464a8df96d041dd9a23780d3fc26cb266e8feb3ab0b106cf6201b3",
+    "sparse_beta_volumes_restored": 23,
+    "sparse_beta_volume_range": [106, 128],
+    "note": "Only the archive volumes required for the exact CarX APK/OBB streams were restored."
   },
   "private_fleet_pack": {
     "name": "Yardman-Personal-Reference-Assets-FleetReady-001.zip",
@@ -29,7 +44,9 @@
     "zip_crc": "pass",
     "base_pack_preserved": true,
     "crown_bytes_modified": false,
-    "private_media_public_git": false
+    "private_media_public_git": false,
+    "structural_validation": "45/45 converted heroes pass manifest hash/byte and BodyShell/wheel-pivot/spin hierarchy checks",
+    "actual_private_godot_import_validation": "pending"
   },
   "runtime_acceptance_contract": [
     "selector_safe_metadata",
@@ -45,8 +62,13 @@
     "test": "godot/tests/vehicle_game_ready_test.gd",
     "workflow": ".github/workflows/vehicle-production-audit.yml",
     "shards": 8,
-    "status": "pending_current_run",
-    "note": "A selector is not declared game-ready until its shard passes. Public CI may use procedural fallback when private hero media are absent; private hero load validation remains a separate required gate."
+    "run_id": 39109948447,
+    "selector_count": 49,
+    "shard_jobs_passed": 8,
+    "shard_jobs_total": 8,
+    "main_audit": "success",
+    "status": "source_only_runtime_green",
+    "note": "The 49-selector source-only lifecycle gate is green. Public CI may use procedural fallback when private hero media are absent; actual private hero Godot import remains a separate required gate."
   },
   "crown007": {
     "status": "playable_reference_not_final_art",
