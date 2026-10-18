@@ -6,6 +6,7 @@ var _renderer := "gles"
 var _probe: ReflectionProbe
 var _last_capture_position := Vector3(INF, INF, INF)
 var _captures := 0
+var _recapture_clock := 9999.0
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -30,7 +31,9 @@ func apply_render_policy(active: Dictionary) -> void:
     _probe.enable_shadows = false
     _probe.update_mode = ReflectionProbe.UPDATE_ONCE
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+    if is_finite(delta) and delta > 0.0 and delta < 1.0:
+        _recapture_clock = minf(9999.0, _recapture_clock + delta)
     if _budget <= 0 or _renderer != "vulkan_mobile":
         return
     var scene := get_tree().current_scene
@@ -44,9 +47,13 @@ func _process(_delta: float) -> void:
         return
     var profile := profile_for(_budget, _renderer)
     var target := (car as Node3D).global_position + Vector3.UP * float(profile.origin_height_m)
-    if _last_capture_position.x == INF or target.distance_to(_last_capture_position) >= float(profile.recapture_m):
+    var first_capture := _last_capture_position.x == INF
+    var moved_far_enough := not first_capture and target.distance_to(_last_capture_position) >= float(profile.recapture_m)
+    var interval_ready := _recapture_clock >= float(profile.min_interval_s)
+    if first_capture or (moved_far_enough and interval_ready):
         _probe.global_position = target
         _last_capture_position = target
+        _recapture_clock = 0.0
         _captures += 1
 
 func _ensure_probe() -> void:
@@ -64,12 +71,14 @@ func _ensure_probe() -> void:
     _probe.update_mode = ReflectionProbe.UPDATE_ONCE
     scene.add_child(_probe)
     _last_capture_position = Vector3(INF, INF, INF)
+    _recapture_clock = 9999.0
 
 static func profile_for(budget: int, renderer: String) -> Dictionary:
     var level := clampi(budget, 0, 4)
     if renderer != "vulkan_mobile" or level <= 0:
-        return {"enabled": false, "recapture_m": INF, "extent_m": 0.0, "height_m": 0.0, "max_distance_m": 0.0, "intensity": 0.0, "mesh_lod_threshold": 4.0, "origin_height_m": 0.0}
+        return {"enabled": false, "recapture_m": INF, "min_interval_s": INF, "extent_m": 0.0, "height_m": 0.0, "max_distance_m": 0.0, "intensity": 0.0, "mesh_lod_threshold": 4.0, "origin_height_m": 0.0}
     var recapture: float = float([0.0, 14.0, 9.0, 5.5, 3.5][level])
+    var min_interval: float = float([0.0, 0.90, 0.65, 0.45, 0.30][level])
     var extent: float = float([0.0, 16.0, 22.0, 28.0, 34.0][level])
     var height: float = float([0.0, 9.0, 11.0, 13.0, 15.0][level])
     var max_distance: float = float([0.0, 24.0, 34.0, 44.0, 54.0][level])
@@ -78,6 +87,7 @@ static func profile_for(budget: int, renderer: String) -> Dictionary:
     return {
         "enabled": true,
         "recapture_m": recapture,
+        "min_interval_s": min_interval,
         "extent_m": extent,
         "height_m": height,
         "max_distance_m": max_distance,
@@ -87,4 +97,12 @@ static func profile_for(budget: int, renderer: String) -> Dictionary:
     }
 
 func runtime_snapshot() -> Dictionary:
-    return {"budget": _budget, "renderer": _renderer, "captures": _captures, "probe_active": _probe != null and is_instance_valid(_probe) and _probe.visible}
+    var profile := profile_for(_budget, _renderer)
+    return {
+        "budget": _budget,
+        "renderer": _renderer,
+        "captures": _captures,
+        "probe_active": _probe != null and is_instance_valid(_probe) and _probe.visible,
+        "recapture_clock": _recapture_clock,
+        "min_interval_s": float(profile.min_interval_s),
+    }
