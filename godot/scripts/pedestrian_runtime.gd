@@ -266,13 +266,23 @@ func _advance_agents(delta: float, roads, active_xz: Vector2) -> void:
         agent.gait = fmod(float(agent.gait) + delta * (5.0 + speed * 1.8), TAU)
         agents[identifier] = agent
 
+func _visual_priority_ids(active_xz: Vector2) -> Array:
+    var ids: Array = agents.keys()
+    ids.sort_custom(func(a, b):
+        var distance_a := Vector2(agents[a].position).distance_squared_to(active_xz)
+        var distance_b := Vector2(agents[b].position).distance_squared_to(active_xz)
+        if distance_a == distance_b:
+            return str(a) < str(b)
+        return distance_a < distance_b
+    )
+    return ids
+
 func _refresh_visuals(scene: Node, roads, terrain, active_xz: Vector2, delta: float) -> void:
     if _proxy == null or _proxy.multimesh == null:
         return
     var near_count := 0
     var proxy_count := 0
-    var ids: Array = agents.keys()
-    ids.sort()
+    var ids := _visual_priority_ids(active_xz)
     for identifier in ids:
         var agent: Dictionary = agents[identifier]
         var point: Vector2 = agent.position

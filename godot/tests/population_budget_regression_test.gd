@@ -71,11 +71,32 @@ func _exercise(runtime, traffic: bool) -> void:
     runtime.free()
     scene.free()
 
+func _exercise_visual_priority(runtime, label: String) -> void:
+    # Identifier order deliberately disagrees with distance order. Expensive
+    # near visual slots must follow player distance with deterministic ties.
+    runtime.agents = {
+        "a_far": {"position": Vector2(120, 0)},
+        "m_mid": {"position": Vector2(55, 0)},
+        "z_near": {"position": Vector2(8, 0)},
+    }
+    var ranked: Array = runtime._visual_priority_ids(Vector2.ZERO)
+    _check(ranked == ["z_near", "m_mid", "a_far"], label + " near visual priority ignored distance")
+    runtime.agents = {
+        "z_tie": {"position": Vector2(30, 0)},
+        "a_tie": {"position": Vector2(-30, 0)},
+    }
+    ranked = runtime._visual_priority_ids(Vector2.ZERO)
+    _check(ranked == ["a_tie", "z_tie"], label + " near visual distance tie was unstable")
+    runtime.agents.clear()
+    runtime.free()
+
 func _run() -> void:
     _exercise(Traffic.new(), true)
     _exercise(Pedestrians.new(), false)
+    _exercise_visual_priority(Traffic.new(), "traffic")
+    _exercise_visual_priority(Pedestrians.new(), "pedestrians")
     if failures == 0:
-        print("YARDMAN_POPULATION_BUDGET_REGRESSION PASS thermal=2 density=2 lifecycle=4 stable=2 far=2 ties=2 zero=2")
+        print("YARDMAN_POPULATION_BUDGET_REGRESSION PASS thermal=2 density=2 lifecycle=4 stable=2 far=2 ties=2 zero=2 visual_priority=4")
     else:
         print("YARDMAN_POPULATION_BUDGET_REGRESSION FAIL failures=%d" % failures)
     quit(0 if failures == 0 else 1)
