@@ -5,7 +5,7 @@ on:
     branches:
       - codex/world-quality-20261018
     paths:
-      - '.recovery/world-quality/part-03.b64'
+      - '.recovery/world-quality/part-033.b64'
 
 permissions:
   contents: write
@@ -22,7 +22,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .recovery/world-quality/part-*.b64 > /tmp/world-quality-recovery.b64
+          cat \
+            .recovery/world-quality/part-00.b64 \
+            .recovery/world-quality/part-01.b64 \
+            .recovery/world-quality/part-02.b64 \
+            .recovery/world-quality/part-030.b64 \
+            .recovery/world-quality/part-031.b64 \
+            .recovery/world-quality/part-032.b64 \
+            .recovery/world-quality/part-033.b64 \
+            > /tmp/world-quality-recovery.b64
           base64 -d /tmp/world-quality-recovery.b64 > /tmp/world-quality-recovery.tgz
           echo '0e5d0efb4e69c317d575a41736033d0141ce5153ceef5abebb8e70ba123c9c81  /tmp/world-quality-recovery.tgz' | sha256sum -c -
           tar -xzf /tmp/world-quality-recovery.tgz -C .
