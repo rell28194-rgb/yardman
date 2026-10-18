@@ -1,0 +1,50 @@
+name: Yardman Render R&D
+
+on:
+  push:
+    branches:
+      - codex/render-rd-001
+    paths:
+      - 'godot/scripts/streaming_priority.gd'
+      - 'godot/scripts/predictive_streaming_runtime.gd'
+      - 'godot/tests/streaming_priority_test.gd'
+      - 'godot/project.godot'
+      - '.github/workflows/godot-render-rd.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  predictive-streaming:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+      - name: Parse and import R&D runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/render-rd-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/render-rd-import.log; then exit 1; fi
+      - name: Test predictive streaming priority
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/streaming_priority_test.gd 2>&1 | tee godot/build/streaming-priority.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/streaming-priority.log; then exit 1; fi
+          grep -q 'YARDMAN_STREAMING_PRIORITY_TEST PASS' godot/build/streaming-priority.log
