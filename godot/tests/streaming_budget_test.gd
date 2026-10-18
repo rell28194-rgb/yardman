@@ -1,6 +1,7 @@
 extends SceneTree
 
 const StreamingBudget = preload("res://scripts/streaming_budget_runtime.gd")
+const RenderRuntime = preload("res://scripts/render_runtime.gd")
 const Visuals = preload("res://scripts/world_visuals.gd")
 var failures := 0
 
@@ -9,11 +10,13 @@ class FakeRoads:
     signal tile_content_ready(tile: Vector2i, tile_root: Node3D, segments: Array)
     signal tile_removed(tile: Vector2i)
     var tile_size := 4096.0
+    var geometry_budget_us := 0
 
 class FakeTerrain:
     extends Node
     signal tile_ready(tile: Vector2i)
     var tile_is_ready := true
+    var geometry_budget_us := 0
 
     func is_tile_ready(_tile: Vector2i) -> bool:
         return tile_is_ready
@@ -21,10 +24,15 @@ class FakeTerrain:
     func height_at(_x: float, _z: float) -> float:
         return 31.0
 
+class FakeBuildings:
+    extends Node
+    var geometry_budget_us := 0
+
 class FakeScene:
     extends Node
     var roads
     var terrain
+    var buildings
     var visuals
     var immediate_road_calls := 0
     var immediate_terrain_calls := 0
@@ -69,9 +77,44 @@ func _run() -> void:
     _check(int(custom.road_radius) == 3 and int(custom.terrain_radius) == 2, "Custom stream radii were ignored")
     _check(is_equal_approx(float(custom.building_distance), 1600.0) and int(custom.building_cells) == 180, "Custom building budget was ignored")
 
+    _test_aggregate_integration_budget()
     await _test_roadside_scheduler(balanced)
-    print("YARDMAN_STREAMING_BUDGET_TEST %s quality_baselines=1 thermal_ladder=1 io_budget=1 geometry_budget=1 roadside_scheduler=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_STREAMING_BUDGET_TEST %s quality_baselines=1 thermal_ladder=1 io_budget=1 geometry_budget=1 aggregate_envelope=1 roadside_scheduler=1" % ("PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
+
+func _test_aggregate_integration_budget() -> void:
+    var performance := RenderRuntime.stream_integration_budget_for("Performance", 0)
+    var quality := RenderRuntime.stream_integration_budget_for("Quality", 0)
+    var ultra := RenderRuntime.stream_integration_budget_for("Ultra", 0)
+    var ultra_hot := RenderRuntime.stream_integration_budget_for("Ultra", 5)
+    _check(int(performance.total_us) < int(quality.total_us) and int(quality.total_us) < int(ultra.total_us), "Quality tiers no longer scale the shared integration envelope")
+    for allocation in [performance, quality, ultra, ultra_hot]:
+        _check(int(allocation.assigned_us) <= int(allocation.total_us), "Streamer slices exceed their aggregate frame envelope")
+        _check(int(allocation.road_us) >= 650 and int(allocation.terrain_us) >= 650 and int(allocation.building_us) >= 500, "Shared envelope starves mandatory streamer progress")
+        _check(int(allocation.roadside_us) >= 700, "Shared envelope failed to reserve roadside scheduler work")
+    _check(int(ultra_hot.total_us) < int(ultra.total_us), "Thermal pressure did not contract aggregate integration time")
+
+    var runtime := RenderRuntime.new()
+    root.add_child(runtime)
+    var scene := FakeScene.new()
+    var roads := FakeRoads.new()
+    var terrain := FakeTerrain.new()
+    var buildings := FakeBuildings.new()
+    scene.roads = roads
+    scene.terrain = terrain
+    scene.buildings = buildings
+    scene.add_child(roads)
+    scene.add_child(terrain)
+    scene.add_child(buildings)
+    root.add_child(scene)
+    runtime._apply_shared_streaming_budget(scene, {"quality": "Ultra", "thermal_stage": 0})
+    var applied: Dictionary = scene.get_meta("yardman_stream_integration_budget", {})
+    _check(int(roads.geometry_budget_us) == int(applied.road_us), "Road streamer did not receive its shared frame slice")
+    _check(int(terrain.geometry_budget_us) == int(applied.terrain_us), "Terrain streamer did not receive its shared frame slice")
+    _check(int(buildings.geometry_budget_us) == int(applied.building_us), "Building streamer did not receive its shared frame slice")
+    _check(int(applied.assigned_us) <= int(applied.total_us), "Applied streamer budget exceeds aggregate frame envelope")
+    scene.queue_free()
+    runtime.queue_free()
 
 func _test_roadside_scheduler(balanced: Dictionary) -> void:
     var runtime := StreamingBudget.new()
