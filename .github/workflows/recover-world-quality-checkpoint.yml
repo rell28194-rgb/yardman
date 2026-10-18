@@ -5,6 +5,7 @@ on:
     branches:
       - codex/world-quality-20261018
     paths:
+      - '.github/workflows/recover-world-quality-checkpoint.yml'
       - '.recovery/world-quality/part-033.b64'
 
 permissions:
@@ -18,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Restore exact saved checkpoint
+      - name: Restore exact saved source checkpoint
         shell: bash
         run: |
           set -euo pipefail
@@ -43,13 +44,11 @@ jobs:
                   godot/tests/terrain_normal_seam_test.gd \
                   godot/tests/population_budget_regression_test.gd \
                   godot/tests/parked_vehicle_test.gd \
-                  .github/workflows/yardman-world-quality.yml \
                   godot/docs/WORLD_QUALITY_CONTINUATION.md \
                   godot/docs/production_evidence/world-quality-20261018
-          git rm -r .recovery/world-quality .github/workflows/recover-world-quality-checkpoint.yml
           if git diff --cached --quiet; then
-            echo 'Checkpoint already restored.'
+            echo 'Source checkpoint already restored.'
             exit 0
           fi
-          git commit -m 'world: recover validated world-quality checkpoint'
+          git commit -m 'world: recover validated world-quality source checkpoint'
           git push origin HEAD:codex/world-quality-20261018
