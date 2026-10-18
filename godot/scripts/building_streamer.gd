@@ -69,6 +69,7 @@ var _failed: Dictionary = {}
 var _queue: Array[String] = []
 var _build: Dictionary = {}
 var _collision_build: Dictionary = {}
+var _prefer_collision_integration := false
 var _last_cell := Vector2i(999999, 999999)
 var _world_position := Vector2.ZERO
 var _refresh_clock := 0.0
@@ -177,9 +178,27 @@ func _process(delta: float) -> void:
         var world: PackedFloat64Array = coordinates.local_to_world(target.global_position)
         update_world(world[0], world[2])
     _poll_jobs()
-    _prepare_geometry()
+    var collision_was_pending := not _collision_build.is_empty()
+    _refresh_collision(false)
+    _advance_stream_integration(collision_was_pending)
     _start_jobs()
-    _refresh_collision()
+
+func _advance_stream_integration(collision_was_pending: bool) -> void:
+    # RenderRuntime's building_us value is one aggregate main-thread envelope.
+    # Mesh/finalize work and collision preparation must compete for that share;
+    # otherwise both paths can each spend geometry_budget_us in one frame.
+    var geometry_pending := not _build.is_empty()
+    var collision_pending := collision_was_pending and not _collision_build.is_empty()
+    if geometry_pending and collision_pending:
+        if _prefer_collision_integration:
+            _advance_collision_build()
+        else:
+            _prepare_geometry()
+        _prefer_collision_integration = not _prefer_collision_integration
+    elif collision_pending:
+        _advance_collision_build()
+    elif geometry_pending:
+        _prepare_geometry()
 
 func _exit_tree() -> void:
     for job in _jobs.values():
@@ -864,7 +883,10 @@ func _advance_collision_build() -> void:
             body.set_meta("yardman_collision_face_chunks", int(_collision_build.get("face_chunks", 0)))
             _collision_build.clear()
 
-func _refresh_collision() -> void:
+func _refresh_collision(advance := true) -> void:
+    # Maintenance is unconditional: retreat must still release BVHs and cancel
+    # stale jobs even when another building integration lane owns this frame.
+    var had_build := not _collision_build.is_empty()
     var build_key := str(_collision_build.get("key", ""))
     var nearest_key := ""
     var nearest_distance := INF
@@ -894,7 +916,8 @@ func _refresh_collision() -> void:
                 nearest_distance = distance
                 nearest_key = key_string
     if not _collision_build.is_empty():
-        _advance_collision_build()
+        if advance and had_build:
+            _advance_collision_build()
         return
     if not nearest_key.is_empty():
         # Starting a job is intentionally cheap. Surface-array acquisition,

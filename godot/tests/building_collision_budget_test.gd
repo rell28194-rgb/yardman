@@ -63,6 +63,58 @@ func _run() -> void:
     _check(int(publication_streamer._collision_build.get("phase", -1)) == 0, "first explicit collision refresh advanced beyond job start")
     publication_streamer.free()
 
+    # The shared RenderRuntime building budget must cover both geometry/finalize
+    # and physics preparation. When both are pending, exactly one heavy lane may
+    # advance per frame; alternate ownership prevents either lane starving.
+    var contention := Building.new()
+    contention.cell_size = 256.0
+    contention.collision_distance = 180.0
+    contention.geometry_budget_us = 1000000
+    contention._world_position = Vector2(128.0, 128.0)
+    var collision_root := Node3D.new()
+    var collision_body := StaticBody3D.new()
+    collision_body.collision_layer = 0
+    var collision_collider := CollisionShape3D.new()
+    collision_body.add_child(collision_collider)
+    collision_root.add_child(collision_body)
+    var contention_mesh := _dense_mesh(1)
+    contention._loaded["0:0"] = {
+        "root": collision_root,
+        "body": collision_body,
+        "collider": collision_collider,
+        "meshes": [contention_mesh],
+        "count": 1,
+        "facade_body": null,
+        "facades": [],
+    }
+    contention._start_collision_build("0:0")
+    var finalize_root := Node3D.new()
+    contention._build = {
+        "root": finalize_root,
+        "cell": Vector2i(1, 0),
+        "key": "1:0",
+        "records": [],
+        "facades": [],
+        "meshes": [],
+        "finalize_phase": 2,
+        "finalize_step_count": 0,
+        "finalize_start_frame": Engine.get_process_frames(),
+        "body": null,
+        "collider": null,
+        "facade_body": null,
+    }
+    contention._advance_stream_integration(true)
+    _check(int(contention._build.get("finalize_phase", -1)) == 3, "geometry lane did not receive first shared building integration turn")
+    _check(int(contention._collision_build.get("phase", -1)) == 0, "collision advanced in the same turn as building finalize")
+    contention._advance_stream_integration(true)
+    _check(int(contention._build.get("finalize_phase", -1)) == 3, "building finalize advanced in collision-owned turn")
+    _check(int(contention._collision_build.get("phase", -1)) == 1, "collision lane did not receive alternating shared integration turn")
+    contention._build.clear()
+    contention._loaded.clear()
+    finalize_root.free()
+    collision_root.free()
+    contention.free()
+
     var streamer := Building.new()
     streamer.cell_size = 256.0
     streamer.collision_distance = 180.0
@@ -129,5 +181,5 @@ func _run() -> void:
     cell_root.free()
     streamer.free()
     if failures == 0:
-        print("YARDMAN_BUILDING_COLLISION_BUDGET_TEST PASS publication=single_owner activation=deferred arrays=isolated faces=chunked cook=isolated retreat=released cancellation=clean")
+        print("YARDMAN_BUILDING_COLLISION_BUDGET_TEST PASS publication=single_owner aggregate=shared_turns activation=deferred arrays=isolated faces=chunked cook=isolated retreat=released cancellation=clean")
     quit(0 if failures == 0 else 1)
