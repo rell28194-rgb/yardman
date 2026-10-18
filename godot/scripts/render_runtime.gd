@@ -6,6 +6,19 @@ const ManagerScript = preload("res://scripts/render_quality_manager.gd")
 const MaterialRegistry = preload("res://scripts/render_material_registry.gd")
 const StreamingBudgetScript = preload("res://scripts/streaming_budget_runtime.gd")
 
+# Geometry streamers used to own independent time slices, which meant roads,
+# terrain, buildings and roadside vegetation could all spend their maximum in
+# one frame. These envelopes cap aggregate integration work instead. Ultra keeps
+# the widest residency/detail window; it does not get permission to hitch.
+const STREAM_INTEGRATION_BASE_US := {
+    "Performance": 3400,
+    "Balanced": 4600,
+    "Quality": 5800,
+    "Ultra": 6800,
+    "Custom": 4600,
+}
+const STREAM_THERMAL_FACTORS := [1.0, 0.95, 0.86, 0.74, 0.62, 0.52]
+
 var manager = ManagerScript.new()
 var _configured := false
 var _quality := ""
@@ -59,6 +72,30 @@ func _process(delta: float) -> void:
         _budget_clock = 0.0
         _apply_scene_budgets(scene)
 
+static func stream_integration_budget_for(quality: String, thermal_stage: int) -> Dictionary:
+    var name := quality if STREAM_INTEGRATION_BASE_US.has(quality) else "Balanced"
+    var stage := clampi(thermal_stage, 0, STREAM_THERMAL_FACTORS.size() - 1)
+    var factor := float(STREAM_THERMAL_FACTORS[stage])
+    var total_us := maxi(2600, int(round(float(STREAM_INTEGRATION_BASE_US[name]) * factor)))
+    # Match the roadside scheduler's own thermal ladder and reserve its slice
+    # before assigning the remaining budget to the other three streamers.
+    var roadside_us := maxi(700, int(round(1400.0 * factor)))
+    var shared_us := maxi(1800, total_us - roadside_us)
+    var road_us := maxi(650, int(floor(float(shared_us) * 0.36)))
+    var terrain_us := maxi(650, int(floor(float(shared_us) * 0.36)))
+    var building_us := maxi(500, shared_us - road_us - terrain_us)
+    var assigned_us := road_us + terrain_us + building_us + roadside_us
+    return {
+        "quality": name,
+        "thermal_stage": stage,
+        "total_us": total_us,
+        "road_us": road_us,
+        "terrain_us": terrain_us,
+        "building_us": building_us,
+        "roadside_us": roadside_us,
+        "assigned_us": assigned_us,
+    }
+
 func _apply_scene_budgets(scene: Node) -> void:
     if scene == null or not _configured:
         return
@@ -74,6 +111,24 @@ func _apply_scene_budgets(scene: Node) -> void:
     for node in get_tree().get_nodes_in_group("yardman_render_quality"):
         if node.has_method("apply_render_policy"):
             node.call("apply_render_policy", active)
+    _apply_shared_streaming_budget(scene, active)
+
+func _apply_shared_streaming_budget(scene: Node, active: Dictionary) -> void:
+    var allocation := stream_integration_budget_for(
+        str(active.get("quality", manager.quality)),
+        int(active.get("thermal_stage", manager.thermal_stage)))
+    var roads = scene.get("roads")
+    var terrain = scene.get("terrain")
+    var buildings = scene.get("buildings")
+    if roads is Object:
+        roads.set("geometry_budget_us", int(allocation.road_us))
+    if terrain is Object:
+        terrain.set("geometry_budget_us", int(allocation.terrain_us))
+    if buildings is Object:
+        buildings.set("geometry_budget_us", int(allocation.building_us))
+    # Keep the full aggregate allocation visible to diagnostics without making
+    # the streamers depend on this autoload's implementation details.
+    scene.set_meta("yardman_stream_integration_budget", allocation)
 
 func apply_streamer_material_policy(scene: Node, active: Dictionary) -> void:
     if scene == null:
@@ -152,5 +207,6 @@ func runtime_snapshot() -> Dictionary:
     result["resolution_scale"] = manager.current_scale
     result["thermal_stage"] = manager.thermal_stage
     result["configured"] = _configured
+    result["stream_integration"] = stream_integration_budget_for(manager.quality, manager.thermal_stage)
     result.merge(manager.timing_snapshot())
     return result
