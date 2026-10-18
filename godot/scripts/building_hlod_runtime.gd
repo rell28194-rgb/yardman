@@ -44,6 +44,9 @@ var _max_io_jobs := 1
 var _max_buildings_per_frame := 64
 var _geometry_budget_us := 1300
 var _material: StandardMaterial3D
+var _rust_spatial
+var _spatial_cells: Array[Vector2i] = []
+var _spatial_ready := false
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -195,6 +198,10 @@ func _release_scene() -> void:
     _manifest.clear()
     _tile_files.clear()
     _tile_cells.clear()
+    _rust_spatial = null
+    _spatial_cells.clear()
+    _spatial_ready = false
+    set_meta("yardman_hlod_spatial_backend", "gdscript-grid")
     _scene = null
     _buildings = null
     _coordinates = null
@@ -228,6 +235,41 @@ func _configure_manifest(payload: Dictionary) -> void:
                 var cell := cell_value as Array
                 cells[_key(Vector2i(int(cell[0]), int(cell[1])))] = true
         _tile_cells[tile_key] = cells
+    _rebuild_spatial_index()
+
+func _rebuild_spatial_index() -> void:
+    _rust_spatial = null
+    _spatial_cells.clear()
+    _spatial_ready = false
+    set_meta("yardman_hlod_spatial_backend", "gdscript-grid")
+    if not ClassDB.class_exists(&"YardmanRustKernels"):
+        return
+
+    var points := PackedVector2Array()
+    var ids := PackedInt32Array()
+    for tile_key_value in _tile_cells.keys():
+        var tile := _cell(str(tile_key_value))
+        var cells_value = _tile_cells.get(tile_key_value, {})
+        if not cells_value is Dictionary:
+            continue
+        for local_key_value in (cells_value as Dictionary).keys():
+            var local := _cell(str(local_key_value))
+            var world_cell := tile * 16 + local
+            var id := _spatial_cells.size()
+            _spatial_cells.append(world_cell)
+            points.append((Vector2(world_cell) + Vector2.ONE * 0.5) * _cell_size)
+            ids.append(id)
+    if points.is_empty():
+        return
+
+    var kernel = ClassDB.instantiate(&"YardmanRustKernels")
+    if kernel == null:
+        return
+    if not bool(kernel.call("configure_spatial_index", points, ids)):
+        return
+    _rust_spatial = kernel
+    _spatial_ready = true
+    set_meta("yardman_hlod_spatial_backend", "rust-rstar")
 
 func _sync_from_streamer() -> void:
     if _buildings == null:
@@ -262,18 +304,9 @@ func update_world(x: float, z: float, force := false) -> void:
         return
     _generation += 1
     _last_cell = current
-    var radius := ceili((_far_distance + _cell_size) / _cell_size)
     var min_distance := maxf(0.0, _switch_distance - _cell_size * 0.85)
-    var candidates: Array[String] = []
-    for dz in range(-radius, radius + 1):
-        for dx in range(-radius, radius + 1):
-            var candidate := current + Vector2i(dx, dz)
-            var center := (Vector2(candidate) + Vector2.ONE * 0.5) * _cell_size
-            var distance := center.distance_to(_world_position)
-            if distance >= min_distance and distance <= _far_distance + _cell_size and _has_cell(candidate):
-                candidates.append(_key(candidate))
-    candidates.sort_custom(func(a: String, b: String) -> bool:
-        return _cell(a).distance_squared_to(current) < _cell(b).distance_squared_to(current))
+    var max_distance := _far_distance + _cell_size
+    var candidates := _candidate_keys(current, min_distance, max_distance)
     if candidates.size() > _max_cells:
         candidates.resize(_max_cells)
 
@@ -301,6 +334,45 @@ func update_world(x: float, z: float, force := false) -> void:
     if not _build.is_empty() and not wanted.has(str(_build.get("key", ""))):
         _build.clear()
     set_meta("yardman_hlod_wanted", wanted)
+
+func _candidate_keys(current: Vector2i, min_distance: float, max_distance: float) -> Array[String]:
+    if _spatial_ready and _rust_spatial != null and is_instance_valid(_rust_spatial):
+        var ids_value = _rust_spatial.call(
+            "query_spatial_annulus",
+            _world_position,
+            min_distance,
+            max_distance,
+            _spatial_cells.size()
+        )
+        if ids_value is PackedInt32Array:
+            var candidates: Array[String] = []
+            for id in ids_value as PackedInt32Array:
+                if id >= 0 and id < _spatial_cells.size():
+                    candidates.append(_key(_spatial_cells[id]))
+            _sort_candidate_keys(candidates, current)
+            return candidates
+    return _candidate_keys_fallback(current, min_distance, max_distance)
+
+func _candidate_keys_fallback(current: Vector2i, min_distance: float, max_distance: float) -> Array[String]:
+    var radius := ceili(max_distance / _cell_size)
+    var candidates: Array[String] = []
+    for dz in range(-radius, radius + 1):
+        for dx in range(-radius, radius + 1):
+            var candidate := current + Vector2i(dx, dz)
+            var center := (Vector2(candidate) + Vector2.ONE * 0.5) * _cell_size
+            var distance := center.distance_to(_world_position)
+            if distance >= min_distance and distance <= max_distance and _has_cell(candidate):
+                candidates.append(_key(candidate))
+    _sort_candidate_keys(candidates, current)
+    return candidates
+
+func _sort_candidate_keys(candidates: Array[String], current: Vector2i) -> void:
+    candidates.sort_custom(func(a: String, b: String) -> bool:
+        var distance_a := _cell(a).distance_squared_to(current)
+        var distance_b := _cell(b).distance_squared_to(current)
+        if distance_a == distance_b:
+            return a < b
+        return distance_a < distance_b)
 
 func _wanted() -> Dictionary:
     var value = get_meta("yardman_hlod_wanted", {})
@@ -677,4 +749,5 @@ func runtime_snapshot() -> Dictionary:
         "queued_cells": _queue.size(),
         "io_jobs": _jobs.size(),
         "building_cell": not _build.is_empty(),
+        "spatial_backend": str(get_meta("yardman_hlod_spatial_backend", "gdscript-grid")),
     }
