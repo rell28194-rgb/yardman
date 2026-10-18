@@ -6,12 +6,14 @@ on:
       - 'codex/world-quality-*'
     paths:
       - 'godot/scripts/**'
+      - 'godot/shaders/**'
       - 'godot/tests/**'
       - 'godot/project.godot'
       - '.github/workflows/yardman-world-quality.yml'
   pull_request:
     paths:
       - 'godot/scripts/**'
+      - 'godot/shaders/**'
       - 'godot/tests/**'
       - 'godot/project.godot'
       - '.github/workflows/yardman-world-quality.yml'
