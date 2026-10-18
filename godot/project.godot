@@ -13,6 +13,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 RenderRuntime="*res://scripts/render_runtime.gd"
 BuildingHLOD="*res://scripts/building_hlod_runtime.gd"
 StreamRecoveryRuntime="*res://scripts/stream_recovery_runtime.gd"
+StreamPriorityRuntime="*res://scripts/stream_priority_runtime.gd"
 RoadVisibilityRuntime="*res://scripts/road_visibility_runtime.gd"
 RoadCorridorTerrainRuntime="*res://scripts/road_corridor_terrain_runtime.gd"
 RoadEarthworksRuntime="*res://scripts/road_earthworks_runtime.gd"
