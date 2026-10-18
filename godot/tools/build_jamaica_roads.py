@@ -133,7 +133,8 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
     network = build_network(features, transformer, (origin_e, origin_n), tile_size,
                             ROAD_WIDTHS, ROAD_CLASSES, road_flags, anchors, height_sampler)
     if height_sampler:
-        smooth_network_profiles(network)
+        spacing = getattr(height_sampler, "spacing", None)
+        smooth_network_profiles(network, terrain_spacing_m=float(spacing) if spacing is not None else None)
     stats, bounds = network["stats"], network["bounds"]
     if not stats["source_segments"]:
         raise ValueError("No drivable road segments were generated")
@@ -174,7 +175,7 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
                           "width": "source width, then source lanes, then carriageway-class estimate",
                           "uv": "continuous source-way station metres and signed lateral metres",
                           "markings": "inferred presentation, not surveyed road-paint positions",
-                          "elevation": "DEM registered; interior longitudinal bumps bounded to 0.45m adjustment; graph junctions and bridge/tunnel profiles preserved",
+                          "elevation": "DEM-derived road deck; terrain stays source authority; interior longitudinal profile may use bounded resolution-aware cut/fill reconstruction; graph junction endpoints and bridge/tunnel profiles preserved",
                           "vertical_transition_qa": "signed grades, grade-break percent-points, and crest/sag reversal candidates retained in stats for evidence-driven engineering"},
         "graph": {"format": 1, "partition": "sha1(id)[0:2]", "directory": "graph",
                   "nodes": stats["graph_nodes"], "edges": stats["graph_edges"],
