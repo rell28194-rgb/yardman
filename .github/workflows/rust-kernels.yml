@@ -7,12 +7,14 @@ on:
     paths:
       - 'native/yardman_core/**'
       - 'native/yardman_rust/**'
+      - 'native/RUST_ECOSYSTEM_INTAKE.md'
       - 'godot/tests/rust_kernel_smoke_test.gd'
       - '.github/workflows/rust-kernels.yml'
   pull_request:
     paths:
       - 'native/yardman_core/**'
       - 'native/yardman_rust/**'
+      - 'native/RUST_ECOSYSTEM_INTAKE.md'
       - 'godot/tests/rust_kernel_smoke_test.gd'
       - '.github/workflows/rust-kernels.yml'
   workflow_dispatch:
@@ -47,6 +49,15 @@ jobs:
         run: |
           set -euo pipefail
           cargo test --manifest-path native/yardman_core/Cargo.toml
+      - name: Bake off Rust data-path candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build/rust-kernel
+          cargo run --release --manifest-path native/yardman_core/Cargo.toml --example ecosystem_bakeoff \
+            2>&1 | tee godot/build/rust-kernel/ecosystem-bakeoff.log
+          grep -Fq 'YARDMAN_ECOSYSTEM_BAKEOFF PASS' godot/build/rust-kernel/ecosystem-bakeoff.log
+          cp native/yardman_core/Cargo.lock native/yardman_core/Cargo.lock.ci
       - name: Build Rust Godot adapter for 4.7 API
         shell: bash
         run: |
@@ -88,6 +99,7 @@ jobs:
           name: Yardman-Rust-Kernel-${{ github.sha }}
           path: |
             godot/build/rust-kernel/*.log
+            native/yardman_core/Cargo.lock.ci
             native/yardman_rust/Cargo.lock.ci
           if-no-files-found: ignore
           retention-days: 14
