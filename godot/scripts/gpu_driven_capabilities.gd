@@ -4,12 +4,12 @@ class_name YardmanGPUDrivenCapabilities
 # Fail-closed capability inspection for the experimental GPU-driven renderer.
 # A renderer name alone is not enough: Yardman requires the Mobile/Vulkan path,
 # a live global RenderingDevice, and the exact indirect MultiMesh bridge APIs.
-const REQUIRED_APIS := PackedStringArray([
+const REQUIRED_APIS := [
     "get_rendering_device",
     "call_on_render_thread",
     "multimesh_get_buffer_rd_rid",
     "multimesh_get_command_buffer_rd_rid",
-])
+]
 
 static func snapshot() -> Dictionary:
     var method := RenderingServer.get_current_rendering_method()
