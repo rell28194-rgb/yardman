@@ -50,13 +50,13 @@ jobs:
           mkdir -p godot/build/world-quality
           timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/world-quality/import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/world-quality/import.log; then exit 1; fi
-      - name: Test terrain seams and live population contraction
+      - name: Test terrain seams, parish truth, and live population contraction
         shell: bash
         run: |
           set -euo pipefail
           # These tests use deterministic local fixtures: no island data download,
           # private vehicle assets, Android SDK, or production APK is required.
-          for TEST in terrain_normal_seam population_budget_regression terrain_coast road_corridor_terrain streaming_budget traffic_runtime pedestrian_runtime parked_vehicle traffic_pedestrian_safety pedestrian_destination; do
+          for TEST in terrain_normal_seam population_budget_regression terrain_coast road_corridor_terrain streaming_budget traffic_runtime pedestrian_runtime parked_vehicle traffic_pedestrian_safety pedestrian_destination location_tracker parish_runtime parish_map_runtime; do
             LOG="godot/build/world-quality/${TEST}.log"
             timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "$LOG"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|FAIL' "$LOG"; then exit 1; fi

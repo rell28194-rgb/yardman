@@ -53,6 +53,8 @@ VehicleDriverLayer="*res://scripts/vehicle_driver_layer.gd"
 StartupMenu="*res://scripts/startup_menu.gd"
 AtmosphereFX="*res://scripts/atmosphere_fx.gd"
 WeatherCycleRuntime="*res://scripts/weather_cycle_runtime.gd"
+ParishRuntime="*res://scripts/parish_runtime.gd"
+ParishMapRuntime="*res://scripts/parish_map_runtime.gd"
 LocationTracker="*res://scripts/location_tracker.gd"
 
 [display]
