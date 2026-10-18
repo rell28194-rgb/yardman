@@ -11,6 +11,7 @@ on:
       - 'godot/scripts/gpu_visibility_probe.gd'
       - 'godot/scripts/gpu_indirect_multimesh_probe.gd'
       - 'godot/scripts/gpu_indirect_multimesh_lifecycle.gd'
+      - 'godot/scripts/gpu_indirect_budget.gd'
       - 'godot/shaders/gpu_visibility.glsl'
       - 'godot/shaders/gpu_indirect_multimesh.glsl'
       - 'godot/shaders/gpu_indirect_multimesh_finalize.glsl'
@@ -18,6 +19,7 @@ on:
       - 'godot/tests/gpu_visibility_test.gd'
       - 'godot/tests/gpu_indirect_multimesh_test.gd'
       - 'godot/tests/gpu_indirect_raster_test.gd'
+      - 'godot/tests/gpu_indirect_budget_test.gd'
       - 'godot/project.godot'
       - '.github/workflows/godot-render-rd.yml'
   workflow_dispatch:
@@ -51,6 +53,11 @@ jobs:
           timeout 120 godot --headless --path godot --script res://tests/streaming_priority_test.gd 2>&1 | tee godot/build/streaming-priority.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/streaming-priority.log; then exit 1; fi
           grep -q 'YARDMAN_STREAMING_PRIORITY_TEST PASS' godot/build/streaming-priority.log
+      - name: Enforce indirect GPU production memory contract
+        run: |
+          timeout 120 godot --headless --path godot --script res://tests/gpu_indirect_budget_test.gd 2>&1 | tee godot/build/gpu-indirect-budget.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/gpu-indirect-budget.log; then exit 1; fi
+          grep -q 'YARDMAN_GPU_INDIRECT_BUDGET_TEST PASS' godot/build/gpu-indirect-budget.log
 
   gpu-visibility:
     runs-on: ubuntu-latest
