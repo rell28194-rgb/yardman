@@ -41,14 +41,15 @@ void fragment() {
     float grain = mix(hash21(floor(UV * 24.0)), 0.5, grain_filter);
     float patch_filter = smoothstep(0.7, 1.3, max(footprint.x * 0.18, footprint.y * 0.65));
     float patch = mix(hash21(floor(UV * vec2(0.18, 0.65))), 0.5, patch_filter);
+    float aggregate_micro = 0.5;
     vec3 base = unpaved ? vec3(0.34, 0.275, 0.18) : vec3(0.205, 0.217, 0.225);
     base *= 0.91 + grain * 0.12 + patch * 0.06;
     if (has_reference_albedo) {
         vec3 reference_color = texture(reference_albedo, UV / 8.0).rgb;
         base = clamp(reference_color * (unpaved ? 1.10 : 2.30), vec3(0.055), vec3(0.46));
         if (has_reference_detail) {
-            float aggregate = dot(texture(reference_detail, UV / 2.0).rgb, vec3(0.2126, 0.7152, 0.0722));
-            base *= clamp(0.80 + aggregate * 1.90, 0.82, 1.30);
+            aggregate_micro = dot(texture(reference_detail, UV / 2.0).rgb, vec3(0.2126, 0.7152, 0.0722));
+            base *= clamp(0.80 + aggregate_micro * 1.90, 0.82, 1.30);
         }
     }
     float edge_distance = max(0.0, width * 0.5 - abs(UV.y));
@@ -81,9 +82,18 @@ void fragment() {
     surface *= mix(1.0, 0.70, surface_wetness * 0.82);
     surface *= mix(1.0, 0.94, puddle_mask * 0.45);
     ALBEDO = surface;
-    ROUGHNESS = unpaved ? mix(0.98, 0.84, surface_wetness) : mix(0.88, 0.34, surface_wetness);
+
+    // High quality asphalt should not read as one uniform rough plastic sheet.
+    // Reuse the detail/grain values already sampled for albedo so this adds no
+    // extra texture fetch. Wetness progressively suppresses the dry aggregate
+    // breakup, while road paint remains slightly smoother than the asphalt.
+    float micro_roughness = mix(grain, aggregate_micro, has_reference_detail ? 0.74 : 0.0);
+    float dry_road_roughness = mix(0.82, 0.94, clamp(micro_roughness, 0.0, 1.0));
+    ROUGHNESS = unpaved ? mix(0.98, 0.84, surface_wetness) : mix(dry_road_roughness, 0.34, surface_wetness);
+    ROUGHNESS = mix(ROUGHNESS, 0.56, line * (1.0 - surface_wetness * 0.55));
     ROUGHNESS = mix(ROUGHNESS, 0.10, puddle_mask * 0.90);
-    SPECULAR = mix(0.24, 0.64, surface_wetness);
+    float dry_specular = mix(0.20, 0.28, clamp(micro_roughness, 0.0, 1.0));
+    SPECULAR = mix(dry_specular, 0.64, surface_wetness);
     SPECULAR = mix(SPECULAR, 0.82, puddle_mask * 0.72);
     METALLIC = 0.0;
 }
