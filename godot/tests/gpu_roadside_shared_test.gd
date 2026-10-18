@@ -89,7 +89,7 @@ func _run() -> void:
             "Godot 4.7.2 workaround did not free every roadside command buffer")
     _mesh = null
     await process_frame
-    print("YARDMAN_GPU_ROADSIDE_SHARED_TEST %s packed32=1 shared_source=1 near_far_grass=1 multsurface=1 cleanup=1" % (
+    print("YARDMAN_GPU_ROADSIDE_SHARED_TEST %s packed32=1 shared_source=1 near_far_grass=1 custom_parity=1 multsurface=1 cleanup=1" % (
         "PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
 
@@ -146,19 +146,18 @@ func _validate_layer(layer: String, result: Dictionary, expected_ids: Dictionary
                     "%s source %d component %d changed during packed expansion" % [layer, source_id, component])
     _check(seen.size() == expected_ids.size(), "%s omitted visible anchors" % layer)
 
-func _expected_record(index: int, layer: String, scale_multiplier: float) -> PackedFloat32Array:
+func _expected_record(index: int, _layer: String, scale_multiplier: float) -> PackedFloat32Array:
     var source := Probe.source_record(index, PROBE_COUNT)
     var position := Vector3(source[0], source[1], source[2])
     var yaw := source[3]
     var scale := source[4] * scale_multiplier
     var basis := Basis(Vector3.UP, yaw).scaled(Vector3.ONE * scale)
-    var dryness := 0.5 if layer == "far" else source[7]
     return PackedFloat32Array([
         basis.x.x, basis.y.x, basis.z.x, position.x,
         basis.x.y, basis.y.y, basis.z.y, position.y,
         basis.x.z, basis.y.z, basis.z.z, position.z,
         1.0, 1.0, 1.0, 1.0,
-        source[5], source[6], dryness, 1.0,
+        source[5], source[6], source[7], 1.0,
     ])
 
 func _cleanup_multimeshes(multimeshes: Array) -> void:
