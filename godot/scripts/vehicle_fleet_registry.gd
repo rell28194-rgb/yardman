@@ -3,6 +3,7 @@ class_name YardmanVehicleFleetRegistry
 
 const DATA_PATH := "res://data/vehicle_fleet_runtime.json"
 static var _entries: Dictionary = {}
+static var _ids: Array = []
 static var _loaded := false
 
 static func _ensure_loaded() -> void:
@@ -24,6 +25,7 @@ static func _ensure_loaded() -> void:
         if vehicle_id.is_empty() or _entries.has(vehicle_id):
             continue
         _entries[vehicle_id] = entry.duplicate(true)
+        _ids.append(vehicle_id)
 
 static func has(vehicle_id: String) -> bool:
     _ensure_loaded()
@@ -35,7 +37,7 @@ static func entry(vehicle_id: String) -> Dictionary:
 
 static func ids() -> Array:
     _ensure_loaded()
-    return _entries.keys().duplicate()
+    return _ids.duplicate()
 
 static func count() -> int:
     _ensure_loaded()
