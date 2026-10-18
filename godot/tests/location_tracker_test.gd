@@ -34,12 +34,17 @@ func _run() -> void:
     tracker._tiles = {"0:0": [
         {"name": "West Town", "kind": "town", "x": 30.0, "z": 30.0, "parish": "West"},
         {"name": "East Town", "kind": "town", "x": 31.0, "z": 30.0, "parish": "East"},
+        {"name": "Unresolved Guess", "kind": "town", "x": 30.25, "z": 30.0, "parish": ""},
     ]}
     tracker._tile_size = 4096.0
     var place := tracker._resolve_place(30.5, 30.0, "West")
-    _check(str(place.settlement.get("name", "")) == "West Town", "cross-border settlement overrode containing parish")
+    _check(str(place.settlement.get("name", "")) == "West Town", "cross-border or unresolved settlement overrode containing parish")
     _check(tracker._compose_label(place, "West") == "West Town · West", "place/parish label composition changed")
 
+    var ambiguous := tracker._resolve_place(30.25, 30.0, "")
+    _check(ambiguous.detail.is_empty() and ambiguous.settlement.is_empty(), "ambiguous parish still accepted nearby place evidence")
+    _check(tracker._compose_label(ambiguous, "").is_empty(), "ambiguous parish fabricated a location label")
+
     tracker.free()
-    print("YARDMAN_LOCATION_TRACKER_TEST %s polygon=1 holes=1 boundary_ambiguity=1 parish_filter=1" % ["PASS" if failures == 0 else "FAIL"])
+    print("YARDMAN_LOCATION_TRACKER_TEST %s polygon=1 holes=1 boundary_ambiguity=1 parish_filter=1 no_guess=1" % ["PASS" if failures == 0 else "FAIL"])
     quit(0 if failures == 0 else 1)
