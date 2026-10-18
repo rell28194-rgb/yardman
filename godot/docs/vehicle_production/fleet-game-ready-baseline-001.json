@@ -1,0 +1,61 @@
+{
+  "checkpoint": "fleet-game-ready-baseline-001",
+  "format_version": 1,
+  "lane": "codex/vehicle-production-001",
+  "goal": "Make every recoverable vehicle game-ready before the maximum-detail art pass.",
+  "source_checkpoint": {
+    "name": "Yardman-Vehicle-Production-002-Checkpoint.zip",
+    "sha256": "6a32c638e94dd9fb129c49ba598aaeb5251bcd6a11e7f051af0eda91dfa8c4f3"
+  },
+  "runtime_registry": {
+    "data": "godot/data/vehicle_fleet_runtime.json",
+    "loader": "godot/scripts/vehicle_fleet_registry.gd",
+    "recovered_private_hero_selectors": 45,
+    "existing_core_selectors": 3,
+    "current_production_selector_total": 48
+  },
+  "recovered_source_evidence": {
+    "lod0_vehicles": 45,
+    "interior_evidence": 45,
+    "stock_wheel_mesh_evidence": 45,
+    "beta2_cross_source_matches": 21,
+    "beta2_pending": 24
+  },
+  "private_fleet_pack": {
+    "name": "Yardman-Personal-Reference-Assets-FleetReady-001.zip",
+    "bytes": 165215231,
+    "sha256": "5dd937a99bef9d77ce81f077a9bd544d956d4cabb98a6d32882af7ff07eb0905",
+    "zip_members": 270,
+    "zip_crc": "pass",
+    "base_pack_preserved": true,
+    "crown_bytes_modified": false,
+    "private_media_public_git": false
+  },
+  "runtime_acceptance_contract": [
+    "selector_safe_metadata",
+    "clean_model_instantiation",
+    "local_collider_wheel_rig_alignment",
+    "CameraMount_ExitPoint_DriverSeat",
+    "forward_reverse_steering_braking",
+    "park_exit_reenter",
+    "reset_despawn",
+    "no_duplicate_or_orphan_nodes"
+  ],
+  "parallel_validation": {
+    "test": "godot/tests/vehicle_game_ready_test.gd",
+    "workflow": ".github/workflows/vehicle-production-audit.yml",
+    "shards": 8,
+    "status": "pending_current_run",
+    "note": "A selector is not declared game-ready until its shard passes. Public CI may use procedural fallback when private hero media are absent; private hero load validation remains a separate required gate."
+  },
+  "crown007": {
+    "status": "playable_reference_not_final_art",
+    "policy": "Do not regress current playability; include Crown in the later maximum-detail graphics pass."
+  },
+  "scope_boundary": {
+    "map_branch": "codex/map-cars-reset-001",
+    "map_world_defects_are_vehicle_failures": false,
+    "package_apk_from_this_lane": false,
+    "merge_pr4": false
+  }
+}
