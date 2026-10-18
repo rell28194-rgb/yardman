@@ -3,9 +3,12 @@ extends SceneTree
 const Probe = preload("res://scripts/gpu_indirect_multimesh_probe.gd")
 const PROBE_COUNT := 8195
 const TIMEOUT_FRAMES := 240
+const CLEANUP_TIMEOUT_FRAMES := 120
 var failures := 0
 var _mesh: BoxMesh
 var _multimesh := RID()
+var _cleanup_mutex := Mutex.new()
+var _cleanup_done := false
 
 func _initialize() -> void:
     call_deferred("_run")
@@ -76,9 +79,41 @@ func _run() -> void:
         _check(actual == expected, "GPU-written MultiMesh transforms differ from visible source set")
         print("YARDMAN_GPU_INDIRECT_MULTIMESH_METRICS count=%d visible=%d roundtrip_us=%d" % [PROBE_COUNT, expected_count, int(result.get("roundtrip_us", -1))])
 
-    if _multimesh.is_valid(): RenderingServer.free_rid(_multimesh)
-    _multimesh = RID()
+    await _free_multimesh_and_sync()
     _mesh = null
     await process_frame
-    print("YARDMAN_GPU_INDIRECT_MULTIMESH_TEST %s global_rd=1 direct_buffer=1 indirect_count=1 init_order=1 no_runtime_readback=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_GPU_INDIRECT_MULTIMESH_TEST %s global_rd=1 direct_buffer=1 indirect_count=1 init_order=1 cleanup_fence=1 no_runtime_readback=1" % ("PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
+
+func _free_multimesh_and_sync() -> void:
+    if not _multimesh.is_valid():
+        return
+    var rid_to_free := _multimesh
+    _multimesh = RID()
+    _cleanup_mutex.lock()
+    _cleanup_done = false
+    _cleanup_mutex.unlock()
+    RenderingServer.call_on_render_thread(_free_multimesh_render_thread.bind(rid_to_free))
+
+    var cleanup_frames := 0
+    while not _is_cleanup_done() and cleanup_frames < CLEANUP_TIMEOUT_FRAMES:
+        cleanup_frames += 1
+        await process_frame
+    _check(_is_cleanup_done(), "render-thread MultiMesh cleanup timed out")
+
+    # Test-only fence: ensure deferred GPU destruction completes before the
+    # process exits so a leak warning cannot be hidden by shutdown timing.
+    RenderingServer.force_sync()
+    await process_frame
+
+func _free_multimesh_render_thread(rid_to_free: RID) -> void:
+    RenderingServer.free_rid(rid_to_free)
+    _cleanup_mutex.lock()
+    _cleanup_done = true
+    _cleanup_mutex.unlock()
+
+func _is_cleanup_done() -> bool:
+    _cleanup_mutex.lock()
+    var value := _cleanup_done
+    _cleanup_mutex.unlock()
+    return value
