@@ -79,6 +79,16 @@ jobs:
           timeout 180 xvfb-run -a -s '-screen 0 1024x768x24' godot --path godot --audio-driver Dummy --script res://tests/terrain_montane_render_test.gd 2>&1 | tee "$LOG"
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|FAIL' "$LOG"; then exit 1; fi
           grep -Fq 'YARDMAN_TERRAIN_MONTANE_RENDER PASS' "$LOG"
+      - name: Render shoreline water response
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build/world-quality/water-shore
+          export YARDMAN_WATER_SHORE_CAPTURE_DIR="$GITHUB_WORKSPACE/godot/build/world-quality/water-shore"
+          LOG="godot/build/world-quality/water_shore_render.log"
+          timeout 180 xvfb-run -a -s '-screen 0 640x480x24' godot --path godot --audio-driver Dummy --script res://tests/water_shore_render_test.gd 2>&1 | tee "$LOG"
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|FAIL' "$LOG"; then exit 1; fi
+          grep -Fq 'YARDMAN_WATER_SHORE_RENDER PASS' "$LOG"
       - name: Preserve world quality diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -87,5 +97,6 @@ jobs:
           path: |
             godot/build/world-quality/*.log
             godot/build/world-quality/terrain-montane/*.png
+            godot/build/world-quality/water-shore/*.png
           if-no-files-found: ignore
           retention-days: 14
