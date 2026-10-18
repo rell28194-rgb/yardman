@@ -84,5 +84,5 @@ jobs:
         run: |
           set -euo pipefail
           timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_visibility_test.gd 2>&1 | tee godot/build/gpu-visibility.log
-          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/gpu-visibility.log; then exit 1; fi
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL|OpArrayLength|ObjectDB instances were leaked' godot/build/gpu-visibility.log; then exit 1; fi
           grep -q 'YARDMAN_GPU_VISIBILITY_TEST PASS' godot/build/gpu-visibility.log

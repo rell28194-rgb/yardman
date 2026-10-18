@@ -12,10 +12,10 @@ static func run_probe(count: int = 4096) -> Dictionary:
 
     var shader_file := load(SHADER_PATH) as RDShaderFile
     if shader_file == null:
-        return {"supported": false, "reason": "compute shader resource unavailable"}
+        return _fail(rd, [], "compute shader resource unavailable")
     var shader_rid := rd.shader_create_from_spirv(shader_file.get_spirv())
     if not shader_rid.is_valid():
-        return {"supported": false, "reason": "compute shader creation failed"}
+        return _fail(rd, [], "compute shader creation failed")
 
     var sphere_values := PackedFloat32Array()
     sphere_values.resize(count * 4)
@@ -37,13 +37,20 @@ static func run_probe(count: int = 4096) -> Dictionary:
     ])
     var output_values := PackedInt32Array()
     output_values.resize(count)
+    var params_values := PackedInt32Array([count])
 
-    var sphere_buffer := rd.storage_buffer_create(sphere_values.to_byte_array().size(), sphere_values.to_byte_array())
-    var plane_buffer := rd.storage_buffer_create(plane_values.to_byte_array().size(), plane_values.to_byte_array())
-    var visibility_buffer := rd.storage_buffer_create(output_values.to_byte_array().size(), output_values.to_byte_array())
-    if not sphere_buffer.is_valid() or not plane_buffer.is_valid() or not visibility_buffer.is_valid():
-        _free_rids(rd, [sphere_buffer, plane_buffer, visibility_buffer, shader_rid])
-        return {"supported": false, "reason": "storage buffer creation failed"}
+    var sphere_bytes := sphere_values.to_byte_array()
+    var plane_bytes := plane_values.to_byte_array()
+    var output_bytes := output_values.to_byte_array()
+    var params_bytes := params_values.to_byte_array()
+    var sphere_buffer := rd.storage_buffer_create(sphere_bytes.size(), sphere_bytes)
+    var plane_buffer := rd.storage_buffer_create(plane_bytes.size(), plane_bytes)
+    var visibility_buffer := rd.storage_buffer_create(output_bytes.size(), output_bytes)
+    var params_buffer := rd.storage_buffer_create(params_bytes.size(), params_bytes)
+    var buffers := [sphere_buffer, plane_buffer, visibility_buffer, params_buffer]
+    if not sphere_buffer.is_valid() or not plane_buffer.is_valid() or not visibility_buffer.is_valid() or not params_buffer.is_valid():
+        buffers.append(shader_rid)
+        return _fail(rd, buffers, "storage buffer creation failed")
 
     var sphere_uniform := RDUniform.new()
     sphere_uniform.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
@@ -57,12 +64,17 @@ static func run_probe(count: int = 4096) -> Dictionary:
     visibility_uniform.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
     visibility_uniform.binding = 2
     visibility_uniform.add_id(visibility_buffer)
+    var params_uniform := RDUniform.new()
+    params_uniform.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+    params_uniform.binding = 3
+    params_uniform.add_id(params_buffer)
 
-    var uniform_set := rd.uniform_set_create([sphere_uniform, plane_uniform, visibility_uniform], shader_rid, 0)
+    var uniform_set := rd.uniform_set_create([
+        sphere_uniform, plane_uniform, visibility_uniform, params_uniform], shader_rid, 0)
     var pipeline := rd.compute_pipeline_create(shader_rid)
     if not uniform_set.is_valid() or not pipeline.is_valid():
-        _free_rids(rd, [uniform_set, pipeline, sphere_buffer, plane_buffer, visibility_buffer, shader_rid])
-        return {"supported": false, "reason": "compute pipeline creation failed"}
+        return _fail(rd, [uniform_set, pipeline, sphere_buffer, plane_buffer,
+            visibility_buffer, params_buffer, shader_rid], "compute pipeline creation failed")
 
     # Warm once so the measured dispatch does not include first-use pipeline work.
     _dispatch(rd, pipeline, uniform_set, count)
@@ -88,8 +100,7 @@ static func run_probe(count: int = 4096) -> Dictionary:
             mismatches += 1
     var cpu_us := Time.get_ticks_usec() - cpu_started
 
-    _free_rids(rd, [uniform_set, pipeline, sphere_buffer, plane_buffer, visibility_buffer, shader_rid])
-    return {
+    var result := {
         "supported": true,
         "count": count,
         "visible": visible_count,
@@ -97,6 +108,10 @@ static func run_probe(count: int = 4096) -> Dictionary:
         "gpu_dispatch_us": gpu_us,
         "cpu_reference_us": cpu_us,
     }
+    _free_rids(rd, [uniform_set, pipeline, sphere_buffer, plane_buffer,
+        visibility_buffer, params_buffer, shader_rid])
+    rd.free()
+    return result
 
 static func _dispatch(rd: RenderingDevice, pipeline: RID, uniform_set: RID, count: int) -> void:
     var compute_list := rd.compute_list_begin()
@@ -110,6 +125,11 @@ static func _cpu_visible(center: Vector3, radius: float) -> bool:
     return center.x + 50.0 >= -radius and -center.x + 50.0 >= -radius \
         and center.y + 50.0 >= -radius and -center.y + 50.0 >= -radius \
         and center.z + 50.0 >= -radius and -center.z + 50.0 >= -radius
+
+static func _fail(rd: RenderingDevice, rids: Array, reason: String) -> Dictionary:
+    _free_rids(rd, rids)
+    rd.free()
+    return {"supported": false, "reason": reason}
 
 static func _free_rids(rd: RenderingDevice, rids: Array) -> void:
     for rid_value in rids:

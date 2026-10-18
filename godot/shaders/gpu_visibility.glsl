@@ -15,9 +15,13 @@ layout(set = 0, binding = 2, std430) writeonly buffer VisibilityBuffer {
     uint data[];
 } visibility;
 
+layout(set = 0, binding = 3, std430) readonly buffer ParamsBuffer {
+    uint count;
+} params;
+
 void main() {
     uint index = gl_GlobalInvocationID.x;
-    if (index >= visibility.data.length()) {
+    if (index >= params.count) {
         return;
     }
 
