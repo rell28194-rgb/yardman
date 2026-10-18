@@ -5,6 +5,8 @@ const INITIAL_SIZE := Vector2i(320, 180)
 const RESIZED_SIZE := Vector2i(256, 144)
 const SNAPSHOT_TIMEOUT_FRAMES := 180
 const RELEASE_TIMEOUT_FRAMES := 120
+const EXPECTED_NEAR_M := 0.1
+const EXPECTED_FAR_M := 100.0
 
 var failures := 0
 var _viewport: SubViewport
@@ -24,6 +26,11 @@ func _run() -> void:
     _build_scene()
     for _frame in range(8):
         await process_frame
+
+    _check(absf(_camera.near - EXPECTED_NEAR_M) <= 0.0001,
+        "authored Camera3D near plane changed unexpectedly")
+    _check(absf(_camera.far - EXPECTED_FAR_M) <= 0.0001,
+        "authored Camera3D far plane changed unexpectedly")
 
     var first := await _snapshot()
     _validate_snapshot(first, INITIAL_SIZE, 7.5, "initial")
@@ -66,8 +73,8 @@ func _build_scene() -> void:
     _camera = Camera3D.new()
     _camera.name = "DepthValidationCamera"
     _camera.fov = 70.0
-    _camera.near = 0.1
-    _camera.far = 100.0
+    _camera.near = EXPECTED_NEAR_M
+    _camera.far = EXPECTED_FAR_M
     _camera.current = true
     world.add_child(_camera)
 
@@ -110,20 +117,14 @@ func _validate_snapshot(snapshot: Dictionary, expected_size: Vector2i,
     var center_linear := _sample_linear(snapshot, center_x, center_y)
     var background_raw := _sample_raw(snapshot, 8, 8)
     var background_linear := _sample_linear(snapshot, 8, 8)
-    var z_far := float(snapshot.get("z_far", 0.0))
-    var z_near := float(snapshot.get("z_near", 0.0))
 
     _check(center_raw > background_raw + 0.0001,
         "%s depth buffer does not exhibit Godot reverse-Z ordering" % label)
     _check(absf(center_linear - expected_center_depth) <= 0.65,
         "%s inverse-projection linear depth differs from known box front face: got %.4f expected %.4f" % [
             label, center_linear, expected_center_depth])
-    _check(background_linear >= z_far * 0.96,
-        "%s background did not linearize near the far plane" % label)
-    _check(z_near >= 0.099 and z_near <= 0.101,
-        "%s camera near plane changed unexpectedly" % label)
-    _check(z_far >= 99.9 and z_far <= 100.1,
-        "%s camera far plane changed unexpectedly" % label)
+    _check(background_linear >= EXPECTED_FAR_M * 0.96,
+        "%s background did not linearize near the authored far plane: got %.4f" % [label, background_linear])
     _check(int(snapshot.get("frames_captured", 0)) > 0,
         "%s compositor never captured a rendered frame" % label)
 
