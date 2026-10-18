@@ -25,6 +25,8 @@ func _process(delta: float) -> void:
     if scene == null:
         _clear_scene_state()
         return
+    if _proxy_scene != scene:
+        _clear_scene_state()
     var roads = scene.get("roads")
     var terrain = scene.get("terrain")
     var player = scene.get("player")
@@ -112,6 +114,9 @@ func _reconcile(roads, active_xz: Vector2) -> void:
         var entry: Dictionary = parked[identifier]
         if Vector2(entry.position).distance_to(active_xz) > minf(512.0, medium_radius + 65.0):
             _destroy(str(identifier))
+    var nearest := _nearest_ids(active_xz)
+    while nearest.size() > maxi(0, max_parked):
+        _destroy(str(nearest.pop_back()))
     if parked.size() >= max_parked:
         return
 
@@ -147,13 +152,23 @@ func _reconcile(roads, active_xz: Vector2) -> void:
             "model": null,
         }
 
+func _nearest_ids(active_xz: Vector2) -> Array:
+    var ids: Array = parked.keys()
+    ids.sort_custom(func(a, b):
+        var distance_a := Vector2(parked[a].position).distance_squared_to(active_xz)
+        var distance_b := Vector2(parked[b].position).distance_squared_to(active_xz)
+        if distance_a == distance_b:
+            return str(a) < str(b)
+        return distance_a < distance_b
+    )
+    return ids
+
 func _refresh_visuals(scene: Node, roads, terrain, active_xz: Vector2) -> void:
     if _proxy == null or _proxy.multimesh == null:
         return
     var near_count := 0
     var proxy_count := 0
-    var ids: Array = parked.keys()
-    ids.sort()
+    var ids := _nearest_ids(active_xz)
     for identifier in ids:
         var entry: Dictionary = parked[identifier]
         var point: Vector2 = entry.position

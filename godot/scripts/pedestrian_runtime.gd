@@ -174,6 +174,9 @@ func _reconcile_population(scene: Node, roads, active_xz: Vector2) -> void:
         var agent: Dictionary = agents[identifier]
         if Vector2(agent.position).distance_to(active_xz) > despawn_radius:
             _destroy_agent(str(identifier))
+    # Density and thermal changes must retire existing simulation work as well
+    # as limit new spawns. Keep the closest actors to avoid nearby pop-out.
+    _trim_population(target, active_xz)
     if agents.size() >= target:
         _far_statistical = maxi(0, far_target - agents.size())
         return
@@ -390,6 +393,20 @@ func _dematerialize_agent(identifier: String) -> void:
     agent.node = null
     agent.rig = {}
     agents[identifier] = agent
+
+func _trim_population(target: int, active_xz: Vector2) -> void:
+    if agents.size() <= target:
+        return
+    var ids: Array = agents.keys()
+    ids.sort_custom(func(a, b):
+        var distance_a := Vector2(agents[a].position).distance_squared_to(active_xz)
+        var distance_b := Vector2(agents[b].position).distance_squared_to(active_xz)
+        if distance_a == distance_b:
+            return str(a) < str(b)
+        return distance_a < distance_b
+    )
+    for index in range(maxi(0, target), ids.size()):
+        _destroy_agent(str(ids[index]))
 
 func _destroy_agent(identifier: String) -> void:
     if not agents.has(identifier):

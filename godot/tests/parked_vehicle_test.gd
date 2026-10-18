@@ -1,6 +1,11 @@
 extends SceneTree
 
 const Parked = preload("res://scripts/parked_vehicle_runtime.gd")
+class EmptyRoads:
+    extends RefCounted
+    func _nearby_surface_segments(_x: float, _z: float, _radius: float) -> Dictionary:
+        return {}
+
 var failures := 0
 
 func _init() -> void:
@@ -29,6 +34,39 @@ func _run() -> void:
     _check(int(hot.near_visuals) <= int(balanced.near_visuals), "thermal full-model parked budget did not degrade")
     _check(int(performance.max_parked) < int(balanced.max_parked), "Performance parked budget should be smaller")
     _check(float(hot.near_radius) >= 105.0 and float(hot.medium_radius) >= 290.0, "thermal policy erased parked-vehicle visibility coverage")
+
+    var runtime := Parked.new()
+    runtime.max_parked = 2
+    runtime.parked = {
+        "a_far": {"position": Vector2(100, 0), "node": null, "model": null},
+        "z_close": {"position": Vector2(10, 0), "node": null, "model": null},
+        "b_middle": {"position": Vector2(50, 0), "node": null, "model": null},
+    }
+    runtime._reconcile(EmptyRoads.new(), Vector2.ZERO)
+    _check(runtime.parked.size() == 2, "existing population ignored reduced budget")
+    _check(runtime.parked.has("z_close") and runtime.parked.has("b_middle"), "budget reduction discarded nearer cars")
+    if runtime.has_method("_nearest_ids"):
+        var ids: Array = runtime.call("_nearest_ids", Vector2.ZERO)
+        _check(ids == ["z_close", "b_middle"], "near visual tier prioritized identifier over distance")
+    runtime.max_parked = 0
+    runtime._reconcile(EmptyRoads.new(), Vector2.ZERO)
+    _check(runtime.parked.is_empty(), "zero budget retained parked cars")
+    var old_scene := Node.new()
+    var next_scene := Node.new()
+    root.add_child(old_scene)
+    root.add_child(next_scene)
+    runtime._proxy_scene = old_scene
+    runtime.parked["old_scene_car"] = {"position": Vector2.ZERO, "node": null, "model": null}
+    root.add_child(runtime)
+    runtime.set_process(false)
+    current_scene = next_scene
+    runtime._process(0.0)
+    _check(runtime.parked.is_empty(), "scene transition retained previous world population")
+    _check(runtime._proxy_scene == null, "scene transition retained old scene owner")
+    current_scene = null
+    runtime.free()
+    old_scene.free()
+    next_scene.free()
 
     if failures == 0:
         print("YARDMAN_PARKED_VEHICLE_TEST PASS shoulders=2 collision_tier=1 hlod_tier=1 thermal=1")
