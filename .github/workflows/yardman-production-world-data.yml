@@ -9,9 +9,12 @@ on:
       - '.github/workflows/yardman-production-world-data.yml'
       - 'godot/tools/build_jamaica_roads.py'
       - 'godot/tools/road_graph.py'
+      - 'godot/tools/road_profile.py'
       - 'godot/tools/road_route_pack.py'
       - 'godot/tools/build_terrain.py'
       - 'godot/tools/build_buildings.py'
+      - 'godot/tools/build_places.py'
+      - 'godot/tools/build_parishes.py'
       - 'godot/tools/profile_building_packs.py'
       - 'Tests/Python/test_road_graph_closed_loops.py'
       - 'Tests/Python/test_route_pack.py'
@@ -118,22 +121,48 @@ jobs:
           pbf = root / 'source/jamaica-latest.osm.pbf'
           source_sha = hashlib.sha256(pbf.read_bytes()).hexdigest()
           terrain = json.loads((root / 'output/terrain/manifest.json').read_text())
-          roads = json.loads((root / 'output/roads/manifest.json').read_text())
+          roads_root = root / 'output/roads'
+          roads = json.loads((roads_root / 'manifest.json').read_text())
           buildings = json.loads((root / 'output/buildings/manifest.json').read_text())
+          places = json.loads((root / 'output/places/manifest.json').read_text())
+          parishes = json.loads((root / 'output/parishes/manifest.json').read_text())
 
           assert roads['source_sha256'] == source_sha, 'Road source hash differs from acquired PBF'
           assert buildings['source_sha256'] == source_sha, 'Building source hash differs from acquired PBF'
-          assert roads['crs'] == buildings['crs'] == terrain['crs'] == 'EPSG:3448'
-          assert roads['origin']['easting'] == buildings['origin']['easting'] == terrain['origin']['easting']
-          assert roads['origin']['northing'] == buildings['origin']['northing'] == terrain['origin']['northing']
+          assert places['source_sha256'] == source_sha, 'Place source hash differs from acquired PBF'
+          assert parishes['source_sha256'] == source_sha, 'Parish source hash differs from acquired PBF'
+          assert roads['crs'] == buildings['crs'] == terrain['crs'] == places['crs'] == parishes['crs'] == 'EPSG:3448'
+          assert roads['origin']['easting'] == buildings['origin']['easting'] == terrain['origin']['easting'] == places['origin']['easting'] == parishes['origin']['easting']
+          assert roads['origin']['northing'] == buildings['origin']['northing'] == terrain['origin']['northing'] == places['origin']['northing'] == parishes['origin']['northing']
           assert roads['elevation_source'] == 'DEM'
           assert len(terrain.get('sources', [])) == 5, 'Expected five Copernicus source COGs'
           assert 2000.0 <= float(terrain['max_height']) <= 2400.0, 'Terrain peak QA failed'
           assert int(buildings['stats'].get('buildings', 0)) >= 800000, 'National building coverage unexpectedly small'
           assert int(buildings['stats'].get('tiles', 0)) >= 600, 'Building tile coverage unexpectedly small'
           assert int(buildings['stats'].get('cells', 0)) >= 50000, 'Building cell coverage unexpectedly small'
+          assert int(places['stats'].get('places', 0)) >= 1500, 'National place coverage unexpectedly small'
+          assert int(places['stats'].get('tiles', 0)) >= 400, 'National place tile coverage unexpectedly small'
+          assert int(parishes['stats'].get('canonical_parishes', 0)) == 14, 'Parish authority must contain all fourteen parishes'
+          assert not parishes['stats'].get('missing_parishes'), 'Parish authority reports missing parishes'
           assert int(roads['stats'].get('graph_edges', 0)) > 0 and int(roads['stats'].get('graph_nodes', 0)) > 0
-          assert not any(edge.get('from') == edge.get('to') for edge in roads.get('graph_edges_detail', [])), 'Self-loop road edge survived production compile'
+
+          graph_nodes = 0
+          graph_edges = 0
+          for shard in sorted((roads_root / 'graph').glob('nodes_*.json')):
+              graph_nodes += len(json.loads(shard.read_text()))
+          for shard in sorted((roads_root / 'graph').glob('edges_*.json')):
+              values = json.loads(shard.read_text())
+              graph_edges += len(values)
+              for edge_id, edge in values.items():
+                  assert edge.get('from') != edge.get('to'), f'Self-loop road edge survived production compile: {edge_id}'
+          assert graph_nodes == int(roads['stats']['graph_nodes']), 'Graph node shard count disagrees with road manifest'
+          assert graph_edges == int(roads['stats']['graph_edges']), 'Graph edge shard count disagrees with road manifest'
+
+          route = roads.get('graph', {}).get('route_pack', {})
+          route_path = roads_root / 'graph' / str(route.get('file', ''))
+          assert route_path.is_file(), 'Compiled route pack is missing'
+          assert hashlib.sha256(route_path.read_bytes()).hexdigest() == route.get('sha256'), 'Route-pack SHA differs from manifest'
+          assert int(route.get('nodes', -1)) == graph_nodes and int(route.get('edges', -1)) == graph_edges, 'Route-pack counts differ from graph shards'
 
           evidence = {
               'compiler_commit': os.environ.get('GITHUB_SHA', ''),
@@ -149,6 +178,7 @@ jobs:
                   'graph_nodes': roads['stats']['graph_nodes'],
                   'graph_edges': roads['stats']['graph_edges'],
                   'bounds': roads['bounds'],
+                  'route_pack_sha256': route['sha256'],
               },
               'buildings': {
                   'buildings': buildings['stats']['buildings'],
@@ -157,6 +187,17 @@ jobs:
                   'max_cell_buildings': buildings['max_cell_buildings'],
                   'max_cell_uncompressed_bytes': buildings['max_cell_uncompressed_bytes'],
                   'bounds': buildings['bounds'],
+              },
+              'places': {
+                  'places': places['stats']['places'],
+                  'tiles': places['stats']['tiles'],
+                  'by_parish': places['stats']['by_parish'],
+                  'fallback_assignments': int(places['stats'].get('parish_assignment', {}).get('nearest_capital_fallback', 0)),
+              },
+              'parishes': {
+                  'canonical_parishes': parishes['stats']['canonical_parishes'],
+                  'runtime_polygons': parishes['stats']['runtime_polygons'],
+                  'runtime_vertices': parishes['stats']['runtime_vertices'],
               },
           }
           path = root / 'output/production-data-evidence.json'
@@ -182,6 +223,8 @@ jobs:
             /tmp/yardman-production-world/output/terrain/**
             /tmp/yardman-production-world/output/roads/**
             /tmp/yardman-production-world/output/buildings/**
+            /tmp/yardman-production-world/output/places/**
+            /tmp/yardman-production-world/output/parishes/**
             /tmp/yardman-production-world/output/production-data-evidence.json
             /tmp/yardman-production-world/output/production-building-profile.json
             /tmp/yardman-production-world/source/geofabrik.url
