@@ -98,8 +98,9 @@ func _update_location() -> void:
     var x := float(world[0])
     var z := float(world[2])
     var parish := _parish_at(x, z)
-    if parish.is_empty() and _parishes.is_empty():
-        parish = _nearest_parish(roads, x, z)
+    # Never infer administrative truth from nearest road/parish anchors. When
+    # polygon authority is unavailable, preserve an already-authoritative scene
+    # parish if one exists; otherwise keep the location unresolved.
     if parish.is_empty():
         parish = str(scene.get("current_parish"))
     var place := _resolve_place(x, z, parish)
@@ -169,34 +170,12 @@ static func polygon_contains(point: Vector2, rings: Array) -> bool:
             return false
     return true
 
-func _nearest_parish(roads: Variant, x: float, z: float) -> String:
-    var road_manifest: Variant = roads.get("manifest")
-    if not road_manifest is Dictionary:
-        return ""
-    var anchors: Variant = road_manifest.get("parish_anchors", {})
-    if not anchors is Dictionary:
-        return ""
-    var best := ""
-    var best_distance := INF
-    for name in anchors:
-        var raw: Variant = anchors[name]
-        if not raw is Dictionary:
-            continue
-        var position: Variant = raw.get("road_position", [])
-        var ax := float(raw.get("x", 0.0))
-        var az := float(raw.get("z", 0.0))
-        if position is Array and position.size() >= 3:
-            ax = float(position[0])
-            az = float(position[2])
-        var distance := Vector2(x - ax, z - az).length_squared()
-        if distance < best_distance:
-            best_distance = distance
-            best = str(name)
-    return best
-
 func _resolve_place(x: float, z: float, parish: String) -> Dictionary:
-    if _tiles.is_empty():
-        return {}
+    # Administrative ambiguity must stay ambiguous. A nearby place is not valid
+    # evidence for selecting a parish, so do not use place records until parish
+    # authority has been resolved independently.
+    if parish.is_empty() or _tiles.is_empty():
+        return {"detail": {}, "settlement": {}, "parish": parish}
     var tx := int(floor(x / _tile_size))
     var tz := int(floor(z / _tile_size))
     var best_detail: Dictionary = {}
@@ -212,11 +191,9 @@ func _resolve_place(x: float, z: float, parish: String) -> Dictionary:
             for raw in records:
                 if not raw is Dictionary:
                     continue
-                # Prefer labels compiled into the actual containing parish. This
-                # prevents a nearby cross-border settlement from replacing the
-                # correct rural parish label.
-                var record_parish := str(raw.get("parish", ""))
-                if not parish.is_empty() and not record_parish.is_empty() and record_parish != parish:
+                # Runtime place labels require exact parish authority. Empty,
+                # guessed, or cross-border records are intentionally excluded.
+                if str(raw.get("parish", "")) != parish:
                     continue
                 var kind := str(raw.get("kind", ""))
                 var distance := Vector2(x - float(raw.get("x", 0.0)), z - float(raw.get("z", 0.0))).length()
