@@ -6,9 +6,12 @@ on:
       - codex/render-rd-hzb-001
     paths:
       - 'godot/scripts/gpu_hzb_probe.gd'
+      - 'godot/scripts/gpu_depth_capture_effect.gd'
       - 'godot/shaders/gpu_hzb_reduce.glsl'
       - 'godot/shaders/gpu_hzb_cull.glsl'
+      - 'godot/shaders/gpu_depth_capture.glsl'
       - 'godot/tests/gpu_hzb_test.gd'
+      - 'godot/tests/gpu_real_depth_test.gd'
       - '.github/workflows/godot-render-rd-hzb.yml'
   workflow_dispatch:
 
@@ -18,7 +21,7 @@ permissions:
 jobs:
   conservative-hzb:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     env: { GODOT_VERSION: '4.7.2', GODOT_CHANNEL: stable }
     steps:
       - uses: actions/checkout@v4
@@ -39,9 +42,15 @@ jobs:
           mkdir -p godot/build
           timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --editor --quit 2>&1 | tee godot/build/gpu-hzb-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|OpArrayLength|ObjectDB instances were leaked|RID of type .* was leaked' godot/build/gpu-hzb-import.log; then exit 1; fi
-      - name: Validate conservative HZB oracle
+      - name: Validate conservative synthetic HZB oracle
         shell: bash
         run: |
           timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_hzb_test.gd 2>&1 | tee godot/build/gpu-hzb-test.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|GPU_HZB_TEST:|OpArrayLength|ObjectDB instances were leaked|RID of type .* was leaked' godot/build/gpu-hzb-test.log; then exit 1; fi
           grep -q 'YARDMAN_GPU_HZB_TEST PASS' godot/build/gpu-hzb-test.log
+      - name: Validate actual Godot reverse-Z scene depth
+        shell: bash
+        run: |
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_real_depth_test.gd 2>&1 | tee godot/build/gpu-real-depth-test.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|GPU_REAL_DEPTH_TEST:|OpArrayLength|ObjectDB instances were leaked|RID of type .* was leaked|Attempted to free invalid ID' godot/build/gpu-real-depth-test.log; then exit 1; fi
+          grep -q 'YARDMAN_GPU_REAL_DEPTH_TEST PASS' godot/build/gpu-real-depth-test.log
