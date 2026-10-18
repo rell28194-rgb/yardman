@@ -53,6 +53,35 @@ def test_nepa_morass_join_preserves_provenance():
     assert morphology_tokens([r]) == ("nepa:black_river_morass_wetland",)
 
 
+def test_invalid_geometry_cannot_authorize():
+    r = attach_spatial_evidence(source="wra", source_feature_id="wmu-26-lm", layer="wmu", mapped_unit="Black River Lower Morass", intersection_fraction=0.8, geometry_valid=False)
+    assert not r.authorizes_morphology
+    assert not r.geometry_valid
+    assert morphology_tokens([r]) == ()
+
+
+def test_repaired_geometry_is_audit_only_until_reviewed():
+    r = attach_spatial_evidence(source="nepa", source_feature_id="wetland-brm-repaired", layer="wetland", mapped_unit="Black River Morass", intersection_fraction=0.6, geometry_valid=True, geometry_repaired=True)
+    assert not r.authorizes_morphology
+    assert r.geometry_repaired
+    assert r.evidence_token == "nepa:black_river_morass_wetland"
+    assert morphology_tokens([r]) == ()
+
+
+def test_impossible_intersection_length_fails_closed():
+    r = attach_spatial_evidence(source="wra", source_feature_id="wmu-26-lm", layer="wmu", mapped_unit="Black River Lower Morass", intersection_fraction=0.9, segment_length_m=100.0, intersection_length_m=120.0)
+    assert not r.authorizes_morphology
+    assert r.segment_length_m == 100.0
+    assert r.intersection_length_m == 120.0
+
+
+def test_consistent_metric_provenance_authorizes():
+    r = attach_spatial_evidence(source="wra", source_feature_id="wmu-26-lm", layer="wmu", mapped_unit="Black River Lower Morass", intersection_fraction=0.75, segment_length_m=100.0, intersection_length_m=75.0)
+    assert r.authorizes_morphology
+    assert r.segment_length_m == 100.0
+    assert r.intersection_length_m == 75.0
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for test in tests:
