@@ -1,0 +1,49 @@
+name: Yardman Vehicle Mechanical Calibration
+
+on:
+  push:
+    branches: [codex/vehicle-production-001]
+    paths:
+      - '.github/workflows/vehicle-fleet-calibration.yml'
+      - 'godot/data/vehicle_fleet_calibration.json'
+      - 'godot/scripts/vehicle_fleet_registry.gd'
+      - 'godot/tests/vehicle_fleet_calibration_test.gd'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  calibration-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned Godot 4.7.2 desktop runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip'
+          EXPECTED='cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4'
+          wget -q "$URL" -O /tmp/Godot_v4.7.2-stable_linux.x86_64.zip
+          echo "$EXPECTED  /tmp/Godot_v4.7.2-stable_linux.x86_64.zip" | sha256sum -c -
+          mkdir -p /tmp/yardman-godot
+          unzip -q /tmp/Godot_v4.7.2-stable_linux.x86_64.zip -d /tmp/yardman-godot
+          GODOT_BIN="$(find /tmp/yardman-godot -maxdepth 2 -type f -name 'Godot*' -print -quit)"
+          test -n "$GODOT_BIN"
+          chmod +x "$GODOT_BIN"
+          echo "GODOT_BIN=$GODOT_BIN" >> "$GITHUB_ENV"
+          "$GODOT_BIN" --version
+      - name: Import project scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 "$GODOT_BIN" --headless --path godot --editor --quit 2>&1 | tee /tmp/yardman-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' /tmp/yardman-import.log; then exit 1; fi
+      - name: Validate evidence-backed fleet calibration
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 "$GODOT_BIN" --headless --path godot --script res://tests/vehicle_fleet_calibration_test.gd 2>&1 | tee /tmp/vehicle-fleet-calibration.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' /tmp/vehicle-fleet-calibration.log; then exit 1; fi
+          grep -q 'YARDMAN_VEHICLE_FLEET_CALIBRATION_TEST PASS' /tmp/vehicle-fleet-calibration.log
