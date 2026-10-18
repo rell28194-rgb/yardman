@@ -1,0 +1,211 @@
+name: Yardman Production Jamaica Data Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/world-quality-20261018
+    paths:
+      - '.github/workflows/yardman-production-world-data.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yardman-production-world-data-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-national-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      PBF_URL: https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf
+      WORK_ROOT: /tmp/yardman-production-world
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install geospatial compiler dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install 'numpy<2.3' 'rasterio>=1.4,<2' 'pyproj>=3.7,<4' 'shapely>=2.1.2,<3' 'osmium>=4,<5'
+          python - <<'PY'
+          import numpy, rasterio, pyproj, shapely, osmium
+          print('numpy', numpy.__version__)
+          print('rasterio', rasterio.__version__)
+          print('pyproj', pyproj.__version__)
+          print('shapely', shapely.__version__)
+          print('osmium', getattr(osmium, '__version__', 'loaded'))
+          PY
+
+      - name: Acquire current Jamaica OpenStreetMap source with provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK_ROOT/source" "$WORK_ROOT/output"
+          curl --fail --location --retry 4 --retry-delay 3 --dump-header "$WORK_ROOT/source/geofabrik.headers" \
+            "$PBF_URL" -o "$WORK_ROOT/source/jamaica-latest.osm.pbf"
+          sha256sum "$WORK_ROOT/source/jamaica-latest.osm.pbf" | tee "$WORK_ROOT/source/jamaica-latest.osm.pbf.sha256"
+          printf '%s\n' "$PBF_URL" > "$WORK_ROOT/source/geofabrik.url"
+
+      - name: Bootstrap canonical Jamaica road frame
+        shell: bash
+        run: |
+          set -euo pipefail
+          python godot/tools/build_jamaica_roads.py \
+            "$WORK_ROOT/source/jamaica-latest.osm.pbf" \
+            "$WORK_ROOT/bootstrap-roads" \
+            --skip-auxiliary
+
+      - name: Acquire and compile registered Copernicus terrain
+        shell: bash
+        run: |
+          set -euo pipefail
+          python godot/tools/build_terrain.py \
+            "$WORK_ROOT/copernicus-source" \
+            "$WORK_ROOT/bootstrap-roads/manifest.json" \
+            "$WORK_ROOT/output/terrain" \
+            --acquire
+
+      - name: Compile terrain-registered national roads and source-derived road layers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python godot/tools/build_jamaica_roads.py \
+            "$WORK_ROOT/source/jamaica-latest.osm.pbf" \
+            "$WORK_ROOT/output/roads" \
+            --terrain "$WORK_ROOT/output/terrain"
+
+      - name: Compile real national building footprints
+        shell: bash
+        run: |
+          set -euo pipefail
+          python godot/tools/build_buildings.py \
+            "$WORK_ROOT/source/jamaica-latest.osm.pbf" \
+            "$WORK_ROOT/output/terrain" \
+            "$WORK_ROOT/output/buildings"
+
+      - name: Validate production provenance and national coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          export YARDMAN_WORK_ROOT="$WORK_ROOT"
+          python - <<'PY'
+          import hashlib, json, os, pathlib, sys
+
+          root = pathlib.Path(os.environ['YARDMAN_WORK_ROOT'])
+          pbf = root / 'source/jamaica-latest.osm.pbf'
+          source_sha = hashlib.sha256(pbf.read_bytes()).hexdigest()
+          terrain = json.loads((root / 'output/terrain/manifest.json').read_text())
+          roads = json.loads((root / 'output/roads/manifest.json').read_text())
+          buildings = json.loads((root / 'output/buildings/manifest.json').read_text())
+
+          assert roads['source_sha256'] == source_sha, 'Road source hash differs from acquired PBF'
+          assert buildings['source_sha256'] == source_sha, 'Building source hash differs from acquired PBF'
+          assert roads['crs'] == buildings['crs'] == terrain['crs'] == 'EPSG:3448'
+          assert roads['origin']['easting'] == buildings['origin']['easting'] == terrain['origin']['easting']
+          assert roads['origin']['northing'] == buildings['origin']['northing'] == terrain['origin']['northing']
+          assert roads['elevation_source'] == 'DEM'
+          assert len(terrain.get('sources', [])) == 5, 'Expected five Copernicus source COGs'
+          assert 2000.0 <= float(terrain['max_height']) <= 2400.0, 'Terrain peak QA failed'
+          assert int(buildings['stats'].get('buildings', 0)) >= 800000, 'National building coverage unexpectedly small'
+          assert int(buildings['stats'].get('tiles', 0)) >= 600, 'Building tile coverage unexpectedly small'
+          assert int(buildings['stats'].get('cells', 0)) >= 50000, 'Building cell coverage unexpectedly small'
+          assert int(roads['stats'].get('graph_edges', 0)) > 0 and int(roads['stats'].get('graph_nodes', 0)) > 0
+
+          evidence = {
+              'source_url': os.environ.get('PBF_URL', ''),
+              'source_sha256': source_sha,
+              'terrain': {
+                  'tiles': len(terrain['tiles']),
+                  'max_height_m': terrain['max_height'],
+                  'source_cogs': terrain['sources'],
+              },
+              'roads': {
+                  'tiles': len(roads['tiles']),
+                  'graph_nodes': roads['stats']['graph_nodes'],
+                  'graph_edges': roads['stats']['graph_edges'],
+                  'bounds': roads['bounds'],
+              },
+              'buildings': {
+                  'buildings': buildings['stats']['buildings'],
+                  'tiles': buildings['stats']['tiles'],
+                  'cells': buildings['stats']['cells'],
+                  'max_cell_buildings': buildings['max_cell_buildings'],
+                  'max_cell_uncompressed_bytes': buildings['max_cell_uncompressed_bytes'],
+                  'bounds': buildings['bounds'],
+              },
+          }
+          path = root / 'output/production-data-evidence.json'
+          path.write_text(json.dumps(evidence, indent=2, sort_keys=True))
+          print('YARDMAN_PRODUCTION_WORLD_DATA PASS')
+          print(json.dumps(evidence, sort_keys=True))
+          PY
+
+      - name: Exercise real compiled building cells
+        shell: bash
+        run: |
+          set -euo pipefail
+          export YARDMAN_WORK_ROOT="$WORK_ROOT"
+          python - <<'PY'
+          import json, os, pathlib, statistics, struct, time
+          import sys
+          sys.path.insert(0, 'godot/tools')
+          from build_buildings import read_cell
+
+          root = pathlib.Path(os.environ['YARDMAN_WORK_ROOT']) / 'output/buildings'
+          manifest = json.loads((root / 'manifest.json').read_text())
+          tiles = manifest['tiles']
+          picks = [tiles[0], tiles[len(tiles)//2], tiles[-1]]
+          evidence = []
+          for tile in picks:
+              if not tile['cells']:
+                  continue
+              local = tile['cells'][len(tile['cells']) // 2]
+              path = root / tile['file']
+              samples = []
+              count = None
+              for _ in range(8):
+                  started = time.perf_counter_ns()
+                  records = read_cell(path, int(local[0]), int(local[1]))
+                  samples.append((time.perf_counter_ns() - started) / 1000.0)
+                  count = len(records)
+              if count <= 0:
+                  raise SystemExit(f'Empty production building sample: {tile["file"]} {local}')
+              if not all(str(record[0]).startswith(('w', 'r')) for record in records[:min(32, count)]):
+                  raise SystemExit('Production sample contains non-OSM source IDs')
+              evidence.append({
+                  'tile': [tile['x'], tile['z']],
+                  'local_cell': local,
+                  'records': count,
+                  'median_decode_us': round(statistics.median(samples), 2),
+                  'max_decode_us': round(max(samples), 2),
+              })
+          out = pathlib.Path(os.environ['YARDMAN_WORK_ROOT']) / 'output/production-building-decode.json'
+          out.write_text(json.dumps(evidence, indent=2, sort_keys=True))
+          print('YARDMAN_REAL_BUILDING_DECODE PASS', json.dumps(evidence, sort_keys=True))
+          PY
+
+      - name: Preserve real national production data
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Production-Jamaica-Data-${{ github.sha }}
+          path: |
+            /tmp/yardman-production-world/output/terrain/**
+            /tmp/yardman-production-world/output/roads/**
+            /tmp/yardman-production-world/output/buildings/**
+            /tmp/yardman-production-world/output/production-data-evidence.json
+            /tmp/yardman-production-world/output/production-building-decode.json
+            /tmp/yardman-production-world/source/geofabrik.url
+            /tmp/yardman-production-world/source/geofabrik.headers
+            /tmp/yardman-production-world/source/jamaica-latest.osm.pbf.sha256
+            /tmp/yardman-production-world/copernicus-source/sources.json
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 14
