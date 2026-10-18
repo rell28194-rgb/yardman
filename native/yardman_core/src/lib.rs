@@ -1,3 +1,5 @@
+pub mod routing;
+
 use rstar::{RTree, primitives::GeomWithData};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
