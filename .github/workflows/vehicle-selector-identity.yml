@@ -1,0 +1,28 @@
+name: Yardman Vehicle Selector Identity
+
+on:
+  push:
+    branches: [codex/vehicle-production-001]
+    paths:
+      - '.github/workflows/vehicle-selector-identity.yml'
+      - 'godot/data/vehicle_fleet_supplemental.json'
+      - 'godot/tools/vehicle_production/validate_fleet_selector_identity.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selector-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate recovered selector identity bindings
+        run: |
+          set -euo pipefail
+          python godot/tools/vehicle_production/validate_fleet_selector_identity.py \
+            godot/data/vehicle_fleet_supplemental.json
