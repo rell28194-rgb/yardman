@@ -1,0 +1,86 @@
+name: Yardman Rust Kernel Gate
+
+on:
+  push:
+    branches:
+      - 'codex/world-quality-*'
+    paths:
+      - 'native/yardman_rust/**'
+      - 'godot/tests/rust_kernel_smoke_test.gd'
+      - '.github/workflows/rust-kernels.yml'
+  pull_request:
+    paths:
+      - 'native/yardman_rust/**'
+      - 'godot/tests/rust_kernel_smoke_test.gd'
+      - '.github/workflows/rust-kernels.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yardman-rust-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-rust-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+      RUST_VERSION: '1.94.0'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST_VERSION" --profile minimal
+          rustup default "$RUST_VERSION"
+          rustc --version
+          cargo --version
+      - name: Build Rust kernel for Godot 4.7 API
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --manifest-path native/yardman_rust/Cargo.toml
+          test -f native/yardman_rust/target/debug/libyardman_native_rust.so
+          cp native/yardman_rust/Cargo.lock native/yardman_rust/Cargo.lock.ci
+      - name: Download canonical Godot runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          curl --fail --location --retry 3 "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+      - name: Stage Rust extension only for smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/native_rust/bin
+          cp native/yardman_rust/target/debug/libyardman_native_rust.so godot/native_rust/bin/libyardman_native_rust.linux.debug.x86_64.so
+          cp native/yardman_rust/yardman_rust.gdextension godot/native_rust/yardman_rust.gdextension
+      - name: Import and smoke-test Rust kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build/rust-kernel
+          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/rust-kernel/import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/rust-kernel/import.log; then exit 1; fi
+          timeout 180 godot --headless --path godot --script res://tests/rust_kernel_smoke_test.gd 2>&1 | tee godot/build/rust-kernel/smoke.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|FAIL' godot/build/rust-kernel/smoke.log; then exit 1; fi
+          grep -Fq 'YARDMAN_RUST_KERNEL_SMOKE PASS' godot/build/rust-kernel/smoke.log
+      - name: Preserve Rust benchmark and lock evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Rust-Kernel-${{ github.sha }}
+          path: |
+            godot/build/rust-kernel/*.log
+            native/yardman_rust/Cargo.lock.ci
+          if-no-files-found: ignore
+          retention-days: 14

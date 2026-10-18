@@ -1,0 +1,11 @@
+[configuration]
+
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = "4.7"
+
+[libraries]
+
+linux.debug.x86_64 = "res://native_rust/bin/libyardman_native_rust.linux.debug.x86_64.so"
+linux.release.x86_64 = "res://native_rust/bin/libyardman_native_rust.linux.release.x86_64.so"
+android.debug.arm64 = "res://native_rust/bin/libyardman_native_rust.android.debug.arm64.so"
+android.release.arm64 = "res://native_rust/bin/libyardman_native_rust.android.release.arm64.so"
