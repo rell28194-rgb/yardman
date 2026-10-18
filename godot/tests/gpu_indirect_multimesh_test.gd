@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Probe = preload("res://scripts/gpu_indirect_multimesh_probe.gd")
+const Lifecycle = preload("res://scripts/gpu_indirect_multimesh_lifecycle.gd")
 const PROBE_COUNT := 8195
 const TIMEOUT_FRAMES := 240
 const CLEANUP_TIMEOUT_FRAMES := 120
@@ -9,6 +10,7 @@ var _mesh: BoxMesh
 var _multimesh := RID()
 var _cleanup_mutex := Mutex.new()
 var _cleanup_done := false
+var _cleanup_result: Dictionary = {}
 
 func _initialize() -> void:
     call_deferred("_run")
@@ -80,9 +82,12 @@ func _run() -> void:
         print("YARDMAN_GPU_INDIRECT_MULTIMESH_METRICS count=%d visible=%d roundtrip_us=%d" % [PROBE_COUNT, expected_count, int(result.get("roundtrip_us", -1))])
 
     await _free_multimesh_and_sync()
+    if Lifecycle.requires_472_command_buffer_workaround():
+        _check(bool(_cleanup_result.get("manual_command_free", false)),
+            "Godot 4.7.2 command-buffer leak workaround did not execute")
     _mesh = null
     await process_frame
-    print("YARDMAN_GPU_INDIRECT_MULTIMESH_TEST %s global_rd=1 direct_buffer=1 indirect_count=1 init_order=1 cleanup_fence=1 no_runtime_readback=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_GPU_INDIRECT_MULTIMESH_TEST %s global_rd=1 direct_buffer=1 indirect_count=1 init_order=1 cleanup_fence=1 leak_workaround=1 no_runtime_readback=1" % ("PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
 
 func _free_multimesh_and_sync() -> void:
@@ -92,6 +97,7 @@ func _free_multimesh_and_sync() -> void:
     _multimesh = RID()
     _cleanup_mutex.lock()
     _cleanup_done = false
+    _cleanup_result = {}
     _cleanup_mutex.unlock()
     RenderingServer.call_on_render_thread(_free_multimesh_render_thread.bind(rid_to_free))
 
@@ -107,8 +113,9 @@ func _free_multimesh_and_sync() -> void:
     await process_frame
 
 func _free_multimesh_render_thread(rid_to_free: RID) -> void:
-    RenderingServer.free_rid(rid_to_free)
+    var result := Lifecycle.free_on_render_thread(rid_to_free)
     _cleanup_mutex.lock()
+    _cleanup_result = result
     _cleanup_done = true
     _cleanup_mutex.unlock()
 

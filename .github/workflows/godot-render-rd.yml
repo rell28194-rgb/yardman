@@ -10,6 +10,7 @@ on:
       - 'godot/scripts/predictive_streaming_runtime.gd'
       - 'godot/scripts/gpu_visibility_probe.gd'
       - 'godot/scripts/gpu_indirect_multimesh_probe.gd'
+      - 'godot/scripts/gpu_indirect_multimesh_lifecycle.gd'
       - 'godot/shaders/gpu_visibility.glsl'
       - 'godot/shaders/gpu_indirect_multimesh.glsl'
       - 'godot/tests/streaming_priority_test.gd'
