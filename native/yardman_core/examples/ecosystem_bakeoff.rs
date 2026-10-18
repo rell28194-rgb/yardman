@@ -1,4 +1,9 @@
+#[path = "../src/routing.rs"]
+mod routing;
+
 use bitcode::{Decode, Encode};
+use petgraph::{algo::dijkstra, graph::DiGraph};
+use routing::{RoadRouteGraph, RouteEdge, RouteMetric};
 use rstar::RTree;
 use serde::{Deserialize, Serialize};
 use std::hint::black_box;
@@ -9,6 +14,8 @@ const SERIALIZE_LOOPS: usize = 48;
 const POINT_COUNT: usize = 131_072;
 const QUERY_COUNT: usize = 192;
 const QUERY_RADIUS: f32 = 900.0;
+const ROUTE_NODES: usize = 8_192;
+const ROUTE_QUERIES: usize = 64;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Encode, Decode)]
 struct SnapshotEntity {
@@ -127,6 +134,108 @@ fn main() {
     let rtree_query_us = rtree_start.elapsed().as_micros();
     assert_eq!(rtree_hits, linear_hits, "R-tree relevance query changed results");
 
+    // Routing candidate: use the same deterministic directed edge semantics as
+    // the Jamaica graph, then compare the compact Yardman kernel with petgraph.
+    let mut route_edges = Vec::with_capacity(ROUTE_NODES * 2);
+    for node in 0..ROUTE_NODES - 1 {
+        route_edges.push(RouteEdge {
+            id: node as i32,
+            from: node as i32,
+            to: node as i32 + 1,
+            length_m: 10.0,
+            speed_limit_mps: Some(13.888_889),
+            direction: 1,
+        });
+    }
+    let shortcut_base = route_edges.len() as i32;
+    for node in 0..ROUTE_NODES - 16 {
+        route_edges.push(RouteEdge {
+            id: shortcut_base + node as i32,
+            from: node as i32,
+            to: node as i32 + 16,
+            length_m: 118.0,
+            speed_limit_mps: Some(22.222_222),
+            direction: 1,
+        });
+    }
+
+    let custom_build_start = Instant::now();
+    let custom_graph = RoadRouteGraph::from_edges(ROUTE_NODES, route_edges.clone(), 13.888_889)
+        .expect("Yardman route graph build");
+    let custom_build_us = custom_build_start.elapsed().as_micros();
+
+    let petgraph_build_start = Instant::now();
+    let mut petgraph_graph = DiGraph::<(), f32>::with_capacity(ROUTE_NODES, route_edges.len());
+    let pet_nodes: Vec<_> = (0..ROUTE_NODES).map(|_| petgraph_graph.add_node(())).collect();
+    for edge in &route_edges {
+        petgraph_graph.add_edge(
+            pet_nodes[edge.from as usize],
+            pet_nodes[edge.to as usize],
+            edge.length_m,
+        );
+    }
+    let petgraph_build_us = petgraph_build_start.elapsed().as_micros();
+
+    let route_queries: Vec<(usize, usize)> = (0..ROUTE_QUERIES)
+        .map(|query| {
+            let start = (query * 97) % (ROUTE_NODES / 2);
+            let span = 2_048 + (query * 53) % 1_024;
+            (start, (start + span).min(ROUTE_NODES - 1))
+        })
+        .collect();
+
+    for &(start, goal) in &route_queries {
+        let custom = custom_graph
+            .shortest_path(start as i32, goal as i32, RouteMetric::Distance)
+            .expect("Yardman route missing");
+        let pet = dijkstra(
+            &petgraph_graph,
+            pet_nodes[start],
+            Some(pet_nodes[goal]),
+            |edge| *edge.weight(),
+        );
+        let pet_cost = pet.get(&pet_nodes[goal]).copied().expect("petgraph route missing");
+        assert!(
+            (custom.distance_m - pet_cost).abs() < 0.01,
+            "route candidates disagree: {} vs {}",
+            custom.distance_m,
+            pet_cost
+        );
+    }
+
+    let custom_route_start = Instant::now();
+    let custom_checksum: f64 = route_queries
+        .iter()
+        .map(|&(start, goal)| {
+            f64::from(
+                custom_graph
+                    .shortest_path(start as i32, goal as i32, RouteMetric::Distance)
+                    .expect("Yardman route missing")
+                    .distance_m,
+            )
+        })
+        .sum();
+    let custom_route_us = custom_route_start.elapsed().as_micros();
+
+    let petgraph_route_start = Instant::now();
+    let petgraph_checksum: f64 = route_queries
+        .iter()
+        .map(|&(start, goal)| {
+            f64::from(
+                *dijkstra(
+                    &petgraph_graph,
+                    pet_nodes[start],
+                    Some(pet_nodes[goal]),
+                    |edge| *edge.weight(),
+                )
+                .get(&pet_nodes[goal])
+                .expect("petgraph route missing"),
+            )
+        })
+        .sum();
+    let petgraph_route_us = petgraph_route_start.elapsed().as_micros();
+    assert!((custom_checksum - petgraph_checksum).abs() < 0.1);
+
     println!(
         "YARDMAN_ECOSYSTEM_BAKEOFF snapshot_entities={} loops={} postcard_bytes={} bitcode_bytes={} lz4_postcard_bytes={}",
         ENTITY_COUNT,
@@ -153,6 +262,17 @@ fn main() {
         linear_query_us,
         rtree_query_us,
         rtree_hits
+    );
+    println!(
+        "YARDMAN_ECOSYSTEM_ROUTING nodes={} edges={} queries={} custom_build_us={} petgraph_build_us={} custom_query_us={} petgraph_query_us={} checksum={:.1}",
+        ROUTE_NODES,
+        route_edges.len(),
+        ROUTE_QUERIES,
+        custom_build_us,
+        petgraph_build_us,
+        custom_route_us,
+        petgraph_route_us,
+        custom_checksum
     );
     println!("YARDMAN_ECOSYSTEM_BAKEOFF PASS");
 }
