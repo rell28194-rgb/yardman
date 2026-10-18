@@ -1,0 +1,41 @@
+name: Yardman Vehicle Godot Toolchain
+
+on:
+  push:
+    branches: [codex/vehicle-production-001]
+    paths:
+      - '.github/workflows/vehicle-godot-toolchain.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  retain-godot-4-7-2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch and verify pinned Godot 4.7.2 Linux x86_64
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip'
+          EXPECTED='cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4'
+          wget -q "$URL" -O Godot_v4.7.2-stable_linux.x86_64.zip
+          echo "$EXPECTED  Godot_v4.7.2-stable_linux.x86_64.zip" | sha256sum -c -
+          mkdir -p extracted
+          unzip -q Godot_v4.7.2-stable_linux.x86_64.zip -d extracted
+          GODOT_BIN="$(find extracted -maxdepth 2 -type f -name 'Godot*' -print -quit)"
+          test -n "$GODOT_BIN"
+          chmod +x "$GODOT_BIN"
+          test "$($GODOT_BIN --version)" = '4.7.2.stable.official.ed1daf0bf'
+      - name: Retain verified vehicle-lane toolchain
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Vehicle-Godot-4.7.2-Linux-x86_64
+          path: |
+            Godot_v4.7.2-stable_linux.x86_64.zip
+            extracted/**
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
