@@ -1,0 +1,36 @@
+{
+  "checkpoint": "vehicle-fitment-tooling-critique-003",
+  "branch_boundary": "93297168d85d809c78a405a35d7a486f233c052c",
+  "scope": "vehicle graphics microtask: source-backed wheel proportion and axle fitment",
+  "critical_findings": [
+    "The previous runtime-rig upgrader estimated tyre radius from the absolute Y coordinate of the four recovered axle anchors and clamped that estimate to 0.30-0.45 m. Axle-anchor height is not tyre-size provenance and can visibly distort otherwise-correct recovered cars.",
+    "ToyotaMark2 is the strongest current fitment repair target because its identity/body/interior/rig evidence is strong and its wheelbase is already effectively correct, while the current conversion loses the source rear-track stagger and uses oversized shared wheel geometry.",
+    "Exact stock fitment metadata already exists in the lane, so the runtime-rig step can apply source-backed front/rear radii, widths, tracks and axle spacing without guessing body origin or silently claiming fallback tyre art is recovered source art."
+  ],
+  "implemented_correction": {
+    "candidate_sha_lock": true,
+    "source_target_pivots_applied": true,
+    "front_rear_radius_split": true,
+    "front_rear_width_split": true,
+    "temporary_tyre_art_explicitly_marked_fallback": true,
+    "visual_promotion_remains_blocked_until_exact_wheel_art": true
+  },
+  "representative_target": {
+    "id": "ToyotaMark2",
+    "current_front_half_track_m": 0.736,
+    "current_rear_half_track_m": 0.736,
+    "source_target_front_half_track_m": 0.74250006,
+    "source_target_rear_half_track_m": 0.7925,
+    "source_target_front_tyre_radius_m": 0.3284,
+    "source_target_rear_tyre_radius_m": 0.3284,
+    "promotion": "hold",
+    "next_visual_gate": "recover exact stock cap/tyre geometry, rebuild with this fitment path, render close/mid/far, then re-grade"
+  },
+  "grade_after_tooling_fix": {
+    "source_fitment_correctness": "A-",
+    "visual_completeness": "C",
+    "reason": "The proportion/placement path is now source-backed and SHA-locked, but temporary tyre geometry is still fallback art and cannot satisfy hero-vehicle wheel fidelity."
+  },
+  "quantity_gate_open": false,
+  "crown007_non_regression": "untouched"
+}

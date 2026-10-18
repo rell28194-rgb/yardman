@@ -1,0 +1,79 @@
+name: Yardman Vehicle Fitment Quality
+
+on:
+  push:
+    branches: [codex/vehicle-production-001]
+    paths:
+      - '.github/workflows/vehicle-fitment-quality.yml'
+      - 'godot/tools/vehicle_production/upgrade_carx_runtime_rig.py'
+      - 'godot/tools/vehicle_production/derive_carx_stock_fitment.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-backed-fitment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate exact stock fitment application
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, struct, subprocess, tempfile
+          from pathlib import Path
+
+          GLB_MAGIC=0x46546C67; GLB_JSON=0x4E4F534A; GLB_BIN=0x004E4942
+          with tempfile.TemporaryDirectory() as td:
+              p=Path(td); src=p/'source.glb'; out=p/'output.glb'; report=p/'report.json'; fit=p/'fitment.json'
+              nodes=[
+                  {'name':'Root','children':[1,2,3,4,5]},
+                  {'name':'BodyShell'},
+                  {'name':'Wheel_FL','translation':[-0.736,0.33,-1.683]},
+                  {'name':'Wheel_FR','translation':[0.736,0.33,-1.683]},
+                  {'name':'Wheel_RL','translation':[-0.736,0.33,0.993]},
+                  {'name':'Wheel_RR','translation':[0.736,0.33,0.993]},
+              ]
+              doc={'asset':{'version':'2.0'},'scene':0,'scenes':[{'nodes':[0]}],'nodes':nodes,'buffers':[{'byteLength':0}]}
+              js=json.dumps(doc,separators=(',',':')).encode(); js+=b' '*((-len(js))%4)
+              raw=struct.pack('<III',GLB_MAGIC,2,12+8+len(js)+8)+struct.pack('<II',len(js),GLB_JSON)+js+struct.pack('<II',0,GLB_BIN)
+              src.write_bytes(raw); source_sha=hashlib.sha256(raw).hexdigest()
+              fit.write_text(json.dumps({
+                  'candidate_sha256':source_sha,
+                  'source_payload_sha256':'synthetic-source-proof',
+                  'source_target':{
+                      'wheel_pivots_m':{
+                          'FrontWheelLeft':[-0.74250006,0.33,-1.684000045],
+                          'FrontWheelRight':[0.74250006,0.33,-1.684000045],
+                          'RearWheelLeft':[-0.7925,0.33,0.994000045],
+                          'RearWheelRight':[0.7925,0.33,0.994000045],
+                      },
+                      'front_wheel_radius_m':0.3284,
+                      'rear_wheel_radius_m':0.3284,
+                      'front_tyre':{'width_mm':215},
+                      'rear_tyre':{'width_mm':225},
+                  },
+              }))
+              subprocess.check_call([
+                  'python','godot/tools/vehicle_production/upgrade_carx_runtime_rig.py',
+                  str(src),str(out),'--fitment',str(fit),'--report',str(report)
+              ])
+              result=json.loads(report.read_text())
+              assert result['stock_fitment_applied'] is True
+              assert result['runtime_wheel_fallback'] is True
+              assert result['visual_promotion_blocked_on_wheel_art'] is True
+              assert abs(result['front_wheel_radius_m']-0.3284)<1e-9
+              assert abs(result['rear_wheel_width_m']-0.225)<1e-9
+              data=out.read_bytes(); jl,jt=struct.unpack_from('<II',data,12)
+              assert jt==GLB_JSON
+              gltf=json.loads(data[20:20+jl].decode().rstrip(' \0'))
+              by_name={node['name']:node for node in gltf['nodes']}
+              assert by_name['RearWheelLeft']['translation'][0]==-0.7925
+              assert by_name['RearWheelRight']['translation'][0]==0.7925
+              assert by_name['FrontWheelLeft']['translation'][2]==-1.684000045
+              assert by_name['RearWheelLeft']['translation'][2]==0.994000045
+          print('YARDMAN_SOURCE_BACKED_FITMENT_PASS')
+          PY
