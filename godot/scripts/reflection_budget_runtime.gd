@@ -48,9 +48,8 @@ func _process(delta: float) -> void:
     var profile := profile_for(_budget, _renderer)
     var target := (car as Node3D).global_position + Vector3.UP * float(profile.origin_height_m)
     var first_capture := _last_capture_position.x == INF
-    var moved_far_enough := not first_capture and target.distance_to(_last_capture_position) >= float(profile.recapture_m)
-    var interval_ready := _recapture_clock >= float(profile.min_interval_s)
-    if first_capture or (moved_far_enough and interval_ready):
+    var moved_m := 0.0 if first_capture else target.distance_to(_last_capture_position)
+    if capture_due(first_capture, moved_m, _recapture_clock, profile):
         _probe.global_position = target
         _last_capture_position = target
         _recapture_clock = 0.0
@@ -72,6 +71,15 @@ func _ensure_probe() -> void:
     scene.add_child(_probe)
     _last_capture_position = Vector3(INF, INF, INF)
     _recapture_clock = 9999.0
+
+static func capture_due(first_capture: bool, moved_m: float, elapsed_s: float, profile: Dictionary) -> bool:
+    if first_capture:
+        return true
+    if not bool(profile.get("enabled", false)):
+        return false
+    if not is_finite(moved_m) or not is_finite(elapsed_s):
+        return false
+    return moved_m >= float(profile.get("recapture_m", INF)) and elapsed_s >= float(profile.get("min_interval_s", INF))
 
 static func profile_for(budget: int, renderer: String) -> Dictionary:
     var level := clampi(budget, 0, 4)
