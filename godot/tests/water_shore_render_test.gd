@@ -36,9 +36,32 @@ func _freeze_variant(coast, renderer: String, quality: String) -> void:
         coast.water_material.set_shader_parameter(flag, false)
     _check(frozen.code.find("shoreline_wash") >= 0, "%s shader lost shoreline wash stage" % renderer)
 
+func _hide_project_overlays() -> void:
+    var startup_menu := root.get_node_or_null("StartupMenu")
+    if startup_menu != null and startup_menu.has_method("_set_open"):
+        startup_menu.call("_set_open", false)
+    # Always-processing autoloads can build or reopen UI after this standalone
+    # render script starts. Hide their concrete controls every capture frame.
+    for path in [
+        "/root/StartupMenu/StartupMenuScreen",
+        "/root/ParishMapRuntime/ParishMapButton",
+        "/root/ParishMapRuntime/ParishMapOverlay",
+        "/root/VehicleGarage/GarageUI",
+    ]:
+        var overlay := root.get_node_or_null(path)
+        if overlay is CanvasItem:
+            overlay.visible = false
+    var hud_layer := root.find_child("YardmanHUD", true, false)
+    if hud_layer != null:
+        for child in hud_layer.get_children():
+            if child is CanvasItem:
+                child.visible = false
+
 func _capture(name: String) -> Image:
     for frame in range(12):
+        _hide_project_overlays()
         await process_frame
+    _hide_project_overlays()
     await RenderingServer.frame_post_draw
     var picture := root.get_texture().get_image()
     if picture == null or picture.is_empty():
@@ -100,22 +123,6 @@ func _grade_variant(label: String, picture: Image, camera: Camera3D) -> Dictiona
     _check(wash_rgb.z > wash_rgb.x * 1.25 and deep_rgb.z > deep_rgb.x * 1.25,
         label + " capture does not contain the expected water chroma")
     return {"wash": wash, "deep": deep, "delta": delta}
-
-func _hide_project_overlays() -> void:
-    var startup_menu := root.get_node_or_null("StartupMenu")
-    if startup_menu != null:
-        if startup_menu.has_method("_set_open"):
-            startup_menu.call("_set_open", false)
-        if startup_menu is CanvasItem:
-            startup_menu.visible = false
-    # Project startup can instantiate the gameplay HUD beside this standalone
-    # render probe. Hide only its CanvasItem children so MAP/GARAGE/touch UI can
-    # never contaminate the water evidence frame.
-    var hud_layer := root.find_child("YardmanHUD", true, false)
-    if hud_layer != null:
-        for child in hud_layer.get_children():
-            if child is CanvasItem:
-                child.visible = false
 
 func _run() -> void:
     if DisplayServer.get_name() == "headless":
