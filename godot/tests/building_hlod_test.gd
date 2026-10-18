@@ -1,6 +1,7 @@
 extends SceneTree
 
 const HLOD = preload("res://scripts/building_hlod_runtime.gd")
+const RenderRuntime = preload("res://scripts/render_runtime.gd")
 var failures := 0
 
 func _initialize() -> void:
@@ -61,5 +62,25 @@ func _run() -> void:
     _check(int(hot_ultra.max_cells) < int(ultra.max_cells), "thermal pressure does not reduce HLOD residency")
     _check(float(hot_ultra.far_distance) >= 1450.0 + 512.0, "thermal HLOD cuts away minimum near-field continuation")
 
-    print("YARDMAN_BUILDING_HLOD_TEST %s footprint=1 height=1 merged_cell=1 thermal_budget=1" % ("PASS" if failures == 0 else "FAIL"))
+    # HLOD used to own a separate 0.9-1.9 ms integration allowance which could
+    # stack on top of roads, terrain, near buildings and roadside work. The
+    # render coordinator now owns that time as a slice of one aggregate frame
+    # envelope and reasserts it after HLOD profile refreshes.
+    var allocation := RenderRuntime.stream_integration_budget_for("Ultra", 0)
+    _check(allocation.has("hlod_us"), "shared stream envelope omitted building HLOD")
+    _check(int(allocation.assigned_us) == int(allocation.total_us), "shared stream slices do not exactly match aggregate envelope")
+    _check(int(allocation.hlod_us) > 0 and int(allocation.hlod_us) < int(ultra.geometry_budget_us), "Ultra HLOD slice is not a meaningful bounded cap")
+    var hlod_runtime := HLOD.new()
+    root.add_child(hlod_runtime)
+    hlod_runtime._geometry_budget_us = int(ultra.geometry_budget_us)
+    RenderRuntime.apply_hlod_budget_cap(hlod_runtime, allocation)
+    _check(int(hlod_runtime._geometry_budget_us) == int(allocation.hlod_us), "shared HLOD cap was not applied to the runtime")
+    var hot_allocation := RenderRuntime.stream_integration_budget_for("Ultra", 5)
+    RenderRuntime.apply_hlod_budget_cap(hlod_runtime, hot_allocation)
+    _check(int(hlod_runtime._geometry_budget_us) == int(hot_allocation.hlod_us), "thermal HLOD cap did not contract")
+    _check(int(hot_allocation.hlod_us) < int(allocation.hlod_us), "thermal pressure did not reduce HLOD integration share")
+    hlod_runtime.queue_free()
+    await process_frame
+
+    print("YARDMAN_BUILDING_HLOD_TEST %s footprint=1 height=1 merged_cell=1 thermal_budget=1 aggregate_integration=1" % ("PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
