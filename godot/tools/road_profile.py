@@ -1,9 +1,10 @@
 """Deterministic longitudinal road-profile refinement for Yardman's Jamaica graph.
 
-The DEM remains vertical authority. This pass only removes sub-metre high-frequency
-bumps from interior road vertices while preserving every graph-edge endpoint and
-shared OSM junction elevation. Bridge/tunnel profiles remain structural authority
-and are never modified here.
+The DEM remains vertical authority. This pass reconstructs a driveable road-deck
+profile from that coarse terrain surface: X/Z, source topology, graph endpoints,
+and structural bridge/tunnel profiles remain untouched. Interior deck Y may move
+within an explicit terrain-resolution-derived envelope so sub-grid DSM/terrain
+slope does not become an artificial saw-tooth road surface.
 """
 from __future__ import annotations
 
@@ -12,6 +13,15 @@ import math
 
 STRUCTURAL_FLAGS = 2 | 4
 SIGNIFICANT_GRADE_BREAK_PP = 10.0
+DEFAULT_MAX_ADJUSTMENT_M = 0.45
+DEFAULT_PASSES = 2
+DEFAULT_BLEND = 0.55
+# Production road profiles are sampled from the runtime terrain, whose current
+# national grid is 64 m. A deck correction up to one tenth of one terrain sample
+# spacing is an explicitly derived cut/fill envelope, not surveyed elevation.
+TERRAIN_ADJUSTMENT_FRACTION = 0.10
+TERRAIN_PROFILE_PASSES = 12
+TERRAIN_PROFILE_BLEND = 0.75
 
 
 def _horizontal_distance(a, b) -> float:
@@ -194,15 +204,30 @@ def _grade_diagnostics(edges: dict) -> dict:
     }
 
 
-def smooth_network_profiles(network: dict, *, max_adjustment_m: float = 0.45,
-                            passes: int = 2, blend: float = 0.55) -> dict:
+def smooth_network_profiles(network: dict, *, terrain_spacing_m: float | None = None,
+                            max_adjustment_m: float | None = None,
+                            passes: int | None = None, blend: float | None = None) -> dict:
     """Refine interior edge elevations and propagate them to streamed surfaces.
 
     ``network`` is the object returned by ``road_graph.build_network``. Graph-edge
     endpoints are invariant, so independently smoothed edges still meet exactly at
-    OSM junctions. Surface polygon Y values intentionally stay as sampled terrain;
-    the runtime earthworks system uses that difference to construct cut/fill ties.
+    OSM junctions. Surface polygon Y remains raw terrain evidence; the runtime
+    earthworks system uses that difference to construct cut/fill ties.
+
+    When a terrain spacing is supplied, the stronger production profile is derived
+    from that grid: the correction envelope is 10% of one terrain sample spacing.
+    This removes sub-grid saw-tooth deck motion while keeping the source DEM as the
+    terrain authority and preserving every graph endpoint.
     """
+    if terrain_spacing_m is not None and (not math.isfinite(terrain_spacing_m) or terrain_spacing_m <= 0.0):
+        raise ValueError("terrain_spacing_m must be finite and positive")
+    if max_adjustment_m is None:
+        max_adjustment_m = (terrain_spacing_m * TERRAIN_ADJUSTMENT_FRACTION
+                            if terrain_spacing_m is not None else DEFAULT_MAX_ADJUSTMENT_M)
+    if passes is None:
+        passes = TERRAIN_PROFILE_PASSES if terrain_spacing_m is not None else DEFAULT_PASSES
+    if blend is None:
+        blend = TERRAIN_PROFILE_BLEND if terrain_spacing_m is not None else DEFAULT_BLEND
     if not math.isfinite(max_adjustment_m) or max_adjustment_m < 0.0:
         raise ValueError("max_adjustment_m must be finite and non-negative")
     if passes < 0:
@@ -234,7 +259,13 @@ def smooth_network_profiles(network: dict, *, max_adjustment_m: float = 0.45,
                    if index not in (0, len(adjustments) - 1) and abs(value) > 1e-9]
         smoothed_vertices += len(changed)
         all_adjustments.extend(changed)
-        edge["elevation_profile"] = "DEM + bounded longitudinal smoothing; endpoints preserved"
+        if terrain_spacing_m is not None:
+            edge["elevation_profile"] = (
+                "DEM-derived road deck; bounded longitudinal smoothing; endpoints preserved; "
+                "not surveyed vertical alignment"
+            )
+        else:
+            edge["elevation_profile"] = "DEM + bounded longitudinal smoothing; endpoints preserved"
 
     transition_counts = {"crest": 0, "sag": 0, "grade_break": 0}
     transition_total = 0
@@ -304,6 +335,12 @@ def smooth_network_profiles(network: dict, *, max_adjustment_m: float = 0.45,
         "profile_mean_adjustment_m": round(sum(absolute) / len(absolute), 6) if absolute else 0.0,
         "profile_adjustment_limit_m": max_adjustment_m,
         "profile_passes": passes,
+        "profile_blend": blend,
+        "profile_terrain_spacing_m": terrain_spacing_m if terrain_spacing_m is not None else 0.0,
+        "profile_adjustment_basis": (
+            "10% of runtime terrain sample spacing; DEM-derived engineering reconstruction"
+            if terrain_spacing_m is not None else "explicit/default local smoothing"
+        ),
     }
     stats.update(_grade_diagnostics(edges))
     network.setdefault("stats", {}).update(stats)
