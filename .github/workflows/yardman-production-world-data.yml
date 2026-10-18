@@ -7,6 +7,14 @@ on:
       - codex/world-quality-20261018
     paths:
       - '.github/workflows/yardman-production-world-data.yml'
+      - 'godot/tools/build_jamaica_roads.py'
+      - 'godot/tools/road_graph.py'
+      - 'godot/tools/road_route_pack.py'
+      - 'godot/tools/build_terrain.py'
+      - 'godot/tools/build_buildings.py'
+      - 'godot/tools/profile_building_packs.py'
+      - 'Tests/Python/test_road_graph_closed_loops.py'
+      - 'Tests/Python/test_route_pack.py'
 
 permissions:
   contents: read
@@ -43,6 +51,13 @@ jobs:
           print('shapely', shapely.__version__)
           print('osmium', getattr(osmium, '__version__', 'loaded'))
           PY
+
+      - name: Gate road topology before national compile
+        shell: bash
+        run: |
+          set -euo pipefail
+          python Tests/Python/test_road_graph_closed_loops.py
+          python Tests/Python/test_route_pack.py
 
       - name: Acquire current Jamaica OpenStreetMap source with provenance
         shell: bash
@@ -97,7 +112,7 @@ jobs:
           set -euo pipefail
           export YARDMAN_WORK_ROOT="$WORK_ROOT"
           python - <<'PY'
-          import hashlib, json, os, pathlib, sys
+          import hashlib, json, os, pathlib
 
           root = pathlib.Path(os.environ['YARDMAN_WORK_ROOT'])
           pbf = root / 'source/jamaica-latest.osm.pbf'
@@ -118,8 +133,10 @@ jobs:
           assert int(buildings['stats'].get('tiles', 0)) >= 600, 'Building tile coverage unexpectedly small'
           assert int(buildings['stats'].get('cells', 0)) >= 50000, 'Building cell coverage unexpectedly small'
           assert int(roads['stats'].get('graph_edges', 0)) > 0 and int(roads['stats'].get('graph_nodes', 0)) > 0
+          assert not any(edge.get('from') == edge.get('to') for edge in roads.get('graph_edges_detail', [])), 'Self-loop road edge survived production compile'
 
           evidence = {
+              'compiler_commit': os.environ.get('GITHUB_SHA', ''),
               'source_url': os.environ.get('PBF_URL', ''),
               'source_sha256': source_sha,
               'terrain': {
@@ -148,49 +165,14 @@ jobs:
           print(json.dumps(evidence, sort_keys=True))
           PY
 
-      - name: Exercise real compiled building cells
+      - name: Profile real compiled building packs and worst-case cell
         shell: bash
         run: |
           set -euo pipefail
-          export YARDMAN_WORK_ROOT="$WORK_ROOT"
-          python - <<'PY'
-          import json, os, pathlib, statistics, struct, time
-          import sys
-          sys.path.insert(0, 'godot/tools')
-          from build_buildings import read_cell
-
-          root = pathlib.Path(os.environ['YARDMAN_WORK_ROOT']) / 'output/buildings'
-          manifest = json.loads((root / 'manifest.json').read_text())
-          tiles = manifest['tiles']
-          picks = [tiles[0], tiles[len(tiles)//2], tiles[-1]]
-          evidence = []
-          for tile in picks:
-              if not tile['cells']:
-                  continue
-              local = tile['cells'][len(tile['cells']) // 2]
-              path = root / tile['file']
-              samples = []
-              count = None
-              for _ in range(8):
-                  started = time.perf_counter_ns()
-                  records = read_cell(path, int(local[0]), int(local[1]))
-                  samples.append((time.perf_counter_ns() - started) / 1000.0)
-                  count = len(records)
-              if count <= 0:
-                  raise SystemExit(f'Empty production building sample: {tile["file"]} {local}')
-              if not all(str(record[0]).startswith(('w', 'r')) for record in records[:min(32, count)]):
-                  raise SystemExit('Production sample contains non-OSM source IDs')
-              evidence.append({
-                  'tile': [tile['x'], tile['z']],
-                  'local_cell': local,
-                  'records': count,
-                  'median_decode_us': round(statistics.median(samples), 2),
-                  'max_decode_us': round(max(samples), 2),
-              })
-          out = pathlib.Path(os.environ['YARDMAN_WORK_ROOT']) / 'output/production-building-decode.json'
-          out.write_text(json.dumps(evidence, indent=2, sort_keys=True))
-          print('YARDMAN_REAL_BUILDING_DECODE PASS', json.dumps(evidence, sort_keys=True))
-          PY
+          python godot/tools/profile_building_packs.py \
+            "$WORK_ROOT/output/buildings" \
+            --output "$WORK_ROOT/output/production-building-profile.json" \
+            --iterations 12
 
       - name: Preserve real national production data
         uses: actions/upload-artifact@v4
@@ -201,7 +183,7 @@ jobs:
             /tmp/yardman-production-world/output/roads/**
             /tmp/yardman-production-world/output/buildings/**
             /tmp/yardman-production-world/output/production-data-evidence.json
-            /tmp/yardman-production-world/output/production-building-decode.json
+            /tmp/yardman-production-world/output/production-building-profile.json
             /tmp/yardman-production-world/source/geofabrik.url
             /tmp/yardman-production-world/source/geofabrik.headers
             /tmp/yardman-production-world/source/jamaica-latest.osm.pbf.sha256
