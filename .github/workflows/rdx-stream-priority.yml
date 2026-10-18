@@ -1,0 +1,61 @@
+name: Yardman RDX Streaming Priority
+
+on:
+  push:
+    branches:
+      - codex/stream-priority-rdx-002
+    paths:
+      - 'godot/scripts/streaming_priority.gd'
+      - 'godot/scripts/road_streamer.gd'
+      - 'godot/scripts/terrain_streamer.gd'
+      - 'godot/scripts/building_streamer.gd'
+      - 'godot/tests/streaming_priority_test.gd'
+      - 'godot/tests/streaming_enqueue_integration_test.gd'
+      - 'godot/tools/rdx_stream_priority_eval.py'
+      - '.github/workflows/rdx-stream-priority.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stream-priority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+      - name: Import and parse R&D runtime
+        shell: bash
+        run: |
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/rdx-stream-priority-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/rdx-stream-priority-import.log; then exit 1; fi
+      - name: Test predictive priority invariants
+        shell: bash
+        run: |
+          timeout 120 godot --headless --path godot --script res://tests/streaming_priority_test.gd 2>&1 | tee godot/build/rdx-stream-priority.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|STREAMING_PRIORITY_TEST:.*' godot/build/rdx-stream-priority.log; then exit 1; fi
+          grep -q 'YARDMAN_STREAMING_PRIORITY_TEST PASS' godot/build/rdx-stream-priority.log
+      - name: Test streamer integration
+        shell: bash
+        run: |
+          timeout 120 godot --headless --path godot --script res://tests/streaming_enqueue_integration_test.gd 2>&1 | tee godot/build/rdx-stream-enqueue.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|STREAMING_ENQUEUE_INTEGRATION_TEST:.*' godot/build/rdx-stream-enqueue.log; then exit 1; fi
+          grep -q 'YARDMAN_STREAMING_ENQUEUE_INTEGRATION_TEST PASS' godot/build/rdx-stream-enqueue.log
+      - name: Evaluate frozen streaming traces
+        if: ${{ hashFiles('godot/tools/rdx_stream_priority_eval.py') != '' }}
+        shell: bash
+        run: |
+          python3 godot/tools/rdx_stream_priority_eval.py | tee godot/build/rdx-stream-priority-eval.log
