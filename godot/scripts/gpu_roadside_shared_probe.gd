@@ -10,6 +10,7 @@ const NEAR_END := 28.0
 const FAR_BEGIN := 28.0
 const FAR_END := 60.0
 const GRASS_END := 16.0
+const DENSITY_SCALE := 1000
 
 var _mutex := Mutex.new()
 var _started := false
@@ -17,16 +18,17 @@ var _done := false
 var _result: Dictionary = {}
 
 func begin(near_multimesh: RID, far_multimesh: RID, grass_multimesh: RID,
-        count: int, surface_count: int) -> bool:
+        count: int, surface_count: int, density_factor: float = 1.0) -> bool:
     _mutex.lock()
     if _started:
         _mutex.unlock()
         return false
     _started = true
     _mutex.unlock()
+    var density_permille := clampi(int(round(clampf(density_factor, 0.0, 1.0) * DENSITY_SCALE)), 0, DENSITY_SCALE)
     RenderingServer.call_on_render_thread(_run_render.bind(
         near_multimesh, far_multimesh, grass_multimesh,
-        clampi(count, 64, 262144), clampi(surface_count, 1, 64)))
+        clampi(count, 64, 262144), clampi(surface_count, 1, 64), density_permille))
     return true
 
 func is_done() -> bool:
@@ -42,7 +44,7 @@ func result() -> Dictionary:
     return value
 
 func _run_render(near_multimesh: RID, far_multimesh: RID, grass_multimesh: RID,
-        count: int, surface_count: int) -> void:
+        count: int, surface_count: int, density_permille: int) -> void:
     var rd := RenderingServer.get_rendering_device()
     if rd == null:
         _finish({"supported": false, "reason": "global RenderingDevice unavailable"})
@@ -76,7 +78,7 @@ func _run_render(near_multimesh: RID, far_multimesh: RID, grass_multimesh: RID,
 
     var source_bytes := source_values.to_byte_array()
     var zero_counts := PackedInt32Array([0, 0, 0, 0]).to_byte_array()
-    var count_params := PackedInt32Array([count, 0, 0, 0]).to_byte_array()
+    var count_params := PackedInt32Array([count, density_permille, 0, 0]).to_byte_array()
     var range_params := PackedFloat32Array([NEAR_END, FAR_BEGIN, FAR_END, GRASS_END]).to_byte_array()
     var surface_params := PackedInt32Array([surface_count, surface_count, surface_count, 0]).to_byte_array()
 
@@ -150,6 +152,7 @@ func _run_render(near_multimesh: RID, far_multimesh: RID, grass_multimesh: RID,
     _finish({
         "supported": true,
         "count": count,
+        "density_permille": density_permille,
         "source_bytes": source_bytes.size(),
         "source_stride_floats": SOURCE_STRIDE_FLOATS,
         "destination_stride_floats": DESTINATION_STRIDE_FLOATS,
@@ -165,6 +168,19 @@ func _run_render(near_multimesh: RID, far_multimesh: RID, grass_multimesh: RID,
         "surface_count": surface_count,
         "roundtrip_us": elapsed_us,
     })
+
+static func stable_hash(index: int) -> int:
+    var x := index & 0xffffffff
+    x = (x ^ (x >> 16)) & 0xffffffff
+    x = (x * 0x7feb352d) & 0xffffffff
+    x = (x ^ (x >> 15)) & 0xffffffff
+    x = (x * 0x846ca68b) & 0xffffffff
+    x = (x ^ (x >> 16)) & 0xffffffff
+    return x
+
+static func density_selected(index: int, density_factor: float) -> bool:
+    var permille := clampi(int(round(clampf(density_factor, 0.0, 1.0) * DENSITY_SCALE)), 0, DENSITY_SCALE)
+    return permille >= DENSITY_SCALE or stable_hash(index) % DENSITY_SCALE < permille
 
 static func source_record(index: int, count: int) -> PackedFloat32Array:
     var x := float((index * 73) % 97) - 48.0
