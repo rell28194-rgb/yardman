@@ -1,0 +1,18 @@
+{
+  "format_version": 1,
+  "vehicles": [
+    {
+      "id": "toyota_chaser_v",
+      "manufacturer": "Toyota",
+      "display_name": "Toyota Chaser V",
+      "hero_scene": "road_car.glb",
+      "source_identity": "ToyotaChaserV",
+      "source_unit": "2c2f0c9e578ce73488d5a70a7fd4ca1e",
+      "source_sha256": "86556496ce2eeaa29c57c7fcc16bec11c230179485609e08b160313594cf3f03",
+      "dimensions_m": [1.957072, 1.343556, 4.831390],
+      "wheelbase_m": 2.673,
+      "track_width_m": 1.542,
+      "wheel_radius_m": 0.353
+    }
+  ]
+}
