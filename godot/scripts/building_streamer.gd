@@ -742,9 +742,9 @@ func _publish_cell() -> void:
     _loaded[key] = {"root": cell_root, "body": body, "collider": collider, "meshes": meshes,
         "count": count, "facade_body": facade_body, "facades": facades}
     _build.clear()
-    # Collision activation now only starts a staged collision job here. It no
-    # longer expands faces or cooks a concave BVH on the publication frame.
-    _refresh_collision()
+    # Collision scheduling has one owner: the top-level process tick. Publication
+    # must not start or advance physics work itself, otherwise a near-cell publish
+    # can consume two collision phases in the same frame.
     cell_ready.emit(cell, count)
 
 func _complete_cell() -> void:

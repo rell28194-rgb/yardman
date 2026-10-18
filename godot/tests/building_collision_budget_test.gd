@@ -31,6 +31,38 @@ func _dense_mesh(triangle_count: int) -> ArrayMesh:
     return mesh
 
 func _run() -> void:
+    var publication_streamer := Building.new()
+    publication_streamer.cell_size = 256.0
+    publication_streamer.collision_distance = 180.0
+    publication_streamer._world_position = Vector2(128.0, 128.0)
+    var publication_root := Node3D.new()
+    var publication_body := StaticBody3D.new()
+    publication_body.name = "NearCollision"
+    publication_body.collision_layer = 0
+    var publication_collider := CollisionShape3D.new()
+    publication_body.add_child(publication_collider)
+    publication_root.add_child(publication_body)
+    var publication_mesh := _dense_mesh(1)
+    publication_streamer._build = {
+        "root": publication_root,
+        "cell": Vector2i.ZERO,
+        "key": "0:0",
+        "building_count": 1,
+        "meshes": [publication_mesh],
+        "body": publication_body,
+        "collider": publication_collider,
+        "facade_body": null,
+        "facades": [],
+        "finalize_step_count": 5,
+        "finalize_start_frame": Engine.get_process_frames(),
+    }
+    publication_streamer._publish_cell()
+    _check(publication_streamer._collision_build.is_empty(), "cell publication consumed collision scheduler work outside the frame owner")
+    publication_streamer._refresh_collision()
+    _check(str(publication_streamer._collision_build.get("key", "")) == "0:0", "single explicit collision refresh did not start the published near cell")
+    _check(int(publication_streamer._collision_build.get("phase", -1)) == 0, "first explicit collision refresh advanced beyond job start")
+    publication_streamer.free()
+
     var streamer := Building.new()
     streamer.cell_size = 256.0
     streamer.collision_distance = 180.0
@@ -97,5 +129,5 @@ func _run() -> void:
     cell_root.free()
     streamer.free()
     if failures == 0:
-        print("YARDMAN_BUILDING_COLLISION_BUDGET_TEST PASS activation=deferred arrays=isolated faces=chunked cook=isolated retreat=released cancellation=clean")
+        print("YARDMAN_BUILDING_COLLISION_BUDGET_TEST PASS publication=single_owner activation=deferred arrays=isolated faces=chunked cook=isolated retreat=released cancellation=clean")
     quit(0 if failures == 0 else 1)
