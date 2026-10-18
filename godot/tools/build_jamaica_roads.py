@@ -16,6 +16,7 @@ from typing import Dict, Iterator, List, Sequence, Tuple
 from pyproj import Transformer
 from road_graph import build_network, partition_id, read_osm_features
 from road_profile import smooth_network_profiles
+from road_route_pack import write_route_pack
 
 CRS_SOURCE = "EPSG:4326"
 CRS_TARGET = "EPSG:3448"
@@ -159,6 +160,7 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
         for partition, values in sorted(partitions.items()):
             (staging / "graph" / f"{kind}_{partition}.json").write_text(
                 json.dumps(values, separators=(",", ":")), encoding="utf-8")
+    route_pack = write_route_pack(network, staging / "graph" / "routes.ymr")
     manifest = {
         "format": 3, "source": "OpenStreetMap / Geofabrik Jamaica extract",
         "source_sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
@@ -175,7 +177,8 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
                           "elevation": "DEM registered; interior longitudinal bumps bounded to 0.45m adjustment; graph junctions and bridge/tunnel profiles preserved",
                           "vertical_transition_qa": "signed grades, grade-break percent-points, and crest/sag reversal candidates retained in stats for evidence-driven engineering"},
         "graph": {"format": 1, "partition": "sha1(id)[0:2]", "directory": "graph",
-                  "nodes": stats["graph_nodes"], "edges": stats["graph_edges"]},
+                  "nodes": stats["graph_nodes"], "edges": stats["graph_edges"],
+                  "route_pack": route_pack},
         "elevation_source": "DEM" if height_sampler else "unmeasured-flat",
         "tiles": tile_entries, "stats": stats,
         "parish_anchors": {name: {**network["anchor_roads"].get(name, {}), "lat": PARISH_COVERAGE_ANCHORS[name][0],
@@ -249,7 +252,7 @@ def main() -> int:
         print("Skipped auxiliary source layers for terrain bootstrap road pass")
     print(json.dumps(manifest["stats"], indent=2, sort_keys=True))
     print(f"Bounds (m): {manifest['bounds']}")
-    print(f"Wrote {len(manifest['tiles'])} road tiles and persistent topology to {args.output_dir}")
+    print(f"Wrote {len(manifest['tiles'])} road tiles, persistent topology, and route pack to {args.output_dir}")
     return 0
 
 
