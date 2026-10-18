@@ -9,6 +9,7 @@ reporting but cannot authorize destructive terrain morphology.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import math
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,22 @@ def _norm(value: object) -> str:
     return " ".join(str(value or "").strip().lower().split())
 
 
+def _safe_fraction(value: object) -> float:
+    """Return a finite [0, 1] overlap fraction; invalid GIS numerics become zero.
+
+    NaN/inf can leak from invalid or empty geometries in GIS pipelines. Treating
+    them as evidence would make destructive terrain authorization non-auditable,
+    so fail closed instead of guessing.
+    """
+    try:
+        fraction = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(fraction):
+        return 0.0
+    return max(0.0, min(1.0, fraction))
+
+
 def attach_spatial_evidence(
     *,
     source: str,
@@ -53,13 +70,13 @@ def attach_spatial_evidence(
     `intersection_fraction` is the fraction of the hydrology segment intersecting
     the mapped feature. It is recorded for auditability, not used to invent a
     morphology threshold. Authorization requires an exact approved mapped-unit
-    contract and a positive spatial intersection.
+    contract and a positive, finite spatial intersection.
     """
     src = _norm(source)
     lyr = _norm(layer)
     unit = _norm(mapped_unit)
     fid = str(source_feature_id or "").strip()
-    fraction = max(0.0, min(1.0, float(intersection_fraction)))
+    fraction = _safe_fraction(intersection_fraction)
 
     token = AUTHORITATIVE_UNITS.get((src, lyr, unit), "")
     authorizes = bool(fid and fraction > 0.0 and token)
