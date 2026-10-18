@@ -8,12 +8,14 @@ on:
       - 'godot/scripts/streaming_priority.gd'
       - 'godot/scripts/predictive_streaming_runtime.gd'
       - 'godot/scripts/gpu_visibility_probe.gd'
+      - 'godot/scripts/gpu_driven_capabilities.gd'
       - 'godot/shaders/gpu_visibility.glsl'
       - 'godot/shaders/gpu_multimesh_indirect.glsl'
       - 'godot/tests/streaming_priority_test.gd'
       - 'godot/tests/gpu_visibility_test.gd'
       - 'godot/tests/gpu_multimesh_indirect_test.gd'
       - 'godot/tests/gpu_multimesh_render_test.gd'
+      - 'godot/tests/gpu_driven_capabilities_test.gd'
       - 'godot/project.godot'
       - '.github/workflows/godot-render-rd.yml'
   workflow_dispatch:
@@ -54,6 +56,14 @@ jobs:
           timeout 120 godot --headless --path godot --script res://tests/streaming_priority_test.gd 2>&1 | tee godot/build/streaming-priority.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/streaming-priority.log; then exit 1; fi
           grep -q 'YARDMAN_STREAMING_PRIORITY_TEST PASS' godot/build/streaming-priority.log
+      - name: Verify Compatibility fails closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --rendering-method gl_compatibility --script res://tests/gpu_driven_capabilities_test.gd 2>&1 | tee godot/build/gpu-capabilities-compat.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/gpu-capabilities-compat.log; then exit 1; fi
+          grep -q 'YARDMAN_GPU_DRIVEN_CAPABILITIES_TEST PASS' godot/build/gpu-capabilities-compat.log
+          grep -q 'candidate=0 fallback=1' godot/build/gpu-capabilities-compat.log
 
   gpu-visibility:
     runs-on: ubuntu-latest
@@ -82,6 +92,14 @@ jobs:
           mkdir -p godot/build
           timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --editor --quit 2>&1 | tee godot/build/gpu-rd-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/gpu-rd-import.log; then exit 1; fi
+      - name: Verify Vulkan Mobile candidate gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot --path godot --rendering-method mobile --rendering-driver vulkan --audio-driver Dummy --script res://tests/gpu_driven_capabilities_test.gd 2>&1 | tee godot/build/gpu-capabilities-mobile.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/gpu-capabilities-mobile.log; then exit 1; fi
+          grep -q 'YARDMAN_GPU_DRIVEN_CAPABILITIES_TEST PASS' godot/build/gpu-capabilities-mobile.log
+          grep -q 'candidate=1 fallback=0' godot/build/gpu-capabilities-mobile.log
       - name: Validate GPU visibility against CPU reference
         shell: bash
         run: |
