@@ -17,6 +17,7 @@ on:
       - 'godot/tools/build_parishes.py'
       - 'godot/tools/profile_building_packs.py'
       - 'Tests/Python/test_road_graph_closed_loops.py'
+      - 'Tests/Python/test_road_profile.py'
       - 'Tests/Python/test_route_pack.py'
 
 permissions:
@@ -55,11 +56,12 @@ jobs:
           print('osmium', getattr(osmium, '__version__', 'loaded'))
           PY
 
-      - name: Gate road topology before national compile
+      - name: Gate road topology and vertical profile before national compile
         shell: bash
         run: |
           set -euo pipefail
           python Tests/Python/test_road_graph_closed_loops.py
+          python Tests/Python/test_road_profile.py
           python Tests/Python/test_route_pack.py
 
       - name: Acquire current Jamaica OpenStreetMap source with provenance
@@ -145,6 +147,8 @@ jobs:
           assert int(parishes['stats'].get('canonical_parishes', 0)) == 14, 'Parish authority must contain all fourteen parishes'
           assert not parishes['stats'].get('missing_parishes'), 'Parish authority reports missing parishes'
           assert int(roads['stats'].get('graph_edges', 0)) > 0 and int(roads['stats'].get('graph_nodes', 0)) > 0
+          assert float(roads['stats'].get('profile_terrain_spacing_m', 0.0)) == float(terrain['sample_spacing_m'])
+          assert float(roads['stats'].get('profile_adjustment_limit_m', 0.0)) == float(terrain['sample_spacing_m']) * 0.10
 
           graph_nodes = 0
           graph_edges = 0
@@ -171,6 +175,7 @@ jobs:
               'terrain': {
                   'tiles': len(terrain['tiles']),
                   'max_height_m': terrain['max_height'],
+                  'sample_spacing_m': terrain['sample_spacing_m'],
                   'source_cogs': terrain['sources'],
               },
               'roads': {
@@ -179,6 +184,12 @@ jobs:
                   'graph_edges': roads['stats']['graph_edges'],
                   'bounds': roads['bounds'],
                   'route_pack_sha256': route['sha256'],
+                  'profile_adjustment_limit_m': roads['stats']['profile_adjustment_limit_m'],
+                  'profile_grade_p95_pct': roads['stats']['profile_grade_p95_pct'],
+                  'profile_grade_p99_pct': roads['stats']['profile_grade_p99_pct'],
+                  'profile_grade_max_pct': roads['stats']['profile_grade_max_pct'],
+                  'profile_grade_over_20pct_segments': roads['stats']['profile_grade_over_20pct_segments'],
+                  'profile_grade_break_p95_pct_points': roads['stats']['profile_grade_break_p95_pct_points'],
               },
               'buildings': {
                   'buildings': buildings['stats']['buildings'],
