@@ -101,18 +101,29 @@ func _grade_variant(label: String, picture: Image, camera: Camera3D) -> Dictiona
         label + " capture does not contain the expected water chroma")
     return {"wash": wash, "deep": deep, "delta": delta}
 
-func _run() -> void:
-    if DisplayServer.get_name() == "headless":
-        _check(false, "Actual GL display required")
-        quit(1)
-        return
-    root.size = Vector2i(640, 480)
+func _hide_project_overlays() -> void:
     var startup_menu := root.get_node_or_null("StartupMenu")
     if startup_menu != null:
         if startup_menu.has_method("_set_open"):
             startup_menu.call("_set_open", false)
         if startup_menu is CanvasItem:
             startup_menu.visible = false
+    # Project startup can instantiate the gameplay HUD beside this standalone
+    # render probe. Hide only its CanvasItem children so MAP/GARAGE/touch UI can
+    # never contaminate the water evidence frame.
+    var hud_layer := root.find_child("YardmanHUD", true, false)
+    if hud_layer != null:
+        for child in hud_layer.get_children():
+            if child is CanvasItem:
+                child.visible = false
+
+func _run() -> void:
+    if DisplayServer.get_name() == "headless":
+        _check(false, "Actual GL display required")
+        quit(1)
+        return
+    root.size = Vector2i(640, 480)
+    _hide_project_overlays()
     output_dir = OS.get_environment("YARDMAN_WATER_SHORE_CAPTURE_DIR")
     if not output_dir.is_empty():
         DirAccess.make_dir_recursive_absolute(output_dir)
