@@ -10,6 +10,7 @@ on:
       - 'godot/tools/build_jamaica_roads.py'
       - 'godot/tools/road_graph.py'
       - 'godot/tools/road_profile.py'
+      - 'godot/tools/audit_road_profiles.py'
       - 'godot/tools/road_route_pack.py'
       - 'godot/tools/build_terrain.py'
       - 'godot/tools/build_buildings.py'
@@ -18,6 +19,7 @@ on:
       - 'godot/tools/profile_building_packs.py'
       - 'Tests/Python/test_road_graph_closed_loops.py'
       - 'Tests/Python/test_road_profile.py'
+      - 'Tests/Python/test_road_profile_audit.py'
       - 'Tests/Python/test_route_pack.py'
 
 permissions:
@@ -62,6 +64,7 @@ jobs:
           set -euo pipefail
           python Tests/Python/test_road_graph_closed_loops.py
           python Tests/Python/test_road_profile.py
+          python Tests/Python/test_road_profile_audit.py
           python Tests/Python/test_route_pack.py
 
       - name: Acquire current Jamaica OpenStreetMap source with provenance
@@ -101,6 +104,15 @@ jobs:
             "$WORK_ROOT/source/jamaica-latest.osm.pbf" \
             "$WORK_ROOT/output/roads" \
             --terrain "$WORK_ROOT/output/terrain"
+
+      - name: Audit compiled national road vertical profiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          python godot/tools/audit_road_profiles.py \
+            "$WORK_ROOT/output/roads" \
+            --output "$WORK_ROOT/output/production-road-profile-audit.json" \
+            --top 100
 
       - name: Compile real national building footprints
         shell: bash
@@ -238,6 +250,7 @@ jobs:
             /tmp/yardman-production-world/output/parishes/**
             /tmp/yardman-production-world/output/production-data-evidence.json
             /tmp/yardman-production-world/output/production-building-profile.json
+            /tmp/yardman-production-world/output/production-road-profile-audit.json
             /tmp/yardman-production-world/source/geofabrik.url
             /tmp/yardman-production-world/source/geofabrik.headers
             /tmp/yardman-production-world/source/jamaica-latest.osm.pbf.sha256
