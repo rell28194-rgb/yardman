@@ -25,6 +25,8 @@ class SpatialEvidence:
     geometry_repaired: bool = False
     segment_length_m: float = 0.0
     intersection_length_m: float = 0.0
+    join_topology: str = "line_overlap"
+    topology_consistent: bool = True
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -39,6 +41,7 @@ AUTHORITATIVE_UNITS = {
 }
 
 CONTEXT_LAYERS = {"parish", "basin", "protected_area", "land_cover", "geology"}
+AUTHORITATIVE_TOPOLOGIES = {"line_overlap", "multipart_line_overlap"}
 
 
 def _norm(value: object) -> str:
@@ -78,15 +81,20 @@ def attach_spatial_evidence(
     geometry_repaired: bool = False,
     segment_length_m: float = 0.0,
     intersection_length_m: float = 0.0,
+    join_topology: str = "line_overlap",
 ) -> SpatialEvidence:
     """Convert a real GIS intersection into a provenance-bearing evidence record.
 
     Authorization requires an exact approved mapped-unit contract, a concrete
-    source feature, positive overlap, and valid unrepaired source geometry.
-    Geometry repaired upstream may still be retained for audit/context, but it
-    cannot authorize destructive terrain morphology until separately reviewed.
-    Optional metric lengths are retained to make segment-to-polygon joins
-    auditable; impossible length relationships fail closed.
+    source feature, positive line overlap, and valid unrepaired source geometry.
+    Point/boundary touches never authorize channel morphology. Multipart polygon
+    overlap is allowed only when the GIS join reports actual line overlap.
+    Geometry repaired upstream remains audit/context only until reviewed.
+
+    When metric lengths are supplied, they must describe a possible and
+    self-consistent line/polygon intersection. This rejects impossible joins and
+    tiny/sliver artifacts whose reported fraction disagrees materially with the
+    measured line overlap, without imposing a Jamaica-wide minimum channel size.
     """
     src = _norm(source)
     lyr = _norm(layer)
@@ -95,12 +103,25 @@ def attach_spatial_evidence(
     fraction = _safe_fraction(intersection_fraction)
     seg_len = _safe_nonnegative(segment_length_m)
     hit_len = _safe_nonnegative(intersection_length_m)
+    topology = _norm(join_topology).replace(" ", "_") or "unknown"
     valid = bool(geometry_valid)
     repaired = bool(geometry_repaired)
 
-    # If metric provenance is supplied, it must describe a possible line/polygon
-    # intersection. A hit longer than its source segment indicates a broken join.
-    lengths_consistent = not (seg_len > 0.0 and hit_len > seg_len + 1e-6)
+    lengths_supplied = seg_len > 0.0 or hit_len > 0.0
+    lengths_possible = not (seg_len <= 0.0 < hit_len or (seg_len > 0.0 and hit_len > seg_len + 1e-6))
+    ratio_consistent = True
+    if seg_len > 0.0:
+        measured_fraction = hit_len / seg_len
+        # 1e-4 absorbs normal GIS floating-point noise but not sliver/topology
+        # mismatches. No absolute length threshold is used.
+        ratio_consistent = abs(measured_fraction - fraction) <= 1e-4
+
+    topology_consistent = bool(
+        topology in AUTHORITATIVE_TOPOLOGIES
+        and lengths_possible
+        and ratio_consistent
+        and not (lengths_supplied and hit_len <= 0.0)
+    )
 
     token = AUTHORITATIVE_UNITS.get((src, lyr, unit), "")
     authorizes = bool(
@@ -109,7 +130,7 @@ def attach_spatial_evidence(
         and token
         and valid
         and not repaired
-        and lengths_consistent
+        and topology_consistent
     )
 
     # Broad contextual overlays are never excavation permission by themselves.
@@ -129,9 +150,29 @@ def attach_spatial_evidence(
         geometry_repaired=repaired,
         segment_length_m=seg_len,
         intersection_length_m=hit_len,
+        join_topology=topology,
+        topology_consistent=topology_consistent,
     )
 
 
 def morphology_tokens(records: list[SpatialEvidence] | tuple[SpatialEvidence, ...]) -> tuple[str, ...]:
-    """Return only provenance-bearing tokens authorized by real intersections."""
+    """Return unique provenance-bearing tokens authorized by real intersections."""
     return tuple(sorted({r.evidence_token for r in records if r.authorizes_morphology and r.evidence_token}))
+
+
+def unique_authorized_evidence(records: list[SpatialEvidence] | tuple[SpatialEvidence, ...]) -> tuple[SpatialEvidence, ...]:
+    """Deduplicate repeated GIS hits without converting duplicates into evidence.
+
+    Duplicate source features can occur after multipart expansion or overlapping
+    source layers. Keep one deterministic record per source/feature/token while
+    preserving distinct authoritative features for audit.
+    """
+    unique: dict[tuple[str, str, str], SpatialEvidence] = {}
+    for record in records:
+        if not record.authorizes_morphology or not record.evidence_token:
+            continue
+        key = (record.source, record.source_feature_id, record.evidence_token)
+        previous = unique.get(key)
+        if previous is None or record.intersection_fraction > previous.intersection_fraction:
+            unique[key] = record
+    return tuple(unique[key] for key in sorted(unique))
