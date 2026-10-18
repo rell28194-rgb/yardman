@@ -95,6 +95,8 @@ func _test_velocity_clamp() -> void:
         "estimated velocity bypassed prediction clamp")
     _check(Priority.estimate_velocity(Vector2.ZERO, Vector2.ONE, 0.0) == Vector2.ZERO,
         "zero elapsed time did not fail safely")
+    _check(Priority.estimate_velocity(Vector2.ZERO, Vector2.ONE, -1.0) == Vector2.ZERO,
+        "negative elapsed time did not fail safely")
 
 func _test_stable_tie_break() -> void:
     var center := Vector2(TILE * 0.5, TILE * 0.5)

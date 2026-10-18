@@ -16,13 +16,13 @@ MUTANTS = [
     ("disable_speed_clamp", 'if speed <= MAX_PREDICTION_SPEED_MPS:\n        return velocity_mps', 'if true:\n        return velocity_mps'),
     ("low_speed_clamp", 'const MAX_PREDICTION_SPEED_MPS := 120.0', 'const MAX_PREDICTION_SPEED_MPS := 20.0'),
     ("invalid_tile_open", 'if tile_size <= 0.0:\n        return INF', 'if tile_size < 0.0:\n        return INF'),
-    ("west_aabb_sign", 'dx = min_x - world_xz.x', 'dx = world_xz.x - min_x'),
-    ("east_aabb_sign", 'dx = world_xz.x - max_x', 'dx = max_x - world_xz.x'),
-    ("north_aabb_sign", 'dz = min_z - world_xz.y', 'dz = world_xz.y - min_z'),
-    ("south_aabb_sign", 'dz = world_xz.y - max_z', 'dz = max_z - world_xz.y'),
+    ("lose_west_distance", 'dx = min_x - world_xz.x', 'dx = 0.0'),
+    ("lose_east_distance", 'dx = world_xz.x - max_x', 'dx = 0.0'),
+    ("lose_north_distance", 'dz = min_z - world_xz.y', 'dz = 0.0'),
+    ("lose_south_distance", 'dz = world_xz.y - max_z', 'dz = 0.0'),
     ("tie_break_reverse_y", 'return a.y < b.y', 'return a.y > b.y'),
     ("tie_break_reverse_x", 'return a.x < b.x', 'return a.x > b.x'),
-    ("elapsed_guard_removed", 'if elapsed_seconds <= 0.000001 or not is_finite(elapsed_seconds):', 'if elapsed_seconds < 0.0 or not is_finite(elapsed_seconds):'),
+    ("allow_negative_elapsed", 'if elapsed_seconds <= 0.000001 or not is_finite(elapsed_seconds):', 'if elapsed_seconds == 0.0 or not is_finite(elapsed_seconds):'),
 ]
 
 
