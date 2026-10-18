@@ -61,6 +61,15 @@ func _check_local_contract(vehicle_id: String, car: CharacterBody3D, collision: 
         _check(is_finite(box.size.x) and is_finite(box.size.y) and is_finite(box.size.z), "%s collider dimensions are non-finite" % vehicle_id)
     _check(controller.visual != null and controller.visual.get_parent() == car, "%s visual is not locally owned by the vehicle" % vehicle_id)
 
+    # A selector may use a procedural fallback when its private hero is absent,
+    # but it must never silently instantiate a different vehicle's hero scene.
+    var expected_hero := str(Catalog.profile(vehicle_id).get("hero_scene", ""))
+    if not expected_hero.is_empty() and controller.visual != null:
+        if bool(controller.visual.get("is_reference_model")):
+            _check(str(controller.visual.get("reference_asset_name")) == expected_hero, "%s loaded cross-model hero %s instead of %s" % [vehicle_id, str(controller.visual.get("reference_asset_name")), expected_hero])
+        else:
+            _check(str(controller.visual.get_meta("yardman_requested_hero_scene", "")) == expected_hero, "%s lost its dedicated hero identity request" % vehicle_id)
+
 func _exercise_vehicle(scene: Node3D, vehicle_id: String, index: int) -> void:
     var built := _make_car(scene, vehicle_id, index)
     var car := built.car as CharacterBody3D
@@ -153,7 +162,7 @@ func _run() -> void:
     for local_index in range(selected_ids.size()):
         await _exercise_vehicle(scene, str(selected_ids[local_index]), local_index)
 
-    print("YARDMAN_VEHICLE_GAME_READY_TEST %s vehicles=%d fleet_total=%d shard=%d/%d hooks=1 drive=1 reverse=1 steering=1 braking=1 park_exit_reenter=1 reset_despawn=1" % ["PASS" if failures == 0 else "FAIL", selected_ids.size(), production_ids.size(), shard_index, shard_total])
+    print("YARDMAN_VEHICLE_GAME_READY_TEST %s vehicles=%d fleet_total=%d shard=%d/%d hooks=1 drive=1 reverse=1 steering=1 braking=1 park_exit_reenter=1 reset_despawn=1 identity_safe=1" % ["PASS" if failures == 0 else "FAIL", selected_ids.size(), production_ids.size(), shard_index, shard_total])
     scene.queue_free()
     await process_frame
     quit(0 if failures == 0 else 1)
