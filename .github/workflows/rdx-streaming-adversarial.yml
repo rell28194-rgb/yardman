@@ -9,6 +9,7 @@ on:
       - 'godot/scripts/stream_recovery_runtime.gd'
       - 'godot/scripts/streaming_adversarial_harness.gd'
       - 'godot/tests/streaming_adversarial_test.gd'
+      - 'godot/tools/rdx_stream_retry_mutation.py'
       - '.github/workflows/rdx-streaming-adversarial.yml'
   workflow_dispatch:
 
@@ -18,7 +19,7 @@ permissions:
 jobs:
   adversarial-streaming:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       GODOT_VERSION: '4.7.2'
       GODOT_CHANNEL: stable
@@ -45,3 +46,9 @@ jobs:
           timeout 120 godot --headless --path godot --script res://tests/streaming_adversarial_test.gd 2>&1 | tee godot/build/rdx-stream-adversarial.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|STREAMING_ADVERSARIAL_TEST:.*' godot/build/rdx-stream-adversarial.log; then exit 1; fi
           grep -q 'YARDMAN_STREAMING_ADVERSARIAL_TEST PASS' godot/build/rdx-stream-adversarial.log
+      - name: Mutation-grade retry policy
+        shell: bash
+        run: |
+          python3 godot/tools/rdx_stream_retry_mutation.py --godot-binary godot --threshold 1.0 --timeout 30 \
+            | tee godot/build/rdx-stream-mutation.log
+          grep -q 'YARDMAN_RDX_MUTATION_SCORE score=1.0000' godot/build/rdx-stream-mutation.log
