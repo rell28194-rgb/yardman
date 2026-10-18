@@ -36,7 +36,8 @@ func _run() -> void:
     _test_legacy_failure_conversion()
     _test_loaded_tile_clears_failure()
     _test_recovery_runtime_integration()
-    print("YARDMAN_STREAMING_ADVERSARIAL_TEST %s schema=1 deterministic=1 backoff=1 repeated_failure=1 retry=1 stale=1 orphan_cleanup=1 legacy=1 loaded_failure_oracle=1 runtime_integration=1" % (
+    _test_recovery_owner_isolation()
+    print("YARDMAN_STREAMING_ADVERSARIAL_TEST %s schema=1 deterministic=1 backoff=1 repeated_failure=1 retry=1 stale=1 orphan_cleanup=1 legacy=1 loaded_failure_oracle=1 runtime_integration=1 owner_isolation=1" % (
         "PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
 
@@ -207,6 +208,7 @@ func _test_recovery_runtime_integration() -> void:
     var released: Dictionary = runtime._service_streamer(streamer, "near-buildings", 1000)
     _check(streamer.refresh_calls == 1, "runtime did not force refresh when retry became due")
     _check(int(released.get("retries_released", 0)) == 1, "runtime retry release accounting mismatch")
+    _check(int(released.get("forced_refreshes", 0)) == 1, "runtime forced-refresh metric missed first refresh")
     _check(is_equal_approx(streamer.last_refresh.x, 10.0) and is_equal_approx(streamer.last_refresh.y, 20.0),
         "runtime passed wrong world position into forced refresh")
     _check(is_equal_approx(streamer.last_refresh.z, 1.0), "runtime forced-refresh flag was lost")
@@ -218,6 +220,7 @@ func _test_recovery_runtime_integration() -> void:
     var second_release: Dictionary = runtime._service_streamer(streamer, "near-buildings", 3000)
     _check(streamer.refresh_calls == 2, "second retry did not release at its exponential deadline")
     _check(int(second_release.get("retries_released", 0)) == 2, "runtime lost cumulative retry-release accounting")
+    _check(int(second_release.get("forced_refreshes", 0)) == 2, "runtime forced-refresh metric missed second refresh")
 
     streamer._failed["tile:runtime"] = true
     streamer._loaded["tile:runtime"] = true
@@ -236,4 +239,40 @@ func _test_recovery_runtime_integration() -> void:
     _check(int(stale_cleanup.get("active_failures", -1)) == 0, "runtime stale cleanup left active failure accounting")
 
     streamer.queue_free()
+    runtime.queue_free()
+
+func _test_recovery_owner_isolation() -> void:
+    var runtime := RecoveryRuntime.new()
+    var streamer_a := FakeStreamer.new()
+    var streamer_b := FakeStreamer.new()
+    root.add_child(runtime)
+    root.add_child(streamer_a)
+    root.add_child(streamer_b)
+    var key := "tile:shared"
+    streamer_a._wanted[key] = true
+    streamer_b._wanted[key] = true
+
+    streamer_a._failed[key] = true
+    runtime._service_streamer(streamer_a, "near-buildings", 0)
+    runtime._service_streamer(streamer_a, "near-buildings", 1000)
+    _check(streamer_a.refresh_calls == 1, "owner-isolation setup did not release streamer A first retry")
+
+    streamer_a._failed[key] = true
+    runtime._service_streamer(streamer_a, "near-buildings", 1000)
+    runtime._service_streamer(streamer_a, "near-buildings", 2999)
+    _check(streamer_a.refresh_calls == 1, "streamer A second retry released too early")
+
+    streamer_b._failed[key] = true
+    var b_first: Dictionary = runtime._service_streamer(streamer_b, "near-buildings", 1000)
+    _check(int(b_first.get("tracked_attempts", 0)) == 1, "streamer B inherited streamer A retry history")
+    runtime._service_streamer(streamer_b, "near-buildings", 1999)
+    _check(streamer_b.refresh_calls == 0, "streamer B retry released before its own deadline")
+    runtime._service_streamer(streamer_b, "near-buildings", 2000)
+    _check(streamer_b.refresh_calls == 1, "streamer B did not release independently at attempt-one deadline")
+
+    runtime._service_streamer(streamer_a, "near-buildings", 3000)
+    _check(streamer_a.refresh_calls == 2, "streamer A did not retain its independent attempt-two deadline")
+
+    streamer_a.queue_free()
+    streamer_b.queue_free()
     runtime.queue_free()
