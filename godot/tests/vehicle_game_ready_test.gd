@@ -4,6 +4,7 @@ const VehicleScript = preload("res://scripts/vehicle_controller.gd")
 const Catalog = preload("res://scripts/vehicle_catalog.gd")
 
 var failures := 0
+var require_reference_media := false
 
 func _initialize() -> void:
     call_deferred("_run")
@@ -16,6 +17,12 @@ func _check(condition: bool, message: String) -> void:
 func _env_int(name: String, fallback: int) -> int:
     var raw := OS.get_environment(name).strip_edges()
     return int(raw) if not raw.is_empty() else fallback
+
+func _env_bool(name: String, fallback: bool = false) -> bool:
+    var raw := OS.get_environment(name).strip_edges().to_lower()
+    if raw.is_empty():
+        return fallback
+    return raw in ["1", "true", "yes", "on"]
 
 func _step_frames(controller, frames: int, throttle: float = 0.0, turn: float = 0.0, ready: bool = true) -> void:
     for frame in range(frames):
@@ -64,6 +71,10 @@ func _check_local_contract(vehicle_id: String, car: CharacterBody3D, collision: 
     # A selector may use a procedural fallback when its private hero is absent,
     # but it must never silently instantiate a different vehicle's hero scene.
     var expected_hero := str(Catalog.profile(vehicle_id).get("hero_scene", ""))
+    if require_reference_media and not expected_hero.is_empty():
+        _check(controller.visual != null and bool(controller.visual.get("is_reference_model")), "%s did not instantiate required private hero %s" % [vehicle_id, expected_hero])
+        if controller.visual != null and bool(controller.visual.get("is_reference_model")):
+            _check(str(controller.visual.get("reference_asset_name")) == expected_hero, "%s private hero identity mismatch: %s != %s" % [vehicle_id, str(controller.visual.get("reference_asset_name")), expected_hero])
     if not expected_hero.is_empty() and controller.visual != null:
         if bool(controller.visual.get("is_reference_model")):
             _check(str(controller.visual.get("reference_asset_name")) == expected_hero, "%s loaded cross-model hero %s instead of %s" % [vehicle_id, str(controller.visual.get("reference_asset_name")), expected_hero])
@@ -141,8 +152,20 @@ func _run() -> void:
     ground.add_child(ground_collision)
     scene.add_child(ground)
 
+    require_reference_media = _env_bool("YARDMAN_REQUIRE_REFERENCE_MEDIA", false)
     var production_ids: Array = Catalog.production_ids()
-    _check(not production_ids.is_empty(), "production catalog is empty")
+    var requested_ids := OS.get_environment("YARDMAN_VEHICLE_TEST_IDS").strip_edges()
+    if not requested_ids.is_empty():
+        var available_ids: Array = production_ids.duplicate()
+        production_ids = []
+        for raw_id in requested_ids.split(","):
+            var candidate := str(raw_id).strip_edges()
+            if candidate.is_empty():
+                continue
+            _check(available_ids.has(candidate), "requested vehicle id %s is not in the production catalog" % candidate)
+            if available_ids.has(candidate):
+                production_ids.append(candidate)
+    _check(not production_ids.is_empty(), "production catalog/test selection is empty")
 
     var shard_total := maxi(_env_int("YARDMAN_VEHICLE_TEST_SHARD_TOTAL", 1), 1)
     var shard_index := _env_int("YARDMAN_VEHICLE_TEST_SHARD_INDEX", 0)
@@ -162,7 +185,7 @@ func _run() -> void:
     for local_index in range(selected_ids.size()):
         await _exercise_vehicle(scene, str(selected_ids[local_index]), local_index)
 
-    print("YARDMAN_VEHICLE_GAME_READY_TEST %s vehicles=%d fleet_total=%d shard=%d/%d hooks=1 drive=1 reverse=1 steering=1 braking=1 park_exit_reenter=1 reset_despawn=1 identity_safe=1" % ["PASS" if failures == 0 else "FAIL", selected_ids.size(), production_ids.size(), shard_index, shard_total])
+    print("YARDMAN_VEHICLE_GAME_READY_TEST %s vehicles=%d fleet_total=%d shard=%d/%d hooks=1 drive=1 reverse=1 steering=1 braking=1 park_exit_reenter=1 reset_despawn=1 identity_safe=1 private_media_required=%d" % ["PASS" if failures == 0 else "FAIL", selected_ids.size(), production_ids.size(), shard_index, shard_total, int(require_reference_media)])
     scene.queue_free()
     await process_frame
     quit(0 if failures == 0 else 1)
