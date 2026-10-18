@@ -7,17 +7,26 @@ const MaterialRegistry = preload("res://scripts/render_material_registry.gd")
 const StreamingBudgetScript = preload("res://scripts/streaming_budget_runtime.gd")
 
 # Geometry streamers used to own independent time slices, which meant roads,
-# terrain, buildings and roadside vegetation could all spend their maximum in
-# one frame. These envelopes cap aggregate integration work instead. Ultra keeps
-# the widest residency/detail window; it does not get permission to hitch.
+# terrain, near buildings, distant building HLOD and roadside vegetation could
+# all spend their maximum in one frame. These envelopes cap aggregate
+# integration work instead. Ultra keeps the widest residency/detail window; it
+# does not get permission to hitch.
 const STREAM_INTEGRATION_BASE_US := {
-    "Performance": 3400,
-    "Balanced": 4600,
-    "Quality": 5800,
-    "Ultra": 6800,
-    "Custom": 4600,
+    "Performance": 4000,
+    "Balanced": 5200,
+    "Quality": 6400,
+    "Ultra": 7400,
+    "Custom": 5200,
+}
+const STREAM_HLOD_BASE_US := {
+    "Performance": 650,
+    "Balanced": 800,
+    "Quality": 1000,
+    "Ultra": 1200,
+    "Custom": 800,
 }
 const STREAM_THERMAL_FACTORS := [1.0, 0.95, 0.86, 0.74, 0.62, 0.52]
+const STREAM_ROADSIDE_BASE_US := 1400
 
 var manager = ManagerScript.new()
 var _configured := false
@@ -26,9 +35,14 @@ var _custom_key := ""
 var _budget_clock := 0.0
 var _refresh_clock := 0.0
 var _timing_enabled := false
+var _stream_allocation: Dictionary = {}
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
+    # BuildingHLOD is a separate autoload with the default process priority.
+    # Run this coordinator later so its shared cap wins even if HLOD refreshed
+    # its quality profile earlier in the same frame.
+    process_priority = 100
     if get_node_or_null("StreamingBudgetRuntime") == null:
         var streaming_budget := StreamingBudgetScript.new()
         streaming_budget.name = "StreamingBudgetRuntime"
@@ -59,6 +73,10 @@ func _process(delta: float) -> void:
         _quality = quality
         _custom_key = custom_key
         _configured = true
+        # Quality changes alter residency and integration pressure immediately;
+        # do not leave the old geometry limits alive for another half second.
+        _apply_scene_budgets(scene)
+        _budget_clock = 0.0
     _refresh_clock += delta
     if _refresh_clock >= 2.0:
         _refresh_clock = 0.0
@@ -67,6 +85,10 @@ func _process(delta: float) -> void:
             manager.set_refresh_rate(screen_hz)
     var gpu_ms := RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid())
     manager.update_frame(delta, get_viewport(), false, gpu_ms)
+    # HLOD can refresh its own profile in its process callback when the near
+    # building distance changes. Reassert only this tiny integer cap after that
+    # callback so no transient independent HLOD spike can escape the envelope.
+    _enforce_hlod_geometry_budget()
     _budget_clock += delta
     if _budget_clock >= 0.5:
         _budget_clock = 0.0
@@ -76,15 +98,29 @@ static func stream_integration_budget_for(quality: String, thermal_stage: int) -
     var name := quality if STREAM_INTEGRATION_BASE_US.has(quality) else "Balanced"
     var stage := clampi(thermal_stage, 0, STREAM_THERMAL_FACTORS.size() - 1)
     var factor := float(STREAM_THERMAL_FACTORS[stage])
-    var total_us := maxi(2600, int(round(float(STREAM_INTEGRATION_BASE_US[name]) * factor)))
-    # Match the roadside scheduler's own thermal ladder and reserve its slice
-    # before assigning the remaining budget to the other three streamers.
-    var roadside_us := maxi(700, int(round(1400.0 * factor)))
-    var shared_us := maxi(1800, total_us - roadside_us)
-    var road_us := maxi(650, int(floor(float(shared_us) * 0.36)))
-    var terrain_us := maxi(650, int(floor(float(shared_us) * 0.36)))
-    var building_us := maxi(500, shared_us - road_us - terrain_us)
-    var assigned_us := road_us + terrain_us + building_us + roadside_us
+    # The minimum still leaves every producer forward progress at the hottest
+    # stage; quality tiers widen only the integration envelope, not concurrency.
+    var total_us := maxi(2800, int(round(float(STREAM_INTEGRATION_BASE_US[name]) * factor)))
+    # RoadsideRuntime currently uses the same 1.4 ms cool baseline for all
+    # quality tiers, so reserve its real scheduler allowance rather than an
+    # optimistic estimate. HLOD receives a separate bounded share.
+    var roadside_us := maxi(450, int(round(float(STREAM_ROADSIDE_BASE_US) * factor)))
+    var hlod_us := maxi(400, int(round(float(STREAM_HLOD_BASE_US[name]) * factor)))
+    var shared_us := total_us - roadside_us - hlod_us
+    # At the 2.8 ms emergency floor shared_us remains large enough for these
+    # minimums. Building gets the exact remainder so assigned_us == total_us.
+    var road_us := maxi(500, int(floor(float(shared_us) * 0.36)))
+    var terrain_us := maxi(500, int(floor(float(shared_us) * 0.36)))
+    var building_us := shared_us - road_us - terrain_us
+    if building_us < 400:
+        var shortage := 400 - building_us
+        var road_cut := mini(shortage / 2, maxi(0, road_us - 500))
+        road_us -= road_cut
+        shortage -= road_cut
+        var terrain_cut := mini(shortage, maxi(0, terrain_us - 500))
+        terrain_us -= terrain_cut
+        building_us = shared_us - road_us - terrain_us
+    var assigned_us := road_us + terrain_us + building_us + hlod_us + roadside_us
     return {
         "quality": name,
         "thermal_stage": stage,
@@ -92,6 +128,7 @@ static func stream_integration_budget_for(quality: String, thermal_stage: int) -
         "road_us": road_us,
         "terrain_us": terrain_us,
         "building_us": building_us,
+        "hlod_us": hlod_us,
         "roadside_us": roadside_us,
         "assigned_us": assigned_us,
     }
@@ -146,6 +183,14 @@ static func apply_shadow_policy_to_light(sun: DirectionalLight3D, active: Dictio
     sun.directional_shadow_fade_start = float(profile.fade_start)
     sun.directional_shadow_blend_splits = bool(profile.blend_splits)
 
+static func apply_hlod_budget_cap(hlod: Object, allocation: Dictionary) -> void:
+    if hlod == null:
+        return
+    var budget := int(allocation.get("hlod_us", 0))
+    if budget <= 0:
+        return
+    hlod.set("_geometry_budget_us", budget)
+
 func _apply_scene_budgets(scene: Node) -> void:
     if scene == null or not _configured:
         return
@@ -153,6 +198,9 @@ func _apply_scene_budgets(scene: Node) -> void:
     active["quality"] = manager.quality
     active["renderer"] = manager.renderer
     active["thermal_stage"] = manager.thermal_stage
+    _stream_allocation = stream_integration_budget_for(manager.quality, manager.thermal_stage)
+    active["stream_integration"] = _stream_allocation
+    active["building_hlod_geometry_us"] = int(_stream_allocation.hlod_us)
     var sun_value = scene.get("sun")
     if sun_value is DirectionalLight3D:
         apply_shadow_policy_to_light(sun_value as DirectionalLight3D, active)
@@ -160,24 +208,34 @@ func _apply_scene_budgets(scene: Node) -> void:
     for node in get_tree().get_nodes_in_group("yardman_render_quality"):
         if node.has_method("apply_render_policy"):
             node.call("apply_render_policy", active)
-    _apply_shared_streaming_budget(scene, active)
+    _apply_shared_streaming_budget(scene, active, _stream_allocation)
+    _enforce_hlod_geometry_budget()
 
-func _apply_shared_streaming_budget(scene: Node, active: Dictionary) -> void:
-    var allocation := stream_integration_budget_for(
-        str(active.get("quality", manager.quality)),
-        int(active.get("thermal_stage", manager.thermal_stage)))
+func _apply_shared_streaming_budget(scene: Node, active: Dictionary, allocation: Dictionary = {}) -> void:
+    var resolved := allocation
+    if resolved.is_empty():
+        resolved = stream_integration_budget_for(
+            str(active.get("quality", manager.quality)),
+            int(active.get("thermal_stage", manager.thermal_stage)))
     var roads = scene.get("roads")
     var terrain = scene.get("terrain")
     var buildings = scene.get("buildings")
     if roads is Object:
-        roads.set("geometry_budget_us", int(allocation.road_us))
+        roads.set("geometry_budget_us", int(resolved.road_us))
     if terrain is Object:
-        terrain.set("geometry_budget_us", int(allocation.terrain_us))
+        terrain.set("geometry_budget_us", int(resolved.terrain_us))
     if buildings is Object:
-        buildings.set("geometry_budget_us", int(allocation.building_us))
+        buildings.set("geometry_budget_us", int(resolved.building_us))
     # Keep the full aggregate allocation visible to diagnostics without making
     # the streamers depend on this autoload's implementation details.
-    scene.set_meta("yardman_stream_integration_budget", allocation)
+    scene.set_meta("yardman_stream_integration_budget", resolved)
+
+func _enforce_hlod_geometry_budget() -> void:
+    if _stream_allocation.is_empty():
+        return
+    var hlod := get_node_or_null("/root/BuildingHLOD")
+    if hlod != null:
+        apply_hlod_budget_cap(hlod, _stream_allocation)
 
 func apply_streamer_material_policy(scene: Node, active: Dictionary) -> void:
     if scene == null:
