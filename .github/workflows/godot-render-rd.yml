@@ -9,6 +9,7 @@ on:
       - 'godot/scripts/predictive_streaming_runtime.gd'
       - 'godot/scripts/gpu_visibility_probe.gd'
       - 'godot/scripts/gpu_driven_capabilities.gd'
+      - 'godot/scripts/gpu_indirect_contract.gd'
       - 'godot/shaders/gpu_visibility.glsl'
       - 'godot/shaders/gpu_multimesh_indirect.glsl'
       - 'godot/tests/streaming_priority_test.gd'
@@ -16,6 +17,7 @@ on:
       - 'godot/tests/gpu_multimesh_indirect_test.gd'
       - 'godot/tests/gpu_multimesh_render_test.gd'
       - 'godot/tests/gpu_driven_capabilities_test.gd'
+      - 'godot/tests/gpu_indirect_contract_test.gd'
       - 'godot/project.godot'
       - '.github/workflows/godot-render-rd.yml'
   workflow_dispatch:
@@ -64,6 +66,13 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/gpu-capabilities-compat.log; then exit 1; fi
           grep -q 'YARDMAN_GPU_DRIVEN_CAPABILITIES_TEST PASS' godot/build/gpu-capabilities-compat.log
           grep -q 'candidate=0 fallback=1' godot/build/gpu-capabilities-compat.log
+      - name: Validate indirect MultiMesh layout contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --rendering-method gl_compatibility --script res://tests/gpu_indirect_contract_test.gd 2>&1 | tee godot/build/gpu-indirect-contract.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/gpu-indirect-contract.log; then exit 1; fi
+          grep -q 'YARDMAN_GPU_INDIRECT_CONTRACT_TEST PASS' godot/build/gpu-indirect-contract.log
 
   gpu-visibility:
     runs-on: ubuntu-latest
