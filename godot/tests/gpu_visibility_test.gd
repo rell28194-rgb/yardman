@@ -20,9 +20,11 @@ func _run() -> void:
     if bool(result.get("supported", false)):
         _check(int(result.get("count", 0)) == PROBE_COUNT, "compute probe processed wrong instance count")
         _check(int(result.get("mismatches", -1)) == 0, "GPU frustum classification differs from CPU reference")
+        _check(int(result.get("compact_mismatches", -1)) == 0, "GPU compacted visible-index set differs from CPU reference")
+        _check(int(result.get("gpu_visible_count", -1)) == int(result.get("visible", -2)), "GPU atomic visible count differs from CPU reference")
         _check(int(result.get("visible", 0)) > 0, "compute probe returned no visible instances")
         _check(int(result.get("visible", 0)) < PROBE_COUNT, "compute probe failed to cull any instances")
-        print("YARDMAN_GPU_VISIBILITY_METRICS count=%d visible=%d gpu_us=%d cpu_us=%d" % [
+        print("YARDMAN_GPU_VISIBILITY_METRICS count=%d visible=%d gpu_us=%d cpu_us=%d compact=1" % [
             int(result.count), int(result.visible), int(result.gpu_dispatch_us), int(result.cpu_reference_us)])
-    print("YARDMAN_GPU_VISIBILITY_TEST %s rd_compute=1 parity=1 partial_group=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_GPU_VISIBILITY_TEST %s rd_compute=1 parity=1 partial_group=1 compact=1" % ("PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)

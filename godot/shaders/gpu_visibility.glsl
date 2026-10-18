@@ -19,6 +19,14 @@ layout(set = 0, binding = 3, std430) readonly buffer ParamsBuffer {
     uint count;
 } params;
 
+layout(set = 0, binding = 4, std430) writeonly buffer VisibleIndexBuffer {
+    uint data[];
+} visible_indices;
+
+layout(set = 0, binding = 5, std430) buffer CounterBuffer {
+    uint visible_count;
+} counter;
+
 void main() {
     uint index = gl_GlobalInvocationID.x;
     if (index >= params.count) {
@@ -35,5 +43,10 @@ void main() {
             break;
         }
     }
+
     visibility.data[index] = is_visible;
+    if (is_visible != 0u) {
+        uint write_index = atomicAdd(counter.visible_count, 1u);
+        visible_indices.data[write_index] = index;
+    }
 }
