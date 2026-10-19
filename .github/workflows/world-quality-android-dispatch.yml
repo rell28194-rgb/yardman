@@ -1,5 +1,6 @@
 name: Yardman World Quality Android Dispatch
 
+# Owner-requested current-head Android validation/export trigger.
 on:
   push:
     branches:
