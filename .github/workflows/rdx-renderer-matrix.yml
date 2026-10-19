@@ -1,0 +1,183 @@
+name: Yardman RDX Renderer Matrix
+
+on:
+  push:
+    branches:
+      - codex/rdx-renderer-matrix-001
+      - codex/validated-rdx-promotion-20261018
+    paths:
+      - 'godot/tests/renderer_capability_matrix_test.gd'
+      - 'godot/tests/material_variants_test.gd'
+      - 'godot/tests/render_quality_test.gd'
+      - 'godot/scripts/render_material_registry.gd'
+      - 'godot/scripts/render_quality_manager.gd'
+      - 'godot/project.godot'
+      - 'godot/shaders/**'
+      - '.github/workflows/rdx-renderer-matrix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  renderer-contract:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: compatibility
+            method: gl_compatibility
+            driver: opengl3
+            family: gles
+            wrong_family: vulkan_mobile
+            expect_rd: '0'
+          - label: mobile
+            method: mobile
+            driver: vulkan
+            family: vulkan_mobile
+            wrong_family: gles
+            expect_rd: '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Freeze source renderer contract before import
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -Fq 'renderer/rendering_method="gl_compatibility"' godot/project.godot
+          grep -Fq 'renderer/rendering_method.mobile="mobile"' godot/project.godot
+          grep -Fq 'textures/vram_compression/import_etc2_astc=true' godot/project.godot
+      - name: Install software renderers and Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mesa-vulkan-drivers libgl1-mesa-dri mesa-utils xvfb
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+      - name: Import representative production shaders
+        shell: bash
+        run: |
+          mkdir -p godot/build
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+            --path godot \
+            --rendering-method '${{ matrix.method }}' \
+            --rendering-driver '${{ matrix.driver }}' \
+            --audio-driver Dummy --editor --quit 2>&1 \
+            | tee 'godot/build/renderer-${{ matrix.label }}-import.log'
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|Shader compilation failed|Failed to compile shader|ObjectDB instances were leaked|RID of type .* was leaked' \
+            'godot/build/renderer-${{ matrix.label }}-import.log'; then exit 1; fi
+      - name: Validate actual renderer and production material policy
+        shell: bash
+        env:
+          YARDMAN_RENDERER_LABEL: ${{ matrix.label }}
+          YARDMAN_EXPECT_METHOD: ${{ matrix.method }}
+          YARDMAN_EXPECT_DRIVER: ${{ matrix.driver }}
+          YARDMAN_EXPECT_FAMILY: ${{ matrix.family }}
+          YARDMAN_EXPECT_RD: ${{ matrix.expect_rd }}
+        run: |
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+            --path godot \
+            --rendering-method '${{ matrix.method }}' \
+            --rendering-driver '${{ matrix.driver }}' \
+            --audio-driver Dummy \
+            --script res://tests/renderer_capability_matrix_test.gd 2>&1 \
+            | tee 'godot/build/renderer-${{ matrix.label }}-test.log'
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|Shader compilation failed|Failed to compile shader|ObjectDB instances were leaked|RID of type .* was leaked' \
+            'godot/build/renderer-${{ matrix.label }}-test.log'; then exit 1; fi
+          grep -q 'YARDMAN_RDX_RENDERER_MATRIX .*result=PASS' \
+            'godot/build/renderer-${{ matrix.label }}-test.log'
+      - name: Validate material variant switching under active backend
+        shell: bash
+        run: |
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+            --path godot \
+            --rendering-method '${{ matrix.method }}' \
+            --rendering-driver '${{ matrix.driver }}' \
+            --audio-driver Dummy \
+            --script res://tests/material_variants_test.gd 2>&1 \
+            | tee 'godot/build/material-variants-${{ matrix.label }}.log'
+          grep -q 'YARDMAN_MATERIAL_VARIANTS_TEST PASS' 'godot/build/material-variants-${{ matrix.label }}.log'
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' 'godot/build/material-variants-${{ matrix.label }}.log'; then exit 1; fi
+      - name: Validate quality and thermal policy under active backend
+        shell: bash
+        run: |
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+            --path godot \
+            --rendering-method '${{ matrix.method }}' \
+            --rendering-driver '${{ matrix.driver }}' \
+            --audio-driver Dummy \
+            --script res://tests/render_quality_test.gd 2>&1 \
+            | tee 'godot/build/render-quality-${{ matrix.label }}.log'
+          grep -q 'YARDMAN_RENDER_QUALITY_TEST PASS' 'godot/build/render-quality-${{ matrix.label }}.log'
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' 'godot/build/render-quality-${{ matrix.label }}.log'; then exit 1; fi
+      - name: Prove wrong method expectation is rejected
+        shell: bash
+        env:
+          YARDMAN_RENDERER_LABEL: negative-method
+          YARDMAN_EXPECT_METHOD: definitely_wrong_method
+          YARDMAN_EXPECT_DRIVER: ${{ matrix.driver }}
+          YARDMAN_EXPECT_FAMILY: ${{ matrix.family }}
+          YARDMAN_EXPECT_RD: ${{ matrix.expect_rd }}
+        run: |
+          set +e
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+            --path godot \
+            --rendering-method '${{ matrix.method }}' \
+            --rendering-driver '${{ matrix.driver }}' \
+            --audio-driver Dummy \
+            --script res://tests/renderer_capability_matrix_test.gd \
+            > 'godot/build/renderer-${{ matrix.label }}-negative-method.log' 2>&1
+          code=$?
+          set -e
+          test "$code" -ne 0
+          grep -q 'rendering method mismatch' 'godot/build/renderer-${{ matrix.label }}-negative-method.log'
+      - name: Prove wrong renderer-family expectation is rejected
+        shell: bash
+        env:
+          YARDMAN_RENDERER_LABEL: negative-family
+          YARDMAN_EXPECT_METHOD: ${{ matrix.method }}
+          YARDMAN_EXPECT_DRIVER: ${{ matrix.driver }}
+          YARDMAN_EXPECT_FAMILY: ${{ matrix.wrong_family }}
+          YARDMAN_EXPECT_RD: ${{ matrix.expect_rd }}
+        run: |
+          set +e
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+            --path godot \
+            --rendering-method '${{ matrix.method }}' \
+            --rendering-driver '${{ matrix.driver }}' \
+            --audio-driver Dummy \
+            --script res://tests/renderer_capability_matrix_test.gd \
+            > 'godot/build/renderer-${{ matrix.label }}-negative-family.log' 2>&1
+          code=$?
+          set -e
+          test "$code" -ne 0
+          grep -q 'quality renderer family mismatch' 'godot/build/renderer-${{ matrix.label }}-negative-family.log'
+      - name: Prove wrong RenderingDevice expectation is rejected
+        shell: bash
+        env:
+          YARDMAN_RENDERER_LABEL: negative-rd
+          YARDMAN_EXPECT_METHOD: ${{ matrix.method }}
+          YARDMAN_EXPECT_DRIVER: ${{ matrix.driver }}
+          YARDMAN_EXPECT_FAMILY: ${{ matrix.family }}
+          YARDMAN_EXPECT_RD: ${{ matrix.expect_rd == '1' && '0' || '1' }}
+        run: |
+          set +e
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+            --path godot \
+            --rendering-method '${{ matrix.method }}' \
+            --rendering-driver '${{ matrix.driver }}' \
+            --audio-driver Dummy \
+            --script res://tests/renderer_capability_matrix_test.gd \
+            > 'godot/build/renderer-${{ matrix.label }}-negative-rd.log' 2>&1
+          code=$?
+          set -e
+          test "$code" -ne 0
+          grep -q 'RenderingDevice capability mismatch' 'godot/build/renderer-${{ matrix.label }}-negative-rd.log'
