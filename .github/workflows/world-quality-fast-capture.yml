@@ -1,0 +1,94 @@
+name: Yardman World Quality Fast Capture
+
+on:
+  push:
+    branches:
+      - codex/world-quality-20261018
+    paths:
+      - '.github/workflows/world-quality-fast-capture.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  capture-current-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+      PRODUCTION_RUN_ID: '39155404062'
+      PRODUCTION_ARTIFACT: 'Yardman-Production-Jamaica-Data-a06f87b07344df282e99fec7741416ead2881545'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore latest successful production Jamaica data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -rf /tmp/yardman-production-data
+          mkdir -p /tmp/yardman-production-data
+          gh run download "$PRODUCTION_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$PRODUCTION_ARTIFACT" \
+            --dir /tmp/yardman-production-data
+          for layer in roads terrain buildings; do
+            test -d "/tmp/yardman-production-data/output/$layer"
+            rm -rf "godot/data/$layer"
+            cp -a "/tmp/yardman-production-data/output/$layer" "godot/data/$layer"
+          done
+          test -s godot/data/roads/manifest.json
+          test -s godot/data/terrain/manifest.json
+          test -s godot/data/buildings/manifest.json
+          du -sh godot/data/roads godot/data/terrain godot/data/buildings
+
+      - name: Install runtime renderer dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Import current Yardman runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/fast-capture-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/fast-capture-import.log; then exit 1; fi
+
+      - name: Capture current streamed gameplay
+        shell: bash
+        run: |
+          set -euo pipefail
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export YARDMAN_CAPTURE_DIR="$GITHUB_WORKSPACE/godot/build/current-captures"
+          mkdir -p "$YARDMAN_CAPTURE_DIR"
+          timeout 900 xvfb-run -a -s '-screen 0 1280x720x24' \
+            godot --path godot --audio-driver Dummy --script res://tests/game_capture_test.gd \
+            2>&1 | tee godot/build/fast-capture.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/fast-capture.log; then exit 1; fi
+          grep -q 'YARDMAN_CAPTURE_TEST PASS' godot/build/fast-capture.log
+          test "$(find "$YARDMAN_CAPTURE_DIR" -maxdepth 1 -type f -name '*.png' | wc -l)" -ge 3
+          ls -lh "$YARDMAN_CAPTURE_DIR"/*.png
+
+      - name: Upload current-head gameplay captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Current-Gameplay-Captures-${{ github.sha }}
+          path: |
+            godot/build/current-captures/*.png
+            godot/build/fast-capture*.log
+          if-no-files-found: warn
+          retention-days: 14
