@@ -8,6 +8,8 @@ import json
 import zipfile
 from pathlib import Path
 
+from road_route_pack import EDGE, HEADER, NODE, ROUTE_PACK_MAGIC, ROUTE_PACK_VERSION
+
 FORBIDDEN_RUNTIME_ASSIGNMENTS = {"nearest_capital_fallback", "canonical_capital_fallback"}
 
 
@@ -27,6 +29,61 @@ def _assert_source_registration(label: str, payload: dict, roads: dict) -> None:
     road_origin = roads.get("origin", {})
     if origin.get("easting") != road_origin.get("easting") or origin.get("northing") != road_origin.get("northing"):
         raise ValueError(f"{label} origin differs from roads")
+
+
+def _validate_route_pack(route_bytes: bytes, route: dict, graph: dict) -> dict:
+    if len(route_bytes) < HEADER.size:
+        raise ValueError("Packaged native route pack header is truncated")
+    (
+        magic,
+        version,
+        header_bytes,
+        node_record_bytes,
+        edge_record_bytes,
+        packed_nodes,
+        packed_edges,
+        strings_bytes,
+        reserved,
+    ) = HEADER.unpack_from(route_bytes)
+
+    if magic != ROUTE_PACK_MAGIC:
+        raise ValueError("Packaged native route pack magic is invalid")
+    if version != ROUTE_PACK_VERSION or version != int(route.get("format", -1)):
+        raise ValueError("Packaged native route pack version differs from manifest")
+    if header_bytes != HEADER.size or header_bytes != int(route.get("header_bytes", -1)):
+        raise ValueError("Packaged native route pack header layout differs from manifest")
+    if node_record_bytes != NODE.size or node_record_bytes != int(route.get("node_record_bytes", -1)):
+        raise ValueError("Packaged native route pack node layout differs from manifest")
+    if edge_record_bytes != EDGE.size or edge_record_bytes != int(route.get("edge_record_bytes", -1)):
+        raise ValueError("Packaged native route pack edge layout differs from manifest")
+    if reserved != 0:
+        raise ValueError("Packaged native route pack reserved header field is non-zero")
+
+    graph_nodes = int(graph.get("nodes", -1))
+    graph_edges = int(graph.get("edges", -1))
+    if packed_nodes != graph_nodes or packed_nodes != int(route.get("nodes", -2)):
+        raise ValueError("Native route-pack node count differs from graph manifest")
+    if packed_edges != graph_edges or packed_edges != int(route.get("edges", -2)):
+        raise ValueError("Native route-pack edge count differs from graph manifest")
+
+    expected_bytes = (
+        header_bytes
+        + packed_nodes * node_record_bytes
+        + packed_edges * edge_record_bytes
+        + strings_bytes
+    )
+    if len(route_bytes) != expected_bytes:
+        raise ValueError("Packaged native route pack byte layout is inconsistent")
+
+    return {
+        "format": version,
+        "header_bytes": header_bytes,
+        "node_record_bytes": node_record_bytes,
+        "edge_record_bytes": edge_record_bytes,
+        "nodes": packed_nodes,
+        "edges": packed_edges,
+        "strings_bytes": strings_bytes,
+    }
 
 
 def validate(apk: Path, roads_manifest: Path, places_manifest: Path, parishes_manifest: Path) -> dict:
@@ -87,16 +144,12 @@ def validate(apk: Path, roads_manifest: Path, places_manifest: Path, parishes_ma
         route_bytes = archive.read(route_name)
         if hashlib.sha256(route_bytes).hexdigest() != str(route.get("sha256", "")):
             raise ValueError("Packaged native route pack SHA differs from road manifest")
-        if len(route_bytes) < 32 or route_bytes[:4] != b"YMR1":
-            raise ValueError("Packaged native route pack header is invalid")
-        if int(route.get("nodes", -1)) != int(graph.get("nodes", -2)):
-            raise ValueError("Native route-pack node count differs from graph manifest")
-        if int(route.get("edges", -1)) != int(graph.get("edges", -2)):
-            raise ValueError("Native route-pack edge count differs from graph manifest")
+        route_proof = _validate_route_pack(route_bytes, route, graph)
 
     return {
         "route_pack_bytes": len(route_bytes),
         "route_pack_sha256": hashlib.sha256(route_bytes).hexdigest(),
+        "route_pack_format": route_proof["format"],
         "runtime_places": runtime_place_count,
         "parishes": len(parish_records),
         "unresolved_place_records": int(places.get("stats", {}).get("unresolved_source_records", 0)),
