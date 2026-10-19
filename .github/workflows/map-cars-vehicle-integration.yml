@@ -1,0 +1,77 @@
+name: Yardman Clean Map + Vehicle Integration
+
+on:
+  push:
+    branches:
+      - codex/map-cars-vehicle-integrate-001
+    paths:
+      - 'godot/project.godot'
+      - 'godot/scripts/map_quality_bootstrap.gd'
+      - 'godot/scripts/reference_assets.gd'
+      - 'godot/scripts/vehicle_*.gd'
+      - 'godot/data/vehicle_fleet_*.json'
+      - 'godot/tests/test_clean_vehicle_integration.py'
+      - 'godot/tests/clean_vehicle_integration_test.gd'
+      - '.github/workflows/map-cars-vehicle-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  clean-map-vehicles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Enforce reset and roster contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest \
+            godot.tests.test_map_cars_integration_scope \
+            godot.tests.test_clean_vehicle_integration -v
+
+      - name: Install exact Godot
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Parse clean reset project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/clean-map-vehicle-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/clean-map-vehicle-import.log; then exit 1; fi
+
+      - name: Exercise production vehicle roster
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/clean_vehicle_integration_test.gd 2>&1 | tee godot/build/clean-map-vehicle-runtime.log
+          grep -q 'YARDMAN_CLEAN_VEHICLE_INTEGRATION_PASS' godot/build/clean-map-vehicle-runtime.log
+          if grep -E 'SCRIPT ERROR|Parse Error|CLEAN_VEHICLE_INTEGRATION:' godot/build/clean-map-vehicle-runtime.log; then exit 1; fi
+
+      - name: Preserve focused evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Clean-Map-Vehicle-Evidence
+          path: godot/build/*.log
+          if-no-files-found: warn
+          retention-days: 14
