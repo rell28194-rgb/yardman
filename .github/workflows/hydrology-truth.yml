@@ -17,6 +17,8 @@ on:
       - 'godot/tools/test_hydrology_spatial_evidence.py'
       - 'godot/tools/hydrology_evidence_reconciliation.py'
       - 'godot/tools/test_hydrology_evidence_reconciliation.py'
+      - 'godot/tools/hydrology_truth_pack.py'
+      - 'godot/tools/test_hydrology_truth_pack.py'
       - 'Tests/Python/test_hydrology_geometry.py'
       - 'Tests/Python/test_hydrology_channel_model.py'
       - 'Tests/Python/test_hydrology_terrain_plan.py'
@@ -52,6 +54,7 @@ jobs:
           python godot/tools/test_hydrology_regional_truth.py
           python godot/tools/test_hydrology_spatial_evidence.py
           python godot/tools/test_hydrology_evidence_reconciliation.py
+          python godot/tools/test_hydrology_truth_pack.py
           python godot/tests/test_hydrology_crossings.py
           python godot/tests/test_hydrology_crossing_inventory.py
           wget -q https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf -O /tmp/jamaica.osm.pbf
