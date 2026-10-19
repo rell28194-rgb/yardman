@@ -1,5 +1,6 @@
 name: Yardman World Quality Fast Capture
 
+# Owner-requested current-head gameplay screenshot trigger.
 on:
   push:
     branches:
