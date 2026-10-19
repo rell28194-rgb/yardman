@@ -23,6 +23,29 @@ func _check(condition: bool, message: String) -> void:
         failures += 1
         push_error("GPU_ROADSIDE_HZB_TEST: " + message)
 
+func _validate_projection_fixtures() -> void:
+    # These values were derived independently from the authored camera and
+    # conservative sphere bounds, not from candidate_for_source(). They freeze
+    # nearest-surface depth, projected radius and the 1.5 px safety margin.
+    var fixtures := [
+        [PackedFloat32Array([0.0, 0.0, 20.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
+            PackedFloat32Array([58.827619, 30.827619, 69.172381, 41.172381, 28.0])],
+        [PackedFloat32Array([8.0, 3.0, -10.0, 0.0, 0.6, 0.0, 0.0, 0.0]),
+            PackedFloat32Array([68.305859, 30.880082, 73.404362, 35.978585, 58.8])],
+        [PackedFloat32Array([-12.0, -2.0, 5.0, 0.0, 1.8, 0.0, 0.0, 0.0]),
+            PackedFloat32Array([44.319055, 32.314313, 56.260503, 44.255761, 41.4])],
+    ]
+    for fixture_index in range(fixtures.size()):
+        var source: PackedFloat32Array = fixtures[fixture_index][0]
+        var expected: PackedFloat32Array = fixtures[fixture_index][1]
+        var actual := Probe.candidate_for_source(source)
+        _check(actual.size() == expected.size(),
+            "projection fixture %d changed output width" % fixture_index)
+        for component in range(mini(actual.size(), expected.size())):
+            _check(absf(actual[component] - expected[component]) <= 0.001,
+                "projection fixture %d component %d differs: got %.6f expected %.6f" % [
+                    fixture_index, component, actual[component], expected[component]])
+
 func _make_two_surface_mesh() -> ArrayMesh:
     var mesh := ArrayMesh.new()
     var first := []
@@ -49,6 +72,7 @@ func _make_multimesh() -> RID:
     return rid
 
 func _run() -> void:
+    _validate_projection_fixtures()
     _mesh = _make_two_surface_mesh()
     var near_multimesh := _make_multimesh()
     var far_multimesh := _make_multimesh()
