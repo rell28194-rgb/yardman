@@ -18,18 +18,27 @@ from hydrology_truth_pack import build_truth_pack
 
 
 def _evidence(record: dict) -> SpatialEvidence:
+    """Deserialize the canonical SpatialEvidence schema without legacy aliases.
+
+    Evidence ingress is fail-closed: authorization is read only from the current
+    authorizes_morphology field. Older/unknown field names cannot accidentally
+    become terrain authority, while valid geometry/topology provenance survives
+    the sidecar round trip unchanged.
+    """
     return SpatialEvidence(
-        str(record.get("source", "")),
-        str(record.get("source_feature_id", "")),
-        str(record.get("layer", "")),
-        str(record.get("mapped_unit", "")),
-        float(record.get("intersection_fraction", 0.0)),
-        str(record.get("evidence_token", "")),
-        bool(record.get("authorized", False)),
-        **{key: value for key, value in record.items() if key in {
-            "source_geometry_valid", "source_geometry_repaired",
-            "segment_length_m", "intersection_length_m", "intersection_dimension"
-        }},
+        source=str(record.get("source", "")),
+        source_feature_id=str(record.get("source_feature_id", "")),
+        layer=str(record.get("layer", "")),
+        mapped_unit=str(record.get("mapped_unit", "")),
+        intersection_fraction=float(record.get("intersection_fraction", 0.0)),
+        evidence_token=str(record.get("evidence_token", "")),
+        authorizes_morphology=bool(record.get("authorizes_morphology", False)),
+        geometry_valid=bool(record.get("geometry_valid", True)),
+        geometry_repaired=bool(record.get("geometry_repaired", False)),
+        segment_length_m=float(record.get("segment_length_m", 0.0)),
+        intersection_length_m=float(record.get("intersection_length_m", 0.0)),
+        join_topology=str(record.get("join_topology", "line_overlap")),
+        topology_consistent=bool(record.get("topology_consistent", True)),
     )
 
 
@@ -62,6 +71,8 @@ def load_evidence(path: Path | None) -> dict[str, list[SpatialEvidence]]:
         raise ValueError("evidence input must be a list or an object containing an evidence list")
     result: dict[str, list[SpatialEvidence]] = {}
     for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("authoritative evidence rows must be objects")
         key = str(row.get("segment_key", ""))
         if not key:
             raise ValueError("authoritative evidence row missing segment_key")
