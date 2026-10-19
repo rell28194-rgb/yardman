@@ -48,6 +48,9 @@ func _on_terrain_tile(tile: Vector2i) -> void:
 func _on_road_tile_removed(tile: Vector2i) -> void:
     _pending.erase(tile)
 
+static func cone_pose_is_valid(local_x: float, local_z: float, ground_y: float, yaw: float) -> bool:
+    return is_finite(local_x) and is_finite(local_z) and is_finite(ground_y) and is_finite(yaw)
+
 func _decorate(tile: Vector2i, tile_root: Node3D) -> void:
     if tile_root == null or not is_instance_valid(tile_root):
         return
@@ -76,12 +79,11 @@ func _decorate(tile: Vector2i, tile_root: Node3D) -> void:
         var world_z := float(item.world_z)
         var ground_y := float(_terrain.height_at(world_x, world_z))
         var yaw := float(item.yaw)
-        if not is_finite(ground_y) or not is_finite(yaw):
+        var local_x := float(item.local_x)
+        var local_z := float(item.local_z)
+        if not cone_pose_is_valid(local_x, local_z, ground_y, yaw):
             continue
-        var local := Vector3(float(item.local_x), ground_y + 0.02, float(item.local_z))
-        if not is_finite(local.x) or not is_finite(local.y) or not is_finite(local.z):
-            continue
-        transforms.append(Transform3D(Basis(Vector3.UP, yaw), local))
+        transforms.append(Transform3D(Basis(Vector3.UP, yaw), Vector3(local_x, ground_y + 0.02, local_z)))
     if transforms.is_empty():
         _pending.erase(tile)
         return

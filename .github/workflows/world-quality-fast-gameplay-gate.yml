@@ -9,6 +9,7 @@ on:
       - 'godot/project.godot'
       - 'godot/scripts/**/*.gd'
       - 'godot/tests/gameplay_test.gd'
+      - 'godot/tests/roadwork_transform_test.gd'
   workflow_dispatch:
 
 permissions:
@@ -72,6 +73,14 @@ jobs:
           mkdir -p godot/build
           timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/fast-gameplay-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/fast-gameplay-import.log; then exit 1; fi
+
+      - name: Test roadwork finite-transform contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 60 godot --headless --path godot --script res://tests/roadwork_transform_test.gd 2>&1 | tee godot/build/fast-gameplay-roadwork.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/fast-gameplay-roadwork.log; then exit 1; fi
+          grep -q 'YARDMAN_ROADWORK_TRANSFORM_TEST PASS' godot/build/fast-gameplay-roadwork.log
 
       - name: Test traversal, vehicle interaction and saves
         shell: bash
