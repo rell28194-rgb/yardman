@@ -35,6 +35,13 @@ jobs:
       GODOT_CHANNEL: stable
     steps:
       - uses: actions/checkout@v4
+      - name: Freeze source renderer contract before import
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -Fq 'renderer/rendering_method="gl_compatibility"' godot/project.godot
+          grep -Fq 'renderer/rendering_method.mobile="mobile"' godot/project.godot
+          grep -Fq 'textures/vram_compression/import_etc2_astc=true' godot/project.godot
       - name: Install software renderers and Godot 4.7.2
         shell: bash
         run: |
