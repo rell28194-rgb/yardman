@@ -20,12 +20,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate map-cars scope, recovered fleet, and owner-media contract
+      - name: Validate map-cars scope, recovered fleet, and owner-media pipeline
         shell: bash
         run: |
           set -euo pipefail
           python -m unittest discover -s godot/tests -p 'test_map_cars_vehicle_scope.py' -v
           python -m unittest discover -s godot/tests -p 'test_validate_owner_media_pack.py' -v
+          python -m unittest discover -s godot/tests -p 'test_stage_owner_media_pack.py' -v
 
       - name: Install Godot 4.7.2
         shell: bash
