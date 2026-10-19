@@ -127,8 +127,8 @@ func _validate_result(result: Dictionary) -> void:
     _validate_layer("near", result, expected.near)
     _validate_layer("far", result, expected.far)
     _validate_layer("grass", result, expected.grass)
-    var baseline_total := baseline.near.size() + baseline.far.size() + baseline.grass.size()
-    var hzb_total := expected.near.size() + expected.far.size() + expected.grass.size()
+    var baseline_total: int = baseline.near.size() + baseline.far.size() + baseline.grass.size()
+    var hzb_total: int = expected.near.size() + expected.far.size() + expected.grass.size()
     _check(hzb_total < baseline_total,
         "HZB did not reduce the roadside indirect working set")
 
