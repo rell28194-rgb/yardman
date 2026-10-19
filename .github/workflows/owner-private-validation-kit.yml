@@ -5,6 +5,15 @@ on:
     branches:
       - codex/map-cars-production-integration-001
     paths:
+      - 'godot/scripts/vehicle_selector_runtime.gd'
+      - 'godot/data/owner_fleet_pack_contract.json'
+      - 'godot/tests/owner_vehicle_asset_gate.gd'
+      - 'godot/tests/private_owner_fleet_runtime_test.gd'
+      - 'godot/tests/test_map_cars_integration_scope.py'
+      - 'godot/tests/test_vehicle_production_scope.py'
+      - 'godot/tests/test_vehicle_selector_asset_scope.py'
+      - 'godot/tools/stage_owner_fleet_pack.py'
+      - 'godot/tools/run_owner_private_preflight.sh'
       - '.github/workflows/owner-private-validation-kit.yml'
   workflow_dispatch:
 
@@ -37,6 +46,8 @@ jobs:
           assert contract['pack_sha256'] == '6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b'
           assert contract['scrapped_vehicle_ids'] == ['port_royal_992', 'toyota_mark_x']
           assert contract['held_missing_vehicle_ids'] == ['corvette_c7', 'delorean_dmc12']
+          assert Path('godot/tools/run_owner_private_preflight.sh').is_file()
+          assert Path('godot/tests/private_owner_fleet_runtime_test.gd').is_file()
           print('YARDMAN_OWNER_VALIDATION_KIT_SCOPE_PASS vehicles=64')
           PY
 
@@ -61,9 +72,20 @@ jobs:
           sha256sum owner-validation-kit/yardman-source.tgz > owner-validation-kit/yardman-source.tgz.sha256
           cat > owner-validation-kit/README.txt <<'EOF'
           YARDMAN OWNER PRIVATE VALIDATION KIT
-          This artifact contains public source plus the exact Godot 4.7.2 Linux binary only.
+
+          This artifact contains the current public integration source plus the exact Godot 4.7.2 Linux binary only.
           It intentionally contains NO private owner media and is NOT an APK or owner candidate.
-          Combine locally with the authoritative Library owner fleet pack, then run owner_vehicle_asset_gate.gd.
+
+          Combine it locally with the authoritative owner fleet pack:
+          Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip
+          SHA-256: 6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b
+
+          Run from the extracted source tree:
+          bash godot/tools/run_owner_private_preflight.sh /path/to/Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip /path/to/Godot_v4.7.2-stable_linux.x86_64
+
+          Owner acceptance requires both exact PASS lines:
+          YARDMAN_OWNER_VEHICLE_ASSET_GATE PASS vehicles=64 expected=64 missing=0 invalid=0
+          YARDMAN_PRIVATE_OWNER_FLEET_RUNTIME_TEST PASS vehicles=64 dedicated=64 banned_absent=2 held_absent=2
           EOF
 
       - name: Upload validation kit
