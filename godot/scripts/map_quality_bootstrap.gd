@@ -45,15 +45,11 @@ func _process(delta: float) -> void:
 
 func _apply_initial(scene: Node) -> void:
     _scene = scene
-
-    # Keep the current geographic/streaming stack, but present it at the real
-    # quality target instead of an obsolete CI/performance profile.
     scene.call("set_quality", "Quality")
     manager.configure("Quality")
     if OS.has_feature("mobile"):
         manager.apply_viewport(get_viewport())
     else:
-        # Desktop/headless validation remains full-resolution Compatibility.
         get_viewport().scaling_3d_scale = 1.0
 
     var environment_value = scene.get("environment")
@@ -85,8 +81,9 @@ func _apply_initial(scene: Node) -> void:
     var terrain_value = scene.get("terrain")
     if terrain_value is Node:
         _terrain = terrain_value
-        if _terrain.has_signal("tile_ready") and not _terrain.tile_ready.is_connected(_on_terrain_tile_ready):
-            _terrain.tile_ready.connect(_on_terrain_tile_ready)
+        var tile_ready_callback := Callable(self, "_on_terrain_tile_ready")
+        if _terrain.has_signal("tile_ready") and not _terrain.is_connected("tile_ready", tile_ready_callback):
+            _terrain.connect("tile_ready", tile_ready_callback)
 
     _applied = true
     _apply_live_policy()
