@@ -12,6 +12,9 @@ on:
       - 'godot/tests/render_quality_test.gd'
       - 'godot/tests/test_runtime_scope.py'
       - 'godot/tests/test_owner_project_contract.py'
+      - 'godot/tests/test_validate_owner_private_pack.py'
+      - 'godot/docs/owner_private_pack_contract.json'
+      - 'godot/tools/validate_owner_private_pack.py'
       - 'godot/scripts/render_runtime.gd'
       - 'godot/scripts/render_material_registry.gd'
       - 'godot/scripts/render_quality_manager.gd'
@@ -37,11 +40,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Enforce owner runtime, fleet and graphics contract
+      - name: Enforce owner runtime, fleet, private-pack and graphics contract
         run: |
           python -m unittest \
             godot.tests.test_runtime_scope \
-            godot.tests.test_owner_project_contract -v
+            godot.tests.test_owner_project_contract \
+            godot.tests.test_validate_owner_private_pack -v
 
   renderer-contract:
     needs: owner-contract
