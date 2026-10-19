@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Remove runtime building footprints that physically occupy a same-grade road deck.
-
-Both roads and buildings remain source-traceable. This pass resolves a rendering
-conflict in favour of the drivable road surface and writes an audit containing
-all removed OSM building-part IDs. Bridge/tunnel road surfaces are ignored here
-because they may cross buildings/structures at a different elevation.
-"""
+"""Remove runtime building footprints that physically occupy a same-grade road deck."""
 from __future__ import annotations
 
 import argparse
@@ -13,6 +7,7 @@ import gzip
 import json
 import math
 import shutil
+import struct
 from collections import Counter
 from pathlib import Path
 
@@ -20,11 +15,45 @@ import shapely
 from shapely.geometry import Polygon
 from shapely.strtree import STRtree
 
-from build_buildings import CELL_SIZE, TILE_SIZE, read_cell, write_pack
-
+TILE_SIZE = 4096
+CELL_SIZE = 256
+MAGIC = b"YMB1"
+INDEX = struct.Struct("<HHII")
+HEADER = struct.Struct("<4sI")
 ROAD_FLAG_BRIDGE = 2
 ROAD_FLAG_TUNNEL = 4
 DEFAULT_MIN_OVERLAP_M2 = 0.75
+
+
+def write_pack(path: Path, cells):
+    cells = sorted(cells)
+    offset = HEADER.size + len(cells) * INDEX.size
+    with path.open("wb") as file:
+        file.write(HEADER.pack(MAGIC, len(cells)))
+        for x, z, payload in cells:
+            if not (0 <= x < TILE_SIZE // CELL_SIZE and 0 <= z < TILE_SIZE // CELL_SIZE):
+                raise ValueError("Content cell is outside its tile")
+            file.write(INDEX.pack(x, z, offset, len(payload)))
+            offset += len(payload)
+        for _, _, payload in cells:
+            file.write(payload)
+
+
+def read_cell(path: Path, x: int, z: int):
+    with path.open("rb") as file:
+        magic, count = HEADER.unpack(file.read(HEADER.size))
+        if magic != MAGIC or count > 256:
+            raise ValueError("Invalid building tile header")
+        file_size = path.stat().st_size
+        data_start = HEADER.size + count * INDEX.size
+        entries = [INDEX.unpack(file.read(INDEX.size)) for _ in range(count)]
+        for cx, cz, offset, length in entries:
+            if offset < data_start or offset + length > file_size:
+                raise ValueError("Invalid building cell index")
+            if (cx, cz) == (x, z):
+                file.seek(offset)
+                return json.loads(gzip.decompress(file.read(length)))
+    return []
 
 
 class RoadSurfaceIndex:
@@ -97,11 +126,7 @@ def record_polygon(record: list, global_cx: int, global_cz: int) -> Polygon | No
     for ring in record[5]:
         if not isinstance(ring, list) or len(ring) < 3:
             continue
-        coords = []
-        for point in ring:
-            if not isinstance(point, list) or len(point) < 3:
-                continue
-            coords.append((ox + float(point[0]), oz + float(point[2])))
+        coords = [(ox + float(point[0]), oz + float(point[2])) for point in ring if isinstance(point, list) and len(point) >= 3]
         if len(coords) >= 3:
             rings.append(coords)
     if not rings:
@@ -109,9 +134,7 @@ def record_polygon(record: list, global_cx: int, global_cz: int) -> Polygon | No
     polygon = Polygon(rings[0], rings[1:])
     if not polygon.is_valid:
         polygon = shapely.make_valid(polygon)
-    if not isinstance(polygon, Polygon) or polygon.is_empty:
-        return None
-    return polygon
+    return polygon if isinstance(polygon, Polygon) and not polygon.is_empty else None
 
 
 def filter_dataset(buildings_root: Path, roads_root: Path, output_root: Path | None = None,
@@ -131,6 +154,7 @@ def filter_dataset(buildings_root: Path, roads_root: Path, output_root: Path | N
     stats = Counter()
     conflicts = []
     new_tiles = []
+    cells_per_tile = TILE_SIZE // CELL_SIZE
     for tile in manifest.get("tiles", []):
         tx, tz = int(tile["x"]), int(tile["z"])
         source_path = buildings_root / str(tile["file"])
@@ -140,7 +164,7 @@ def filter_dataset(buildings_root: Path, roads_root: Path, output_root: Path | N
             local_x, local_z = int(local_x), int(local_z)
             records = read_cell(source_path, local_x, local_z)
             kept = []
-            global_cx, global_cz = tx * (TILE_SIZE // CELL_SIZE) + local_x, tz * (TILE_SIZE // CELL_SIZE) + local_z
+            global_cx, global_cz = tx * cells_per_tile + local_x, tz * cells_per_tile + local_z
             for record in records:
                 stats["checked_buildings"] += 1
                 polygon = record_polygon(record, global_cx, global_cz)
@@ -151,12 +175,8 @@ def filter_dataset(buildings_root: Path, roads_root: Path, output_root: Path | N
                 conflict, overlap = road_index.conflict(polygon, min_overlap_m2)
                 if conflict:
                     stats["rejected_road_overlap"] += 1
-                    conflicts.append({
-                        "building_part_id": str(record[0]) if record else "",
-                        "tile": [tx, tz],
-                        "cell": [global_cx, global_cz],
-                        "overlap_m2": round(overlap, 3),
-                    })
+                    conflicts.append({"building_part_id": str(record[0]) if record else "", "tile": [tx, tz],
+                                      "cell": [global_cx, global_cz], "overlap_m2": round(overlap, 3)})
                     continue
                 kept.append(record)
             if kept:
@@ -187,21 +207,16 @@ def filter_dataset(buildings_root: Path, roads_root: Path, output_root: Path | N
     }
     (staging / "manifest.json").write_text(json.dumps(updated, indent=2, sort_keys=True), encoding="utf-8")
 
-    audit = {
-        "format": 1,
-        "buildings_checked": int(stats["checked_buildings"]),
-        "buildings_kept": int(stats["kept_buildings"]),
-        "rejected_road_overlap": int(stats["rejected_road_overlap"]),
-        "invalid_runtime_footprint": int(stats["invalid_runtime_footprint"]),
-        "min_overlap_m2": min_overlap_m2,
-        "conflicts": conflicts,
-    }
-    final_audit = audit_path if audit_path else staging / "road_overlap_audit.json"
+    audit = {"format": 1, "buildings_checked": int(stats["checked_buildings"]),
+             "buildings_kept": int(stats["kept_buildings"]),
+             "rejected_road_overlap": int(stats["rejected_road_overlap"]),
+             "invalid_runtime_footprint": int(stats["invalid_runtime_footprint"]),
+             "min_overlap_m2": min_overlap_m2, "conflicts": conflicts}
     if audit_path:
         Path(audit_path).parent.mkdir(parents=True, exist_ok=True)
         Path(audit_path).write_text(json.dumps(audit, indent=2, sort_keys=True), encoding="utf-8")
     else:
-        final_audit.write_text(json.dumps(audit, indent=2, sort_keys=True), encoding="utf-8")
+        (staging / "road_overlap_audit.json").write_text(json.dumps(audit, indent=2, sort_keys=True), encoding="utf-8")
 
     if output_root.exists() and output_root != buildings_root:
         shutil.rmtree(output_root)
