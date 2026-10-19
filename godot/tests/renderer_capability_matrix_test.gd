@@ -1,8 +1,9 @@
 extends SceneTree
 
-# RDX-010 freezes the renderer contract before any renderer-specific production
-# optimization is promoted. It intentionally measures capability/correctness,
-# not CI frame rate: hosted software GL/Vulkan is not Android GPU evidence.
+# RDX-010 freezes the runtime renderer capability contract before any
+# renderer-specific production optimization is promoted. Source project.godot
+# invariants are checked by CI before editor import can rewrite local overrides.
+# Hosted software GL/Vulkan timings are never treated as Android GPU evidence.
 const SHADER_PATHS := [
     "res://shaders/road_surface.gdshader",
     "res://shaders/terrain_surface.gdshader",
@@ -51,7 +52,6 @@ func _run() -> void:
     _check(rd_present == expected_rd,
         "RenderingDevice capability mismatch: got %s expected %s" % [str(rd_present), str(expected_rd)])
 
-    _validate_project_contract()
     var loaded_shaders := _load_production_shaders()
     var render_metrics := await _render_shader_probe(loaded_shaders)
 
@@ -60,19 +60,6 @@ func _run() -> void:
         label, method, driver, int(rd_present), loaded_shaders.size(),
         float(render_metrics.get("luma", 0.0)), int(render_metrics.get("lit_samples", 0)), status])
     quit(0 if failures == 0 else 1)
-
-func _validate_project_contract() -> void:
-    var path := ProjectSettings.globalize_path("res://project.godot")
-    _check(FileAccess.file_exists(path), "project.godot is unavailable to the evaluator")
-    if not FileAccess.file_exists(path):
-        return
-    var text := FileAccess.get_file_as_string(path)
-    _check(text.contains('renderer/rendering_method="gl_compatibility"'),
-        "desktop/headless Compatibility contract changed")
-    _check(text.contains('renderer/rendering_method.mobile="mobile"'),
-        "Android Mobile renderer override changed")
-    _check(text.contains('textures/vram_compression/import_etc2_astc=true'),
-        "Android ETC2/ASTC import contract changed")
 
 func _load_production_shaders() -> Array[Shader]:
     var result: Array[Shader] = []
@@ -108,18 +95,18 @@ func _render_shader_probe(shaders: Array[Shader]) -> Dictionary:
 
     var camera := Camera3D.new()
     camera.position = Vector3(0.0, 1.8, 11.0)
+    viewport.add_child(camera)
     camera.look_at(Vector3(0.0, 0.5, 0.0), Vector3.UP)
     camera.current = true
-    viewport.add_child(camera)
 
     var sun := DirectionalLight3D.new()
     sun.rotation_degrees = Vector3(-48.0, -32.0, 0.0)
     sun.light_energy = 1.8
     viewport.add_child(sun)
 
-    # A StandardMaterial control guarantees that a non-empty frame means the
-    # 3D raster path itself is live, while the shader meshes below force all
-    # representative production shader resources through the active backend.
+    # A StandardMaterial control proves that the active 3D raster path is live.
+    # The shader meshes force representative production shaders through the same
+    # backend; workflow error scanning makes shader/compiler errors fatal.
     var control_mesh := BoxMesh.new()
     control_mesh.size = Vector3(1.2, 1.2, 1.2)
     var control_material := StandardMaterial3D.new()
@@ -139,8 +126,8 @@ func _render_shader_probe(shaders: Array[Shader]) -> Dictionary:
         var instance := MeshInstance3D.new()
         instance.mesh = mesh
         instance.material_override = material
-        var column := index % 4
-        var row := index / 4
+        var column: int = index % 4
+        var row: int = index / 4
         instance.position = Vector3(-2.6 + float(column) * 1.7,
             0.45 + float(row) * 1.45, 0.0)
         viewport.add_child(instance)
