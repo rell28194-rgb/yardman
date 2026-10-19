@@ -1,0 +1,51 @@
+name: Yardman Foundation Rebuild Source Snapshot
+
+on:
+  push:
+    branches:
+      - codex/foundation-rebuild-20261019
+    paths:
+      - '.github/workflows/foundation-rebuild-source-snapshot.yml'
+      - 'godot/**'
+      - 'Tests/Python/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yardman-foundation-rebuild-snapshot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record exact rebuild head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee FOUNDATION_REBUILD_HEAD.txt
+      - name: Run source-level regression guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check 'shapely>=2.1,<3'
+          python Tests/Python/test_building_road_clearance.py
+          python godot/tests/test_runtime_scope.py
+          ! grep -q 'JobRuntime' godot/scripts/vehicle_garage.gd
+          ! grep -q 'JobPersistence' godot/scripts/vehicle_garage.gd
+          ! grep -q 'toyota_mark_x' godot/scripts/vehicle_catalog.gd
+          ! grep -q 'port_royal_992' godot/scripts/vehicle_catalog.gd
+      - name: Retain exact integrated source
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Foundation-Rebuild-Source-${{ github.sha }}
+          path: |
+            FOUNDATION_REBUILD_HEAD.txt
+            godot/**
+            Tests/Python/**
+          if-no-files-found: error
+          retention-days: 30
