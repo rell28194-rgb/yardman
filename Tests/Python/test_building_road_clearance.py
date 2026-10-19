@@ -8,8 +8,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "godot" / "tools"))
 
-from build_buildings import write_pack, read_cell
-from filter_building_road_overlaps import filter_dataset
+from filter_building_road_overlaps import filter_dataset, write_pack, read_cell
 
 
 def building_record(identifier, x0, z0, x1, z1):
