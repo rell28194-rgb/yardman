@@ -1,0 +1,143 @@
+name: Yardman Map Cars National Candidate Data
+
+on:
+  push:
+    branches:
+      - codex/map-cars-production-integration-001
+    paths:
+      - '.github/workflows/map-cars-national-candidate-data.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: yardman-map-cars-national-data-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  compile-national-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lock current map-cars authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest \
+            godot/tests/test_map_cars_integration_scope.py \
+            godot/tests/test_vehicle_production_scope.py \
+            godot/tests/test_vehicle_selector_asset_scope.py
+
+      - name: Install national data compiler dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --disable-pip-version-check \
+            'pyproj>=3.7,<4' 'osmium>=4,<5' 'numpy>=2,<3' \
+            'rasterio>=1.4,<2' 'shapely>=2.1,<3'
+
+      - name: Compile authoritative Jamaica runtime data
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p godot/build/national-candidate-data
+          wget -q https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf -O /tmp/jamaica.osm.pbf
+          sha256sum /tmp/jamaica.osm.pbf | tee godot/build/national-candidate-data/jamaica-osm.sha256
+
+          rm -rf godot/data/roads godot/data/terrain godot/data/coast godot/data/buildings
+          mkdir -p godot/data/roads godot/data/terrain godot/data/coast godot/data/buildings
+
+          python godot/tools/build_jamaica_roads.py \
+            /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096
+          python godot/tools/build_terrain.py \
+            /tmp/yardman-dem godot/data/roads/manifest.json godot/data/terrain --acquire
+          python godot/tools/build_jamaica_roads.py \
+            /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096 --terrain godot/data/terrain
+          python godot/tools/build_road_structures.py godot/data/roads
+          python godot/tools/build_tunnel_portals.py godot/data/roads
+          python godot/tools/validate_road_structures.py godot/data/roads
+          python godot/tools/validate_road_topology.py \
+            godot/data/roads \
+            --output godot/data/roads/topology_report.json \
+            --near-miss-metres 2.5 \
+            --require-anchor-component
+          python godot/tools/build_coastline.py \
+            /tmp/jamaica.osm.pbf godot/data/terrain godot/data/coast
+          python godot/tools/build_buildings.py \
+            /tmp/jamaica.osm.pbf godot/data/terrain godot/data/buildings
+          python godot/tools/resolve_building_road_conflicts.py \
+            godot/data/roads godot/data/terrain godot/data/buildings
+
+      - name: Validate full-island candidate data
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('godot/data')
+          roads = json.loads((root/'roads/manifest.json').read_text())
+          terrain = json.loads((root/'terrain/manifest.json').read_text())
+          coast = json.loads((root/'coast/manifest.json').read_text())
+          buildings = json.loads((root/'buildings/manifest.json').read_text())
+          topology = json.loads((root/'roads/topology_report.json').read_text())
+          structures = json.loads((root/'roads/structures.json').read_text())
+          portals = json.loads((root/'roads/tunnel_portals/manifest.json').read_text())
+          anchors = roads.get('parish_anchors', {})
+          assert len(anchors) == 14, len(anchors)
+          stats = roads['stats']
+          assert stats['road_features'] >= 1000, stats
+          assert stats['segments'] >= 10000, stats
+          assert stats['tiles'] >= 100, stats
+          assert topology['parish_anchors']['component_count'] == 1, topology['parish_anchors']
+          assert structures['bridge']['edges'] > 0, structures
+          assert structures['tunnel']['profiled_edges'] > 0, structures
+          assert portals['portals'] > 0 and not portals['anomalies'], portals
+          tstats = terrain.get('stats', {})
+          cstats = coast.get('stats', {})
+          bstats = buildings.get('stats', {})
+          proof = {
+              'status': 'PASS',
+              'source_sha': '${{ github.sha }}',
+              'parishes': len(anchors),
+              'roads': stats,
+              'terrain': tstats,
+              'coast': cstats,
+              'buildings': bstats,
+              'topology': {
+                  'components': topology['components']['count'],
+                  'largest_edge_ratio': topology['components']['largest_edge_ratio'],
+                  'parish_anchor_components': topology['parish_anchors']['component_count'],
+                  'near_miss_count': topology['suspect_near_miss_count'],
+              },
+              'bridges': structures['bridge']['edges'],
+              'tunnel_profiled_edges': structures['tunnel']['profiled_edges'],
+              'tunnel_portals': portals['portals'],
+          }
+          out = Path('godot/build/national-candidate-data/national-data-proof.json')
+          out.write_text(json.dumps(proof, indent=2) + '\n')
+          print('YARDMAN_NATIONAL_CANDIDATE_DATA_PASS parishes=14 roads=%d segments=%d road_tiles=%d' % (
+              stats['road_features'], stats['segments'], stats['tiles']))
+          PY
+
+      - name: Package exact national data payload
+        shell: bash
+        run: |
+          set -euxo pipefail
+          printf '%s\n' "$GITHUB_SHA" > godot/build/national-candidate-data/source-sha.txt
+          tar -C godot -czf godot/build/national-candidate-data/Yardman-National-Map-Cars-Data.tgz \
+            data/roads data/terrain data/coast data/buildings
+          sha256sum godot/build/national-candidate-data/Yardman-National-Map-Cars-Data.tgz \
+            | tee godot/build/national-candidate-data/Yardman-National-Map-Cars-Data.tgz.sha256
+
+      - name: Upload national candidate data
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Map-Cars-National-Candidate-Data
+          path: godot/build/national-candidate-data/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 3
