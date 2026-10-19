@@ -7,14 +7,22 @@ on:
     paths:
       - 'godot/project.godot'
       - 'godot/scripts/map_quality_bootstrap.gd'
+      - 'godot/scripts/coastline.gd'
+      - 'godot/scripts/render_*.gd'
       - 'godot/scripts/reference_assets.gd'
       - 'godot/scripts/vehicle_*.gd'
+      - 'godot/shaders/road_surface*.gdshader'
+      - 'godot/shaders/terrain_surface*.gdshader'
+      - 'godot/shaders/water*.gdshader'
       - 'godot/data/vehicle_fleet_*.json'
       - 'godot/data/owner_fleet_pack_contract.json'
       - 'godot/tools/validate_owner_fleet_pack.py'
       - 'godot/tests/test_clean_vehicle_integration.py'
       - 'godot/tests/clean_vehicle_integration_test.gd'
       - 'godot/tests/owner_vehicle_asset_gate.gd'
+      - 'godot/tests/material_variants_test.gd'
+      - 'godot/tests/render_quality_test.gd'
+      - 'godot/tests/renderer_capability_matrix_test.gd'
       - '.github/workflows/map-cars-vehicle-integration.yml'
   workflow_dispatch:
 
@@ -24,7 +32,7 @@ permissions:
 jobs:
   clean-map-vehicles:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     env:
       GODOT_VERSION: '4.7.2'
       GODOT_CHANNEL: stable
@@ -43,10 +51,12 @@ jobs:
             godot.tests.test_map_cars_integration_scope \
             godot.tests.test_clean_vehicle_integration -v
 
-      - name: Install exact Godot
+      - name: Install exact Godot and software renderers
         shell: bash
         run: |
           set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mesa-vulkan-drivers libgl1-mesa-dri mesa-utils xvfb
           BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
           wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
           unzip -q /tmp/godot.zip -d /tmp/godot-bin
@@ -70,6 +80,50 @@ jobs:
           grep -q 'YARDMAN_CLEAN_VEHICLE_INTEGRATION_PASS roster=64' godot/build/clean-map-vehicle-runtime.log
           if grep -E 'SCRIPT ERROR|Parse Error|CLEAN_VEHICLE_INTEGRATION:' godot/build/clean-map-vehicle-runtime.log; then exit 1; fi
 
+      - name: Validate integrated RDX renderer stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          while read -r label method driver family expect_rd; do
+            log="godot/build/renderer-${label}-integration.log"
+            YARDMAN_RENDERER_LABEL="$label" \
+            YARDMAN_EXPECT_METHOD="$method" \
+            YARDMAN_EXPECT_DRIVER="$driver" \
+            YARDMAN_EXPECT_FAMILY="$family" \
+            YARDMAN_EXPECT_RD="$expect_rd" \
+            timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+              --path godot \
+              --rendering-method "$method" \
+              --rendering-driver "$driver" \
+              --audio-driver Dummy \
+              --script res://tests/renderer_capability_matrix_test.gd 2>&1 | tee "$log"
+            grep -q 'YARDMAN_RDX_RENDERER_MATRIX .*result=PASS' "$log"
+            if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|Shader compilation failed|Failed to compile shader' "$log"; then exit 1; fi
+
+            material_log="godot/build/material-${label}-integration.log"
+            timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+              --path godot \
+              --rendering-method "$method" \
+              --rendering-driver "$driver" \
+              --audio-driver Dummy \
+              --script res://tests/material_variants_test.gd 2>&1 | tee "$material_log"
+            grep -q 'YARDMAN_MATERIAL_VARIANTS_TEST PASS' "$material_log"
+            if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' "$material_log"; then exit 1; fi
+
+            quality_log="godot/build/render-quality-${label}-integration.log"
+            timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+              --path godot \
+              --rendering-method "$method" \
+              --rendering-driver "$driver" \
+              --audio-driver Dummy \
+              --script res://tests/render_quality_test.gd 2>&1 | tee "$quality_log"
+            grep -q 'YARDMAN_RENDER_QUALITY_TEST PASS' "$quality_log"
+            if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' "$quality_log"; then exit 1; fi
+          done <<'MATRIX'
+          compatibility gl_compatibility opengl3 gles 0
+          mobile mobile vulkan vulkan_mobile 1
+          MATRIX
+
       - name: Prove public checkout fails closed as owner candidate
         shell: bash
         run: |
@@ -89,7 +143,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Yardman-Clean-Map-Vehicle-Evidence
+          name: Yardman-Clean-Map-Vehicle-RDX-Evidence
           path: godot/build/*.log
           if-no-files-found: warn
           retention-days: 14
