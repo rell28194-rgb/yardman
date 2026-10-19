@@ -1,6 +1,8 @@
 extends RefCounted
 class_name YardmanVehicleCatalog
 
+const FleetRegistry = preload("res://scripts/vehicle_fleet_registry.gd")
+
 # Physics/tuning data are deliberately separate from controller code so adding a
 # vehicle does not fork the solver. Values are game tuning baselines, not claims
 # of exact homologation specifications for a particular trim/year.
@@ -57,7 +59,7 @@ const VEHICLES := {
         "paint_rgb": [0.055, 0.070, 0.090], "audio_profile": "crown_v6", "camera_distance_m": 8.1,
     },
     "toyota_mark_x": {
-        "id": "toyota_mark_x", "manufacturer": "Toyota", "display_name": "Toyota Mark X", "drivetrain": "RWD", "hero_scene": "toyota_mark_x_2013.glb",
+        "id": "toyota_mark_x", "manufacturer": "Toyota", "display_name": "Toyota Mark X", "drivetrain": "RWD", "hero_scene": "toyota_mark_x.glb",
         "mass_kg": 1540.0, "wheelbase_m": 2.85, "use_visual_wheelbase": false, "track_width_m": 1.54, "cg_height_m": 0.51,
         "dimensions_m": [1.79, 1.44, 4.77], "visual_scale": [0.968, 1.108, 1.193], "wheel_radius_m": 0.34,
         "max_forward_mps": 66.0, "max_reverse_mps": 8.0, "grass_limit_mps": 16.0,
@@ -81,8 +83,7 @@ const VEHICLES := {
         "paint_rgb": [0.20, 0.035, 0.035], "audio_profile": "mark_x_v6", "camera_distance_m": 7.9,
     },
     "port_royal_992": {
-        # Keep the stable internal/save ID while the authorized production identity uses Porsche presentation.
-        "id": "port_royal_992", "manufacturer": "Porsche", "display_name": "Porsche 911 (992)", "drivetrain": "RWD", "hero_scene": "porsche_911_992.glb",
+        "id": "port_royal_992", "manufacturer": "Yardman", "display_name": "Port Royal 992", "drivetrain": "RWD", "hero_scene": "port_royal_992.glb",
         "mass_kg": 1515.0, "wheelbase_m": 2.45, "use_visual_wheelbase": false, "track_width_m": 1.62, "cg_height_m": 0.43,
         "dimensions_m": [1.85, 1.30, 4.54], "visual_scale": [1.0, 1.0, 1.135], "wheel_radius_m": 0.34,
         "max_forward_mps": 82.0, "max_reverse_mps": 9.0, "grass_limit_mps": 14.5,
@@ -108,21 +109,35 @@ const VEHICLES := {
 }
 
 static func profile(vehicle_id: String) -> Dictionary:
-    var key := vehicle_id if VEHICLES.has(vehicle_id) else DEFAULT_ID
-    return VEHICLES[key].duplicate(true)
+    if VEHICLES.has(vehicle_id):
+        return VEHICLES[vehicle_id].duplicate(true)
+    if FleetRegistry.has(vehicle_id):
+        var result: Dictionary = VEHICLES[DEFAULT_ID].duplicate(true)
+        var recovered := FleetRegistry.entry(vehicle_id)
+        for key in recovered.keys():
+            result[key] = recovered[key]
+        return result
+    return VEHICLES[DEFAULT_ID].duplicate(true)
 
 static func has(vehicle_id: String) -> bool:
-    return VEHICLES.has(vehicle_id)
+    return VEHICLES.has(vehicle_id) or FleetRegistry.has(vehicle_id)
 
 static func ids(include_legacy: bool = true) -> Array:
     var result: Array = []
     if include_legacy:
         result.append(DEFAULT_ID)
     result.append_array(PRODUCTION_IDS)
+    for vehicle_id in FleetRegistry.ids():
+        if not result.has(vehicle_id):
+            result.append(vehicle_id)
     return result
 
 static func production_ids() -> Array:
-    return PRODUCTION_IDS.duplicate()
+    var result: Array = PRODUCTION_IDS.duplicate()
+    for vehicle_id in FleetRegistry.ids():
+        if not result.has(vehicle_id):
+            result.append(vehicle_id)
+    return result
 
 static func next_id(current_id: String, include_legacy: bool = false) -> String:
     var order := ids(include_legacy)

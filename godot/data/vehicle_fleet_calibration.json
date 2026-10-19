@@ -1,0 +1,45 @@
+{
+  "format_version": 1,
+  "policy": {
+    "purpose": "Evidence-backed runtime calibration overrides only. Identity, hero scene, source hashes and recovered dimensions remain owned by the source registries.",
+    "no_cross_model_relabeling": true,
+    "no_unmarked_placeholder_specs": true,
+    "variant_sensitive_values_must_be_declared": true
+  },
+  "vehicles": [
+    {
+      "id": "delorean_dmc12",
+      "runtime_calibration_status": "mechanical_evidence_pass_visual_wheel_art_still_held",
+      "runtime_variant": "canonical_5_speed_manual",
+      "runtime_variant_note": "The recovered exterior identity proves DMC-12, not the factory gearbox. Yardman explicitly selects the documented five-speed manual as its canonical drivable variant instead of silently inheriting Legacy Sedan's six-speed automatic.",
+      "mass_kg": 1225.0,
+      "wheel_radius_m": 0.3315,
+      "front_tyre_radius_m": 0.2948,
+      "rear_tyre_radius_m": 0.3315,
+      "front_tyre": "195/60R14",
+      "rear_tyre": "235/60R15",
+      "transmission": "5-speed manual",
+      "peak_torque_nm": 208.0,
+      "gear_ratios": [3.364, 2.059, 1.381, 1.057, 0.8205],
+      "final_drive": 3.44,
+      "reverse_ratio": 3.1818,
+      "max_forward_mps": 53.64,
+      "redline_rpm": 6000.0,
+      "shift_up_light_rpm": 3100.0,
+      "shift_up_rpm": 5700.0,
+      "shift_down_rpm": 1500.0,
+      "shift_time_s": 0.32,
+      "source_evidence": {
+        "factory_tyre_sizes": "https://support.delorean.com/kb/a31/tire-choices-updated.aspx",
+        "factory_wheel_sizes": "https://support.delorean.com/kb/a82/delorean-wheels-the-many-differences.aspx",
+        "owner_manual_scan": "https://europartsinc.com/dmc/DMC-12_Owners_Manual.pdf",
+        "period_road_test": "https://www.caranddriver.com/reviews/a15142619/1981-de-lorean-archived-first-drive-review/",
+        "derived_front_radius_m": "(14*25.4 + 2*195*0.60)/2000 = 0.2948",
+        "derived_rear_radius_m": "(15*25.4 + 2*235*0.60)/2000 = 0.3315",
+        "mass_basis": "Car and Driver period estimate: 2700 lb, rounded to 1225 kg for runtime mass",
+        "top_speed_basis": "Car and Driver period estimate: 120 mph; runtime cap 53.64 m/s",
+        "mechanical_basis": "Owner manual: 5-speed ratios 3.364/2.059/1.381/1.057/0.8205, reverse 3.1818, final drive 3.44; engine 208 Nm peak torque; period test describes six-grand redline"
+      }
+    }
+  ]
+}
