@@ -1,0 +1,824 @@
+{
+  "artifact_id": 12153644236,
+  "audit_sha256": "d614a2d5f0f491578fde4793c27b26bc7116a0fbb082cc311972bff8c4ba7fdd",
+  "audit_stats": {
+    "edge_shards": 256,
+    "edges": 120412,
+    "grade_break_max_pct_points": 65.2664,
+    "grade_break_p95_pct_points": 2.9655,
+    "grade_break_p99_pct_points": 6.5656,
+    "grade_break_vertices": 711247,
+    "grade_max_pct": 68.9345,
+    "grade_over_20pct_segments": 17136,
+    "grade_over_30pct_segments": 3177,
+    "grade_p95_pct": 15.343,
+    "grade_p99_pct": 23.969,
+    "grade_segments": 830663,
+    "structural_edges_skipped": 1012,
+    "top_grade_segments_touching_graph_endpoint": 11
+  },
+  "by_highway_class": {
+    "living_street": {
+      "grade_max_pct": 33.6379,
+      "grade_over_20pct_segments": 34,
+      "grade_over_30pct_segments": 5,
+      "grade_p95_pct": 27.8213,
+      "grade_p99_pct": 32.1797,
+      "segments": 195
+    },
+    "motorway": {
+      "grade_max_pct": 21.3523,
+      "grade_over_20pct_segments": 2,
+      "grade_over_30pct_segments": 0,
+      "grade_p95_pct": 10.0557,
+      "grade_p99_pct": 15.2974,
+      "segments": 3482
+    },
+    "motorway_link": {
+      "grade_max_pct": 17.1537,
+      "grade_over_20pct_segments": 0,
+      "grade_over_30pct_segments": 0,
+      "grade_p95_pct": 7.1761,
+      "grade_p99_pct": 11.5493,
+      "segments": 972
+    },
+    "primary": {
+      "grade_max_pct": 34.6675,
+      "grade_over_20pct_segments": 52,
+      "grade_over_30pct_segments": 8,
+      "grade_p95_pct": 8.9859,
+      "grade_p99_pct": 14.5924,
+      "segments": 17838
+    },
+    "primary_link": {
+      "grade_max_pct": 24.2953,
+      "grade_over_20pct_segments": 3,
+      "grade_over_30pct_segments": 0,
+      "grade_p95_pct": 9.3267,
+      "grade_p99_pct": 16.1695,
+      "segments": 547
+    },
+    "raceway": {
+      "grade_max_pct": 10.1938,
+      "grade_over_20pct_segments": 0,
+      "grade_over_30pct_segments": 0,
+      "grade_p95_pct": 5.7098,
+      "grade_p99_pct": 9.8627,
+      "segments": 317
+    },
+    "residential": {
+      "grade_max_pct": 62.346,
+      "grade_over_20pct_segments": 4260,
+      "grade_over_30pct_segments": 432,
+      "grade_p95_pct": 13.8617,
+      "grade_p99_pct": 20.3375,
+      "segments": 392338
+    },
+    "road": {
+      "grade_max_pct": 0.5996,
+      "grade_over_20pct_segments": 0,
+      "grade_over_30pct_segments": 0,
+      "grade_p95_pct": 0.5939,
+      "grade_p99_pct": 0.5984,
+      "segments": 6
+    },
+    "secondary": {
+      "grade_max_pct": 57.944,
+      "grade_over_20pct_segments": 771,
+      "grade_over_30pct_segments": 134,
+      "grade_p95_pct": 13.906,
+      "grade_p99_pct": 22.1248,
+      "segments": 49471
+    },
+    "secondary_link": {
+      "grade_max_pct": 9.6449,
+      "grade_over_20pct_segments": 0,
+      "grade_over_30pct_segments": 0,
+      "grade_p95_pct": 6.3425,
+      "grade_p99_pct": 9.0055,
+      "segments": 209
+    },
+    "service": {
+      "grade_max_pct": 62.8306,
+      "grade_over_20pct_segments": 1060,
+      "grade_over_30pct_segments": 138,
+      "grade_p95_pct": 13.4595,
+      "grade_p99_pct": 22.0242,
+      "segments": 72866
+    },
+    "tertiary": {
+      "grade_max_pct": 49.5834,
+      "grade_over_20pct_segments": 757,
+      "grade_over_30pct_segments": 136,
+      "grade_p95_pct": 14.0862,
+      "grade_p99_pct": 22.5626,
+      "segments": 48487
+    },
+    "tertiary_link": {
+      "grade_max_pct": 15.2071,
+      "grade_over_20pct_segments": 0,
+      "grade_over_30pct_segments": 0,
+      "grade_p95_pct": 11.1788,
+      "grade_p99_pct": 14.0017,
+      "segments": 45
+    },
+    "track": {
+      "grade_max_pct": 68.9345,
+      "grade_over_20pct_segments": 5910,
+      "grade_over_30pct_segments": 1570,
+      "grade_p95_pct": 21.882,
+      "grade_p99_pct": 34.3019,
+      "segments": 91193
+    },
+    "trunk": {
+      "grade_max_pct": 30.3434,
+      "grade_over_20pct_segments": 3,
+      "grade_over_30pct_segments": 2,
+      "grade_p95_pct": 5.6828,
+      "grade_p99_pct": 12.0077,
+      "segments": 3624
+    },
+    "trunk_link": {
+      "grade_max_pct": 18.4859,
+      "grade_over_20pct_segments": 0,
+      "grade_over_30pct_segments": 0,
+      "grade_p95_pct": 4.7168,
+      "grade_p99_pct": 6.6801,
+      "segments": 356
+    },
+    "unclassified": {
+      "grade_max_pct": 59.8844,
+      "grade_over_20pct_segments": 4284,
+      "grade_over_30pct_segments": 752,
+      "grade_p95_pct": 17.0422,
+      "grade_p99_pct": 25.838,
+      "segments": 148717
+    }
+  },
+  "comparison": {
+    "metrics": {
+      "profile_grade_break_max_pct_points": {
+        "after": 65.2664,
+        "before": 130.9612
+      },
+      "profile_grade_break_p95_pct_points": {
+        "after": 2.9655,
+        "before": 14.8027
+      },
+      "profile_grade_max_pct": {
+        "after": 68.9345,
+        "before": 92.6317
+      },
+      "profile_grade_over_20pct_segments": {
+        "after": 17136,
+        "before": 49250
+      },
+      "profile_grade_p95_pct": {
+        "after": 15.343,
+        "before": 21.3357
+      },
+      "profile_grade_p99_pct": {
+        "after": 23.969,
+        "before": 34.6128
+      }
+    },
+    "previous_run_id": 39155404062,
+    "same_pbf_and_five_cog_hashes": true
+  },
+  "compiler_files_unchanged_since_run": true,
+  "limitations": [
+    "Compiled 64 m terrain is DSM-derived, not surveyed road alignment.",
+    "Terrain agreement explains compiler output, not real-world road accuracy.",
+    "No blanket grade clamp or geometry rewrite performed.",
+    "No Android performance or visual acceptance inferred."
+  ],
+  "run_id": 39173528834,
+  "source_evidence": {
+    "buildings": {
+      "bounds": [
+        -166572.652,
+        -61511.155,
+        64541.965,
+        105019.112
+      ],
+      "buildings": 1023152,
+      "cells": 63200,
+      "max_cell_buildings": 358,
+      "max_cell_uncompressed_bytes": 103597,
+      "tiles": 716
+    },
+    "compiler_commit": "003fda123b7c8cf901379e7a135a16017820deec",
+    "parishes": {
+      "canonical_parishes": 14,
+      "runtime_polygons": 16,
+      "runtime_vertices": 60372
+    },
+    "places": {
+      "by_parish": {
+        "Clarendon": 85,
+        "Hanover": 76,
+        "Kingston": 7,
+        "Manchester": 89,
+        "Portland": 223,
+        "St. Andrew": 128,
+        "St. Ann": 173,
+        "St. Catherine": 284,
+        "St. Elizabeth": 163,
+        "St. James": 67,
+        "St. Mary": 360,
+        "St. Thomas": 200,
+        "Trelawny": 125,
+        "Westmoreland": 281
+      },
+      "fallback_assignments": 3,
+      "places": 2261,
+      "tiles": 513
+    },
+    "roads": {
+      "bounds": [
+        -166532.418,
+        -61436.835,
+        64524.071,
+        104896.021
+      ],
+      "graph_edges": 120412,
+      "graph_nodes": 101656,
+      "profile_adjustment_limit_m": 6.4,
+      "profile_grade_break_p95_pct_points": 2.9655,
+      "profile_grade_max_pct": 68.9345,
+      "profile_grade_over_20pct_segments": 17136,
+      "profile_grade_p95_pct": 15.343,
+      "profile_grade_p99_pct": 23.969,
+      "route_pack_sha256": "f6204f835205ba5f1810fd04f0f61799af26ab53c2b0b15dd49ecd6a35b3cd87",
+      "tiles": 713
+    },
+    "source_sha256": "ecffc063bc9aa7bb5eea371f115bfad567a1ffae85afd130fd121d5f21637ebb",
+    "source_url": "https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf",
+    "terrain": {
+      "max_height_m": 2248.86962890625,
+      "sample_spacing_m": 64.0,
+      "source_cogs": [
+        {
+          "file": "Copernicus_DSM_COG_10_N17_00_W077_00_DEM.tif",
+          "sha256": "c5c34930c1f58a32626f5b57aa612ef0768b5e18c23c5e485c92f063113899cb",
+          "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N17_00_W077_00_DEM/Copernicus_DSM_COG_10_N17_00_W077_00_DEM.tif"
+        },
+        {
+          "file": "Copernicus_DSM_COG_10_N17_00_W078_00_DEM.tif",
+          "sha256": "eae87ab5247ee92a9646be558fa4890c1d44db597815353cd463b3137de34420",
+          "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N17_00_W078_00_DEM/Copernicus_DSM_COG_10_N17_00_W078_00_DEM.tif"
+        },
+        {
+          "file": "Copernicus_DSM_COG_10_N18_00_W077_00_DEM.tif",
+          "sha256": "95e0277acc2911fc5cb49d7c2eaa60e1386284de978c087ec000a39ddb8f5a5d",
+          "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N18_00_W077_00_DEM/Copernicus_DSM_COG_10_N18_00_W077_00_DEM.tif"
+        },
+        {
+          "file": "Copernicus_DSM_COG_10_N18_00_W078_00_DEM.tif",
+          "sha256": "c4041fb8611e996ac7b0877f9fb82814632c77799d7cb367c24ef3dfe0cd6da2",
+          "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N18_00_W078_00_DEM/Copernicus_DSM_COG_10_N18_00_W078_00_DEM.tif"
+        },
+        {
+          "file": "Copernicus_DSM_COG_10_N18_00_W079_00_DEM.tif",
+          "sha256": "a9e7e9a1be637971b7b612d630a0db564ff2ac76dd8f1ad31b6ef8da14c01ad7",
+          "url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N18_00_W079_00_DEM/Copernicus_DSM_COG_10_N18_00_W079_00_DEM.tif"
+        }
+      ],
+      "tiles": 2537
+    }
+  },
+  "top_grade_break_terrain_samples": [
+    {
+      "class": "track",
+      "edge_id": "w303344333:0:osm:5140926678:osm:5141717581",
+      "grade_break_pct_points": 65.2664,
+      "incoming_grade_pct": 54.884,
+      "outgoing_grade_pct": -10.3823,
+      "position": [
+        15317.875,
+        1127.57,
+        -10532.369
+      ],
+      "samples": [
+        {
+          "deck": [
+            15325.431,
+            1119.319314,
+            -10545.366
+          ],
+          "deck_minus_terrain_m": -2.308840222488243,
+          "index": 204,
+          "terrain_y": 1121.6281542224883
+        },
+        {
+          "deck": [
+            15317.875,
+            1127.570467,
+            -10532.369
+          ],
+          "deck_minus_terrain_m": -6.400000250823496,
+          "index": 205,
+          "terrain_y": 1133.9704672508235
+        },
+        {
+          "deck": [
+            15325.481,
+            1126.74035,
+            -10529.904
+          ],
+          "deck_minus_terrain_m": -5.256391655349489,
+          "index": 206,
+          "terrain_y": 1131.9967416553495
+        }
+      ],
+      "source_way": "w303344333",
+      "vertex_index": 205
+    },
+    {
+      "class": "residential",
+      "edge_id": "w307463197:0:osm:3126228085:osm:4856358418",
+      "grade_break_pct_points": 64.321,
+      "incoming_grade_pct": -34.5515,
+      "outgoing_grade_pct": 29.7695,
+      "position": [
+        12032.025,
+        973.875,
+        -5869.534
+      ],
+      "samples": [
+        {
+          "deck": [
+            12040.681,
+            979.909777,
+            -5854.364
+          ],
+          "deck_minus_terrain_m": 3.629628386069953,
+          "index": 46,
+          "terrain_y": 976.28014861393
+        },
+        {
+          "deck": [
+            12032.025,
+            973.875062,
+            -5869.534
+          ],
+          "deck_minus_terrain_m": 6.399999613487012,
+          "index": 47,
+          "terrain_y": 967.475062386513
+        },
+        {
+          "deck": [
+            12024.642,
+            976.455087,
+            -5864.995
+          ],
+          "deck_minus_terrain_m": 3.8020020962828767,
+          "index": 48,
+          "terrain_y": 972.6530849037172
+        }
+      ],
+      "source_way": "w307463197",
+      "vertex_index": 47
+    },
+    {
+      "class": "track",
+      "edge_id": "w1222106161:0:osm:11334697799:osm:4944286873",
+      "grade_break_pct_points": 62.7046,
+      "incoming_grade_pct": 33.0031,
+      "outgoing_grade_pct": -29.7015,
+      "position": [
+        -64919.998,
+        545.783,
+        -42599.791
+      ],
+      "samples": [
+        {
+          "deck": [
+            -64932.858,
+            540.284913,
+            -42610.379
+          ],
+          "deck_minus_terrain_m": -0.5790672885050299,
+          "index": 5,
+          "terrain_y": 540.863980288505
+        },
+        {
+          "deck": [
+            -64919.998,
+            545.782535,
+            -42599.791
+          ],
+          "deck_minus_terrain_m": -6.4000001619705245,
+          "index": 6,
+          "terrain_y": 552.1825351619706
+        },
+        {
+          "deck": [
+            -64911.321,
+            541.861786,
+            -42589.843
+          ],
+          "deck_minus_terrain_m": -0.7284819080986153,
+          "index": 7,
+          "terrain_y": 542.5902679080987
+        }
+      ],
+      "source_way": "w1222106161",
+      "vertex_index": 6
+    }
+  ],
+  "verified_against_head": "64c8242bd9887a464bbeacb8d978cd36c6291c61",
+  "worst_segment_by_class_with_runtime_terrain": {
+    "living_street": {
+      "deck_grade_pct": 33.63792256131059,
+      "deck_minus_terrain_m": [
+        0.11936371504782173,
+        8.761319492123221e-08
+      ],
+      "edge_id": "w1355007861:0:osm:12539855906:osm:12539855908",
+      "from": [
+        12368.311,
+        29.989745,
+        3146.703
+      ],
+      "path_points": 3,
+      "run_m": 18.15941216008913,
+      "segment_index": 1,
+      "source_way": "w1355007861",
+      "terrain_grade_pct": 34.295232535787434,
+      "to": [
+        12360.284,
+        36.098194,
+        3130.414
+      ]
+    },
+    "motorway": {
+      "deck_grade_pct": 21.352313106809273,
+      "deck_minus_terrain_m": [
+        2.423255824575932,
+        -6.39999962398862
+      ],
+      "edge_id": "w573251948:0:osm:4053850617:osm:4037638127",
+      "from": [
+        -13060.839,
+        38.734473,
+        -5913.473
+      ],
+      "path_points": 135,
+      "run_m": 70.31529054906953,
+      "segment_index": 35,
+      "source_way": "w573251948",
+      "terrain_grade_pct": 33.90044507023655,
+      "to": [
+        -13112.672,
+        53.748414,
+        -5960.987
+      ]
+    },
+    "motorway_link": {
+      "deck_grade_pct": -17.153690501864524,
+      "deck_minus_terrain_m": [
+        -4.2945072209477075e-07,
+        0.9428082902228425
+      ],
+      "edge_id": "w403381782:0:osm:5350165382:osm:5359545912",
+      "from": [
+        -34238.458,
+        334.268338,
+        -32100.982
+      ],
+      "path_points": 4,
+      "run_m": 14.87193091027677,
+      "segment_index": 0,
+      "source_way": "w403381782",
+      "terrain_grade_pct": -23.493208385329588,
+      "to": [
+        -34226.598,
+        331.717253,
+        -32092.009
+      ]
+    },
+    "primary": {
+      "deck_grade_pct": 34.66754941163088,
+      "deck_minus_terrain_m": [
+        6.400000014218783,
+        -6.399999782537151
+      ],
+      "edge_id": "w50438408:0:osm:641272369:osm:786120896",
+      "from": [
+        -20436.137,
+        70.267072,
+        -11010.304
+      ],
+      "path_points": 110,
+      "run_m": 23.8517147601608,
+      "segment_index": 56,
+      "source_way": "w50438408",
+      "terrain_grade_pct": 88.33245327898554,
+      "to": [
+        -20451.753,
+        78.535877,
+        -11028.333
+      ]
+    },
+    "primary_link": {
+      "deck_grade_pct": -24.295297029422777,
+      "deck_minus_terrain_m": [
+        -4.394626138548574e-07,
+        1.7316720651623392
+      ],
+      "edge_id": "w369100538:0:osm:3729223253:osm:3729223256",
+      "from": [
+        -33483.239,
+        16.333021,
+        -48042.434
+      ],
+      "path_points": 4,
+      "run_m": 17.20904253583161,
+      "segment_index": 0,
+      "source_way": "w369100538",
+      "terrain_grade_pct": -34.35787024358836,
+      "to": [
+        -33481.623,
+        12.152033,
+        -48059.567
+      ]
+    },
+    "raceway": {
+      "deck_grade_pct": 10.193751020305005,
+      "deck_minus_terrain_m": [
+        1.2334295342872679,
+        -0.9125727235725094
+      ],
+      "edge_id": "w247345542:0:osm:2542492164:osm:2542492333",
+      "from": [
+        -61706.342,
+        348.726544,
+        -50059.296
+      ],
+      "path_points": 29,
+      "run_m": 14.626990565396286,
+      "segment_index": 24,
+      "source_way": "w247345542",
+      "terrain_grade_pct": 24.86527383468809,
+      "to": [
+        -61720.8,
+        350.217583,
+        -50057.079
+      ]
+    },
+    "residential": {
+      "deck_grade_pct": -62.34600389064104,
+      "deck_minus_terrain_m": [
+        1.6361840238232617e-07,
+        1.2818059502706092e-07
+      ],
+      "edge_id": "w1430166968:0:osm:11245595750:osm:11245595751",
+      "from": [
+        18182.601,
+        26.814458,
+        7257.893
+      ],
+      "path_points": 2,
+      "run_m": 12.943814352809556,
+      "segment_index": 0,
+      "source_way": "w1430166968",
+      "terrain_grade_pct": -62.34600361685925,
+      "to": [
+        18175.12,
+        18.744507,
+        7268.456
+      ]
+    },
+    "road": {
+      "deck_grade_pct": -0.5995651209327711,
+      "deck_minus_terrain_m": [
+        3.967810258131976e-08,
+        -0.14617273934404906
+      ],
+      "edge_id": "w1448366491:0:osm:13288715496:osm:13288715490",
+      "from": [
+        -100241.428,
+        14.665568,
+        -17472.02
+      ],
+      "path_points": 7,
+      "run_m": 16.001931508413875,
+      "segment_index": 0,
+      "source_way": "w1448366491",
+      "terrain_grade_pct": 0.31390447456758114,
+      "to": [
+        -100234.024,
+        14.569626,
+        -17457.834
+      ]
+    },
+    "secondary": {
+      "deck_grade_pct": -57.94399891361694,
+      "deck_minus_terrain_m": [
+        0.008757273669516508,
+        0.4973915478907145
+      ],
+      "edge_id": "w686131248:0:osm:3684357146:osm:278827314",
+      "from": [
+        -141848.732,
+        254.719559,
+        -43115.181
+      ],
+      "path_points": 382,
+      "run_m": 1.4166643921552025,
+      "segment_index": 177,
+      "source_way": "w686131248",
+      "terrain_grade_pct": -92.43588541313062,
+      "to": [
+        -141847.349,
+        253.898687,
+        -43114.874
+      ]
+    },
+    "secondary_link": {
+      "deck_grade_pct": 9.644860345701494,
+      "deck_minus_terrain_m": [
+        0.2824368914316251,
+        -3.776544410527549e-08
+      ],
+      "edge_id": "w259989981:0:osm:2654424596:osm:2654424601",
+      "from": [
+        -119467.926,
+        8.031047,
+        -56133.7
+      ],
+      "path_points": 6,
+      "run_m": 8.78824544491993,
+      "segment_index": 4,
+      "source_way": "w259989981",
+      "terrain_grade_pct": 12.858663726219643,
+      "to": [
+        -119460.079,
+        8.878661,
+        -56137.657
+      ]
+    },
+    "service": {
+      "deck_grade_pct": 62.830559791093265,
+      "deck_minus_terrain_m": [
+        -3.0551285590263433e-07,
+        -6.511606898129685e-08
+      ],
+      "edge_id": "w744706315:0:osm:6969870590:osm:6969844582",
+      "from": [
+        -72954.664,
+        315.171469,
+        -45104.087
+      ],
+      "path_points": 2,
+      "run_m": 12.82855194478563,
+      "segment_index": 0,
+      "source_way": "w744706315",
+      "terrain_grade_pct": 62.83055791717338,
+      "to": [
+        -72942.777,
+        323.23172,
+        -45099.263
+      ]
+    },
+    "tertiary": {
+      "deck_grade_pct": 49.583370967250964,
+      "deck_minus_terrain_m": [
+        -8.394204087380785e-08,
+        -1.3912585927755572e-07
+      ],
+      "edge_id": "w552226418:0:osm:2537801166:osm:5949702281",
+      "from": [
+        2788.561,
+        341.61498,
+        -8357.728
+      ],
+      "path_points": 2,
+      "run_m": 9.689863569730495,
+      "segment_index": 0,
+      "source_way": "w552226418",
+      "terrain_grade_pct": 49.583371536751436,
+      "to": [
+        2797.301,
+        346.419541,
+        -8353.544
+      ]
+    },
+    "tertiary_link": {
+      "deck_grade_pct": -15.207148426476955,
+      "deck_minus_terrain_m": [
+        -9.672410072880666e-08,
+        2.487659500616246e-08
+      ],
+      "edge_id": "w1276294295:0:osm:1515122109:osm:11849187910",
+      "from": [
+        -118104.271,
+        14.998691,
+        -54606.191
+      ],
+      "path_points": 2,
+      "run_m": 9.788225630838044,
+      "segment_index": 0,
+      "source_way": "w1276294295",
+      "terrain_grade_pct": -15.207149668792983,
+      "to": [
+        -118110.126,
+        13.510181,
+        -54614.035
+      ]
+    },
+    "track": {
+      "deck_grade_pct": -68.93446311624275,
+      "deck_minus_terrain_m": [
+        -1.375426563754445e-07,
+        9.137033885053825e-08
+      ],
+      "edge_id": "w1338933288:0:osm:12385176950:osm:12385176951",
+      "from": [
+        22222.786,
+        1313.485201,
+        -4495.292
+      ],
+      "path_points": 2,
+      "run_m": 61.925473950549424,
+      "segment_index": 0,
+      "source_way": "w1338933288",
+      "terrain_grade_pct": -68.9344634859016,
+      "to": [
+        22284.668,
+        1270.797208,
+        -4497.612
+      ]
+    },
+    "trunk": {
+      "deck_grade_pct": -30.343435228780173,
+      "deck_minus_terrain_m": [
+        -1.2782231095798124e-07,
+        3.1847110650458674
+      ],
+      "edge_id": "w544529545:0:osm:11245595749:osm:281774523",
+      "from": [
+        17886.132,
+        60.982956,
+        6965.061
+      ],
+      "path_points": 31,
+      "run_m": 31.088526822607964,
+      "segment_index": 0,
+      "source_way": "w544529545",
+      "terrain_grade_pct": -40.58744328693047,
+      "to": [
+        17868.522,
+        51.549629,
+        6939.441
+      ]
+    },
+    "trunk_link": {
+      "deck_grade_pct": -18.485935746709195,
+      "deck_minus_terrain_m": [
+        -2.3675923888077932e-07,
+        4.2561845869926174e-07
+      ],
+      "edge_id": "w1380856837:0:osm:12783684296:osm:12783684295",
+      "from": [
+        11696.699,
+        6.575604,
+        3252.654
+      ],
+      "path_points": 2,
+      "run_m": 11.271303917470973,
+      "segment_index": 0,
+      "source_way": "w1380856837",
+      "terrain_grade_pct": -18.485941623382406,
+      "to": [
+        11699.313,
+        4.491998,
+        3263.618
+      ]
+    },
+    "unclassified": {
+      "deck_grade_pct": -59.88436810364397,
+      "deck_minus_terrain_m": [
+        -2.6416762466396904e-07,
+        0.5161915485840609
+      ],
+      "edge_id": "w303344352:0:osm:5181742073:osm:3076985914",
+      "from": [
+        14171.309,
+        587.872,
+        -7521.904
+      ],
+      "path_points": 5,
+      "run_m": 9.869189885699583,
+      "segment_index": 0,
+      "source_way": "w303344352",
+      "terrain_grade_pct": -65.11470431897655,
+      "to": [
+        14173.504,
+        581.961898,
+        -7531.526
+      ]
+    }
+  }
+}
