@@ -1,6 +1,7 @@
 name: Yardman World Quality Fast Capture
 
 # Owner-requested current-head gameplay screenshot trigger.
+# Trigger marker: 2026-10-19T05:18Z finite-transform/headless-input repair.
 on:
   push:
     branches:
