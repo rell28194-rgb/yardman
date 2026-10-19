@@ -6,6 +6,10 @@ on:
       - codex/rdx-renderer-matrix-001
     paths:
       - 'godot/tests/renderer_capability_matrix_test.gd'
+      - 'godot/tests/material_variants_test.gd'
+      - 'godot/tests/render_quality_test.gd'
+      - 'godot/scripts/render_material_registry.gd'
+      - 'godot/scripts/render_quality_manager.gd'
       - 'godot/project.godot'
       - 'godot/shaders/**'
       - '.github/workflows/rdx-renderer-matrix.yml'
@@ -23,10 +27,14 @@ jobs:
           - label: compatibility
             method: gl_compatibility
             driver: opengl3
+            family: gles
+            wrong_family: vulkan_mobile
             expect_rd: '0'
           - label: mobile
             method: mobile
             driver: vulkan
+            family: vulkan_mobile
+            wrong_family: gles
             expect_rd: '1'
     runs-on: ubuntu-latest
     timeout-minutes: 12
@@ -65,12 +73,13 @@ jobs:
             | tee 'godot/build/renderer-${{ matrix.label }}-import.log'
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|Shader compilation failed|Failed to compile shader|ObjectDB instances were leaked|RID of type .* was leaked' \
             'godot/build/renderer-${{ matrix.label }}-import.log'; then exit 1; fi
-      - name: Validate renderer capability and shader contract
+      - name: Validate actual renderer and production material policy
         shell: bash
         env:
           YARDMAN_RENDERER_LABEL: ${{ matrix.label }}
           YARDMAN_EXPECT_METHOD: ${{ matrix.method }}
           YARDMAN_EXPECT_DRIVER: ${{ matrix.driver }}
+          YARDMAN_EXPECT_FAMILY: ${{ matrix.family }}
           YARDMAN_EXPECT_RD: ${{ matrix.expect_rd }}
         run: |
           timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
@@ -84,12 +93,37 @@ jobs:
             'godot/build/renderer-${{ matrix.label }}-test.log'; then exit 1; fi
           grep -q 'YARDMAN_RDX_RENDERER_MATRIX .*result=PASS' \
             'godot/build/renderer-${{ matrix.label }}-test.log'
+      - name: Validate material variant switching under active backend
+        shell: bash
+        run: |
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+            --path godot \
+            --rendering-method '${{ matrix.method }}' \
+            --rendering-driver '${{ matrix.driver }}' \
+            --audio-driver Dummy \
+            --script res://tests/material_variants_test.gd 2>&1 \
+            | tee 'godot/build/material-variants-${{ matrix.label }}.log'
+          grep -q 'YARDMAN_MATERIAL_VARIANTS_TEST PASS' 'godot/build/material-variants-${{ matrix.label }}.log'
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' 'godot/build/material-variants-${{ matrix.label }}.log'; then exit 1; fi
+      - name: Validate quality and thermal policy under active backend
+        shell: bash
+        run: |
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+            --path godot \
+            --rendering-method '${{ matrix.method }}' \
+            --rendering-driver '${{ matrix.driver }}' \
+            --audio-driver Dummy \
+            --script res://tests/render_quality_test.gd 2>&1 \
+            | tee 'godot/build/render-quality-${{ matrix.label }}.log'
+          grep -q 'YARDMAN_RENDER_QUALITY_TEST PASS' 'godot/build/render-quality-${{ matrix.label }}.log'
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' 'godot/build/render-quality-${{ matrix.label }}.log'; then exit 1; fi
       - name: Prove wrong method expectation is rejected
         shell: bash
         env:
           YARDMAN_RENDERER_LABEL: negative-method
           YARDMAN_EXPECT_METHOD: definitely_wrong_method
           YARDMAN_EXPECT_DRIVER: ${{ matrix.driver }}
+          YARDMAN_EXPECT_FAMILY: ${{ matrix.family }}
           YARDMAN_EXPECT_RD: ${{ matrix.expect_rd }}
         run: |
           set +e
@@ -103,14 +137,35 @@ jobs:
           code=$?
           set -e
           test "$code" -ne 0
-          grep -q 'rendering method mismatch' \
-            'godot/build/renderer-${{ matrix.label }}-negative-method.log'
+          grep -q 'rendering method mismatch' 'godot/build/renderer-${{ matrix.label }}-negative-method.log'
+      - name: Prove wrong renderer-family expectation is rejected
+        shell: bash
+        env:
+          YARDMAN_RENDERER_LABEL: negative-family
+          YARDMAN_EXPECT_METHOD: ${{ matrix.method }}
+          YARDMAN_EXPECT_DRIVER: ${{ matrix.driver }}
+          YARDMAN_EXPECT_FAMILY: ${{ matrix.wrong_family }}
+          YARDMAN_EXPECT_RD: ${{ matrix.expect_rd }}
+        run: |
+          set +e
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+            --path godot \
+            --rendering-method '${{ matrix.method }}' \
+            --rendering-driver '${{ matrix.driver }}' \
+            --audio-driver Dummy \
+            --script res://tests/renderer_capability_matrix_test.gd \
+            > 'godot/build/renderer-${{ matrix.label }}-negative-family.log' 2>&1
+          code=$?
+          set -e
+          test "$code" -ne 0
+          grep -q 'quality renderer family mismatch' 'godot/build/renderer-${{ matrix.label }}-negative-family.log'
       - name: Prove wrong RenderingDevice expectation is rejected
         shell: bash
         env:
           YARDMAN_RENDERER_LABEL: negative-rd
           YARDMAN_EXPECT_METHOD: ${{ matrix.method }}
           YARDMAN_EXPECT_DRIVER: ${{ matrix.driver }}
+          YARDMAN_EXPECT_FAMILY: ${{ matrix.family }}
           YARDMAN_EXPECT_RD: ${{ matrix.expect_rd == '1' && '0' || '1' }}
         run: |
           set +e
@@ -124,5 +179,4 @@ jobs:
           code=$?
           set -e
           test "$code" -ne 0
-          grep -q 'RenderingDevice capability mismatch' \
-            'godot/build/renderer-${{ matrix.label }}-negative-rd.log'
+          grep -q 'RenderingDevice capability mismatch' 'godot/build/renderer-${{ matrix.label }}-negative-rd.log'
