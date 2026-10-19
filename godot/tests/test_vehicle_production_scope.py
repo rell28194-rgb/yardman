@@ -7,6 +7,8 @@ CATALOG = ROOT / "scripts" / "vehicle_catalog.gd"
 RUNTIME = ROOT / "data" / "vehicle_fleet_runtime.json"
 SUPPLEMENTAL = ROOT / "data" / "vehicle_fleet_supplemental.json"
 
+BANNED = {"toyota_mark_x", "port_royal_992"}
+HELD = {"corvette_c7", "delorean_dmc12"}
 REQUIRED_RECOVERED = {
     "audi_r8",
     "bmw_m3_e46",
@@ -19,6 +21,12 @@ REQUIRED_RECOVERED = {
     "mazda_rx7",
     "mitsubishi_evo9",
     "nissan_180sx",
+    "toyota_supra_rz",
+    "carx_commodore",
+    "carx_pontiac_solstice",
+    "carx_cuda_70",
+    "carx_civic_source",
+    "carx_driftwagon",
 }
 
 
@@ -28,16 +36,20 @@ def load_ids(path: Path) -> set[str]:
 
 
 class VehicleProductionScopeTests(unittest.TestCase):
-    def test_mark_x_and_992_are_hard_forbidden(self):
+    def test_banned_and_held_vehicle_policy_is_explicit(self):
         text = CATALOG.read_text(encoding="utf-8")
         self.assertIn('const FORBIDDEN_IDS := ["toyota_mark_x", "port_royal_992"]', text)
+        self.assertIn('const HELD_IDS := ["corvette_c7", "delorean_dmc12"]', text)
         self.assertNotIn('const PRODUCTION_IDS := ["toyota_crown", "toyota_mark_x"]', text)
 
-    def test_recovered_fleet_cannot_collapse_to_single_car(self):
+    def test_exact_owner_recovery_fleet_is_64_selectable_cars(self):
         recovered = load_ids(RUNTIME) | load_ids(SUPPLEMENTAL)
-        self.assertGreaterEqual(len(recovered), 20)
         missing = REQUIRED_RECOVERED - recovered
         self.assertFalse(missing, f"missing recovered fleet ids: {sorted(missing)}")
+        selectable = (recovered - BANNED - HELD) | {"toyota_crown"}
+        self.assertEqual(len(selectable), 64, f"owner fleet drifted: {len(selectable)} selectable ids")
+        self.assertTrue(BANNED.isdisjoint(selectable))
+        self.assertTrue(HELD.isdisjoint(selectable))
 
     def test_crown_remains_default_not_only_vehicle(self):
         text = CATALOG.read_text(encoding="utf-8")
