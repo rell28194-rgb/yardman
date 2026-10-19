@@ -6,6 +6,7 @@ on:
       - codex/world-quality-20261018
     paths:
       - '.github/workflows/world-quality-fast-capture.yml'
+      - 'godot/tests/game_capture_test.gd'
   workflow_dispatch:
 
 permissions:
