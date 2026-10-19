@@ -1,0 +1,30 @@
+name: Yardman World Quality Android Dispatch
+
+on:
+  push:
+    branches:
+      - codex/world-quality-20261018
+    paths:
+      - '.github/workflows/world-quality-android-dispatch.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch-android-capture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch existing Android workflow at this branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "repos/${{ github.repository }}/actions/workflows/godot-android.yml/dispatches" \
+            -f ref="$TARGET_REF"
+          echo "Dispatched godot-android.yml for $TARGET_REF"
