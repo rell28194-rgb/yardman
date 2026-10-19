@@ -1,0 +1,37 @@
+name: Yardman Owner Recovery Source Snapshot
+
+on:
+  push:
+    branches:
+      - codex/owner-recovery-20261019
+    paths:
+      - 'godot/**'
+      - '.github/workflows/owner-recovery-source-snapshot.yml'
+  workflow_dispatch:
+
+jobs:
+  snapshot:
+    name: Package recovery source without private media
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar \
+            --exclude='godot/.godot' \
+            --exclude='godot/build' \
+            --exclude='godot/data' \
+            --exclude='godot/assets/user_reference' \
+            -czf /tmp/Yardman-Owner-Recovery-Source.tar.gz godot
+          test -s /tmp/Yardman-Owner-Recovery-Source.tar.gz
+          echo "snapshot_bytes=$(stat -c%s /tmp/Yardman-Owner-Recovery-Source.tar.gz)"
+      - name: Upload recovery source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Owner-Recovery-Source
+          path: /tmp/Yardman-Owner-Recovery-Source.tar.gz
+          if-no-files-found: error
+          retention-days: 7
