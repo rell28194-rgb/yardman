@@ -3,11 +3,9 @@ class_name YardmanVehicleCatalog
 
 const FleetRegistry = preload("res://scripts/vehicle_fleet_registry.gd")
 
-# Owner build rule: Crown + manifest-verified recovered fleet. Mark X and 992
-# are intentionally not production selectors.
+# Owner build rule: Crown + manifest-verified recovered fleet only.
 const DEFAULT_ID := "toyota_crown"
 const CROWN_ID := "toyota_crown"
-const BLOCKED_IDS := ["toyota_mark_x", "port_royal_992"]
 
 # Shared driving baseline. Dedicated hero geometry supplies its measured bounds,
 # wheelbase and track at runtime, while this profile keeps the solver coherent
@@ -72,8 +70,6 @@ static func profile(vehicle_id: String) -> Dictionary:
         return _merged(CROWN_PROFILE)
     if FleetRegistry.has(vehicle_id):
         var entry := FleetRegistry.entry(vehicle_id)
-        # Hero geometry is measured after import, so these are only safe solver
-        # initialization values until the dedicated rig supplies exact bounds.
         entry["use_visual_wheelbase"] = true
         entry["audio_profile"] = "legacy_inline6"
         return _merged(entry)
@@ -85,12 +81,11 @@ static func has(vehicle_id: String) -> bool:
 static func production_ids() -> Array:
     var result: Array = [CROWN_ID]
     for vehicle_id in FleetRegistry.ids():
-        if not result.has(vehicle_id) and not BLOCKED_IDS.has(vehicle_id):
+        if not result.has(vehicle_id):
             result.append(vehicle_id)
     return result
 
 static func ids(include_legacy: bool = true) -> Array:
-    # Kept for API compatibility. Legacy procedural sedan is no longer exposed.
     return production_ids()
 
 static func next_id(current_id: String, include_legacy: bool = false) -> String:
