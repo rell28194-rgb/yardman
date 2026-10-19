@@ -26,8 +26,15 @@ static func record_failure(failed: Dictionary, attempts: Dictionary, key: String
 static func release_due(failed: Dictionary, attempts: Dictionary, loaded: Dictionary,
         stats: Dictionary, now_msec: int = -1) -> int:
     var now := Time.get_ticks_msec() if now_msec < 0 else now_msec
+    var loaded_cleared := 0
     for loaded_key in loaded.keys():
-        attempts.erase(str(loaded_key))
+        var key := str(loaded_key)
+        attempts.erase(key)
+        if failed.erase(key):
+            loaded_cleared += 1
+    if loaded_cleared > 0:
+        stats["loaded_failures_cleared"] = int(stats.get("loaded_failures_cleared", 0)) + loaded_cleared
+
     var released := 0
     for key_value in failed.keys():
         var state = failed[key_value]
@@ -55,6 +62,17 @@ static func forget_unwanted(failed: Dictionary, attempts: Dictionary, wanted: Di
         dropped += 1
     if dropped > 0:
         stats["stale_failures_dropped"] = int(stats.get("stale_failures_dropped", 0)) + dropped
+
+    var orphan_attempts_dropped := 0
+    for key_value in attempts.keys():
+        var key := str(key_value)
+        if wanted.has(key):
+            continue
+        attempts.erase(key_value)
+        orphan_attempts_dropped += 1
+    if orphan_attempts_dropped > 0:
+        stats["stale_attempts_dropped"] = int(stats.get("stale_attempts_dropped", 0)) + orphan_attempts_dropped
+
     stats["active_failures"] = failed.size()
     return dropped
 
