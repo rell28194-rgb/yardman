@@ -6,6 +6,9 @@ on:
       - codex/world-quality-20261018
     paths:
       - '.github/workflows/world-quality-fast-gameplay-gate.yml'
+      - 'godot/project.godot'
+      - 'godot/scripts/**/*.gd'
+      - 'godot/tests/gameplay_test.gd'
   workflow_dispatch:
 
 permissions:
