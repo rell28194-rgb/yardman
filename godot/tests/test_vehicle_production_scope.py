@@ -7,7 +7,6 @@ CATALOG = ROOT / "scripts" / "vehicle_catalog.gd"
 RUNTIME = ROOT / "data" / "vehicle_fleet_runtime.json"
 SUPPLEMENTAL = ROOT / "data" / "vehicle_fleet_supplemental.json"
 
-BANNED = {"toyota_mark_x", "port_royal_992"}
 REQUIRED_RECOVERED = {
     "audi_r8",
     "bmw_m3_e46",
@@ -29,7 +28,7 @@ def load_ids(path: Path) -> set[str]:
 
 
 class VehicleProductionScopeTests(unittest.TestCase):
-    def test_banned_vehicles_are_hard_forbidden(self):
+    def test_mark_x_and_992_are_hard_forbidden(self):
         text = CATALOG.read_text(encoding="utf-8")
         self.assertIn('const FORBIDDEN_IDS := ["toyota_mark_x", "port_royal_992"]', text)
         self.assertNotIn('const PRODUCTION_IDS := ["toyota_crown", "toyota_mark_x"]', text)
@@ -37,8 +36,8 @@ class VehicleProductionScopeTests(unittest.TestCase):
     def test_recovered_fleet_cannot_collapse_to_single_car(self):
         recovered = load_ids(RUNTIME) | load_ids(SUPPLEMENTAL)
         self.assertGreaterEqual(len(recovered), 20)
-        self.assertFalse(REQUIRED_RECOVERED - recovered, f"missing recovered fleet ids: {sorted(REQUIRED_RECOVERED - recovered)}")
-        self.assertTrue(BANNED.isdisjoint(recovered) or BANNED <= {"toyota_mark_x", "port_royal_992"})
+        missing = REQUIRED_RECOVERED - recovered
+        self.assertFalse(missing, f"missing recovered fleet ids: {sorted(missing)}")
 
     def test_crown_remains_default_not_only_vehicle(self):
         text = CATALOG.read_text(encoding="utf-8")
