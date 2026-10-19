@@ -233,7 +233,7 @@ func _poll_jobs() -> void:
         tile_root.name = "RoadTile_%d_%d" % [tile.x, tile.y]
         tile_root.position = coordinates.world_to_local(float(tile.x) * tile_size, float(tile.y) * tile_size)
         _building = {"key": key, "tile": tile, "root": tile_root,
-            "segments": payload.segments, "cursor": 0, "batch": 0,
+            "segments": payload.segments, "cursor": 0, "batch": 0, "upload_phase": -1,
             "paved_vertices": PackedVector3Array(), "paved_indices": PackedInt32Array(),
             "paved_normals": PackedVector3Array(), "paved_uv": PackedVector2Array(),
             "paved_uv2": PackedVector2Array(), "paved_colors": PackedColorArray(),
@@ -243,6 +243,9 @@ func _poll_jobs() -> void:
 
 func _prepare_geometry() -> void:
     if _building.is_empty():
+        return
+    if int(_building.get("upload_phase", -1)) >= 0:
+        _advance_mesh_batch()
         return
     var start := Time.get_ticks_usec()
     var processed := 0
@@ -261,20 +264,16 @@ func _prepare_geometry() -> void:
                 _building.dirt_colors if dirt else _building.paved_colors, segment, _building.tile)
             _index_surface_segment(_building.surface_index, segment)
         if _building.cursor % 2048 == 0:
-            _flush_mesh_batch()
+            _building.upload_phase = 0
+            return
         if Time.get_ticks_usec() - start >= geometry_budget_us:
             break
     if _building.cursor >= segments.size():
-        _flush_mesh_batch()
-        var tile_root: Node3D = _building.root
-        var key: String = _building.key
-        var tile: Vector2i = _building.tile
-        add_child(tile_root)
-        _loaded[key] = tile_root
-        _surface_indices[key] = _building.surface_index
-        _building.clear()
-        tile_ready.emit(tile)
-        tile_content_ready.emit(tile, tile_root, segments)
+        # CPU preparation, the two indivisible GPU uploads and publication must
+        # not all consume the same road integration slice. This also applies to
+        # intermediate batches, where dense tiles previously uploaded and then
+        # continued preparing geometry in the same frame.
+        _building.upload_phase = 0
 
 func _append_segment(vertices: PackedVector3Array, indices: PackedInt32Array,
         normals: PackedVector3Array, uvs: PackedVector2Array, uv2s: PackedVector2Array,
@@ -347,8 +346,10 @@ func _source_way_height_bias(source_way: String) -> float:
     mixed ^= mixed >> 16
     return 0.028 + float(mixed & 0xffff) * (0.018 / 65535.0)
 
-func _flush_mesh_batch() -> void:
-    for prefix in ["paved", "dirt"]:
+func _advance_mesh_batch() -> void:
+    var phase := int(_building.upload_phase)
+    if phase < 2:
+        var prefix := "paved" if phase == 0 else "dirt"
         _add_surface_mesh(_building.root, _building[prefix + "_vertices"], _building[prefix + "_indices"],
             _building[prefix + "_normals"], _building[prefix + "_uv"], _building[prefix + "_uv2"],
             _building[prefix + "_colors"], _asphalt_material if prefix == "paved" else _dirt_material, prefix)
@@ -358,7 +359,23 @@ func _flush_mesh_batch() -> void:
         _building[prefix + "_uv"] = PackedVector2Array()
         _building[prefix + "_uv2"] = PackedVector2Array()
         _building[prefix + "_colors"] = PackedColorArray()
+        _building.upload_phase = phase + 1
+        return
     _building.batch += 1
+    var segments: Array = _building.segments
+    if int(_building.cursor) < segments.size():
+        _building.upload_phase = -1
+        return
+    var tile_root: Node3D = _building.root
+    var key: String = _building.key
+    var tile: Vector2i = _building.tile
+    tile_root.set_meta("yardman_budgeted_finalize", true)
+    add_child(tile_root)
+    _loaded[key] = tile_root
+    _surface_indices[key] = _building.surface_index
+    _building.clear()
+    tile_ready.emit(tile)
+    tile_content_ready.emit(tile, tile_root, segments)
 
 func _add_surface_mesh(parent: Node3D, vertices: PackedVector3Array, indices: PackedInt32Array,
         normals: PackedVector3Array, uvs: PackedVector2Array, uv2s: PackedVector2Array,
