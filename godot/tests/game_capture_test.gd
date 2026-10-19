@@ -58,6 +58,22 @@ func _configure_capture_streaming() -> void:
         scene.roads.geometry_budget_us, scene.terrain.geometry_budget_us, scene.buildings.geometry_budget_us
     ])
 
+func _close_startup_menu() -> bool:
+    var menu := root.get_node_or_null("StartupMenu")
+    if menu == null:
+        push_error("CAPTURE_TEST: StartupMenu autoload unavailable")
+        return false
+    for _frame in range(120):
+        await process_frame
+        if menu.get("game") == scene:
+            menu.call("_set_open", false)
+            await process_frame
+            var closed := not bool(menu.get("menu_open"))
+            print("YARDMAN_CAPTURE_PROGRESS phase=startup_menu_closed ok=%s elapsed_ms=%d" % [str(closed), Time.get_ticks_msec() - _started_ms])
+            return closed
+    push_error("CAPTURE_TEST: Startup menu did not bind to current scene")
+    return false
+
 func _wait_world(parish: String) -> bool:
     var deadline_ms := Time.get_ticks_msec() + 150000
     var stable_frames := 0
@@ -107,6 +123,9 @@ func _run() -> void:
     scene = load("res://main.tscn").instantiate()
     root.add_child(scene)
     current_scene = scene
+    if not await _close_startup_menu():
+        quit(1)
+        return
     scene.set_quality("Ultra")
     _configure_capture_streaming()
     scene.touch._touch_seen = true
@@ -141,8 +160,4 @@ func _run() -> void:
         quit(1)
         return
     print("YARDMAN_CAPTURE_TEST PASS actual_gl_frames=4 renderer=" + RenderingServer.get_video_adapter_name())
-    if current_scene == scene:
-        current_scene = null
-    scene.queue_free()
-    await process_frame
     quit(0)
