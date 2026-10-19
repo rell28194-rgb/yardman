@@ -2,6 +2,7 @@ extends CanvasLayer
 class_name YardmanVehicleSelectorRuntime
 
 const Catalog = preload("res://scripts/vehicle_catalog.gd")
+const References = preload("res://scripts/reference_assets.gd")
 const SAVE_PATH := "user://yardman/vehicle-selection.json"
 
 var _game: Node
@@ -19,9 +20,16 @@ func attach(game: Node) -> void:
     layer = 40
     _build_ui()
     _populate()
+    if _vehicle_ids.is_empty():
+        _button.disabled = true
+        _button.text = "CARS · OWNER MEDIA REQUIRED"
+        _status.text = "No manifest-verified dedicated vehicle assets are installed in this build."
+        return
     var saved := _load_saved_id()
-    var initial := saved if Catalog.has(saved) else Catalog.DEFAULT_ID
-    if not _apply_vehicle(initial, false):
+    var initial := saved if _vehicle_ids.has(saved) else Catalog.DEFAULT_ID
+    if not _vehicle_ids.has(initial):
+        initial = _vehicle_ids[0]
+    if not _apply_vehicle(initial, false) and initial != Catalog.DEFAULT_ID and _vehicle_ids.has(Catalog.DEFAULT_ID):
         _apply_vehicle(Catalog.DEFAULT_ID, false)
 
 func _build_ui() -> void:
@@ -75,17 +83,34 @@ func _build_ui() -> void:
     _status.text = "Dedicated vehicle assets only."
     column.add_child(_status)
 
+func _dedicated_asset_available(vehicle_id: String) -> bool:
+    if not Catalog.has(vehicle_id):
+        return false
+    var profile: Dictionary = Catalog.profile(vehicle_id)
+    var hero := str(profile.get("hero_scene", ""))
+    if hero.is_empty():
+        return false
+    var path := References.ROOT + hero
+    if not ResourceLoader.exists(path):
+        return false
+    var manifest := References.manifest()
+    return not manifest.is_empty() and References.manifest_file_matches(hero, manifest)
+
 func _populate() -> void:
     _vehicle_ids.clear()
     _options.clear()
     for raw_id in Catalog.production_ids():
         var vehicle_id := str(raw_id)
-        if not Catalog.has(vehicle_id):
+        if not _dedicated_asset_available(vehicle_id):
             continue
         var profile: Dictionary = Catalog.profile(vehicle_id)
         _vehicle_ids.append(vehicle_id)
         _options.add_item(str(profile.get("display_name", vehicle_id)))
-    _select_id(Catalog.DEFAULT_ID)
+    if _vehicle_ids.has(Catalog.DEFAULT_ID):
+        _select_id(Catalog.DEFAULT_ID)
+    elif not _vehicle_ids.is_empty():
+        _options.select(0)
+    _status.text = "Dedicated fleet assets: %d" % _vehicle_ids.size()
 
 func _apply_selected() -> void:
     if _options.selected < 0 or _options.selected >= _vehicle_ids.size():
@@ -93,7 +118,7 @@ func _apply_selected() -> void:
     _apply_vehicle(_vehicle_ids[_options.selected], true)
 
 func _apply_vehicle(vehicle_id: String, persist: bool) -> bool:
-    if _controller == null or not Catalog.has(vehicle_id):
+    if _controller == null or not _vehicle_ids.has(vehicle_id) or not _dedicated_asset_available(vehicle_id):
         return false
     if absf(float(_controller.get("speed_mps"))) > 0.5:
         _status.text = "Stop the car before changing vehicles."
@@ -105,10 +130,10 @@ func _apply_vehicle(vehicle_id: String, persist: bool) -> bool:
     var missing := visual == null or bool(visual.get_meta("yardman_hero_asset_missing_or_invalid", false)) \
         or bool(visual.get_meta("yardman_procedural_vehicle_fallback", false))
     if missing:
-        if previous != vehicle_id and Catalog.has(previous):
+        if previous != vehicle_id and _vehicle_ids.has(previous):
             _controller.call("apply_profile", previous)
         _select_id(previous)
-        _status.text = "%s is not available as a dedicated asset in this build." % str(Catalog.profile(vehicle_id).get("display_name", vehicle_id))
+        _status.text = "%s failed dedicated-asset validation in this build." % str(Catalog.profile(vehicle_id).get("display_name", vehicle_id))
         return false
 
     _current_id = vehicle_id
@@ -116,7 +141,7 @@ func _apply_vehicle(vehicle_id: String, persist: bool) -> bool:
     var profile: Dictionary = Catalog.profile(vehicle_id)
     var display_name := str(profile.get("display_name", vehicle_id))
     _button.text = "CARS · " + display_name
-    _status.text = display_name
+    _status.text = "%s · dedicated asset" % display_name
     if _game != null:
         _game.set_meta("yardman_selected_vehicle_id", vehicle_id)
     if persist:
