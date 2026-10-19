@@ -5,15 +5,18 @@ on:
     branches:
       - codex/map-cars-production-integration-001
     paths:
+      - 'AGENTS.md'
       - 'godot/project.godot'
       - 'godot/scripts/map_quality_bootstrap.gd'
       - 'godot/scripts/vehicle_*.gd'
       - 'godot/scripts/render_*.gd'
       - 'godot/scripts/coastline.gd'
       - 'godot/data/vehicle_fleet_*.json'
+      - 'godot/data/owner_fleet_pack_contract.json'
       - 'godot/shaders/**'
       - 'godot/tests/test_map_cars_integration_scope.py'
       - 'godot/tests/test_vehicle_production_scope.py'
+      - 'godot/tests/owner_vehicle_asset_gate.gd'
       - 'godot/tests/material_variants_test.gd'
       - 'godot/tests/render_quality_test.gd'
       - 'godot/tests/renderer_capability_matrix_test.gd'
@@ -29,7 +32,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Lock clean runtime and fleet scope
+      - name: Lock clean runtime and exact owner fleet scope
         run: |
           python3 -m unittest \
             godot/tests/test_map_cars_integration_scope.py \
@@ -109,3 +112,31 @@ jobs:
             --audio-driver Dummy --script res://tests/render_quality_test.gd 2>&1 | tee /tmp/quality.log
           grep -q 'YARDMAN_RENDER_QUALITY_TEST PASS' /tmp/quality.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' /tmp/quality.log; then exit 1; fi
+
+  owner-private-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify public metadata matches owner fleet authority
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, re
+          from pathlib import Path
+          root = Path('godot')
+          contract = json.loads((root/'data/owner_fleet_pack_contract.json').read_text())
+          catalog = (root/'scripts/vehicle_catalog.gd').read_text()
+          assert contract['available_vehicle_count'] == 64
+          assert contract['scrapped_vehicle_ids'] == ['port_royal_992', 'toyota_mark_x']
+          assert contract['held_missing_vehicle_ids'] == ['corvette_c7', 'delorean_dmc12']
+          assert 'const FORBIDDEN_IDS := ["toyota_mark_x", "port_royal_992"]' in catalog
+          assert 'const HELD_IDS := ["corvette_c7", "delorean_dmc12"]' in catalog
+          assert contract['pack_sha256'] == '6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b'
+          print('YARDMAN_OWNER_FLEET_METADATA_PASS vehicles=64 banned=2 held=2')
+          PY
+      - name: Keep private media gate fail-closed but out of public CI
+        run: |
+          grep -q 'References.scene(hero)' godot/tests/owner_vehicle_asset_gate.gd
+          grep -q 'production selector set does not match the authoritative 64-car owner pack' godot/tests/owner_vehicle_asset_gate.gd
+          echo 'YARDMAN_OWNER_PRIVATE_GATE_CONTRACT_PASS'
