@@ -11,6 +11,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [autoload]
 MapQualityBootstrap="*res://scripts/map_quality_bootstrap.gd"
+VehicleSelector="*res://scripts/vehicle_selector_runtime.gd"
 
 [display]
 window/size/viewport_width=1280
