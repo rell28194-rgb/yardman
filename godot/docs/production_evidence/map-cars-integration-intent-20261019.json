@@ -1,0 +1,23 @@
+{
+  "format_version": 1,
+  "purpose": "Integrate the current vehicle-production runtime into the map-and-cars reset shell without reintroducing jobs, AI traffic, pedestrian simulation, or economy systems.",
+  "authoritative_base": "codex/map-cars-reset-001",
+  "vehicle_source": "codex/vehicle-production-001",
+  "forbidden_runtime_systems": [
+    "JobRuntime",
+    "JobPersistenceRuntime",
+    "JobGuidanceRuntime",
+    "TrafficRuntime",
+    "TrafficSignalRuntime",
+    "PedestrianRuntime",
+    "PedestrianDestinationRuntime",
+    "PedestrianIdleRuntime",
+    "TrafficPedestrianSafetyRuntime",
+    "TrafficVisualVarietyRuntime",
+    "TrafficBrakeLightRuntime",
+    "TrafficHeadlightRuntime",
+    "VehicleDriverLayer"
+  ],
+  "scrapped_vehicle_ids": ["toyota_mark_x", "port_royal_992"],
+  "candidate_rule": "Do not export an owner candidate if the private hero fleet is missing or if any forbidden runtime system is active."
+}
