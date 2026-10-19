@@ -34,6 +34,26 @@ CURRENT PRODUCTION AUTHORITY — DO NOT REGRESS THIS PROJECT TO OLD CI STATE
   systems remain disabled unless the owner explicitly reauthorizes them.
 - Preserve PR #4 unmerged unless the owner explicitly orders otherwise.
 
+VALIDATED GRAPHICS / RDX AUTHORITY
+
+- RDX-010 renderer capability/fallback work is approved production carry. Keep
+  desktop/headless Compatibility as the validation/fallback path and Android on
+  the validated Mobile/Vulkan path. Keep separate high and safe road, terrain,
+  and water shader families plus renderer-aware material selection and thermal /
+  adaptive-resolution policy.
+- Integrate RDX work into the clean map-and-cars runtime. Do not restore the old
+  RenderRuntime/autoload pile merely because an older test expects it. The
+  current single `MapQualityBootstrap` owns validated renderer-policy bridging.
+- RDX-003 conservative HZB and RDX-004 cluster/meshlet work remain research-only.
+  They passed isolated research gates but did not clear physical-GPU/Android
+  production evidence. Do not promote them until that evidence exists.
+- Never replace newer world-quality fixes with older RDX file versions wholesale.
+  Merge validated capabilities into the newest terrain/coast/road implementation
+  and retain later geometry, normal, streaming, and visual fixes.
+- A public Compatibility screenshot is not evidence of the intended owner-build
+  Android graphics path. Owner visual acceptance must come from the current
+  Mobile/Vulkan candidate with the private Beta media pack present.
+
 Read `godot/docs/ASSET_EXECUTION.md`, `godot/docs/asset_recovery/ledger.json`
 and `godot/docs/RECOVERY.md` before asset work. Do not infer library completion
 from a few recovered models, a model-only catalog, successful import, headless
