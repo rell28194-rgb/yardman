@@ -3,6 +3,7 @@ extends CanvasLayer
 signal vehicle_selected(vehicle_id: String)
 
 const Catalog = preload("res://scripts/vehicle_catalog.gd")
+const References = preload("res://scripts/reference_assets.gd")
 const STARTER_VEHICLE_ID := "toyota_crown"
 const SCRAPPED_IDS := ["toyota_mark_x", "port_royal_992"]
 
@@ -32,16 +33,19 @@ func _process(_delta: float) -> void:
         if apply_selected_to_scene(scene):
             vehicle_selected.emit(_selected_id)
 
+func _has_exact_hero(vehicle_id: String) -> bool:
+    var profile: Dictionary = Catalog.profile(vehicle_id)
+    var hero_scene := str(profile.get("hero_scene", ""))
+    return not hero_scene.is_empty() and References.scene(hero_scene) != null
+
 func available_vehicle_ids() -> Array:
     var result: Array = []
     for vehicle_id in Catalog.production_ids():
         var value := str(vehicle_id)
-        if SCRAPPED_IDS.has(value):
+        if SCRAPPED_IDS.has(value) or not _has_exact_hero(value):
             continue
         if not result.has(value):
             result.append(value)
-    if not result.has(STARTER_VEHICLE_ID):
-        result.push_front(STARTER_VEHICLE_ID)
     return result
 
 func selected_vehicle_id() -> String:
@@ -66,8 +70,8 @@ func can_afford_vehicle(vehicle_id: String) -> bool:
     return is_vehicle_owned(vehicle_id)
 
 func set_selected_vehicle(vehicle_id: String, _persist: bool = true, apply_to_game: bool = true) -> bool:
-    if SCRAPPED_IDS.has(vehicle_id) or not available_vehicle_ids().has(vehicle_id):
-        _set_status("VEHICLE UNAVAILABLE")
+    if SCRAPPED_IDS.has(vehicle_id) or not _has_exact_hero(vehicle_id) or not available_vehicle_ids().has(vehicle_id):
+        _set_status("EXACT VEHICLE MEDIA UNAVAILABLE")
         return false
     var scene := get_tree().current_scene
     var controller := _scene_controller(scene)
@@ -88,8 +92,15 @@ func apply_selected_to_scene(scene) -> bool:
     var controller := _scene_controller(scene)
     if controller == null or not controller.has_method("apply_profile"):
         return false
-    if SCRAPPED_IDS.has(_selected_id) or not available_vehicle_ids().has(_selected_id):
-        _selected_id = STARTER_VEHICLE_ID
+    var ids := available_vehicle_ids()
+    if ids.is_empty():
+        _set_status("PRIVATE FLEET MEDIA NOT MOUNTED")
+        return false
+    if not ids.has(_selected_id):
+        _selected_id = STARTER_VEHICLE_ID if ids.has(STARTER_VEHICLE_ID) else str(ids[0])
+    if not _has_exact_hero(_selected_id):
+        _set_status("EXACT VEHICLE MEDIA UNAVAILABLE")
+        return false
     if str(controller.get("vehicle_id")) != _selected_id:
         controller.call("apply_profile", _selected_id)
     _remember_applied(scene, controller)
@@ -111,6 +122,7 @@ func is_open() -> bool:
 func _cycle_vehicle() -> void:
     var ids := available_vehicle_ids()
     if ids.is_empty():
+        _set_status("PRIVATE FLEET MEDIA NOT MOUNTED")
         return
     var index := ids.find(_selected_id)
     var next_id := str(ids[(index + 1) % ids.size()]) if index >= 0 else str(ids[0])
@@ -130,13 +142,13 @@ func _build_ui() -> void:
     _button = Button.new()
     _button.text = "CAR"
     _button.position = Vector2(18, 76)
-    _button.size = Vector2(112, 42)
+    _button.size = Vector2(220, 42)
     _button.pressed.connect(open_garage)
     add_child(_button)
 
     _panel = PanelContainer.new()
     _panel.position = Vector2(18, 126)
-    _panel.size = Vector2(330, 154)
+    _panel.size = Vector2(360, 154)
     _panel.visible = false
     add_child(_panel)
 
@@ -161,8 +173,8 @@ func _build_ui() -> void:
     apply.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     apply.pressed.connect(func() -> void:
         if _selector.selected >= 0:
-            var ids := available_vehicle_ids()
-            if _selector.selected < ids.size() and set_selected_vehicle(str(ids[_selector.selected]), false, true):
+            var vehicle_id := str(_selector.get_item_metadata(_selector.selected))
+            if not vehicle_id.is_empty() and set_selected_vehicle(vehicle_id, false, true):
                 close_garage())
     row.add_child(apply)
 
@@ -191,7 +203,7 @@ func _sync_selector() -> void:
     if _selector.item_count > 0:
         _selector.select(selected_index)
     if _button != null:
-        _button.text = "CAR · " + _display_name(_selected_id)
+        _button.text = "CAR · " + _display_name(_selected_id) if ids.has(_selected_id) else "CAR · MEDIA MISSING"
 
 func _display_name(vehicle_id: String) -> String:
     var profile: Dictionary = Catalog.profile(vehicle_id)
