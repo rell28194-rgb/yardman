@@ -13,32 +13,29 @@ import argparse
 import json
 from pathlib import Path
 
-from hydrology_spatial_evidence import SpatialEvidence
+from hydrology_spatial_evidence import SpatialEvidence, attach_spatial_evidence
 from hydrology_truth_pack import build_truth_pack
 
 
 def _evidence(record: dict) -> SpatialEvidence:
-    """Deserialize the canonical SpatialEvidence schema without legacy aliases.
+    """Revalidate canonical GIS evidence instead of trusting serialized authority.
 
-    Evidence ingress is fail-closed: authorization is read only from the current
-    authorizes_morphology field. Older/unknown field names cannot accidentally
-    become terrain authority, while valid geometry/topology provenance survives
-    the sidecar round trip unchanged.
+    The sidecar is a terrain-mutation boundary. A JSON producer therefore cannot
+    grant authority merely by setting authorizes_morphology/evidence_token. We
+    recompute both from the exact source/layer/mapped-unit contract plus geometry,
+    overlap and topology provenance. Legacy aliases remain ignored.
     """
-    return SpatialEvidence(
+    return attach_spatial_evidence(
         source=str(record.get("source", "")),
         source_feature_id=str(record.get("source_feature_id", "")),
         layer=str(record.get("layer", "")),
         mapped_unit=str(record.get("mapped_unit", "")),
-        intersection_fraction=float(record.get("intersection_fraction", 0.0)),
-        evidence_token=str(record.get("evidence_token", "")),
-        authorizes_morphology=bool(record.get("authorizes_morphology", False)),
+        intersection_fraction=record.get("intersection_fraction", 0.0),
         geometry_valid=bool(record.get("geometry_valid", True)),
         geometry_repaired=bool(record.get("geometry_repaired", False)),
-        segment_length_m=float(record.get("segment_length_m", 0.0)),
-        intersection_length_m=float(record.get("intersection_length_m", 0.0)),
+        segment_length_m=record.get("segment_length_m", 0.0),
+        intersection_length_m=record.get("intersection_length_m", 0.0),
         join_topology=str(record.get("join_topology", "line_overlap")),
-        topology_consistent=bool(record.get("topology_consistent", True)),
     )
 
 
