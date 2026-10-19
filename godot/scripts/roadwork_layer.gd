@@ -67,22 +67,36 @@ func _decorate(tile: Vector2i, tile_root: Node3D) -> void:
     if plan.is_empty():
         _pending.erase(tile)
         return
+    # Terrain height intentionally returns NAN for water/non-land or unavailable
+    # height samples. Compact only terrain-supported cone poses before creating
+    # the MultiMesh so invalid roadside candidates can never reach RenderingServer.
+    var transforms: Array[Transform3D] = []
+    for item: Dictionary in plan:
+        var world_x := float(item.world_x)
+        var world_z := float(item.world_z)
+        var ground_y := float(_terrain.height_at(world_x, world_z))
+        var yaw := float(item.yaw)
+        if not is_finite(ground_y) or not is_finite(yaw):
+            continue
+        var local := Vector3(float(item.local_x), ground_y + 0.02, float(item.local_z))
+        if not is_finite(local.x) or not is_finite(local.y) or not is_finite(local.z):
+            continue
+        transforms.append(Transform3D(Basis(Vector3.UP, yaw), local))
+    if transforms.is_empty():
+        _pending.erase(tile)
+        return
     var multi := MultiMesh.new()
     multi.transform_format = MultiMesh.TRANSFORM_3D
     multi.mesh = mesh
-    multi.instance_count = plan.size()
-    for index in range(plan.size()):
-        var item: Dictionary = plan[index]
-        var world_x := float(item.world_x)
-        var world_z := float(item.world_z)
-        var local := Vector3(float(item.local_x), float(_terrain.height_at(world_x, world_z)) + 0.02, float(item.local_z))
-        multi.set_instance_transform(index, Transform3D(Basis(Vector3.UP, float(item.yaw)), local))
+    multi.instance_count = transforms.size()
+    for index in range(transforms.size()):
+        multi.set_instance_transform(index, transforms[index])
     var instance := MultiMeshInstance3D.new()
     instance.name = "RoadworkProxy"
     instance.multimesh = multi
     instance.visibility_range_end = 650.0
     instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-    instance.set_meta("roadwork_cones", plan.size())
+    instance.set_meta("roadwork_cones", transforms.size())
     instance.set_meta("placement_source", "OSM construction-tagged ways; cone positions inferred along tagged geometry")
     tile_root.add_child(instance)
     _pending.erase(tile)
