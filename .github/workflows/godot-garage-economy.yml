@@ -1,26 +1,31 @@
-name: Yardman Garage Economy
+name: Yardman Vehicle Selection Contract
+
+# Historical garage/economy validation is retired. The active owner runtime is
+# map + cars + world/graphics; vehicle selection must not depend on jobs/wallets.
 
 on:
   push:
     branches:
-      - codex/godot-polish-002
+      - codex/yardman-owner-recovery-20261019
     paths:
+      - 'AGENTS.md'
       - 'godot/project.godot'
       - 'godot/scripts/vehicle_catalog.gd'
+      - 'godot/scripts/vehicle_fleet_registry.gd'
       - 'godot/scripts/vehicle_garage.gd'
-      - 'godot/scripts/job_runtime.gd'
-      - 'godot/scripts/job_persistence_runtime.gd'
-      - 'godot/tests/garage_test.gd'
-      - 'godot/tests/garage_economy_test.gd'
-      - 'godot/tests/job_runtime_test.gd'
-      - 'godot/tests/job_persistence_test.gd'
-      - 'godot/tests/job_guidance_test.gd'
+      - 'godot/data/vehicle_fleet_*.json'
+      - 'godot/docs/owner_private_pack_contract.json'
+      - 'godot/tools/validate_owner_private_pack.py'
+      - 'godot/tests/test_runtime_scope.py'
+      - 'godot/tests/test_owner_project_contract.py'
+      - 'godot/tests/test_validate_owner_private_pack.py'
+      - 'godot/tests/vehicle_selection_contract_test.gd'
       - '.github/workflows/godot-garage-economy.yml'
   workflow_dispatch:
 
 jobs:
-  garage-economy:
-    name: Garage ownership and courier wallet
+  owner-vehicle-contract:
+    name: Owner car-only runtime contract
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
@@ -28,6 +33,19 @@ jobs:
       GODOT_CHANNEL: stable
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Enforce project-wide owner contract
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m unittest \
+            godot.tests.test_runtime_scope \
+            godot.tests.test_owner_project_contract \
+            godot.tests.test_validate_owner_private_pack -v
 
       - name: Install Godot
         shell: bash
@@ -40,30 +58,28 @@ jobs:
           sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
           godot --version
 
-      - name: Parse project
+      - name: Parse current project without legacy simulation autoloads
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p godot/build
-          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/garage-import.log
-          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/garage-import.log; then exit 1; fi
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/owner-vehicle-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/owner-vehicle-import.log; then exit 1; fi
 
-      - name: Run garage and courier economy tests
+      - name: Validate recovered fleet and banned vehicle boundary
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in garage garage_economy job_runtime job_persistence job_guidance; do
-            timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
-            if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
-            grep -q 'PASS' "godot/build/${TEST}.log"
-          done
-          echo 'YARDMAN_GARAGE_ECONOMY_GATE PASS'
+          timeout 120 godot --headless --path godot --script res://tests/vehicle_selection_contract_test.gd 2>&1 | tee godot/build/vehicle-selection-contract.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' godot/build/vehicle-selection-contract.log; then exit 1; fi
+          grep -q 'YARDMAN_VEHICLE_SELECTION_CONTRACT_TEST PASS' godot/build/vehicle-selection-contract.log
+          echo 'YARDMAN_OWNER_VEHICLE_CONTRACT PASS'
 
       - name: Preserve focused diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Yardman-Garage-Economy-Diagnostics
+          name: Yardman-Owner-Vehicle-Contract-Diagnostics
           path: godot/build/*.log
           if-no-files-found: warn
           retention-days: 7
