@@ -16,6 +16,7 @@ on:
       - 'godot/shaders/**'
       - 'godot/tests/test_map_cars_integration_scope.py'
       - 'godot/tests/test_vehicle_production_scope.py'
+      - 'godot/tests/test_vehicle_selector_asset_scope.py'
       - 'godot/tests/owner_vehicle_asset_gate.gd'
       - 'godot/tests/material_variants_test.gd'
       - 'godot/tests/render_quality_test.gd'
@@ -32,11 +33,12 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Lock clean runtime and exact owner fleet scope
+      - name: Lock clean runtime, exact owner fleet, and selector visibility
         run: |
           python3 -m unittest \
             godot/tests/test_map_cars_integration_scope.py \
-            godot/tests/test_vehicle_production_scope.py
+            godot/tests/test_vehicle_production_scope.py \
+            godot/tests/test_vehicle_selector_asset_scope.py
 
   renderer-contract:
     strategy:
@@ -122,7 +124,7 @@ jobs:
         shell: bash
         run: |
           python3 - <<'PY'
-          import json, re
+          import json
           from pathlib import Path
           root = Path('godot')
           contract = json.loads((root/'data/owner_fleet_pack_contract.json').read_text())
@@ -133,10 +135,14 @@ jobs:
           assert 'const FORBIDDEN_IDS := ["toyota_mark_x", "port_royal_992"]' in catalog
           assert 'const HELD_IDS := ["corvette_c7", "delorean_dmc12"]' in catalog
           assert contract['pack_sha256'] == '6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b'
+          assert contract['policy']['fail_closed_on_missing_hero'] is True
+          assert contract['policy']['cross_model_fallback_allowed'] is False
+          assert contract['policy']['public_ci_fallback_is_owner_candidate'] is False
           print('YARDMAN_OWNER_FLEET_METADATA_PASS vehicles=64 banned=2 held=2')
           PY
       - name: Keep private media gate fail-closed but out of public CI
         run: |
           grep -q 'References.scene(hero)' godot/tests/owner_vehicle_asset_gate.gd
           grep -q 'production selector set does not match the authoritative 64-car owner pack' godot/tests/owner_vehicle_asset_gate.gd
+          grep -q 'CARS · OWNER MEDIA REQUIRED' godot/scripts/vehicle_selector_runtime.gd
           echo 'YARDMAN_OWNER_PRIVATE_GATE_CONTRACT_PASS'
