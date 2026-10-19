@@ -13,6 +13,9 @@ var _button: Button
 var _panel: PanelContainer
 var _selector: OptionButton
 var _status: Label
+# Compatibility surface for VehicleVisualRuntime. This clean selector does not
+# instantiate a separate preview model, so the runtime will simply skip preview styling.
+var _preview_model: Node3D
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -182,6 +185,7 @@ func _sync_selector() -> void:
     for index in range(ids.size()):
         var vehicle_id := str(ids[index])
         _selector.add_item(_display_name(vehicle_id))
+        _selector.set_item_metadata(index, vehicle_id)
         if vehicle_id == _selected_id:
             selected_index = index
     if _selector.item_count > 0:
