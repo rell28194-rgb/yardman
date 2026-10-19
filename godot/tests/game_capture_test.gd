@@ -36,10 +36,10 @@ func _wait_world() -> bool:
     for frame in range(CAPTURE_MAX_FRAMES):
         await process_frame
         _suppress_far_overview()
-        var local_surface_ready := scene.world_ready \
-            and scene.car.is_on_floor() \
-            and scene.roads.inflight_count() == 0 \
-            and scene.terrain.inflight_count() == 0
+        var local_surface_ready: bool = bool(scene.world_ready) \
+            and bool(scene.car.is_on_floor()) \
+            and int(scene.roads.inflight_count()) == 0 \
+            and int(scene.terrain.inflight_count()) == 0
         if local_surface_ready:
             ready_frames += 1
             if ready_frames >= CAPTURE_READY_FRAMES:
