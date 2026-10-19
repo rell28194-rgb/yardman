@@ -7,8 +7,12 @@ on:
       - '.github/workflows/vehicle-quality-cohort.yml'
       - 'godot/data/vehicle_fleet_supplemental.json'
       - 'godot/data/vehicle_fleet_calibration.json'
+      - 'godot/data/vehicle_fleet_runtime.json'
       - 'godot/scripts/vehicle_fleet_registry.gd'
+      - 'godot/scripts/vehicle_catalog.gd'
+      - 'godot/scripts/vehicle_controller.gd'
       - 'godot/tests/vehicle_fleet_calibration_test.gd'
+      - 'godot/tests/vehicle_game_ready_test.gd'
       - 'godot/tools/vehicle_production/audit_quality_cohort.py'
   workflow_dispatch:
 
@@ -55,3 +59,14 @@ jobs:
           timeout 120 "$GODOT_BIN" --headless --path godot --script res://tests/vehicle_fleet_calibration_test.gd 2>&1 | tee /tmp/vehicle-fleet-calibration.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' /tmp/vehicle-fleet-calibration.log; then exit 1; fi
           grep -q 'YARDMAN_VEHICLE_FLEET_CALIBRATION_TEST PASS' /tmp/vehicle-fleet-calibration.log
+
+      - name: Exercise representative cohort lifecycle and protect Crown007
+        shell: bash
+        env:
+          YARDMAN_VEHICLE_TEST_IDS: 'toyota_crown,delorean_dmc12,corvette_c7'
+        run: |
+          set -euo pipefail
+          timeout 180 "$GODOT_BIN" --headless --path godot --script res://tests/vehicle_game_ready_test.gd 2>&1 | tee /tmp/vehicle-quality-cohort-runtime.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|VEHICLE_GAME_READY_TEST:.*FAIL' /tmp/vehicle-quality-cohort-runtime.log; then exit 1; fi
+          grep -q 'YARDMAN_VEHICLE_GAME_READY_TEST PASS vehicles=3' /tmp/vehicle-quality-cohort-runtime.log
+          grep -q 'hooks=1 drive=1 reverse=1 steering=1 braking=1 park_exit_reenter=1 reset_despawn=1 identity_safe=1' /tmp/vehicle-quality-cohort-runtime.log
