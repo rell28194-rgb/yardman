@@ -4,7 +4,35 @@ The owner's latest execution directive governs this existing Godot project:
 push tested source, preserve green Android build health, exhaust Beta 1 before
 starting Beta 2, and defer final APK delivery until both libraries and their
 integration/polish passes are complete. An APK is a checkpoint, never project
-completion. Continue the existing `codex/godot-polish-002` branch.
+completion.
+
+CURRENT PRODUCTION AUTHORITY — DO NOT REGRESS THIS PROJECT TO OLD CI STATE
+
+- The active runtime baseline is the clean map-and-cars reset architecture, not
+  any older CI snapshot whose tests expect jobs, traffic AI, pedestrian AI,
+  economy systems, placeholder cars, or other retired runtime systems.
+- Do not make old tests authoritative over the current game. If an old test
+  conflicts with the owner's current production direction, update/retire that
+  test instead of reintroducing removed gameplay systems merely to make CI green.
+- The full recovered/accepted vehicle fleet is a project-wide requirement. Do
+  not collapse Yardman to Crown-only, a legacy sedan, or a tiny test fleet.
+  Crown is the default spawn, not the only production car.
+- Toyota Mark X is BANNED from Yardman runtime/candidate builds and must not be
+  reintroduced by catalog, selector, private pack, fallback, CI fixture, or merge.
+- The 992/Porsche path is excluded from production/candidate builds. Do not
+  reproduce, badge, relabel, substitute, or ship it.
+- A vehicle that fails a quality pass is not automatically deleted from the
+  accepted fleet unless the owner explicitly bans/removes it. Improve its
+  production quality in the vehicle lane instead.
+- Public CI without the private Beta vehicle/media pack is validation-only. A
+  fallback/procedural/public-CI vehicle render must never be presented to the
+  owner as a representative Beta 1/2 visual candidate.
+- Owner candidate builds must compose the current map/reset state with the
+  current vehicle-production and graphics/world-quality work. They must fail
+  closed if required private hero art or the intended visual stack is absent.
+- Jobs/economy, traffic simulation, pedestrian simulation, and AI vehicle-driver
+  systems remain disabled unless the owner explicitly reauthorizes them.
+- Preserve PR #4 unmerged unless the owner explicitly orders otherwise.
 
 Read `godot/docs/ASSET_EXECUTION.md`, `godot/docs/asset_recovery/ledger.json`
 and `godot/docs/RECOVERY.md` before asset work. Do not infer library completion
