@@ -73,10 +73,11 @@ jobs:
       - name: Prove public checkout fails closed as owner candidate
         shell: bash
         run: |
-          set -uo pipefail
+          set +e
+          set -o pipefail
           timeout 120 godot --headless --path godot --script res://tests/owner_vehicle_asset_gate.gd 2>&1 | tee godot/build/public-owner-negative-control.log
           status=${PIPESTATUS[0]}
-          set -e
+          set -euo pipefail
           test "$status" -ne 0
           grep -q 'YARDMAN_OWNER_VEHICLE_ASSET_GATE_FAIL selectors=64 verified_heroes=0' godot/build/public-owner-negative-control.log
           if grep -q 'YARDMAN_OWNER_VEHICLE_ASSET_GATE_PASS' godot/build/public-owner-negative-control.log; then
