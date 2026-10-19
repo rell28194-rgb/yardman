@@ -7,6 +7,7 @@ class FakeRoads:
     extends Node3D
     var _asphalt_material := ShaderMaterial.new()
     var _dirt_material := ShaderMaterial.new()
+    var surface_visibility_distance := 2600.0
 
 class FakeTerrain:
     extends Node3D
@@ -48,8 +49,8 @@ func _run() -> void:
     coastline.apply_render_policy({"quality": "Quality", "water_variant": "depth"}, "gles")
     _check(coastline.water_material.shader.resource_path == "res://shaders/water_gles.gdshader", "GLES coastline escaped safe water path")
 
-    var runtime = root.get_node_or_null("RenderRuntime")
-    _check(runtime != null, "RenderRuntime autoload missing")
+    var runtime = root.get_node_or_null("MapQualityBootstrap")
+    _check(runtime != null, "MapQualityBootstrap autoload missing")
     if runtime != null:
         var fake := FakeScene.new()
         fake.roads = FakeRoads.new()
