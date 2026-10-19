@@ -202,6 +202,16 @@ static func build_candidates(width: int, height: int, count: int) -> PackedFloat
         values[base + 2] = center_x + half_width
         values[base + 3] = center_y + half_height
         values[base + 4] = near_depth
+    # Immutable edge-case fixture: this rectangle sits wholly behind the 8 m
+    # synthetic occluder, but only by 3 cm. The production 5 cm depth bias must
+    # therefore keep it visible. It specifically guards against "almost safe"
+    # occlusion tests that would otherwise introduce edge flicker.
+    if count > 0 and width == 128 and height == 72:
+        values[0] = 20.1
+        values[1] = 20.1
+        values[2] = 21.1
+        values[3] = 21.1
+        values[4] = 8.03
     return values
 
 static func _storage_uniform(binding: int, rid: RID) -> RDUniform:
