@@ -1,0 +1,26 @@
+name: Yardman World Quality Android Promotion
+
+on:
+  push:
+    branches:
+      - ci/world-quality-android-7cbee095
+    paths:
+      - '.github/workflows/world-quality-android-promotion.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch full Android validation at pinned promotion ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run godot-android.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
+          echo "Promotion ref: $GITHUB_REF_NAME"
+          echo "Promotion SHA: $GITHUB_SHA"
