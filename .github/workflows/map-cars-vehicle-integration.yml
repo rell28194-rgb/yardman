@@ -10,8 +10,11 @@ on:
       - 'godot/scripts/reference_assets.gd'
       - 'godot/scripts/vehicle_*.gd'
       - 'godot/data/vehicle_fleet_*.json'
+      - 'godot/data/owner_fleet_pack_contract.json'
+      - 'godot/tools/validate_owner_fleet_pack.py'
       - 'godot/tests/test_clean_vehicle_integration.py'
       - 'godot/tests/clean_vehicle_integration_test.gd'
+      - 'godot/tests/owner_vehicle_asset_gate.gd'
       - '.github/workflows/map-cars-vehicle-integration.yml'
   workflow_dispatch:
 
@@ -32,7 +35,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Enforce reset and roster contracts
+      - name: Enforce reset and exact owner roster contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -59,13 +62,27 @@ jobs:
           timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/clean-map-vehicle-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/clean-map-vehicle-import.log; then exit 1; fi
 
-      - name: Exercise production vehicle roster
+      - name: Exercise exact production vehicle roster
         shell: bash
         run: |
           set -euo pipefail
           timeout 120 godot --headless --path godot --script res://tests/clean_vehicle_integration_test.gd 2>&1 | tee godot/build/clean-map-vehicle-runtime.log
-          grep -q 'YARDMAN_CLEAN_VEHICLE_INTEGRATION_PASS' godot/build/clean-map-vehicle-runtime.log
+          grep -q 'YARDMAN_CLEAN_VEHICLE_INTEGRATION_PASS roster=64' godot/build/clean-map-vehicle-runtime.log
           if grep -E 'SCRIPT ERROR|Parse Error|CLEAN_VEHICLE_INTEGRATION:' godot/build/clean-map-vehicle-runtime.log; then exit 1; fi
+
+      - name: Prove public checkout fails closed as owner candidate
+        shell: bash
+        run: |
+          set -uo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/owner_vehicle_asset_gate.gd 2>&1 | tee godot/build/public-owner-negative-control.log
+          status=${PIPESTATUS[0]}
+          set -e
+          test "$status" -ne 0
+          grep -q 'YARDMAN_OWNER_VEHICLE_ASSET_GATE_FAIL selectors=64 verified_heroes=0' godot/build/public-owner-negative-control.log
+          if grep -q 'YARDMAN_OWNER_VEHICLE_ASSET_GATE_PASS' godot/build/public-owner-negative-control.log; then
+            echo 'Public checkout incorrectly qualified as owner candidate' >&2
+            exit 1
+          fi
 
       - name: Preserve focused evidence
         if: always()
