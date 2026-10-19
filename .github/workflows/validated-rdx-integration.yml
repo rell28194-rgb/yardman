@@ -1,0 +1,143 @@
+name: Validated RDX integration
+
+on:
+  push:
+    branches:
+      - codex/validated-rdx-promotion-20261018
+    paths:
+      - 'godot/scripts/road_streamer.gd'
+      - 'godot/scripts/road_streamer_base.gd'
+      - 'godot/scripts/stream_priority_policy.gd'
+      - 'godot/scripts/stream_retry_policy.gd'
+      - 'godot/scripts/stream_recovery_runtime.gd'
+      - 'godot/scripts/streaming_adversarial_harness.gd'
+      - 'godot/tests/stream_priority_policy_test.gd'
+      - 'godot/tests/stream_priority_integration_test.gd'
+      - 'godot/tests/streaming_adversarial_test.gd'
+      - 'godot/tests/streaming_budget_test.gd'
+      - 'godot/tests/building_streamer_test.gd'
+      - 'godot/tests/building_hlod_test.gd'
+      - 'godot/tools/rdx_stream_priority_eval.py'
+      - 'godot/tools/rdx_stream_priority_mutation.py'
+      - 'godot/tools/rdx_stream_priority_national_eval.py'
+      - 'godot/tools/rdx_stream_retry_mutation.py'
+      - 'godot/docs/rdx/stream_priority_national_evidence.json'
+      - '.github/workflows/validated-rdx-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validated-streaming-stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+      NATIONAL_ARTIFACT_ID: '12146648928'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Download preserved national Jamaica production artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${NATIONAL_ARTIFACT_ID}/zip" > /tmp/yardman-national.zip
+          echo "885ed9a1dcfdbb52c33e50400a003fbc96983445fde62d87ed5ef5f0bca8d4d9  /tmp/yardman-national.zip" | sha256sum -c -
+
+      - name: Re-evaluate national stream priority evidence
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p godot/build
+          python3 godot/tools/rdx_stream_priority_national_eval.py /tmp/yardman-national.zip --output godot/build/rdx-stream-priority-national.json \
+            | tee godot/build/rdx-stream-priority-national.log
+          grep -q 'result=PASS' godot/build/rdx-stream-priority-national.log
+          diff -u godot/docs/rdx/stream_priority_national_evidence.json godot/build/rdx-stream-priority-national.json
+
+      - name: Run frozen stream-priority evaluator
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 godot/tools/rdx_stream_priority_eval.py | tee godot/build/rdx-stream-priority-eval.log
+          grep -q 'result=PASS' godot/build/rdx-stream-priority-eval.log
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+
+      - name: Import and parse combined production candidate
+        shell: bash
+        run: |
+          set -euxo pipefail
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/validated-rdx-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/validated-rdx-import.log; then exit 1; fi
+
+      - name: Run stream-priority policy oracle
+        shell: bash
+        run: |
+          set -euxo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/stream_priority_policy_test.gd 2>&1 | tee godot/build/stream-priority-policy.log
+          grep -q 'YARDMAN_STREAM_PRIORITY_POLICY_TEST PASS' godot/build/stream-priority-policy.log
+
+      - name: Run shared road terrain scheduler oracle
+        shell: bash
+        run: |
+          set -euxo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/stream_priority_integration_test.gd 2>&1 | tee godot/build/stream-priority-integration.log
+          grep -q 'YARDMAN_STREAM_PRIORITY_INTEGRATION_TEST PASS' godot/build/stream-priority-integration.log
+
+      - name: Mutation-grade stream priority
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 godot/tools/rdx_stream_priority_mutation.py --godot-binary godot --threshold 0.90 --timeout 30 \
+            | tee godot/build/stream-priority-mutation.log
+          grep -q 'score=1.0000' godot/build/stream-priority-mutation.log
+
+      - name: Run adversarial recovery oracle
+        shell: bash
+        run: |
+          set -euxo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/streaming_adversarial_test.gd 2>&1 | tee godot/build/stream-recovery-adversarial.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|STREAMING_ADVERSARIAL_TEST:.*' godot/build/stream-recovery-adversarial.log; then exit 1; fi
+          grep -q 'YARDMAN_STREAMING_ADVERSARIAL_TEST PASS' godot/build/stream-recovery-adversarial.log
+
+      - name: Mutation-grade stream recovery
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 godot/tools/rdx_stream_retry_mutation.py --godot-binary godot --threshold 1.0 --timeout 30 \
+            | tee godot/build/stream-recovery-mutation.log
+          grep -q 'YARDMAN_RDX_MUTATION_SCORE score=1.0000' godot/build/stream-recovery-mutation.log
+
+      - name: Run streaming budget regression
+        shell: bash
+        run: |
+          set -euxo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/streaming_budget_test.gd 2>&1 | tee godot/build/streaming-budget.log
+          grep -q 'YARDMAN_STREAMING_BUDGET_TEST PASS' godot/build/streaming-budget.log
+
+      - name: Run building streamer regression
+        shell: bash
+        run: |
+          set -euxo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/building_streamer_test.gd 2>&1 | tee godot/build/building-streamer.log
+          grep -q 'YARDMAN_BUILDING_STREAMER_TEST PASS' godot/build/building-streamer.log
+
+      - name: Run building HLOD regression
+        shell: bash
+        run: |
+          set -euxo pipefail
+          timeout 120 godot --headless --path godot --script res://tests/building_hlod_test.gd 2>&1 | tee godot/build/building-hlod.log
+          grep -q 'YARDMAN_BUILDING_HLOD_TEST PASS' godot/build/building-hlod.log
