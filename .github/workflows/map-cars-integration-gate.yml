@@ -18,6 +18,9 @@ on:
       - 'godot/tests/test_vehicle_production_scope.py'
       - 'godot/tests/test_vehicle_selector_asset_scope.py'
       - 'godot/tests/owner_vehicle_asset_gate.gd'
+      - 'godot/tests/private_owner_fleet_runtime_test.gd'
+      - 'godot/tools/stage_owner_fleet_pack.py'
+      - 'godot/tools/run_owner_private_preflight.sh'
       - 'godot/tests/material_variants_test.gd'
       - 'godot/tests/render_quality_test.gd'
       - 'godot/tests/renderer_capability_matrix_test.gd'
@@ -145,4 +148,6 @@ jobs:
           grep -q 'References.scene(hero)' godot/tests/owner_vehicle_asset_gate.gd
           grep -q 'production selector set does not match the authoritative 64-car owner pack' godot/tests/owner_vehicle_asset_gate.gd
           grep -q 'CARS · OWNER MEDIA REQUIRED' godot/scripts/vehicle_selector_runtime.gd
+          grep -q 'YARDMAN_PRIVATE_OWNER_FLEET_RUNTIME_TEST' godot/tests/private_owner_fleet_runtime_test.gd
+          grep -q 'YARDMAN_OWNER_PRIVATE_PREFLIGHT PASS' godot/tools/run_owner_private_preflight.sh
           echo 'YARDMAN_OWNER_PRIVATE_GATE_CONTRACT_PASS'
