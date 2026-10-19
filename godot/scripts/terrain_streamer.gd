@@ -16,6 +16,7 @@ var _far_thread: Thread
 var _far_build: Dictionary = {}
 var _far_root: Node3D
 var _far_sectors: Dictionary = {}
+var _prefer_far_integration := false
 
 func _ready() -> void:
     if coastline == null:
@@ -37,10 +38,6 @@ func _exit_tree() -> void:
         _far_thread.wait_to_finish()
     _far_build.clear()
     super._exit_tree()
-
-func _process(delta: float) -> void:
-    super._process(delta)
-    _prepare_far()
 
 func _remove_terrain_data(tile: Vector2i) -> void:
     var key := _tile_key(tile.x, tile.y)
@@ -157,6 +154,25 @@ func _poll_jobs() -> void:
             "collision_cursor": 0, "collision_faces": PackedVector3Array(), "collision_face_chunks": 0}
 
 func _prepare_geometry() -> void:
+    # The inherited process calls this once after polling near-tile I/O. Near
+    # and overview construction share the allocated terrain slice; invoking
+    # both separately allowed each to spend the entire slice in one frame.
+    var near_pending := not _building.is_empty()
+    var far_pending := not _far_build.is_empty() or (_far_thread != null and
+        _far_thread.is_started() and not _far_thread.is_alive())
+    if near_pending and far_pending and not _loaded.is_empty():
+        if _prefer_far_integration:
+            _prepare_far()
+        else:
+            _prepare_near_geometry()
+        _prefer_far_integration = not _prefer_far_integration
+    elif near_pending:
+        # Keep startup collision/near-terrain readiness ahead of the overview.
+        _prepare_near_geometry()
+    else:
+        _prepare_far()
+
+func _prepare_near_geometry() -> void:
     if _building.is_empty():
         return
     if int(_building.get("finalize_phase", -1)) >= 0:
