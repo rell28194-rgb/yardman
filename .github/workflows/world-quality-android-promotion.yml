@@ -1,0 +1,34 @@
+name: Yardman World Quality Android Promotion
+
+# One-shot promotion lane for an already-vetted world-quality snapshot.
+# The promotion branch is pinned before this workflow is added, so the Android
+# dispatch cannot drift with concurrent production work on the source branch.
+on:
+  push:
+    branches:
+      - ci/world-quality-android-d5a4d469
+    paths:
+      - '.github/workflows/world-quality-android-promotion.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch pinned snapshot to Yardman Android pipeline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Promotion ref: $GITHUB_REF_NAME"
+          echo "Promotion SHA: $GITHUB_SHA"
+          gh workflow run godot-android.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$GITHUB_REF_NAME"
+          echo "YARDMAN_ANDROID_PROMOTION_DISPATCHED ref=$GITHUB_REF_NAME sha=$GITHUB_SHA"
