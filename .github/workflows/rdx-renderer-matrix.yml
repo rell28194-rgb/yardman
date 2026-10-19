@@ -5,14 +5,23 @@ on:
     branches:
       - codex/rdx-renderer-matrix-001
       - codex/validated-rdx-promotion-20261018
+      - codex/yardman-owner-recovery-20261019
     paths:
       - 'godot/tests/renderer_capability_matrix_test.gd'
       - 'godot/tests/material_variants_test.gd'
       - 'godot/tests/render_quality_test.gd'
+      - 'godot/tests/test_runtime_scope.py'
+      - 'godot/tests/test_owner_project_contract.py'
+      - 'godot/scripts/render_runtime.gd'
       - 'godot/scripts/render_material_registry.gd'
       - 'godot/scripts/render_quality_manager.gd'
+      - 'godot/scripts/vehicle_garage.gd'
+      - 'godot/scripts/vehicle_catalog.gd'
+      - 'godot/scripts/vehicle_fleet_registry.gd'
+      - 'godot/data/vehicle_fleet_*.json'
       - 'godot/project.godot'
       - 'godot/shaders/**'
+      - 'AGENTS.md'
       - '.github/workflows/rdx-renderer-matrix.yml'
   workflow_dispatch:
 
@@ -20,7 +29,22 @@ permissions:
   contents: read
 
 jobs:
+  owner-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Enforce owner runtime, fleet and graphics contract
+        run: |
+          python -m unittest \
+            godot.tests.test_runtime_scope \
+            godot.tests.test_owner_project_contract -v
+
   renderer-contract:
+    needs: owner-contract
     strategy:
       fail-fast: false
       matrix:
