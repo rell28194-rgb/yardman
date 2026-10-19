@@ -14,7 +14,12 @@ INITIALIZE_RE = re.compile(r"^func\s+_initialize\s*\(", re.MULTILINE)
 INIT_RE = re.compile(r"^func\s+_init\s*\(", re.MULTILINE)
 RUN_RE = re.compile(r"^func\s+_run\s*\(", re.MULTILINE)
 NEXT_TOP_LEVEL_FUNC_RE = re.compile(r"^func\s+", re.MULTILINE)
-SCHEDULE_RUN_RE = re.compile(r"(?:call_deferred\s*\(\s*[\"']_run[\"']|\b_run\s*\()")
+# Godot 4 supports both Object.call_deferred("_run") and Callable.call_deferred()
+# forms. Treat either as an explicit startup schedule so valid SceneTree tests
+# do not fail this static guard before the runtime test can execute.
+SCHEDULE_RUN_RE = re.compile(
+    r"(?:call_deferred\s*\(\s*[\"']_run[\"']|\b_run\s*\.\s*call_deferred\s*\(|\b_run\s*\()"
+)
 
 
 class SceneTreeEntrypointContractTests(unittest.TestCase):
