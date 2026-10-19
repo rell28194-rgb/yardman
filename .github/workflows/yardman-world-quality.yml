@@ -63,7 +63,7 @@ jobs:
           set -euo pipefail
           # These tests use deterministic local fixtures: no island data download,
           # private vehicle assets, Android SDK, or production APK is required.
-          for TEST in terrain_normal_seam population_budget_regression terrain_coast road_corridor_terrain road_graph_routing road_integration_budget terrain_integration_budget export_data_contract stream_retry stream_recovery_runtime streaming_budget building_hlod vegetation_lod_tint reflection_budget traffic_runtime pedestrian_runtime parked_vehicle traffic_pedestrian_safety pedestrian_destination location_tracker parish_runtime parish_map_runtime; do
+          for TEST in terrain_normal_seam population_budget_regression terrain_coast road_corridor_terrain road_corridor_staging road_graph_routing road_integration_budget terrain_integration_budget export_data_contract stream_retry stream_recovery_runtime streaming_budget building_hlod vegetation_lod_tint reflection_budget traffic_runtime pedestrian_runtime parked_vehicle traffic_pedestrian_safety pedestrian_destination location_tracker parish_runtime parish_map_runtime; do
             LOG="godot/build/world-quality/${TEST}.log"
             timeout 120 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "$LOG"
             python3 godot/tools/check_godot_log.py "$LOG" --token FAIL

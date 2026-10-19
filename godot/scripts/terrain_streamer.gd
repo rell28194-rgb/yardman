@@ -17,6 +17,8 @@ var _far_build: Dictionary = {}
 var _far_root: Node3D
 var _far_sectors: Dictionary = {}
 var _prefer_far_integration := false
+var _corridor_integrators: Array[WeakRef] = []
+var _prefer_corridor_integration := false
 
 func _ready() -> void:
     if coastline == null:
@@ -160,6 +162,19 @@ func _prepare_geometry() -> void:
     var near_pending := not _building.is_empty()
     var far_pending := not _far_build.is_empty() or (_far_thread != null and
         _far_thread.is_started() and not _far_thread.is_alive())
+    # Road arrival used to refine/cook a terrain tile inside its publication
+    # signal. That work now competes for this same allocation; it cannot add
+    # another independent geometry budget to the frame.
+    if near_pending and _loaded.is_empty():
+        _prepare_near_geometry()
+        return
+    _prune_corridor_integrators()
+    if not _corridor_integrators.is_empty():
+        if _prefer_corridor_integration or (not near_pending and not far_pending):
+            _advance_corridor_integration()
+            _prefer_corridor_integration = false
+            return
+        _prefer_corridor_integration = true
     if near_pending and far_pending and not _loaded.is_empty():
         if _prefer_far_integration:
             _prepare_far()
@@ -171,6 +186,35 @@ func _prepare_geometry() -> void:
         _prepare_near_geometry()
     else:
         _prepare_far()
+
+func request_corridor_integration(runtime: Node) -> void:
+    if not is_instance_valid(runtime) or not runtime.has_method("advance_terrain_integration"):
+        return
+    for reference in _corridor_integrators:
+        if reference.get_ref() == runtime:
+            return
+    _corridor_integrators.append(weakref(runtime))
+
+func cancel_corridor_integration(runtime: Node) -> void:
+    for index in range(_corridor_integrators.size() - 1, -1, -1):
+        var candidate = _corridor_integrators[index].get_ref()
+        if candidate == null or candidate == runtime:
+            _corridor_integrators.remove_at(index)
+
+func _prune_corridor_integrators() -> void:
+    for index in range(_corridor_integrators.size() - 1, -1, -1):
+        var candidate = _corridor_integrators[index].get_ref()
+        if not is_instance_valid(candidate) or candidate.is_queued_for_deletion():
+            _corridor_integrators.remove_at(index)
+
+func _advance_corridor_integration() -> void:
+    var reference: WeakRef = _corridor_integrators.pop_front()
+    var runtime = reference.get_ref()
+    if not is_instance_valid(runtime):
+        return
+    var pending := bool(runtime.call("advance_terrain_integration", geometry_budget_us))
+    if pending and is_instance_valid(runtime) and not runtime.is_queued_for_deletion():
+        request_corridor_integration(runtime)
 
 func _prepare_near_geometry() -> void:
     if _building.is_empty():

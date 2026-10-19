@@ -28,6 +28,17 @@ class FixtureTerrain:
     func _prepare_far() -> void:
         far_steps += 1
 
+class FixtureCorridor:
+    extends Node
+    var calls := 0
+    var last_budget := 0
+    var work_remaining := 99
+    func advance_terrain_integration(budget_us: int) -> bool:
+        calls += 1
+        last_budget = budget_us
+        work_remaining -= 1
+        return work_remaining > 0
+
 func _initialize() -> void:
     call_deferred("_run")
 
@@ -80,5 +91,51 @@ func _run() -> void:
     terrain._loaded.clear()
     terrain._far_build.clear()
     terrain.free()
-    print("YARDMAN_TERRAIN_INTEGRATION_BUDGET_TEST %s startup_priority=1 one_slice=1 fair_progress=1 poll_admission=1" % ("PASS" if failures == 0 else "FAIL"))
+    _test_corridor_allocation()
+    print("YARDMAN_TERRAIN_INTEGRATION_BUDGET_TEST %s startup_priority=1 one_slice=1 fair_progress=1 poll_admission=1 corridor_shared=1" % ("PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
+
+func _test_corridor_allocation() -> void:
+    var terrain := FixtureTerrain.new()
+    var corridor := FixtureCorridor.new()
+    terrain.geometry_budget_us = 777
+    terrain.request_corridor_integration(corridor)
+    terrain.request_corridor_integration(corridor)
+    _check(terrain._corridor_integrators.size() == 1, "Duplicate notifications created duplicate corridor work")
+    terrain._building = {"fixture": true}
+    terrain._far_build = {"fixture": true}
+    terrain._process(0.0)
+    _check(terrain.near_steps == 1 and corridor.calls == 0 and terrain.far_steps == 0,
+        "Corridor work stole startup terrain readiness")
+    terrain._loaded["fixture"] = terrain
+    for frame in range(8):
+        var previous_total := terrain.near_steps + terrain.far_steps + corridor.calls
+        terrain._process(0.0)
+        _check(terrain.near_steps + terrain.far_steps + corridor.calls == previous_total + 1,
+            "Terrain and corridor consumed separate allocations in one frame")
+    _check(terrain.near_steps == 3 and terrain.far_steps == 2 and corridor.calls == 4,
+        "Pending near/far/corridor lanes did not all progress")
+    _check(corridor.last_budget == 777, "Corridor created an independent budget")
+    terrain.cancel_corridor_integration(corridor)
+    terrain._process(0.0)
+    _check(corridor.calls == 4, "Cancelled participant was advanced")
+    terrain.request_corridor_integration(corridor)
+    corridor.free()
+    terrain._process(0.0)
+    _check(terrain._corridor_integrators.is_empty(), "Freed participant was retained or called")
+    terrain._building.clear()
+    terrain._far_build.clear()
+    var first := FixtureCorridor.new()
+    var second := FixtureCorridor.new()
+    first.work_remaining = 2
+    second.work_remaining = 2
+    terrain.request_corridor_integration(first)
+    terrain.request_corridor_integration(second)
+    for frame in range(4):
+        terrain._process(0.0)
+    _check(first.calls == 2 and second.calls == 2 and terrain._corridor_integrators.is_empty(),
+        "Corridor participants starved or remained registered after completion")
+    first.free()
+    second.free()
+    terrain._loaded.clear()
+    terrain.free()

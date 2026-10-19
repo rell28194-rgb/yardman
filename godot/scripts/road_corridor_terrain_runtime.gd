@@ -19,6 +19,29 @@ var _terrain: Node
 var _connected := false
 var _segments_by_tile: Dictionary = {}
 var _original_mesh_by_tile: Dictionary = {}
+var _original_root_by_tile: Dictionary = {}
+var _revisions: Dictionary = {}
+var _pending: Array[Vector2i] = []
+var _job: Dictionary = {}
+var _task_id := -1
+var _completed_jobs := 0
+var _cancelled_jobs := 0
+var _failed_jobs := 0
+var _last_worker_us := 0
+var _max_main_grant_us := 0
+
+class Cancellation extends RefCounted:
+    var _mutex := Mutex.new()
+    var _cancelled := false
+    func cancel() -> void:
+        _mutex.lock()
+        _cancelled = true
+        _mutex.unlock()
+    func is_cancelled() -> bool:
+        _mutex.lock()
+        var value := _cancelled
+        _mutex.unlock()
+        return value
 
 func _ready() -> void:
     set_process(true)
@@ -54,14 +77,119 @@ func _on_terrain_tile(tile: Vector2i) -> void:
 
 func _on_terrain_tile_removed(tile: Vector2i) -> void:
     _original_mesh_by_tile.erase(tile)
+    _original_root_by_tile.erase(tile)
+    _cancel_job_for_tile(tile)
+    _revisions[tile] = int(_revisions.get(tile, 0)) + 1
+    _pending.erase(tile)
 
 func _terrain_root(tile: Vector2i) -> Node3D:
     if _terrain == null:
         return null
     return _terrain.get_node_or_null("TerrainTile_%d_%d" % [tile.x, tile.y]) as Node3D
 
+# Signals only invalidate/queue work. Terrain owns the shared integration slice;
+# CPU geometry and face expansion run on one bounded in-flight worker.
 func _try_refine(tile: Vector2i) -> void:
-    if _terrain == null or not _terrain.is_tile_ready(tile) or not _segments_by_tile.has(tile):
+    _queue_tile(tile)
+
+func _cancel_job_for_tile(tile: Vector2i) -> void:
+    if not _job.is_empty() and _job.tile == tile:
+        _job.cancellation.cancel()
+
+func _queue_tile(tile: Vector2i) -> void:
+    _cancel_job_for_tile(tile)
+    _revisions[tile] = int(_revisions.get(tile, 0)) + 1
+    if not _pending.has(tile):
+        _pending.append(tile)
+    if is_instance_valid(_terrain) and _terrain.has_method("request_corridor_integration"):
+        _terrain.request_corridor_integration(self)
+
+func _restore_tile(tile: Vector2i) -> void:
+    _queue_tile(tile)
+
+func _exit_tree() -> void:
+    if is_instance_valid(_terrain) and _terrain.has_method("cancel_corridor_integration"):
+        _terrain.cancel_corridor_integration(self)
+    # A worker never touches the scene, but its callable must outlive execution.
+    if not _job.is_empty():
+        _job.cancellation.cancel()
+    if _task_id >= 0:
+        WorkerThreadPool.wait_for_task_completion(_task_id)
+        _task_id = -1
+
+func runtime_snapshot() -> Dictionary:
+    return {"pending_tiles": _pending.size(), "worker_in_flight": _task_id >= 0,
+        "phase": "idle" if _job.is_empty() else ("cpu" if _task_id >= 0 else ("publish" if _job.has("shape") else ("shape" if _job.has("mesh") else "mesh"))),
+        "completed_jobs": _completed_jobs, "cancelled_jobs": _cancelled_jobs,
+        "failed_jobs": _failed_jobs, "last_worker_us": _last_worker_us,
+        "max_main_grant_us": _max_main_grant_us}
+
+func advance_terrain_integration(budget_us: int) -> bool:
+    var started := Time.get_ticks_usec()
+    var remains := _advance_terrain_integration(budget_us)
+    _max_main_grant_us = maxi(_max_main_grant_us, Time.get_ticks_usec() - started)
+    return remains
+
+func _advance_terrain_integration(budget_us: int) -> bool:
+    if budget_us <= 0:
+        return not _pending.is_empty() or not _job.is_empty()
+    # Do at most one indivisible Resource operation per grant. Uploading a
+    # surface/physics shape is an engine call and cannot be interrupted safely.
+    if not _job.is_empty():
+        if _task_id >= 0:
+            if not WorkerThreadPool.is_task_completed(_task_id):
+                return true
+            WorkerThreadPool.wait_for_task_completion(_task_id)
+            _task_id = -1
+            _last_worker_us = int(_job.output.get("worker_us", 0))
+        if not _job_is_current(_job):
+            _cancelled_jobs += 1
+            _job = {}
+        elif not bool(_job.output.get("ok", false)):
+            _failed_jobs += 1
+            push_warning("Road corridor CPU refinement failed for %s" % str(_job.tile))
+            _job = {}
+        elif not _job.has("mesh"):
+            if bool(_job.output.restore):
+                _job.mesh = _job.source_mesh
+            else:
+                var mesh := ArrayMesh.new()
+                mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _job.output.arrays)
+                mesh.surface_set_material(0, _job.source_mesh.surface_get_material(0))
+                _job.mesh = mesh
+            return true
+        elif not _job.has("shape"):
+            var shape := ConcavePolygonShape3D.new()
+            shape.backface_collision = true
+            shape.set_faces(_job.output.faces)
+            _job.shape = shape
+            return true
+        else:
+            if _commit_job(_job):
+                _completed_jobs += 1
+            else:
+                _failed_jobs += 1
+                push_warning("Road corridor terrain collision disappeared before commit for %s" % str(_job.tile))
+            _job = {}
+            return not _pending.is_empty()
+    if _job.is_empty() and not _pending.is_empty():
+        var tile: Vector2i = _pending.pop_front()
+        _begin_job(tile)
+    return not _pending.is_empty() or not _job.is_empty()
+
+func _job_is_current(job: Dictionary) -> bool:
+    if int(_revisions.get(job.tile, 0)) != int(job.revision):
+        return false
+    if not is_instance_valid(_terrain) or not _terrain.is_tile_ready(job.tile):
+        return false
+    var tile_root := _terrain_root(job.tile)
+    if tile_root == null or tile_root.is_queued_for_deletion() or tile_root.get_instance_id() != int(job.root_id):
+        return false
+    var land := tile_root.get_node_or_null("RegisteredLand") as MeshInstance3D
+    return land != null and not land.is_queued_for_deletion() and land.get_instance_id() == int(job.land_id)
+
+func _begin_job(tile: Vector2i) -> void:
+    if not is_instance_valid(_terrain) or not _terrain.is_tile_ready(tile):
         return
     var tile_root := _terrain_root(tile)
     if tile_root == null:
@@ -69,58 +197,98 @@ func _try_refine(tile: Vector2i) -> void:
     var land := tile_root.get_node_or_null("RegisteredLand") as MeshInstance3D
     if land == null or land.mesh == null or land.mesh.get_surface_count() == 0:
         return
+    var root_id := tile_root.get_instance_id()
+    if int(_original_root_by_tile.get(tile, 0)) != root_id:
+        _original_mesh_by_tile.erase(tile)
+    var restore := not _segments_by_tile.has(tile)
+    if restore and not _original_mesh_by_tile.has(tile):
+        return
+    if not _original_mesh_by_tile.has(tile):
+        _original_mesh_by_tile[tile] = land.mesh
+        _original_root_by_tile[tile] = root_id
+    var source_mesh: ArrayMesh = _original_mesh_by_tile[tile]
     var key: String = _terrain._tile_key(tile.x, tile.y)
     var heights: PackedFloat32Array = _terrain._height_data.get(key, PackedFloat32Array())
     var coast: Dictionary = _terrain._coast_data.get(key, {})
     var mask: PackedByteArray = coast.get("mask", PackedByteArray())
-    if heights.size() != int(_terrain.resolution) * int(_terrain.resolution) or mask.is_empty():
+    if not restore and (heights.size() != int(_terrain.resolution) * int(_terrain.resolution) or mask.is_empty()):
         return
+    # Resource reads happen here, on the main thread. The worker receives only
+    # independent value arrays and never dereferences a Node or Resource.
+    var input := {"tile": tile, "source": source_mesh.surface_get_arrays(0),
+        "segments": _segments_by_tile.get(tile, []).duplicate(true),
+        "heights": heights, "mask": mask, "tile_size": float(_terrain.tile_size),
+        "spacing": float(_terrain.spacing), "resolution": int(_terrain.resolution), "restore": restore}
+    var cancellation := Cancellation.new()
+    input["cancellation"] = cancellation
+    var output: Dictionary = {}
+    _job = {"tile": tile, "revision": int(_revisions.get(tile, 0)), "root_id": root_id,
+        "land_id": land.get_instance_id(), "source_mesh": source_mesh, "output": output, "cancellation": cancellation}
+    _task_id = WorkerThreadPool.add_task(_build_worker.bind(input, output), false, "Road corridor terrain")
 
-    if not _original_mesh_by_tile.has(tile):
-        _original_mesh_by_tile[tile] = land.mesh
-    var source_mesh: ArrayMesh = _original_mesh_by_tile[tile]
-    var plan := refinement_plan(_segments_by_tile[tile], tile, float(_terrain.tile_size),
-        float(_terrain.spacing), int(_terrain.resolution), mask)
-    var cells: Dictionary = plan.get("cells", {})
-    if cells.is_empty():
-        _restore_tile(tile)
+static func _build_worker(input: Dictionary, output: Dictionary) -> void:
+    var started := Time.get_ticks_usec()
+    var result: Dictionary
+    var plan := {"cells": {}, "structural_skips": 0}
+    if not bool(input.restore):
+        plan = refinement_plan(input.segments, input.tile, input.tile_size, input.spacing, input.resolution, input.mask, input.cancellation)
+    var restore: bool = bool(input.restore) or plan.cells.is_empty()
+    if restore:
+        result = {"ok": true, "arrays": input.source}
+    else:
+        result = rebuild_value_arrays(input.source, input.heights, plan.cells, input.tile,
+            input.tile_size, input.spacing, input.resolution, REFINE_STEP_M, input.cancellation)
+    if input.cancellation.is_cancelled() or not bool(result.get("ok", false)):
+        output["ok"] = false
         return
-    var result := rebuild_land_arrays(source_mesh, heights, cells, tile, float(_terrain.tile_size),
-        float(_terrain.spacing), int(_terrain.resolution), REFINE_STEP_M)
-    if not bool(result.get("ok", false)):
-        push_warning("Road corridor terrain refinement failed for %s" % str(tile))
-        return
-    var mesh := ArrayMesh.new()
-    mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, result.arrays)
-    mesh.surface_set_material(0, source_mesh.surface_get_material(0))
-    land.mesh = mesh
-    land.set_meta("road_corridor_refined", true)
-    land.set_meta("refined_cells", cells.size())
-    land.set_meta("removed_coarse_triangles", int(result.removed_triangles))
-    land.set_meta("micro_triangles", int(result.micro_triangles))
-    land.set_meta("structural_skips", int(plan.get("structural_skips", 0)))
-    _replace_collision(tile_root, result.arrays)
+    var faces := PackedVector3Array()
+    var vertices: PackedVector3Array = result.arrays[Mesh.ARRAY_VERTEX]
+    var indices: PackedInt32Array = result.arrays[Mesh.ARRAY_INDEX]
+    faces.resize(indices.size())
+    for cursor in range(indices.size()):
+        if cursor % 4096 == 0 and input.cancellation.is_cancelled():
+            output["ok"] = false
+            return
+        faces[cursor] = vertices[indices[cursor]]
+    result["faces"] = faces
+    result["restore"] = restore
+    result["refined_cells"] = plan.cells.size()
+    result["structural_skips"] = plan.structural_skips
+    result["worker_us"] = Time.get_ticks_usec() - started
+    output.merge(result, true)
 
-func _restore_tile(tile: Vector2i) -> void:
-    if not _original_mesh_by_tile.has(tile):
-        return
-    var tile_root := _terrain_root(tile)
-    if tile_root == null:
-        return
+func _commit_job(job: Dictionary) -> bool:
+    var tile_root := _terrain_root(job.tile)
     var land := tile_root.get_node_or_null("RegisteredLand") as MeshInstance3D
-    if land == null:
-        return
-    var source_mesh: ArrayMesh = _original_mesh_by_tile[tile]
-    land.mesh = source_mesh
-    land.remove_meta("road_corridor_refined")
-    land.remove_meta("refined_cells")
-    land.remove_meta("removed_coarse_triangles")
-    land.remove_meta("micro_triangles")
-    land.remove_meta("structural_skips")
-    _replace_collision(tile_root, source_mesh.surface_get_arrays(0))
+    # Reuse the existing collision body/shape node. The physics bubble owns its
+    # layer, mask and disabled state; replacement must not silently reactivate it.
+    var collider: CollisionShape3D
+    for child in tile_root.get_children():
+        if child is StaticBody3D:
+            for shape_node in child.get_children():
+                if shape_node is CollisionShape3D:
+                    collider = shape_node
+                    break
+            if collider != null:
+                break
+    if collider == null:
+        # An evicted/disabled physics residency without a body is not permission
+        # to allocate a new active collider outside the terrain streamer's policy.
+        return false
+    collider.shape = job.shape
+    land.mesh = job.mesh
+    if bool(job.output.restore):
+        for key in ["road_corridor_refined", "refined_cells", "removed_coarse_triangles", "micro_triangles", "structural_skips"]:
+            land.remove_meta(key)
+    else:
+        land.set_meta("road_corridor_refined", true)
+        land.set_meta("removed_coarse_triangles", int(job.output.removed_triangles))
+        for key in ["refined_cells", "micro_triangles", "structural_skips"]:
+            land.set_meta(key, int(job.output[key]))
+    return true
 
-func refinement_plan(segments: Array, tile: Vector2i, tile_size: float, spacing: float,
-        resolution: int, land_mask: PackedByteArray) -> Dictionary:
+static func refinement_plan(segments: Array, tile: Vector2i, tile_size: float, spacing: float,
+        resolution: int, land_mask: PackedByteArray, cancellation: Cancellation = null) -> Dictionary:
     var cells: Dictionary = {}
     var structural_skips := 0
     if tile_size <= 0.0 or spacing <= 0.0 or resolution < 2 or not is_finite(tile_size) or not is_finite(spacing):
@@ -129,6 +297,8 @@ func refinement_plan(segments: Array, tile: Vector2i, tile_size: float, spacing:
         return {"cells": cells, "structural_skips": structural_skips}
     var tile_origin := Vector2(float(tile.x) * tile_size, float(tile.y) * tile_size)
     for segment in segments:
+        if cancellation != null and cancellation.is_cancelled():
+            return {"cells": {}, "structural_skips": structural_skips}
         if not segment is Array or segment.size() < 12:
             continue
         var flags := int(segment[6])
@@ -168,6 +338,8 @@ func refinement_plan(segments: Array, tile: Vector2i, tile_size: float, spacing:
         var z0 := clampi(int(floor((min_z - expand) / spacing)), 0, resolution - 2)
         var z1 := clampi(int(floor((max_z + expand) / spacing)), 0, resolution - 2)
         for z in range(z0, z1 + 1):
+            if cancellation != null and cancellation.is_cancelled():
+                return {"cells": {}, "structural_skips": structural_skips}
             for x in range(x0, x1 + 1):
                 if land_mask[z * (resolution - 1) + x] != 1:
                     continue
@@ -182,7 +354,7 @@ func refinement_plan(segments: Array, tile: Vector2i, tile_size: float, spacing:
                 cells[cell_key].segments.append(segment)
     return {"cells": cells, "structural_skips": structural_skips}
 
-func _corridor_touches_cell(a: Vector2, b: Vector2, radius: float, cell: Rect2) -> bool:
+static func _corridor_touches_cell(a: Vector2, b: Vector2, radius: float, cell: Rect2) -> bool:
     var radius_squared := radius * radius + 0.000001
     # Endpoint-to-rectangle distances cover short roads ending beside a cell.
     for point in [a, b]:
@@ -201,11 +373,16 @@ func _corridor_touches_cell(a: Vector2, b: Vector2, radius: float, cell: Rect2) 
 func rebuild_land_arrays(source_mesh: ArrayMesh, heights: PackedFloat32Array, cells: Dictionary,
         tile: Vector2i, tile_size: float, spacing: float, resolution: int,
         refine_step_m: float = REFINE_STEP_M) -> Dictionary:
-    if source_mesh == null or source_mesh.get_surface_count() == 0 or cells.is_empty():
+    if source_mesh == null or source_mesh.get_surface_count() == 0:
         return {"ok": false}
-    if heights.size() != resolution * resolution or refine_step_m <= 0.0 or not is_finite(refine_step_m):
+    return rebuild_value_arrays(source_mesh.surface_get_arrays(0), heights, cells, tile,
+        tile_size, spacing, resolution, refine_step_m)
+
+static func rebuild_value_arrays(source: Array, heights: PackedFloat32Array, cells: Dictionary,
+        tile: Vector2i, tile_size: float, spacing: float, resolution: int,
+        refine_step_m: float = REFINE_STEP_M, cancellation: Cancellation = null) -> Dictionary:
+    if cells.is_empty() or heights.size() != resolution * resolution or refine_step_m <= 0.0 or not is_finite(refine_step_m):
         return {"ok": false}
-    var source: Array = source_mesh.surface_get_arrays(0)
     var vertices: PackedVector3Array = source[Mesh.ARRAY_VERTEX].duplicate()
     var normals: PackedVector3Array = source[Mesh.ARRAY_NORMAL].duplicate()
     var colors: PackedColorArray = source[Mesh.ARRAY_COLOR].duplicate()
@@ -233,6 +410,8 @@ func rebuild_land_arrays(source_mesh: ArrayMesh, heights: PackedFloat32Array, ce
     var ordered_keys: Array = cells.keys()
     ordered_keys.sort()
     for cell_key in ordered_keys:
+        if cancellation != null and cancellation.is_cancelled():
+            return {"ok": false}
         var record: Dictionary = cells[cell_key]
         var cell: Vector2i = record.cell
         micro_triangles += _append_refined_cell(vertices, normals, colors, indices, heights,
@@ -246,7 +425,7 @@ func rebuild_land_arrays(source_mesh: ArrayMesh, heights: PackedFloat32Array, ce
     return {"ok": true, "arrays": arrays, "removed_triangles": removed_triangles,
         "micro_triangles": micro_triangles}
 
-func _append_refined_cell(vertices: PackedVector3Array, normals: PackedVector3Array,
+static func _append_refined_cell(vertices: PackedVector3Array, normals: PackedVector3Array,
         colors: PackedColorArray, indices: PackedInt32Array, heights: PackedFloat32Array,
         cell: Vector2i, segments: Array, tile_origin: Vector2, spacing: float,
         resolution: int, refine_step_m: float) -> int:
@@ -332,7 +511,7 @@ func _append_refined_cell(vertices: PackedVector3Array, normals: PackedVector3Ar
                         triangle_count += 1
     return triangle_count
 
-func _local_decks(segments: Array, tile_origin: Vector2) -> Array:
+static func _local_decks(segments: Array, tile_origin: Vector2) -> Array:
     var decks: Array = []
     for segment in segments:
         if not segment is Array or segment.size() < 12 or int(segment[6]) & (FLAG_BRIDGE | FLAG_TUNNEL):
@@ -381,13 +560,13 @@ func _local_decks(segments: Array, tile_origin: Vector2) -> Array:
                 "length_sq": axis.length_squared(), "y0": float(segment[9]), "y1": float(segment[10])})
     return decks
 
-func _polygon_area(points: Array) -> float:
+static func _polygon_area(points: Array) -> float:
     var area := 0.0
     for index in range(points.size()):
         area += Vector2(points[index]).cross(Vector2(points[(index + 1) % points.size()]))
     return area * 0.5
 
-func _in_convex_polygon(point: Vector2, polygon: Array) -> bool:
+static func _in_convex_polygon(point: Vector2, polygon: Array) -> bool:
     var orientation := 1.0 if _polygon_area(polygon) >= 0.0 else -1.0
     for index in range(polygon.size()):
         var a: Vector2 = polygon[index]
@@ -396,7 +575,7 @@ func _in_convex_polygon(point: Vector2, polygon: Array) -> bool:
             return false
     return true
 
-func _clip_half_plane(points: Array, a: Vector2, b: Vector2, sign_value: float) -> Array:
+static func _clip_half_plane(points: Array, a: Vector2, b: Vector2, sign_value: float) -> Array:
     var result: Array = []
     if points.is_empty():
         return result
@@ -416,7 +595,7 @@ func _clip_half_plane(points: Array, a: Vector2, b: Vector2, sign_value: float) 
         result.pop_back()
     return result if result.size() >= 3 and absf(_polygon_area(result)) > 0.000001 else []
 
-func _partition_at_ribbon(points: Array, polygon: Array) -> Array:
+static func _partition_at_ribbon(points: Array, polygon: Array) -> Array:
     var touches := false
     for point in points:
         if _in_convex_polygon(point, polygon):
@@ -451,7 +630,7 @@ func _partition_at_ribbon(points: Array, polygon: Array) -> Array:
         pieces = next_pieces
     return pieces
 
-func _cell_height(heights: PackedFloat32Array, cell: Vector2i, u: float, v: float,
+static func _cell_height(heights: PackedFloat32Array, cell: Vector2i, u: float, v: float,
         resolution: int) -> float:
     var a := float(heights[cell.y * resolution + cell.x])
     var b := float(heights[cell.y * resolution + cell.x + 1])
@@ -461,7 +640,7 @@ func _cell_height(heights: PackedFloat32Array, cell: Vector2i, u: float, v: floa
         return a + (b - a) * u + (c - a) * v
     return d + (c - d) * (1.0 - u) + (b - d) * (1.0 - v)
 
-func carved_height(raw_height: float, world_x: float, world_z: float, segments: Array) -> float:
+static func carved_height(raw_height: float, world_x: float, world_z: float, segments: Array) -> float:
     if not is_finite(raw_height) or not is_finite(world_x) or not is_finite(world_z):
         return raw_height
     var result := raw_height
@@ -499,35 +678,7 @@ func carved_height(raw_height: float, world_x: float, world_z: float, segments: 
         result = minf(result, allowed)
     return result
 
-func _replace_collision(tile_root: Node3D, arrays: Array) -> void:
-    var old_body: StaticBody3D
-    for child in tile_root.get_children():
-        if child is StaticBody3D:
-            old_body = child as StaticBody3D
-            break
-    if old_body != null:
-        tile_root.remove_child(old_body)
-        old_body.queue_free()
-    var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-    var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
-    if vertices.is_empty() or indices.is_empty():
-        return
-    var faces := PackedVector3Array()
-    for index in indices:
-        faces.append(vertices[int(index)])
-    var shape := ConcavePolygonShape3D.new()
-    shape.backface_collision = true
-    shape.set_faces(faces)
-    var collider := CollisionShape3D.new()
-    collider.shape = shape
-    var body := StaticBody3D.new()
-    body.name = "RoadAwareTerrainCollision"
-    body.collision_layer = 1
-    body.collision_mask = 0
-    body.add_child(collider)
-    tile_root.add_child(body)
-
-func _height_color(height: float, slope: float) -> Color:
+static func _height_color(height: float, slope: float) -> Color:
     if height < 2.0:
         return Color(0.38, 0.43, 0.25)
     var low := Color(0.24, 0.38, 0.14)
