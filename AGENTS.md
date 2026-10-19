@@ -4,7 +4,65 @@ The owner's latest execution directive governs this existing Godot project:
 push tested source, preserve green Android build health, exhaust Beta 1 before
 starting Beta 2, and defer final APK delivery until both libraries and their
 integration/polish passes are complete. An APK is a checkpoint, never project
-completion. Continue the existing `codex/godot-polish-002` branch.
+completion. Continue from the newest production-derived Yardman branch; never
+revive an older runtime merely because its historical tests are easier to pass.
+
+## Owner runtime contract — project-wide
+
+This contract overrides obsolete gameplay/test assumptions everywhere in the
+repository and across future agents/branches unless the owner explicitly changes
+it.
+
+- Runtime scope is **map + cars + world/graphics systems**. Do not reactivate
+  jobs/economy, courier gameplay, NPC/pedestrian simulation, autonomous traffic
+  gameplay, or other removed legacy systems just to satisfy an older test.
+- Existing dormant source may remain for provenance/history, but it must not be
+  autoloaded or become a dependency of the active owner runtime.
+- Vehicle selection must not depend on `JobRuntime`, `JobPersistenceRuntime`, a
+  wallet, prices, job progress, or economy state.
+- **Toyota Mark X is banned from Yardman production/runtime.** Do not expose,
+  spawn, select, package, restore, substitute, or reintroduce it from historical
+  branches, saved selections, tests, recovered packs, or fallback logic.
+- The former 992/Port Royal 992 path is excluded from the owner vehicle build.
+  Do not restore it through historical tests or fallback logic.
+- The recovered fleet registry/data from the vehicle-production lane is a
+  required production input. Integrate the other recovered vehicles when their
+  verified private source media are present; do not collapse the owner build
+  back to Crown-only because public CI lacks private media.
+- Toyota Crown remains an accepted owner vehicle source, subject to the same
+  private-pack verification and visual/runtime acceptance as the recovered
+  fleet.
+- Public CI that omits owner-private vehicle media is **not** visual/vehicle
+  acceptance evidence and must never be handed to the owner as a representative
+  Beta vehicle build. Owner APK export must fail/withhold candidate status when
+  required private hero vehicle media are absent rather than silently showing a
+  procedural/legacy fallback.
+
+## Validated graphics / R&D promotion contract
+
+Preserve and use graphics work only according to its measured promotion state.
+The validated RDX promotion lane is production ancestry, not disposable test
+work.
+
+- Preserve the accepted renderer/material capability contract from
+  `codex/validated-rdx-promotion-20261018` / validated head
+  `64c8242bd9887a464bbeacb8d978cd36c6291c61`.
+- Keep Compatibility as the desktop/headless validation baseline and Mobile /
+  Vulkan as the Android mobile renderer path. Do not perform a speculative
+  engine or renderer-policy switch.
+- Preserve `render_quality_manager.gd`, `render_material_registry.gd`, the
+  renderer-specific road/water/terrain material families, adaptive resolution,
+  thermal/frame-pacing policy, shared streaming integration budgets and shadow
+  budget policy that passed the renderer capability/fallback validation.
+- The passed renderer contract proves correct backend/material selection and
+  fallback behavior. Do not claim hosted llvmpipe results prove physical-phone
+  performance.
+- RDX-003 conservative HZB and RDX-004 cluster/meshlet work remain research-only
+  until their outstanding production/device evidence is satisfied. Do not
+  silently promote them merely because their research gates were green.
+- Missing Godot capabilities may still be developed in isolated R&D lanes; only
+  promote them after measurable success and regression review against the
+  current production state.
 
 Read `godot/docs/ASSET_EXECUTION.md`, `godot/docs/asset_recovery/ledger.json`
 and `godot/docs/RECOVERY.md` before asset work. Do not infer library completion
