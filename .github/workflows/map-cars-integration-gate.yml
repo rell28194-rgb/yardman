@@ -1,0 +1,111 @@
+name: Map Cars Integration Gate
+
+on:
+  push:
+    branches:
+      - codex/map-cars-production-integration-001
+    paths:
+      - 'godot/project.godot'
+      - 'godot/scripts/map_quality_bootstrap.gd'
+      - 'godot/scripts/vehicle_*.gd'
+      - 'godot/scripts/render_*.gd'
+      - 'godot/scripts/coastline.gd'
+      - 'godot/data/vehicle_fleet_*.json'
+      - 'godot/shaders/**'
+      - 'godot/tests/test_map_cars_integration_scope.py'
+      - 'godot/tests/test_vehicle_production_scope.py'
+      - 'godot/tests/material_variants_test.gd'
+      - 'godot/tests/render_quality_test.gd'
+      - 'godot/tests/renderer_capability_matrix_test.gd'
+      - '.github/workflows/map-cars-integration-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scope-and-fleet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lock clean runtime and fleet scope
+        run: |
+          python3 -m unittest \
+            godot/tests/test_map_cars_integration_scope.py \
+            godot/tests/test_vehicle_production_scope.py
+
+  renderer-contract:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: compatibility
+            method: gl_compatibility
+            driver: opengl3
+            family: gles
+            rd: '0'
+          - label: mobile
+            method: mobile
+            driver: vulkan
+            family: vulkan_mobile
+            rd: '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install render dependencies and Godot
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mesa-vulkan-drivers libgl1-mesa-dri mesa-utils xvfb
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+      - name: Parse integrated project
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+            --path godot --rendering-method '${{ matrix.method }}' --rendering-driver '${{ matrix.driver }}' \
+            --audio-driver Dummy --editor --quit 2>&1 | tee /tmp/import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|Shader compilation failed|Failed to compile shader' /tmp/import.log; then exit 1; fi
+      - name: Validate renderer capability contract
+        shell: bash
+        env:
+          YARDMAN_RENDERER_LABEL: ${{ matrix.label }}
+          YARDMAN_EXPECT_METHOD: ${{ matrix.method }}
+          YARDMAN_EXPECT_DRIVER: ${{ matrix.driver }}
+          YARDMAN_EXPECT_FAMILY: ${{ matrix.family }}
+          YARDMAN_EXPECT_RD: ${{ matrix.rd }}
+        run: |
+          set -o pipefail
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+            --path godot --rendering-method '${{ matrix.method }}' --rendering-driver '${{ matrix.driver }}' \
+            --audio-driver Dummy --script res://tests/renderer_capability_matrix_test.gd 2>&1 | tee /tmp/renderer.log
+          grep -q 'YARDMAN_RDX_RENDERER_MATRIX .*result=PASS' /tmp/renderer.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' /tmp/renderer.log; then exit 1; fi
+      - name: Validate live material switching
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+            --path godot --rendering-method '${{ matrix.method }}' --rendering-driver '${{ matrix.driver }}' \
+            --audio-driver Dummy --script res://tests/material_variants_test.gd 2>&1 | tee /tmp/material.log
+          grep -q 'YARDMAN_MATERIAL_VARIANTS_TEST PASS' /tmp/material.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' /tmp/material.log; then exit 1; fi
+      - name: Validate quality and thermal policy
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout 120 xvfb-run -a -s '-screen 0 1280x720x24' godot \
+            --path godot --rendering-method '${{ matrix.method }}' --rendering-driver '${{ matrix.driver }}' \
+            --audio-driver Dummy --script res://tests/render_quality_test.gd 2>&1 | tee /tmp/quality.log
+          grep -q 'YARDMAN_RENDER_QUALITY_TEST PASS' /tmp/quality.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' /tmp/quality.log; then exit 1; fi
