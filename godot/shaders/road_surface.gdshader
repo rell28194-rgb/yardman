@@ -7,10 +7,7 @@ uniform sampler2D reference_detail : source_color, repeat_enable, filter_linear_
 uniform bool has_reference_albedo = false;
 uniform bool has_reference_detail = false;
 uniform float visibility_distance = 2600.0;
-uniform float wetness : hint_range(0.0, 1.0) = 0.0;
-uniform float standing_water : hint_range(0.0, 1.0) = 0.0;
 varying float camera_distance;
-varying float road_up_alignment;
 
 float hash21(vec2 p) {
     p = fract(p * vec2(123.34, 456.21));
@@ -20,7 +17,6 @@ float hash21(vec2 p) {
 
 void vertex() {
     camera_distance = length((MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz);
-    road_up_alignment = clamp(abs(NORMAL.y), 0.0, 1.0);
     // A minute depth-only scale supplements the physical overlay on grazing
     // views; road lighting and canonical/physics geometry are unchanged.
     Z_CLIP_SCALE = 0.99997;
@@ -33,27 +29,58 @@ void fragment() {
     if (hash21(FRAGCOORD.xy) < range_fade) {
         discard;
     }
+
     float width = max(COLOR.r * 64.0, 1.0);
     int paint = int(round(COLOR.g * 2.0));
     int lanes = clamp(int(round(COLOR.b * 8.0)), 1, 8);
     vec2 footprint = fwidth(UV);
+
+    // Keep several deterministic scales of variation so large junction polygons
+    // do not collapse into a featureless dark slab. Derivative filtering makes
+    // the pattern converge instead of sparkling at distance.
     float grain_filter = smoothstep(0.8, 1.5, max(footprint.x, footprint.y) * 24.0);
     float grain = mix(hash21(floor(UV * 24.0)), 0.5, grain_filter);
     float patch_filter = smoothstep(0.7, 1.3, max(footprint.x * 0.18, footprint.y * 0.65));
     float patch = mix(hash21(floor(UV * vec2(0.18, 0.65))), 0.5, patch_filter);
-    vec3 base = unpaved ? vec3(0.34, 0.275, 0.18) : vec3(0.205, 0.217, 0.225);
-    base *= 0.91 + grain * 0.12 + patch * 0.06;
+    float broad_filter = smoothstep(0.6, 1.2, max(footprint.x * 0.055, footprint.y * 0.20));
+    float broad = mix(hash21(floor(UV * vec2(0.055, 0.20))), 0.5, broad_filter);
+
+    vec3 base = unpaved ? vec3(0.34, 0.275, 0.18) : vec3(0.225, 0.232, 0.236);
+    base *= 0.92 + grain * 0.08 + patch * 0.055 + broad * 0.045;
     if (has_reference_albedo) {
         vec3 reference_color = texture(reference_albedo, UV / 8.0).rgb;
-        base = clamp(reference_color * (unpaved ? 1.10 : 2.30), vec3(0.055), vec3(0.46));
+        // The recovered asphalt reference has very deep texels. Preserve its
+        // aggregate character without allowing daylight streets to read black.
+        float reference_luma = dot(reference_color, vec3(0.2126, 0.7152, 0.0722));
+        reference_color = mix(reference_color, vec3(reference_luma), 0.30);
+        base = clamp(reference_color * (unpaved ? 1.10 : 2.30),
+            unpaved ? vec3(0.075) : vec3(0.115),
+            unpaved ? vec3(0.46) : vec3(0.43));
         if (has_reference_detail) {
             float aggregate = dot(texture(reference_detail, UV / 2.0).rgb, vec3(0.2126, 0.7152, 0.0722));
-            base *= clamp(0.80 + aggregate * 1.90, 0.82, 1.30);
+            base *= clamp(0.86 + aggregate * 1.55, 0.88, 1.24);
         }
+        base *= 0.965 + patch * 0.045 + broad * 0.035;
     }
+
+    // Give the asphalt/terrain interface a visible shoulder band using the
+    // existing lateral road UV. No geometry, topology or draw-call changes.
     float edge_distance = max(0.0, width * 0.5 - abs(UV.y));
-    float shoulder = 1.0 - smoothstep(0.0, 0.32, edge_distance);
-    base = mix(base, unpaved ? vec3(0.40, 0.33, 0.22) : vec3(0.27, 0.265, 0.245), shoulder * 0.23);
+    float shoulder_width = clamp(width * 0.075, 0.46, 0.78);
+    float shoulder = 1.0 - smoothstep(0.04, shoulder_width, edge_distance);
+    float edge_grit = 0.88 + hash21(floor(UV * vec2(0.31, 1.85))) * 0.16;
+    vec3 shoulder_color = unpaved ? vec3(0.405, 0.335, 0.225) : vec3(0.315, 0.300, 0.270);
+    base = mix(base, shoulder_color * edge_grit, shoulder * (unpaved ? 0.34 : 0.58));
+
+    // UV2 stores distance from each logical segment endpoint. Use it only as a
+    // visual wear mask to break up oversized intersection plates; source road
+    // geometry and registered coordinates stay untouched.
+    float endpoint_distance = min(UV2.x, UV2.y);
+    float junction_zone = 1.0 - smoothstep(5.0, 15.0, endpoint_distance);
+    float junction_breakup = junction_zone * (0.35 + 0.65 * broad);
+    vec3 junction_tone = unpaved ? vec3(0.365, 0.305, 0.215) : vec3(0.255, 0.260, 0.255);
+    base = mix(base, junction_tone, junction_breakup * (unpaved ? 0.10 : 0.20));
+
     float dash = 1.0 - step(3.2, mod(UV.x, 8.5));
     dash = mix(dash, 3.2 / 8.5, smoothstep(1.5, 4.0, footprint.x));
     float line_softness = max(footprint.y * 0.6, 0.015);
@@ -70,20 +97,13 @@ void fragment() {
                 }
             }
         }
-        // Logical-edge junctions are left unpainted, avoiding crossed dashes
-        // at intersections. Markings are explicitly inferred, never surveyed.
-        line *= smoothstep(4.0, 9.0, min(UV2.x, UV2.y));
+        // Fade paint only inside the junction mouth. Approaches retain markings
+        // closer to the intersection so road direction remains legible.
+        line *= smoothstep(2.5, 7.0, endpoint_distance);
     }
-    float surface_wetness = unpaved ? wetness * 0.48 : wetness;
-    float puddle_flatness = smoothstep(0.965, 0.998, road_up_alignment);
-    float puddle_mask = unpaved ? 0.0 : smoothstep(0.58, 0.86, patch) * standing_water * puddle_flatness;
-    vec3 surface = mix(base, vec3(0.82, 0.815, 0.76), line * (0.78 + grain * 0.15));
-    surface *= mix(1.0, 0.70, surface_wetness * 0.82);
-    surface *= mix(1.0, 0.94, puddle_mask * 0.45);
-    ALBEDO = surface;
-    ROUGHNESS = unpaved ? mix(0.98, 0.84, surface_wetness) : mix(0.88, 0.34, surface_wetness);
-    ROUGHNESS = mix(ROUGHNESS, 0.10, puddle_mask * 0.90);
-    SPECULAR = mix(0.24, 0.64, surface_wetness);
-    SPECULAR = mix(SPECULAR, 0.82, puddle_mask * 0.72);
+
+    ALBEDO = mix(base, vec3(0.82, 0.815, 0.76), line * (0.80 + grain * 0.13));
+    float paved_roughness = mix(0.87, 0.95, max(shoulder, junction_zone * 0.35));
+    ROUGHNESS = unpaved ? 0.98 : paved_roughness;
     METALLIC = 0.0;
 }

@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource path="res://scripts/main.gd" type="Script" id="1"]
 [ext_resource path="res://scripts/road_structure_collision.gd" type="Script" id="2"]
 [ext_resource path="res://scripts/tunnel_geometry.gd" type="Script" id="3"]
+[ext_resource path="res://scripts/parish_navigation.gd" type="Script" id="4"]
 
 [node name="Yardman" type="Node3D"]
 script = ExtResource("1")
@@ -12,3 +13,6 @@ script = ExtResource("2")
 
 [node name="TunnelGeometry" type="Node" parent="."]
 script = ExtResource("3")
+
+[node name="ParishNavigation" type="Control" parent="."]
+script = ExtResource("4")

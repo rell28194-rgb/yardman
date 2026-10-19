@@ -7,10 +7,8 @@ uniform sampler2D surface_noise : repeat_enable, filter_linear_mipmap_anisotropi
 uniform sampler2D reference_grass : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_dry_grass : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_rock : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
-uniform sampler2D reference_grass_normal : repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool has_reference_ground = false;
 uniform bool has_reference_rock = false;
-uniform bool has_reference_grass_normal = false;
 uniform sampler2D tunnel_portal_mask : filter_nearest, repeat_disable;
 uniform bool tunnel_portal_mask_enabled = false;
 uniform float terrain_tile_size = 4096.0;
@@ -65,11 +63,14 @@ void fragment() {
         vec3 dry_texture = texture(reference_dry_grass, p.yz / 8.0).rgb * blend.x
             + texture(reference_dry_grass, p.xz / 8.0).rgb * blend.y
             + texture(reference_dry_grass, p.xy / 8.0).rgb * blend.z;
-        // Preserve recovered texture brightness. Extra gain here washed out
-        // ground colors under the runtime sun/ambient lighting.
         grass = mix(wet, dry_texture, dry);
     }
-    grass *= mix(0.73, 1.29, patch.r) * mix(0.84, 1.14, macro);
+    // The acceptance captures exposed a fluorescent lime response on flat
+    // lowland ground. Keep the recovered texture variation but constrain its
+    // lighting range and saturation before the Android sun/ambient pass.
+    grass *= mix(0.78, 1.12, patch.r) * mix(0.88, 1.08, macro);
+    float grass_luma = dot(grass, vec3(0.2126, 0.7152, 0.0722));
+    grass = mix(vec3(grass_luma), grass, 0.78) * 0.88;
     vec3 soil = mix(vec3(0.30, 0.22, 0.12), vec3(0.53, 0.38, 0.24), patch.b);
     vec3 rock = mix(vec3(0.34, 0.34, 0.28), vec3(0.61, 0.60, 0.49), detail.r);
     if (has_reference_rock) {
@@ -81,21 +82,14 @@ void fragment() {
     float bare = smoothstep(0.66, 0.85, patch.g) * (0.16 + dry * 0.65);
     float rocky = smoothstep(0.22, 0.59, slope) * mix(0.72, 1.0, patch.b);
     vec3 color = mix(mix(grass, soil, bare), rock, rocky);
-    float grain = overview ? 1.0 : mix(0.85, 1.14, detail.g);
+    float grain = overview ? 1.0 : mix(0.90, 1.08, detail.g);
     ALBEDO = color * grain;
     ROUGHNESS = mix(0.96, 0.87, rocky);
     SPECULAR = 0.14;
-    // Surface normals add material depth without moving the Jamaica terrain mesh.
-    // The recovered scrub-grass source contributes only where grass is dominant;
-    // rock/soil slopes keep their procedural signal and overview remains flat.
+    // A subtle texture normal adds surface detail without changing geography.
     if (!overview) {
         vec2 normal_xy = (detail.rg - vec2(0.5)) * (0.16 + rocky * 0.13);
-        if (has_reference_grass_normal) {
-            vec2 grass_n = texture(reference_grass_normal, p.xz / 8.0).rg * 2.0 - 1.0;
-            float grass_weight = (1.0 - rocky) * (1.0 - bare) * (1.0 - dry * 0.22);
-            normal_xy += grass_n * 0.21 * clamp(grass_weight, 0.0, 1.0);
-        }
         NORMAL_MAP = vec3(normal_xy + vec2(0.5), 1.0);
-        NORMAL_MAP_DEPTH = 0.30;
+        NORMAL_MAP_DEPTH = 0.24;
     }
 }

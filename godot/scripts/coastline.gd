@@ -1,56 +1,30 @@
 extends Node3D
 class_name YardmanCoastline
 
-const MaterialRegistry = preload("res://scripts/render_material_registry.gd")
+const WaterShader = preload("res://shaders/water.gdshader")
 const BeachShader = preload("res://shaders/beach.gdshader")
 const ReferenceAssets = preload("res://scripts/reference_assets.gd")
 var water_material: ShaderMaterial
 var beach_material: ShaderMaterial
-var _quality := "Balanced"
-var _force_safe_water := false
 
 func _init() -> void:
     water_material = ShaderMaterial.new()
-    water_material.shader = MaterialRegistry.shader_for("water")
+    water_material.shader = WaterShader
     beach_material = ShaderMaterial.new()
     beach_material.shader = BeachShader
-    _bind_reference_media()
-
-func _bind_reference_media() -> void:
     for binding in [
         [beach_material, "reference_sand", "has_reference_sand", "beach_sand.png"],
         [water_material, "reference_surface", "has_reference_surface", "water_surface.png"],
         [water_material, "reference_foam", "has_reference_foam", "water_foam.png"],
         [water_material, "reference_caustics", "has_reference_caustics", "water_caustics.png"],
-        # Direct owner-authorized Beta2 recovery. The KTX keeps the original
-        # uCaptain WaterBump ETC1 mip chain; asset-absent validation builds simply
-        # retain Yardman's procedural normal field.
-        [water_material, "reference_normal", "has_reference_normal", "beta2_ucaptain_water_bump.ktx"],
     ]:
         var texture: Texture2D = ReferenceAssets.texture(str(binding[3]))
-        binding[0].set_shader_parameter(str(binding[2]), texture != null)
         if texture != null:
             binding[0].set_shader_parameter(str(binding[1]), texture)
+            binding[0].set_shader_parameter(str(binding[2]), true)
 
-func _ready() -> void:
-    add_to_group("yardman_render_quality")
-
-func apply_render_policy(policy: Dictionary, renderer_override: String = "") -> void:
-    var requested_quality := str(policy.get("quality", _quality))
-    if not requested_quality.is_empty():
-        _quality = requested_quality
-    _force_safe_water = str(policy.get("water_variant", "dual_normal")) == "opaque"
-    var selected := MaterialRegistry.shader_for("water", renderer_override, _quality, _force_safe_water)
-    if water_material.shader != selected:
-        water_material.shader = selected
-        # ShaderMaterial parameter tables are shader-specific. Re-apply both the
-        # ordinary private media and direct Beta2 source normal after any renderer
-        # or thermal-quality variant swap.
-        _bind_reference_media()
-
-func material_variant() -> String:
-    return MaterialRegistry.variant_name("water", "", _quality, _force_safe_water)
-
+# Attach below the terrain tile root. The shared parent already places this
+# sea-level tile relative to the floating origin, so rebase shifts it once.
 func instantiate_tile(tile: Vector2i, payload: Dictionary, parent_node: Node3D, tile_size: float = 4096.0) -> void:
     append_water(payload, parent_node, float(tile.x) * tile_size, float(tile.y) * tile_size)
     append_beach(payload, parent_node, float(tile.x) * tile_size, float(tile.y) * tile_size)
@@ -70,6 +44,8 @@ func append_water(payload: Dictionary, parent_node: Node3D, world_x: float, worl
     for triangle in range(0, source.size(), 3):
         var cross := (source[triangle + 1] - source[triangle]).cross(source[triangle + 2] - source[triangle])
         var order := [0, 2, 1] if cross.y > 0.0 else [0, 1, 2]
+        # Godot front faces are clockwise. Reorder the distance attribute with
+        # each vertex; changing winding must never change the coastal tint.
         for offset: int in order:
             var index: int = triangle + offset
             var vertex := source[index]
@@ -82,9 +58,37 @@ func append_water(payload: Dictionary, parent_node: Node3D, world_x: float, worl
     instance.extra_cull_margin = 0.15
     return instance
 
+# Beach source arrives as a triangle list. Shared positions are exact because
+# they originate from one registered clipping pass, so average adjacent face
+# normals without welding or moving the canonical source mesh itself.
+static func beach_vertex_normals(source: PackedVector3Array) -> PackedVector3Array:
+    var sums: Dictionary = {}
+    if source.size() % 3 != 0:
+        return PackedVector3Array()
+    for index in range(0, source.size(), 3):
+        var cross := (source[index + 1] - source[index]).cross(source[index + 2] - source[index])
+        if cross.length_squared() < 0.000000000001:
+            continue
+        var normal := cross.normalized()
+        if normal.y < 0.0:
+            normal = -normal
+        for offset in range(3):
+            var point: Vector3 = source[index + offset]
+            var accumulated: Vector3 = sums.get(point, Vector3.ZERO)
+            sums[point] = accumulated + normal
+    var normals := PackedVector3Array()
+    normals.resize(source.size())
+    for index in source.size():
+        var accumulated: Vector3 = sums.get(source[index], Vector3.UP)
+        normals[index] = accumulated.normalized() if accumulated.length_squared() > 0.000000001 else Vector3.UP
+    return normals
+
 func append_beach(payload: Dictionary, parent_node: Node3D, world_x: float, world_z: float) -> MeshInstance3D:
     var source: PackedVector3Array = payload.get("beach", PackedVector3Array())
     if source.is_empty() or source.size() % 3 != 0:
+        return null
+    var source_normals := beach_vertex_normals(source)
+    if source_normals.size() != source.size():
         return null
     var vertices := PackedVector3Array()
     var normals := PackedVector3Array()
@@ -93,16 +97,22 @@ func append_beach(payload: Dictionary, parent_node: Node3D, world_x: float, worl
         var cross := (source[index + 1] - source[index]).cross(source[index + 2] - source[index])
         if cross.length_squared() < 0.000000000001:
             continue
-        var normal := cross.normalized()
-        if normal.y < 0.0:
-            normal = -normal
-        var order := [0, 2, 1] if cross.dot(normal) > 0.0 else [0, 1, 2]
+        var face_normal := cross.normalized()
+        if face_normal.y < 0.0:
+            face_normal = -face_normal
+        var order := [0, 2, 1] if cross.dot(face_normal) > 0.0 else [0, 1, 2]
         for offset: int in order:
-            var vertex := source[index + offset]
-            vertex.y += 0.035
+            var source_index := index + offset
+            var normal: Vector3 = source_normals[source_index]
+            var source_vertex: Vector3 = source[source_index]
+            # Lift only the render skin, along the actual smoothed terrain
+            # normal. This prevents z-fighting without vertically distorting a
+            # sloped beach or changing the registered beach coordinates.
+            var vertex := source_vertex + normal * 0.035
             vertices.append(vertex)
             normals.append(normal)
-            uvs.append(Vector2((world_x + float(vertex.x)) / 3.0, (world_z + float(vertex.z)) / 3.0))
+            uvs.append(Vector2((world_x + float(source_vertex.x)) / 3.0,
+                (world_z + float(source_vertex.z)) / 3.0))
     return _instance("SourcedBeach", vertices, normals, uvs, PackedColorArray(), beach_material, parent_node)
 
 func _instance(label: String, vertices: PackedVector3Array, normals: PackedVector3Array,
