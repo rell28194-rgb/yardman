@@ -1,0 +1,56 @@
+{
+  "format_version": 1,
+  "purpose": "Owner-candidate private asset authority. Public/fallback builds are not owner visual acceptance evidence.",
+  "archive": {
+    "filename": "Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip",
+    "sha256": "6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b",
+    "bytes": 159594070
+  },
+  "manifest": {
+    "pack_id": "Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19",
+    "private_pack_revision": "owner-recovery-64",
+    "available_vehicle_count": 64,
+    "scrapped_vehicle_ids": [
+      "port_royal_992",
+      "toyota_mark_x"
+    ],
+    "held_missing_vehicle_ids": [
+      "corvette_c7",
+      "delorean_dmc12"
+    ]
+  },
+  "required_owner_heroes": [
+    "toyota_crown_2013.glb",
+    "fleet_audi_r8.glb",
+    "fleet_honda_s2000.glb",
+    "fleet_nissan_skyline_r34.glb",
+    "fleet_toyota_supra_rz.glb",
+    "carx_commodore.glb",
+    "carx_pontiac_solstice.glb",
+    "carx_charger_source.glb"
+  ],
+  "forbidden_hero_paths": [
+    "toyota_mark_x.glb",
+    "port_royal_992.glb",
+    "porsche_911_992.glb"
+  ],
+  "graphics_authority": {
+    "validated_promotion_branch": "codex/validated-rdx-promotion-20261018",
+    "validated_promotion_sha": "64c8242bd9887a464bbeacb8d978cd36c6291c61",
+    "required_runtime_files": [
+      "scripts/render_runtime.gd",
+      "scripts/render_quality_manager.gd",
+      "scripts/render_material_registry.gd",
+      "shaders/road_surface.gdshader",
+      "shaders/road_surface_gles.gdshader",
+      "shaders/water.gdshader",
+      "shaders/water_gles.gdshader",
+      "shaders/terrain_surface.gdshader",
+      "shaders/terrain_surface_gles.gdshader"
+    ],
+    "research_only_not_promoted": [
+      "RDX-003 conservative HZB",
+      "RDX-004 cluster/meshlet"
+    ]
+  }
+}
