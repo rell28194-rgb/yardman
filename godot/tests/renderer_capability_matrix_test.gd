@@ -1,16 +1,11 @@
 extends SceneTree
 
-# RDX-010 freezes the runtime renderer capability contract before any
-# renderer-specific production optimization is promoted. Source project.godot
-# invariants are checked by CI before editor import can rewrite local overrides.
-# Hosted software GL/Vulkan timings are never treated as Android GPU evidence.
-const SHADER_PATHS := [
-    "res://shaders/road_surface.gdshader",
-    "res://shaders/terrain_surface.gdshader",
+const Registry = preload("res://scripts/render_material_registry.gd")
+const QualityManager = preload("res://scripts/render_quality_manager.gd")
+const COMMON_SHADER_PATHS := [
     "res://shaders/building_surface.gdshader",
     "res://shaders/foliage.gdshader",
     "res://shaders/tree_bark.gdshader",
-    "res://shaders/water.gdshader",
     "res://shaders/beach.gdshader",
 ]
 const VIEWPORT_SIZE := Vector2i(640, 360)
@@ -30,49 +25,91 @@ func _run() -> void:
     var expected_method := OS.get_environment("YARDMAN_EXPECT_METHOD")
     var expected_driver := OS.get_environment("YARDMAN_EXPECT_DRIVER")
     var expected_rd_text := OS.get_environment("YARDMAN_EXPECT_RD")
+    var expected_family := OS.get_environment("YARDMAN_EXPECT_FAMILY")
     var label := OS.get_environment("YARDMAN_RENDERER_LABEL")
     if label.is_empty():
         label = "unknown"
 
     _check(not expected_method.is_empty(), "YARDMAN_EXPECT_METHOD is required")
     _check(not expected_driver.is_empty(), "YARDMAN_EXPECT_DRIVER is required")
-    _check(expected_rd_text == "0" or expected_rd_text == "1",
-        "YARDMAN_EXPECT_RD must be 0 or 1")
+    _check(expected_rd_text == "0" or expected_rd_text == "1", "YARDMAN_EXPECT_RD must be 0 or 1")
+    _check(expected_family == "gles" or expected_family == "vulkan_mobile", "YARDMAN_EXPECT_FAMILY must be gles or vulkan_mobile")
 
     var method := RenderingServer.get_current_rendering_method()
     var driver := RenderingServer.get_current_rendering_driver_name()
     var rendering_device := RenderingServer.get_rendering_device()
     var rd_present := rendering_device != null
     var expected_rd := expected_rd_text == "1"
+    var quality_family := QualityManager.renderer_family()
+    var registry_family := Registry.renderer_family()
 
-    _check(method == expected_method,
-        "rendering method mismatch: got %s expected %s" % [method, expected_method])
-    _check(driver == expected_driver or driver.begins_with(expected_driver),
-        "rendering driver mismatch: got %s expected prefix %s" % [driver, expected_driver])
-    _check(rd_present == expected_rd,
-        "RenderingDevice capability mismatch: got %s expected %s" % [str(rd_present), str(expected_rd)])
+    _check(method == expected_method, "rendering method mismatch: got %s expected %s" % [method, expected_method])
+    _check(driver == expected_driver or driver.begins_with(expected_driver), "rendering driver mismatch: got %s expected prefix %s" % [driver, expected_driver])
+    _check(rd_present == expected_rd, "RenderingDevice capability mismatch: got %s expected %s" % [str(rd_present), str(expected_rd)])
+    _check(quality_family == expected_family, "quality renderer family mismatch: got %s expected %s" % [quality_family, expected_family])
+    _check(registry_family == expected_family, "material renderer family mismatch: got %s expected %s" % [registry_family, expected_family])
 
-    var loaded_shaders := _load_production_shaders()
-    var render_metrics := await _render_shader_probe(loaded_shaders)
+    var policy := QualityManager.policy_for("Balanced", quality_family)
+    _validate_quality_policy(expected_family, policy)
+    var selected_shaders := _load_selected_production_shaders(expected_family)
+    var render_metrics := await _render_shader_probe(selected_shaders)
 
     var status := "PASS" if failures == 0 else "FAIL"
-    print("YARDMAN_RDX_RENDERER_MATRIX label=%s method=%s driver=%s rd=%d shaders=%d luma=%.6f lit_samples=%d result=%s" % [
-        label, method, driver, int(rd_present), loaded_shaders.size(),
-        float(render_metrics.get("luma", 0.0)), int(render_metrics.get("lit_samples", 0)), status])
+    print("YARDMAN_RDX_RENDERER_MATRIX label=%s method=%s driver=%s family=%s rd=%d shaders=%d luma=%.6f lit_samples=%d road=%s water=%s terrain=%s result=%s" % [
+        label, method, driver, quality_family, int(rd_present), selected_shaders.size(),
+        float(render_metrics.get("luma", 0.0)), int(render_metrics.get("lit_samples", 0)),
+        Registry.variant_name("road"), Registry.variant_name("water"), Registry.variant_name("terrain"), status])
     quit(0 if failures == 0 else 1)
 
-func _load_production_shaders() -> Array[Shader]:
+func _validate_quality_policy(expected_family: String, policy: Dictionary) -> void:
+    if expected_family == "gles":
+        _check(str(policy.road_variant) == "safe", "Compatibility escaped safe road material policy")
+        _check(str(policy.water_variant) == "opaque", "Compatibility escaped opaque water policy")
+        _check(str(policy.terrain_variant) == "2layer", "Compatibility escaped two-layer terrain policy")
+        _check(not bool(policy.screen_effects), "Compatibility retained expensive screen effects")
+        _check(float(policy.resolution_max) <= 0.82, "Compatibility escaped GLES resolution cap")
+    else:
+        _check(str(policy.road_variant) == "high", "Mobile/Vulkan Balanced lost high road material policy")
+        _check(str(policy.water_variant) == "dual_normal", "Mobile/Vulkan Balanced lost dual-normal water policy")
+        _check(str(policy.terrain_variant) == "2layer", "Mobile/Vulkan Balanced terrain policy changed")
+        _check(float(policy.resolution_max) >= 0.95, "Mobile/Vulkan Balanced lost intended resolution ceiling")
+
+func _expected_surface_path(surface: String, expected_family: String) -> String:
+    var safe := expected_family == "gles"
+    match surface:
+        "road":
+            return "res://shaders/road_surface_gles.gdshader" if safe else "res://shaders/road_surface.gdshader"
+        "water":
+            return "res://shaders/water_gles.gdshader" if safe else "res://shaders/water.gdshader"
+        "terrain":
+            return "res://shaders/terrain_surface_gles.gdshader" if safe else "res://shaders/terrain_surface.gdshader"
+        _:
+            return ""
+
+func _load_selected_production_shaders(expected_family: String) -> Array[Shader]:
     var result: Array[Shader] = []
-    for path in SHADER_PATHS:
-        _check(ResourceLoader.exists(path), "production shader missing: " + path)
+    for surface in ["road", "water", "terrain"]:
+        var shader: Shader = Registry.shader_for(surface)
+        var expected_path := _expected_surface_path(surface, expected_family)
+        _check(shader != null, "%s production material did not resolve a shader" % surface)
+        if shader != null:
+            _check(shader.resource_path == expected_path, "%s runtime shader mismatch: got %s expected %s" % [surface, shader.resource_path, expected_path])
+            _check(Registry.variant_name(surface) == "%s:%s" % [surface, "safe" if expected_family == "gles" else "high"], "%s runtime variant name disagrees with active renderer" % surface)
+            result.append(shader)
+        var performance_shader: Shader = Registry.shader_for(surface, "", "Performance")
+        _check(performance_shader != null and performance_shader.resource_path == _expected_surface_path(surface, "gles"), "%s Performance tier escaped safe shader" % surface)
+        var forced_safe: Shader = Registry.shader_for(surface, "", "Balanced", true)
+        _check(forced_safe != null and forced_safe.resource_path == _expected_surface_path(surface, "gles"), "%s forced-safe fallback did not resolve safe shader" % surface)
+
+    for path in COMMON_SHADER_PATHS:
+        _check(ResourceLoader.exists(path), "common production shader missing: " + path)
         if not ResourceLoader.exists(path):
             continue
         var shader := load(path) as Shader
-        _check(shader != null, "production shader failed to load: " + path)
+        _check(shader != null, "common production shader failed to load: " + path)
         if shader != null:
             result.append(shader)
-    _check(result.size() == SHADER_PATHS.size(),
-        "not every representative production shader loaded")
+    _check(result.size() == 7, "representative runtime shader set is incomplete")
     return result
 
 func _render_shader_probe(shaders: Array[Shader]) -> Dictionary:
@@ -104,9 +141,6 @@ func _render_shader_probe(shaders: Array[Shader]) -> Dictionary:
     sun.light_energy = 1.8
     viewport.add_child(sun)
 
-    # A StandardMaterial control proves that the active 3D raster path is live.
-    # The shader meshes force representative production shaders through the same
-    # backend; workflow error scanning makes shader/compiler errors fatal.
     var control_mesh := BoxMesh.new()
     control_mesh.size = Vector3(1.2, 1.2, 1.2)
     var control_material := StandardMaterial3D.new()
@@ -128,8 +162,7 @@ func _render_shader_probe(shaders: Array[Shader]) -> Dictionary:
         instance.material_override = material
         var column: int = index % 4
         var row: int = index / 4
-        instance.position = Vector3(-2.6 + float(column) * 1.7,
-            0.45 + float(row) * 1.45, 0.0)
+        instance.position = Vector3(-2.6 + float(column) * 1.7, 0.45 + float(row) * 1.45, 0.0)
         viewport.add_child(instance)
 
     for _frame in range(SETTLE_FRAMES):
