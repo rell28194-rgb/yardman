@@ -5,12 +5,14 @@ extends Node
 # jobs, traffic, pedestrians, economy, or other retired simulation systems.
 const ManagerScript = preload("res://scripts/render_quality_manager.gd")
 const MaterialRegistry = preload("res://scripts/render_material_registry.gd")
+const VehicleSelectorScript = preload("res://scripts/vehicle_selector_runtime.gd")
 
 var manager = ManagerScript.new()
 var _applied := false
 var _scene: Node
 var _buildings: JamaicaBuildingStreamer
 var _terrain: Node
+var _vehicle_selector
 var _policy_clock := 0.0
 var _timing_enabled := false
 
@@ -84,6 +86,12 @@ func _apply_initial(scene: Node) -> void:
         var tile_ready_callback := Callable(self, "_on_terrain_tile_ready")
         if _terrain.has_signal("tile_ready") and not _terrain.is_connected("tile_ready", tile_ready_callback):
             _terrain.connect("tile_ready", tile_ready_callback)
+
+    if scene.get("vehicle") != null:
+        _vehicle_selector = VehicleSelectorScript.new()
+        _vehicle_selector.name = "VehicleSelectorRuntime"
+        add_child(_vehicle_selector)
+        _vehicle_selector.call_deferred("attach", scene)
 
     _applied = true
     _apply_live_policy()
