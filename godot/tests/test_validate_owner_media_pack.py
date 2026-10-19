@@ -44,11 +44,12 @@ class OwnerMediaPackValidationTests(unittest.TestCase):
                 archive.writestr(path, payload)
         return pack
 
-    def _write_contract(self, pack: Path, *, minimum=1, pack_sha=True):
+    def _write_contract(self, pack: Path, *, fleet_minimum=1, owner_minimum=2, pack_sha=True):
         contract = {
             "format_version": 1,
             "pack_sha256": hashlib.sha256(pack.read_bytes()).hexdigest() if pack_sha else "",
-            "minimum_fleet_heroes": minimum,
+            "minimum_fleet_heroes": fleet_minimum,
+            "minimum_owner_vehicle_heroes": owner_minimum,
             "required_heroes": [
                 {
                     "path": "toyota_crown_2013.glb",
@@ -66,6 +67,7 @@ class OwnerMediaPackValidationTests(unittest.TestCase):
         pack = self._write_pack()
         proof = validate(pack, self._write_contract(pack))
         self.assertEqual(proof["fleet_heroes"], 1)
+        self.assertEqual(proof["owner_vehicle_heroes"], 2)
         self.assertEqual(proof["manifest_records_verified"], 2)
         self.assertEqual(proof["forbidden_identity_gate"], "pass")
         self.assertEqual(proof["required_heroes"][0]["path"], "toyota_crown_2013.glb")
@@ -110,12 +112,26 @@ class OwnerMediaPackValidationTests(unittest.TestCase):
         members = {"fleet_audi_r8.glb": self.hero}
         pack = self._write_pack(members)
         with self.assertRaisesRegex(ValueError, "Required hero is not manifest-backed"):
-            validate(pack, self._write_contract(pack))
+            validate(pack, self._write_contract(pack, owner_minimum=1))
 
     def test_rejects_incomplete_private_fleet(self):
         pack = self._write_pack()
         with self.assertRaisesRegex(ValueError, "Private fleet is incomplete"):
-            validate(pack, self._write_contract(pack, minimum=2))
+            validate(pack, self._write_contract(pack, fleet_minimum=2))
+
+    def test_rejects_incomplete_owner_vehicle_set(self):
+        pack = self._write_pack()
+        with self.assertRaisesRegex(ValueError, "Owner vehicle set is incomplete"):
+            validate(pack, self._write_contract(pack, owner_minimum=3))
+
+    def test_required_fleet_hero_is_counted_once(self):
+        pack = self._write_pack()
+        contract = self._write_contract(pack, owner_minimum=2)
+        payload = json.loads(contract.read_text())
+        payload["required_heroes"].append(self._record("fleet_audi_r8.glb", self.hero))
+        contract.write_text(json.dumps(payload))
+        proof = validate(pack, contract)
+        self.assertEqual(proof["owner_vehicle_heroes"], 2)
 
     def test_rejects_duplicate_manifest_path(self):
         members = {

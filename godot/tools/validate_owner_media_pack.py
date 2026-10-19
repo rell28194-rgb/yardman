@@ -74,6 +74,7 @@ def validate(pack_path: Path, contract_path: Path) -> dict:
             verified_records += 1
 
         required_proof = []
+        required_vehicle_paths: set[str] = set()
         for required in contract.get("required_heroes", []):
             path = str(required.get("path", ""))
             if not path or path not in records:
@@ -87,14 +88,23 @@ def validate(pack_path: Path, contract_path: Path) -> dict:
             if expected_sha and actual_sha != expected_sha:
                 raise ValueError(f"Required hero SHA mismatch for {path}")
             required_proof.append({"path": path, "bytes": len(payload), "sha256": actual_sha})
+            if path.lower().endswith(".glb"):
+                required_vehicle_paths.add(path)
 
         fleet_heroes = sorted(
             name for name in names
             if name.startswith("fleet_") and name.lower().endswith(".glb") and name in records
         )
-        minimum = int(contract.get("minimum_fleet_heroes", 0))
-        if len(fleet_heroes) < minimum:
-            raise ValueError(f"Private fleet is incomplete: {len(fleet_heroes)} < {minimum}")
+        minimum_fleet = int(contract.get("minimum_fleet_heroes", 0))
+        if len(fleet_heroes) < minimum_fleet:
+            raise ValueError(f"Private fleet is incomplete: {len(fleet_heroes)} < {minimum_fleet}")
+
+        owner_vehicle_paths = set(fleet_heroes) | required_vehicle_paths
+        minimum_owner = int(contract.get("minimum_owner_vehicle_heroes", 0))
+        if len(owner_vehicle_paths) < minimum_owner:
+            raise ValueError(
+                f"Owner vehicle set is incomplete: {len(owner_vehicle_paths)} < {minimum_owner}"
+            )
 
     return {
         "pack": pack_path.name,
@@ -103,6 +113,7 @@ def validate(pack_path: Path, contract_path: Path) -> dict:
         "zip_members": len(names),
         "manifest_records_verified": verified_records,
         "fleet_heroes": len(fleet_heroes),
+        "owner_vehicle_heroes": len(owner_vehicle_paths),
         "required_heroes": required_proof,
         "forbidden_identity_gate": "pass",
     }
