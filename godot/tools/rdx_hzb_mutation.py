@@ -130,15 +130,30 @@ MARKERS = {
 }
 
 
-def run_oracle(godot: str, root: Path, script: str, timeout: int) -> tuple[bool, str]:
-    command = [
+def godot_prefix(godot: str, root: Path) -> list[str]:
+    return [
         "xvfb-run", "-a", "-s", "-screen 0 1280x720x24",
         godot, "--path", str(root), "--rendering-method", "mobile",
         "--rendering-driver", "vulkan", "--audio-driver", "Dummy",
-        "--script", script,
     ]
+
+
+def refresh_shader_imports(godot: str, root: Path, timeout: int) -> tuple[bool, str]:
     proc = subprocess.run(
-        command,
+        godot_prefix(godot, root) + ["--editor", "--quit"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    bad = ("Parse Error", "SCRIPT ERROR", "Shader compilation failed", "Failed to compile shader")
+    return proc.returncode == 0 and not any(token in proc.stdout for token in bad), proc.stdout
+
+
+def run_oracle(godot: str, root: Path, script: str, timeout: int) -> tuple[bool, str]:
+    proc = subprocess.run(
+        godot_prefix(godot, root) + ["--script", script],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -170,8 +185,8 @@ def main() -> int:
     baseline_scripts = tuple(MARKERS)
     baseline_ok, baseline_output = run_set(args.godot_binary, root, baseline_scripts, args.timeout)
     if not baseline_ok:
-        print("BASELINE_FAILED")
-        print(baseline_output)
+        print("BASELINE_FAILED", flush=True)
+        print(baseline_output, flush=True)
         return 2
 
     paths = {mutant.path for mutant in MUTANTS}
@@ -189,18 +204,32 @@ def main() -> int:
             if mutant.needle not in original:
                 invalid += 1
                 invalid_names.append(mutant.name)
-                print(f"MUTANT_INVALID name={mutant.name} reason=needle_missing")
+                print(f"MUTANT_INVALID name={mutant.name} reason=needle_missing", flush=True)
                 continue
+
             target.write_text(original.replace(mutant.needle, mutant.replacement, 1), encoding="utf-8")
-            passed, _ = run_set(args.godot_binary, root, mutant.scripts, args.timeout)
+            import_ok = True
+            if target.suffix == ".glsl":
+                import_ok, _ = refresh_shader_imports(args.godot_binary, root, args.timeout)
+            passed = False
+            if import_ok:
+                passed, _ = run_set(args.godot_binary, root, mutant.scripts, args.timeout)
+
             target.write_text(original, encoding="utf-8")
+            if target.suffix == ".glsl":
+                restored, restore_output = refresh_shader_imports(args.godot_binary, root, args.timeout)
+                if not restored:
+                    print("BASELINE_RESTORE_FAILED", flush=True)
+                    print(restore_output, flush=True)
+                    return 3
+
             if passed:
                 survived += 1
                 survivors.append(mutant.name)
-                print(f"MUTANT_SURVIVED name={mutant.name}")
+                print(f"MUTANT_SURVIVED name={mutant.name}", flush=True)
             else:
                 killed += 1
-                print(f"MUTANT_KILLED name={mutant.name}")
+                print(f"MUTANT_KILLED name={mutant.name}", flush=True)
     finally:
         for path, original in originals.items():
             (root / path).write_text(original, encoding="utf-8")
@@ -210,12 +239,13 @@ def main() -> int:
     print(
         "YARDMAN_RDX_HZB_MUTATION "
         f"score={score:.4f} killed={killed} valid={valid} survivors={survived} "
-        f"invalid={invalid} threshold={args.threshold:.4f}"
+        f"invalid={invalid} threshold={args.threshold:.4f}",
+        flush=True,
     )
     if survivors:
-        print("SURVIVORS " + ",".join(survivors))
+        print("SURVIVORS " + ",".join(survivors), flush=True)
     if invalid_names:
-        print("INVALID " + ",".join(invalid_names))
+        print("INVALID " + ",".join(invalid_names), flush=True)
     return 0 if valid > 0 and invalid == 0 and score >= args.threshold else 1
 
 
