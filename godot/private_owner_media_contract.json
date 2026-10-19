@@ -1,0 +1,19 @@
+{
+  "format_version": 1,
+  "pack_filename": "Yardman-Personal-Reference-Assets-FleetReady-001.zip",
+  "pack_sha256": "5dd937a99bef9d77ce81f077a9bd544d956d4cabb98a6d32882af7ff07eb0905",
+  "minimum_fleet_heroes": 45,
+  "required_heroes": [
+    {
+      "path": "toyota_crown_2013.glb",
+      "bytes": 3926676,
+      "sha256": "4083b38c8ab948e2016044e1318fba406bf5fe280deb22fc6977e1a3fff429eb"
+    }
+  ],
+  "forbidden_name_fragments": [
+    "toyota_mark_x",
+    "markx",
+    "992",
+    "porsche"
+  ]
+}
