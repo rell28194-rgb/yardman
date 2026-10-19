@@ -1,0 +1,76 @@
+name: Yardman Owner Private Validation Kit
+
+on:
+  push:
+    branches:
+      - codex/map-cars-production-integration-001
+    paths:
+      - '.github/workflows/owner-private-validation-kit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-validation-kit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify clean owner integration authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest \
+            godot/tests/test_map_cars_integration_scope.py \
+            godot/tests/test_vehicle_production_scope.py \
+            godot/tests/test_vehicle_selector_asset_scope.py
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          contract = json.loads(Path('godot/data/owner_fleet_pack_contract.json').read_text())
+          assert contract['available_vehicle_count'] == 64
+          assert contract['pack_sha256'] == '6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b'
+          assert contract['scrapped_vehicle_ids'] == ['port_royal_992', 'toyota_mark_x']
+          assert contract['held_missing_vehicle_ids'] == ['corvette_c7', 'delorean_dmc12']
+          print('YARDMAN_OWNER_VALIDATION_KIT_SCOPE_PASS vehicles=64')
+          PY
+
+      - name: Download exact Godot 4.7.2 Linux validator
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          mkdir -p owner-validation-kit/bin
+          unzip -q /tmp/godot.zip -d owner-validation-kit/bin
+          chmod +x owner-validation-kit/bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64
+          owner-validation-kit/bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64 --version | tee owner-validation-kit/godot-version.txt
+
+      - name: Snapshot exact current source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git rev-parse HEAD | tee owner-validation-kit/source-sha.txt
+          test "$(cat owner-validation-kit/source-sha.txt)" = "$GITHUB_SHA"
+          tar -czf owner-validation-kit/yardman-source.tgz godot AGENTS.md
+          sha256sum owner-validation-kit/yardman-source.tgz > owner-validation-kit/yardman-source.tgz.sha256
+          cat > owner-validation-kit/README.txt <<'EOF'
+          YARDMAN OWNER PRIVATE VALIDATION KIT
+          This artifact contains public source plus the exact Godot 4.7.2 Linux binary only.
+          It intentionally contains NO private owner media and is NOT an APK or owner candidate.
+          Combine locally with the authoritative Library owner fleet pack, then run owner_vehicle_asset_gate.gd.
+          EOF
+
+      - name: Upload validation kit
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Owner-Private-Validation-Kit
+          path: owner-validation-kit/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 3
