@@ -1,25 +1,22 @@
 name: Yardman Godot Android
 
-# Internal Android health and regression testing only. A successful export or
-# retained APK artifact does not complete asset recovery or authorize final
-# delivery; validate_asset_milestone.py records those separate acceptance gates.
+# Internal Android health and regression testing only. A successful public export
+# is not owner visual/vehicle acceptance. Owner-candidate builds additionally
+# require the exact private fleet pack contract in owner_private_pack_contract.json.
 
 on:
   push:
     branches:
       - codex/godot-beta-001
       - codex/godot-polish-002
+      - codex/yardman-owner-recovery-20261019
     paths:
       - 'godot/**'
-      # Evidence/checkpoint updates must not cancel an in-flight national build.
-      # Runtime, data compiler, tests and asset-recovery gates still match above.
       - '!godot/docs/production_evidence/**'
       - '!godot/docs/PRODUCTION_EXECUTION_REGISTER.md'
       - '.github/workflows/godot-android.yml'
   workflow_dispatch:
 
-# Full-island geodata compilation is expensive. A newer push to the same branch
-# supersedes older internal builds; do not burn runners rebuilding stale commits.
 concurrency:
   group: yardman-android-${{ github.ref }}
   cancel-in-progress: true
@@ -50,50 +47,24 @@ jobs:
             https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf \
             -O /tmp/jamaica.osm.pbf
 
-          # This first flat graph only selects terrain coverage. Auxiliary OSM
-          # layers would be deleted by the final registered compile, so skip them.
           python godot/tools/build_jamaica_roads.py \
             /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096 --skip-auxiliary
 
           python godot/tools/build_terrain.py /tmp/yardman-dem \
             godot/data/roads/manifest.json godot/data/terrain --acquire
-          # The final terrain-registered compile also packages roadworks, places,
-          # bus stops and explicit retaining walls exactly once.
           python godot/tools/build_jamaica_roads.py \
             /tmp/jamaica.osm.pbf godot/data/roads --tile-size 4096 --terrain godot/data/terrain
 
-          # Runtime administrative labels must never use guessed nearest-parish or
-          # synthetic capital records. Unresolved real OSM records remain audit-only.
           python godot/tools/enforce_place_authority.py godot/data/places/manifest.json
-
-          # Fence authority comes directly from barrier=fence ways, never from
-          # the road-only OSM reader. Only explicit wire-compatible tags authorize
-          # wire/chain-link styling in the runtime layer.
           python godot/tools/build_fences.py \
             /tmp/jamaica.osm.pbf godot/data/roads/fences --tile-size 4096
-
-          # Street-light authority is explicit Jamaica OSM point data only. This
-          # must be regenerated after the road compiler replaces godot/data/roads;
-          # committed probe files alone do not prove the Android package contains it.
           python godot/tools/build_streetlights.py \
             /tmp/jamaica.osm.pbf godot/data/roads/streetlights --tile-size 4096
-
-          # Guard rails are a distinct barrier family. Only explicit OSM
-          # barrier=guard_rail ways are compiled; highway edges are never inferred.
           python godot/tools/build_guardrails.py \
             /tmp/jamaica.osm.pbf godot/data/roads/guardrails --tile-size 4096
-
-          # Bridges keep their DEM-registered abutments, but the deck itself is
-          # independent of terrain below. Runtime builds matching collision decks.
           python godot/tools/build_road_structures.py godot/data/roads
-          # True outer portals are a separate graph compiler. Without this
-          # invocation a green build silently has no terrain openings.
           python godot/tools/build_tunnel_portals.py godot/data/roads
           python godot/tools/validate_road_structures.py godot/data/roads
-
-          # Map correctness gate: rendering a road is not enough. The packaged
-          # OSM graph must also form a connected national network for every
-          # parish anchor. Near-miss endpoints are diagnosed, never auto-snapped.
           python godot/tools/validate_road_topology.py \
             godot/data/roads \
             --output godot/data/roads/topology_report.json \
@@ -303,15 +274,28 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/gameplay.log; then exit 1; fi
           grep -q 'YARDMAN_GAMEPLAY_TEST PASS' godot/build/gameplay.log
 
-      - name: Test coastline, controls, vehicle and rendered surface geometry
+      - name: Test map, car selection, vehicles, controls and rendered surface geometry
         shell: bash
         run: |
           set -euo pipefail
-          for TEST in road_surface road_height_bias road_structure_data roadwork_layer fence_layer streetlight_layer guardrail_layer retaining_wall_layer road_earthworks road_corridor_terrain coastline terrain_coast structural_spawn controls_hud vehicle vehicle_hero_asset vehicle_hero_integration visuals audio building_streamer reference_building reference_assets reference_foliage polish_integration job_persistence save_game garage garage_economy garage_purchase_recovery; do
+          for TEST in road_surface road_height_bias road_structure_data roadwork_layer fence_layer streetlight_layer guardrail_layer retaining_wall_layer road_earthworks road_corridor_terrain coastline terrain_coast structural_spawn controls_hud vehicle vehicle_selection_contract vehicle_hero_asset vehicle_hero_integration visuals audio building_streamer reference_building reference_assets reference_foliage polish_integration save_game; do
             timeout 300 godot --headless --path godot --script "res://tests/${TEST}_test.gd" 2>&1 | tee "godot/build/${TEST}.log"
             if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:|_TEST FAIL' "godot/build/${TEST}.log"; then exit 1; fi
             grep -q 'PASS' "godot/build/${TEST}.log"
           done
+
+      - name: Confirm public build cannot be promoted as owner vehicle evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f godot/docs/owner_private_pack_contract.json
+          test -f godot/tools/validate_owner_private_pack.py
+          if [ -d godot/assets/user_reference ]; then
+            echo 'Public source contains a private-reference directory; validating it before any owner-candidate claim.'
+            python godot/tools/validate_owner_private_pack.py --installed-root godot/assets/user_reference
+          else
+            echo 'YARDMAN_PUBLIC_BUILD_PRIVATE_PACK_ABSENT expected=1 owner_candidate=0'
+          fi
 
       - name: Validate Compatibility shaders and capture streamed gameplay
         shell: bash
@@ -333,7 +317,7 @@ jobs:
             grep -q 'PASS' "godot/build/${TEST}.log"
           done
 
-      - name: Export internal Yardman Android smoke APK
+      - name: Export internal public-health Android smoke APK
         shell: bash
         run: |
           set -euxo pipefail
@@ -342,7 +326,7 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' build/export.log; then exit 1; fi
           test -s build/Yardman-Beta.apk
 
-      - name: Validate APK
+      - name: Validate public-health APK
         shell: bash
         run: |
           set -euxo pipefail
@@ -353,12 +337,12 @@ jobs:
           python godot/tools/validate_streetlight_apk.py godot/build/Yardman-Beta.apk godot/data/roads/streetlights/manifest.json
           python godot/tools/validate_guardrail_apk.py godot/build/Yardman-Beta.apk godot/data/roads/guardrails/manifest.json
           "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose godot/build/Yardman-Beta.apk
+          echo 'YARDMAN_ANDROID_PUBLIC_HEALTH_PASS owner_candidate=0'
 
-      - name: Retain internal map QA and Android test APK
+      - name: Retain internal map QA and public-health Android APK
         uses: actions/upload-artifact@v4
         with:
-          # This is a diagnostic/test package, not terminal APK delivery.
-          name: Yardman-Internal-Android
+          name: Yardman-Public-Health-Android
           path: |
             godot/build/Yardman-Beta.apk
             godot/build/Yardman-Beta.apk.sha256
