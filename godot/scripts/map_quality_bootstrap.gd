@@ -1,5 +1,8 @@
 extends Node
 
+const VehicleCatalog = preload("res://scripts/vehicle_catalog.gd")
+const References = preload("res://scripts/reference_assets.gd")
+
 # Map-first presentation bootstrap. This branch is deliberately about the
 # Jamaica world itself; it does not add AI, jobs, traffic or placeholder
 # vehicle systems. It also carries forward the proven graphics-pass image
@@ -10,6 +13,8 @@ var _scene: Node
 var _sky_material: ProceduralSkyMaterial
 var _cloud_texture: ImageTexture
 var _cloud_clock := 0.0
+var _vehicle_picker: OptionButton
+var _vehicle_ids: Array[String] = []
 
 func _ready() -> void:
     set_process(true)
@@ -70,6 +75,11 @@ func _process(delta: float) -> void:
         for entry in _buildings._loaded.values():
             _upgrade_building_cell(entry.root)
 
+    # The reset intentionally removed the old garage/economy stack. Restore car
+    # selection directly against the real controller, and expose only heroes
+    # that the mounted private pack actually contains.
+    _install_vehicle_picker(scene)
+
     _applied = true
     _update_cloud_tint()
 
@@ -113,6 +123,92 @@ func _update_cloud_tint() -> void:
     var hour := float(_scene.get("day_hour"))
     var daylight := clampf(sin((hour - 6.0) * PI / 12.0), 0.0, 1.0)
     _sky_material.sky_cover_modulate = Color(0.035, 0.055, 0.10).lerp(Color(0.88, 0.93, 1.0), daylight)
+
+func _manifest_scene_allowlist() -> Dictionary:
+    var allowlist: Dictionary = {}
+    var payload := References.manifest()
+    var records = payload.get("files", [])
+    if not records is Array:
+        return allowlist
+    for raw_record in records:
+        if not raw_record is Dictionary:
+            continue
+        var filename := str(raw_record.get("path", ""))
+        if filename.get_extension().to_lower() in ["glb", "gltf"]:
+            allowlist[filename] = true
+    return allowlist
+
+func _install_vehicle_picker(scene: Node) -> void:
+    var allowlist := _manifest_scene_allowlist()
+    if allowlist.is_empty():
+        # Public/source CI intentionally has no private media. It must not
+        # pretend those cars are present or create a fake selector.
+        return
+    var hud_value = scene.get("hud")
+    if not hud_value is Control:
+        return
+    var scroll_value = hud_value.get("_menu_scroll")
+    if not scroll_value is ScrollContainer or scroll_value.get_child_count() == 0:
+        return
+    var rows = scroll_value.get_child(0)
+    if not rows is VBoxContainer:
+        return
+
+    var separator := HSeparator.new()
+    separator.name = "PrivateVehicleSeparator"
+    rows.add_child(separator)
+    var title := Label.new()
+    title.name = "PrivateVehicleTitle"
+    title.text = "VEHICLES"
+    title.add_theme_font_size_override("font_size", 16)
+    rows.add_child(title)
+
+    _vehicle_picker = OptionButton.new()
+    _vehicle_picker.name = "PrivateVehiclePicker"
+    _vehicle_picker.custom_minimum_size.y = 46
+    _vehicle_picker.focus_mode = Control.FOCUS_NONE
+    rows.add_child(_vehicle_picker)
+
+    _vehicle_ids.clear()
+    var selected_id := ""
+    var controller = scene.get("vehicle")
+    if controller != null:
+        selected_id = str(controller.get("vehicle_id"))
+    var selected_index := 0
+    for raw_id in VehicleCatalog.production_ids():
+        var vehicle_id := str(raw_id)
+        var profile := VehicleCatalog.profile(vehicle_id)
+        var hero_scene := str(profile.get("hero_scene", ""))
+        if hero_scene.is_empty() or not allowlist.has(hero_scene):
+            continue
+        var label := str(profile.get("display_name", ""))
+        if label.is_empty():
+            label = vehicle_id.replace("_", " ").capitalize()
+        _vehicle_picker.add_item(label)
+        _vehicle_ids.append(vehicle_id)
+        if vehicle_id == selected_id:
+            selected_index = _vehicle_ids.size() - 1
+
+    if _vehicle_ids.is_empty():
+        separator.queue_free()
+        title.queue_free()
+        _vehicle_picker.queue_free()
+        _vehicle_picker = null
+        return
+    _vehicle_picker.select(selected_index)
+    _vehicle_picker.item_selected.connect(_on_vehicle_selected)
+
+func _on_vehicle_selected(index: int) -> void:
+    if _scene == null or index < 0 or index >= _vehicle_ids.size():
+        return
+    var controller = _scene.get("vehicle")
+    if controller == null:
+        return
+    var vehicle_id := _vehicle_ids[index]
+    controller.call("apply_profile", vehicle_id)
+    if _scene.has_method("_notify"):
+        var profile := VehicleCatalog.profile(vehicle_id)
+        _scene.call("_notify", "Vehicle: " + str(profile.get("display_name", vehicle_id)))
 
 func _on_building_cell_ready(cell: Vector2i, _building_count: int) -> void:
     if _buildings == null:
