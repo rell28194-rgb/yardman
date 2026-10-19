@@ -1,26 +1,59 @@
 extends Node
 
-# One-shot map-first presentation bootstrap. This branch is deliberately about
-# the Jamaica world itself; it does not add AI, jobs, traffic or placeholder
-# vehicle systems.
+# Map-first presentation and validated renderer-policy bootstrap. This remains
+# the single runtime autoload: graphics R&D is integrated here without reviving
+# jobs, traffic, pedestrians, economy, or other retired simulation systems.
+const ManagerScript = preload("res://scripts/render_quality_manager.gd")
+const MaterialRegistry = preload("res://scripts/render_material_registry.gd")
+const ShadowPolicy = preload("res://scripts/render_shadow_policy.gd")
+const VehicleSelectorScript = preload("res://scripts/vehicle_selector_runtime.gd")
+
+var manager = ManagerScript.new()
 var _applied := false
+var _scene: Node
 var _buildings: JamaicaBuildingStreamer
+var _terrain: Node
+var _vehicle_selector
+var _policy_clock := 0.0
+var _timing_enabled := false
 
 func _ready() -> void:
+    process_mode = Node.PROCESS_MODE_ALWAYS
     set_process(true)
 
-func _process(_delta: float) -> void:
-    if _applied:
-        set_process(false)
-        return
-    var scene := get_tree().current_scene
-    if scene == null or not scene.has_method("set_quality"):
+func _process(delta: float) -> void:
+    if not _applied:
+        var scene := get_tree().current_scene
+        if scene == null or not scene.has_method("set_quality"):
+            return
+        _apply_initial(scene)
+
+    if _scene == null:
         return
 
-    # Keep the original geographic/streaming stack, but present it at a real
-    # quality target instead of the later performance-first profile.
+    if OS.has_feature("mobile"):
+        if get_tree().paused:
+            manager.reset_frame_history()
+        else:
+            if not _timing_enabled:
+                RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
+                _timing_enabled = true
+            var gpu_ms := RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid())
+            manager.update_frame(delta, get_viewport(), false, gpu_ms)
+
+    _policy_clock += delta
+    if _policy_clock >= 0.5:
+        _policy_clock = 0.0
+        _apply_live_policy()
+
+func _apply_initial(scene: Node) -> void:
+    _scene = scene
     scene.call("set_quality", "Quality")
-    get_viewport().scaling_3d_scale = 1.0
+    manager.configure("Quality")
+    if OS.has_feature("mobile"):
+        manager.apply_viewport(get_viewport())
+    else:
+        get_viewport().scaling_3d_scale = 1.0
 
     var environment_value = scene.get("environment")
     if environment_value is Environment:
@@ -34,7 +67,6 @@ func _process(_delta: float) -> void:
     if sun_value is DirectionalLight3D:
         var sun: DirectionalLight3D = sun_value
         sun.shadow_enabled = true
-        sun.directional_shadow_max_distance = maxf(sun.directional_shadow_max_distance, 220.0)
         sun.shadow_bias = minf(sun.shadow_bias, 0.035)
 
     var buildings_value = scene.get("buildings")
@@ -45,12 +77,110 @@ func _process(_delta: float) -> void:
         _buildings.max_loaded_cells = maxi(_buildings.max_loaded_cells, 176)
         if not _buildings.cell_ready.is_connected(_on_building_cell_ready):
             _buildings.cell_ready.connect(_on_building_cell_ready)
-        # Upgrade any cells that were already present before this bootstrap ran.
         for entry in _buildings._loaded.values():
             _upgrade_building_cell(entry.root)
 
+    var terrain_value = scene.get("terrain")
+    if terrain_value is Node:
+        _terrain = terrain_value
+        var tile_ready_callback := Callable(self, "_on_terrain_tile_ready")
+        if _terrain.has_signal("tile_ready") and not _terrain.is_connected("tile_ready", tile_ready_callback):
+            _terrain.connect("tile_ready", tile_ready_callback)
+
+    if scene.get("vehicle") != null:
+        _vehicle_selector = VehicleSelectorScript.new()
+        _vehicle_selector.name = "VehicleSelectorRuntime"
+        add_child(_vehicle_selector)
+        _vehicle_selector.call_deferred("attach", scene)
+
     _applied = true
-    set_process(false)
+    _apply_live_policy()
+
+func _active_policy() -> Dictionary:
+    var active := manager.effective_policy()
+    active["quality"] = manager.quality
+    active["renderer"] = manager.renderer
+    active["thermal_stage"] = manager.thermal_stage
+    return active
+
+func _apply_live_policy() -> void:
+    if _scene == null:
+        return
+    var active := _active_policy()
+    apply_streamer_material_policy(_scene, active)
+    var sun_value = _scene.get("sun")
+    if sun_value is DirectionalLight3D:
+        ShadowPolicy.apply_to_light(sun_value as DirectionalLight3D, active)
+    if _terrain != null:
+        var coastline_value = _terrain.get("coastline")
+        if coastline_value is Node and coastline_value.has_method("apply_render_policy"):
+            coastline_value.call("apply_render_policy", active, str(active.renderer))
+
+func apply_streamer_material_policy(scene: Node, active: Dictionary) -> void:
+    if scene == null:
+        return
+    var renderer := str(active.get("renderer", manager.renderer))
+    var quality_name := str(active.get("quality", manager.quality))
+    var road_safe := str(active.get("road_variant", "high")) == "safe"
+    var terrain_safe := str(active.get("terrain_variant", "3layer")) == "2layer"
+    var road_shader := MaterialRegistry.shader_for("road", renderer, quality_name, road_safe)
+    var terrain_shader := MaterialRegistry.shader_for("terrain", renderer, quality_name, terrain_safe)
+
+    var roads_value = scene.get("roads")
+    if roads_value is Object:
+        _apply_road_material(roads_value, "_asphalt_material", road_shader, active)
+        _apply_road_material(roads_value, "_dirt_material", road_shader, active)
+        if roads_value.get("surface_visibility_distance") != null:
+            roads_value.set("surface_visibility_distance", float(active.get("road_visibility", 2600.0)))
+
+    var terrain_value = scene.get("terrain")
+    if terrain_value is Object:
+        var loaded_value = terrain_value.get("_loaded")
+        if loaded_value is Dictionary:
+            for tile_root in loaded_value.values():
+                if tile_root is Node:
+                    _apply_terrain_shader_to_tree(tile_root, terrain_shader)
+        var far_value = terrain_value.get("_far_root")
+        if far_value is Node:
+            _apply_terrain_shader_to_tree(far_value, terrain_shader)
+
+func _apply_road_material(owner: Object, property_name: String, selected: Shader, active: Dictionary) -> void:
+    var value = owner.get(property_name)
+    if value is ShaderMaterial:
+        var material := value as ShaderMaterial
+        material.shader = selected
+        material.set_shader_parameter("visibility_distance", float(active.get("road_visibility", 2600.0)))
+
+func _apply_terrain_shader_to_tree(root: Node, selected: Shader) -> void:
+    if root is MeshInstance3D:
+        _apply_terrain_shader_to_instance(root as MeshInstance3D, selected)
+    for node in root.find_children("*", "MeshInstance3D", true, false):
+        _apply_terrain_shader_to_instance(node as MeshInstance3D, selected)
+
+func _apply_terrain_shader_to_instance(instance: MeshInstance3D, selected: Shader) -> void:
+    var override := instance.material_override
+    if _is_terrain_material(override):
+        (override as ShaderMaterial).shader = selected
+        instance.set_meta("yardman_terrain_variant", selected.resource_path)
+    var mesh := instance.mesh
+    if mesh == null:
+        return
+    for surface in range(mesh.get_surface_count()):
+        var material := mesh.surface_get_material(surface)
+        if _is_terrain_material(material):
+            (material as ShaderMaterial).shader = selected
+            instance.set_meta("yardman_terrain_variant", selected.resource_path)
+
+func _is_terrain_material(material: Material) -> bool:
+    if not material is ShaderMaterial:
+        return false
+    var shader := (material as ShaderMaterial).shader
+    if shader == null:
+        return false
+    return shader.resource_path in [MaterialRegistry.TERRAIN_HIGH.resource_path, MaterialRegistry.TERRAIN_SAFE.resource_path]
+
+func _on_terrain_tile_ready(_tile: Vector2i) -> void:
+    _apply_live_policy()
 
 func _on_building_cell_ready(cell: Vector2i, _building_count: int) -> void:
     if _buildings == null:
@@ -68,8 +198,5 @@ func _upgrade_building_cell(root: Node3D) -> void:
             child.visibility_range_end = 1650.0
             child.visibility_range_end_margin = 128.0
         elif child is MultiMeshInstance3D and str(child.name).begins_with("ReferenceFacade"):
-            # The old source-facade modules were visually useful, but the 100 m
-            # cutoff made towns collapse back into plain extruded footprints too
-            # quickly. Keep them visible farther without altering geography.
             child.visibility_range_end = 240.0
             child.visibility_range_end_margin = 30.0

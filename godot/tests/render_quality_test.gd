@@ -1,0 +1,103 @@
+extends SceneTree
+
+const Manager = preload("res://scripts/render_quality_manager.gd")
+const ShadowPolicy = preload("res://scripts/render_shadow_policy.gd")
+var failures := 0
+
+func _initialize() -> void:
+    call_deferred("_run")
+
+func _check(condition: bool, message: String) -> void:
+    if not condition:
+        failures += 1
+        push_error("RENDER_QUALITY_TEST: " + message)
+
+func _run() -> void:
+    var vulkan: Dictionary = Manager.policy_for("Ultra", "vulkan_mobile")
+    var gles: Dictionary = Manager.policy_for("Ultra", "gles")
+    _check(float(vulkan.resolution_max) >= 0.99, "Vulkan Ultra is not allowed full internal resolution")
+    _check(str(vulkan.water_variant) == "depth" and str(vulkan.road_variant) == "high", "Vulkan Ultra lost high material variants")
+    _check(float(gles.resolution_max) <= 0.82, "GLES Safe exceeds its resolution cap")
+    _check(not bool(gles.screen_effects) and str(gles.water_variant) == "opaque" and str(gles.road_variant) == "safe", "GLES Safe retained expensive material/effect paths")
+    _check(Manager.paced_fps(45, 60.0) == 30, "60 Hz display retained uneven 45 FPS cadence")
+    _check(Manager.paced_fps(45, 90.0) == 45, "90 Hz display lost 45 FPS cadence")
+    _check(Manager.paced_fps(45, 120.0) == 40, "120 Hz display retained uneven 45 FPS cadence")
+    _check(Manager.paced_fps(60, 59.94) == 60, "Fractional 60 Hz refresh was not tolerated")
+    _check(Manager.paced_fps(60, -1.0) == 60, "Unavailable refresh rate did not use 60 Hz fallback")
+    _check(Manager.paced_fps(30, 144.0) == 24, "144 Hz display retained uneven 30 FPS cadence")
+
+    var corrupt: Dictionary = Manager.policy_for("Custom", "gles", {
+        "target_fps": NAN,
+        "resolution_min": -5.0,
+        "resolution_max": INF,
+        "resolution_default": "invalid",
+        "shadow_distance": -100.0,
+        "road_visibility": 90000.0,
+    })
+    _check(int(corrupt.target_fps) == 30 and float(corrupt.resolution_min) >= 0.5 and float(corrupt.resolution_max) <= 0.82, "Corrupt custom settings escaped safe resolution/FPS bounds")
+    _check(float(corrupt.shadow_distance) == 10.0 and float(corrupt.road_visibility) <= 2200.0, "Corrupt custom settings escaped world budgets")
+
+    _test_shadow_policy()
+
+    var manager = Manager.new()
+    manager.configure("Performance", {}, "vulkan_mobile")
+    var start_scale: float = manager.current_scale
+    for _i in range(180):
+        manager.update_frame(1.0 / 30.0, null, true)
+    _check(manager.current_scale < start_scale, "Sustained missed frame budget did not reduce internal resolution")
+
+    manager.configure("Performance", {}, "vulkan_mobile", 60.0)
+    manager.set_thermal_stage(0)
+    manager.auto_thermal_enabled = false
+    manager.current_scale = 0.60
+    for _i in range(900):
+        manager.update_frame(1.0 / 60.0, null, true, 5.0)
+    _check(manager.current_scale > 0.60, "Measured GPU headroom could not recover resolution")
+    _check(bool(manager.timing_snapshot().gpu_timing_available), "Valid GPU timings were not exposed")
+
+    manager.configure("Performance", {}, "vulkan_mobile", 60.0)
+    manager.current_scale = 0.60
+    for _i in range(900):
+        manager.update_frame(1.0 / 60.0, null, true)
+    _check(is_equal_approx(manager.current_scale, 0.60), "Missing GPU timings fabricated headroom")
+
+    var before_pause: float = manager.current_scale
+    manager.update_frame(15.0, null, true, 2000.0)
+    manager.update_frame(NAN, null, true)
+    _check(is_equal_approx(manager.current_scale, before_pause), "Resume/loading gap caused a quality downgrade")
+
+    manager.configure("Ultra", {}, "vulkan_mobile")
+    manager.set_thermal_stage(3)
+    var warm: Dictionary = manager.effective_policy()
+    _check(str(warm.road_variant) == "safe", "Thermal stage 3 did not downgrade road shader")
+    manager.set_thermal_stage(4)
+    var hot: Dictionary = manager.effective_policy()
+    _check(str(hot.water_variant) == "opaque" and str(hot.terrain_variant) == "2layer" and not bool(hot.screen_effects), "Thermal stage did not move to cheaper water/terrain/effect policy")
+    _check(int(hot.reflection_budget) <= 1, "Hot thermal stage retained expensive reflection budget")
+
+    manager.set_thermal_stage(5)
+    var critical: Dictionary = manager.effective_policy()
+    _check(int(critical.target_fps) == 30, "Critical thermal stage did not cap frame pacing to 30 FPS")
+
+    print("YARDMAN_RENDER_QUALITY_TEST %s renderer_policy=1 adaptive=1 thermal=1 frame_pacing=1 material_ladder=1 shadow_distribution=1" % ("PASS" if failures == 0 else "FAIL"))
+    quit(0 if failures == 0 else 1)
+
+func _test_shadow_policy() -> void:
+    var performance: Dictionary = ShadowPolicy.shadow_profile_for("Performance", 0)
+    var ultra: Dictionary = ShadowPolicy.shadow_profile_for("Ultra", 0)
+    var warm: Dictionary = ShadowPolicy.shadow_profile_for("Ultra", 3)
+    var critical: Dictionary = ShadowPolicy.shadow_profile_for("Ultra", 5)
+    _check(int(performance.mode) == DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS, "Performance shadows retained four-split cost")
+    _check(int(ultra.mode) == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS, "Cool Ultra lost four-split near-field shadow detail")
+    _check(float(ultra.split_1) < 0.10 and float(ultra.split_3) < 0.50, "Ultra shadow splits no longer prioritize near field")
+    _check(int(warm.mode) == DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS, "Warm Ultra did not shed two PSSM splits")
+    _check(int(critical.mode) == DirectionalLight3D.SHADOW_ORTHOGONAL, "Critical thermal stage retained split-shadow cost")
+    _check(not bool(ultra.blend_splits), "Ultra enabled split blending despite its mobile cost")
+
+    var sun := DirectionalLight3D.new()
+    ShadowPolicy.apply_to_light(sun, {"quality": "Ultra", "thermal_stage": 0, "shadow_distance": 136.0})
+    _check(sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS, "Ultra shadow mode was not applied")
+    _check(is_equal_approx(sun.directional_shadow_max_distance, 136.0), "Quality shadow distance was not applied")
+    _check(is_equal_approx(sun.directional_shadow_split_1, float(ultra.split_1)), "Near shadow split was not applied")
+    _check(is_equal_approx(sun.directional_shadow_split_3, float(ultra.split_3)), "Far shadow split was not applied")
+    sun.free()
