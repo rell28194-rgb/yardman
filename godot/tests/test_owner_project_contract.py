@@ -24,21 +24,30 @@ class OwnerProjectContractTests(unittest.TestCase):
         self.assertFalse(present, f"garage re-coupled to jobs/economy: {present}")
 
     def test_mark_x_is_a_hard_runtime_ban(self):
-        text = GARAGE.read_text(encoding="utf-8")
-        self.assertIn('const BANNED_IDS := {', text)
-        self.assertIn('"toyota_mark_x": true', text)
-        self.assertIn('"toyota_mark_x_2013": true', text)
-        self.assertIn('"mark_x": true', text)
-        self.assertIn('"VEHICLE BANNED"', text)
-        self.assertIn('if _is_banned(vehicle_id):', text)
-        self.assertIn('if not _is_blocked(saved) and _source_ready(saved):', text)
+        garage = GARAGE.read_text(encoding="utf-8")
+        catalog = CATALOG.read_text(encoding="utf-8")
+        for text in (garage, catalog):
+            self.assertIn('const BANNED_IDS := {', text)
+            self.assertIn('"toyota_mark_x": true', text)
+            self.assertIn('"toyota_mark_x_2013": true', text)
+            self.assertIn('"mark_x": true', text)
+        self.assertIn('"VEHICLE BANNED"', garage)
+        self.assertIn('if _is_banned(vehicle_id):', garage)
+        self.assertIn('if not _is_blocked(saved) and _source_ready(saved):', garage)
+        self.assertIn('const PRODUCTION_IDS := ["toyota_crown"]', catalog)
+        self.assertIn('if is_blocked(vehicle_id):', catalog)
+        self.assertIn('return false', catalog)
+        self.assertNotIn('"toyota_mark_x": {', catalog)
 
     def test_992_path_is_excluded(self):
-        text = GARAGE.read_text(encoding="utf-8")
-        self.assertIn('const EXCLUDED_IDS := {', text)
-        self.assertIn('"port_royal_992": true', text)
-        self.assertIn('"porsche_911_992": true', text)
-        self.assertIn('"992": true', text)
+        garage = GARAGE.read_text(encoding="utf-8")
+        catalog = CATALOG.read_text(encoding="utf-8")
+        for text in (garage, catalog):
+            self.assertIn('const EXCLUDED_IDS := {', text)
+            self.assertIn('"port_royal_992": true', text)
+            self.assertIn('"porsche_911_992": true', text)
+            self.assertIn('"992": true', text)
+        self.assertNotIn('"port_royal_992": {', catalog)
 
     def test_recovered_fleet_is_a_required_runtime_input(self):
         self.assertTrue((ROOT / "scripts" / "vehicle_fleet_registry.gd").is_file())
@@ -48,6 +57,7 @@ class OwnerProjectContractTests(unittest.TestCase):
         catalog = CATALOG.read_text(encoding="utf-8")
         self.assertIn('preload("res://scripts/vehicle_fleet_registry.gd")', catalog)
         self.assertIn('for vehicle_id in FleetRegistry.ids():', catalog)
+        self.assertIn('if is_blocked(str(vehicle_id)):', catalog)
 
     def test_validated_renderer_stack_is_active(self):
         project = PROJECT.read_text(encoding="utf-8")
