@@ -5,6 +5,7 @@ extends Node
 # jobs, traffic, pedestrians, economy, or other retired simulation systems.
 const ManagerScript = preload("res://scripts/render_quality_manager.gd")
 const MaterialRegistry = preload("res://scripts/render_material_registry.gd")
+const ShadowPolicy = preload("res://scripts/render_shadow_policy.gd")
 const VehicleSelectorScript = preload("res://scripts/vehicle_selector_runtime.gd")
 
 var manager = ManagerScript.new()
@@ -66,7 +67,6 @@ func _apply_initial(scene: Node) -> void:
     if sun_value is DirectionalLight3D:
         var sun: DirectionalLight3D = sun_value
         sun.shadow_enabled = true
-        sun.directional_shadow_max_distance = maxf(sun.directional_shadow_max_distance, 220.0)
         sun.shadow_bias = minf(sun.shadow_bias, 0.035)
 
     var buildings_value = scene.get("buildings")
@@ -108,6 +108,9 @@ func _apply_live_policy() -> void:
         return
     var active := _active_policy()
     apply_streamer_material_policy(_scene, active)
+    var sun_value = _scene.get("sun")
+    if sun_value is DirectionalLight3D:
+        ShadowPolicy.apply_to_light(sun_value as DirectionalLight3D, active)
     if _terrain != null:
         var coastline_value = _terrain.get("coastline")
         if coastline_value is Node and coastline_value.has_method("apply_render_policy"):
