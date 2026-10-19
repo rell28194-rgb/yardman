@@ -1,0 +1,68 @@
+name: Yardman Owner Recovery Gate
+
+on:
+  push:
+    branches:
+      - codex/owner-recovery-20261019
+    paths:
+      - 'godot/project.godot'
+      - 'godot/main.tscn'
+      - 'godot/scripts/map_quality_bootstrap.gd'
+      - 'godot/scripts/vehicle_selector_runtime.gd'
+      - 'godot/scripts/vehicle_*.gd'
+      - 'godot/scripts/building_streamer.gd'
+      - 'godot/scripts/coastline.gd'
+      - 'godot/scripts/parish_navigation.gd'
+      - 'godot/shaders/**'
+      - 'godot/data/vehicle_fleet_*.json'
+      - 'godot/tests/test_owner_recovery_scope.py'
+      - '.github/workflows/owner-recovery-gate.yml'
+  workflow_dispatch:
+
+jobs:
+  owner-recovery:
+    name: Current map + fleet composition
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GODOT_VERSION: '4.7.2'
+      GODOT_CHANNEL: stable
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate current recovery contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest godot.tests.test_owner_recovery_scope -v
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Parse current project only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 120 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/owner-recovery-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/owner-recovery-import.log; then
+            exit 1
+          fi
+          echo 'YARDMAN_OWNER_RECOVERY_PARSE PASS'
+
+      - name: Preserve focused diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Owner-Recovery-Diagnostics
+          path: godot/build/owner-recovery-import.log
+          if-no-files-found: warn
+          retention-days: 7
