@@ -6,10 +6,20 @@ const Catalog = preload("res://scripts/vehicle_catalog.gd")
 const References = preload("res://scripts/reference_assets.gd")
 const SETTINGS_PATH := "user://yardman/vehicle.json"
 const STARTER_VEHICLE_ID := "toyota_crown"
-const SCRAPPED_IDS := {
+
+# Owner-level production ban. These identifiers must never be exposed, restored
+# from saved state, spawned, selected, packaged as candidates, or revived from
+# historical branches/tests.
+const BANNED_IDS := {
     "toyota_mark_x": true,
     "toyota_mark_x_2013": true,
     "mark_x": true,
+}
+
+# Explicitly removed from the owner fleet. Kept distinct from BANNED_IDS so the
+# repository records the owner's Mark X ban accurately while still excluding the
+# former 992 path from production.
+const EXCLUDED_IDS := {
     "port_royal_992": true,
     "porsche_911_992": true,
     "992": true,
@@ -53,7 +63,7 @@ func available_vehicle_ids() -> Array:
     var result: Array = []
     for raw_id in Catalog.production_ids():
         var vehicle_id := str(raw_id)
-        if _is_scrapped(vehicle_id):
+        if _is_blocked(vehicle_id):
             continue
         if not Catalog.has(vehicle_id):
             continue
@@ -67,7 +77,7 @@ func selected_vehicle_id() -> String:
     return _selected_id
 
 func selected_vehicle_ready() -> bool:
-    return not _is_scrapped(_selected_id) and _source_ready(_selected_id)
+    return not _is_blocked(_selected_id) and _source_ready(_selected_id)
 
 func owned_vehicle_ids() -> Array[String]:
     var result: Array[String] = []
@@ -98,8 +108,11 @@ func is_open() -> bool:
 
 func set_selected_vehicle(vehicle_id: String, persist: bool = true, apply_to_game: bool = true) -> bool:
     _last_selection_error = ""
-    if _is_scrapped(vehicle_id):
-        _last_selection_error = "VEHICLE SCRAPPED"
+    if _is_banned(vehicle_id):
+        _last_selection_error = "VEHICLE BANNED"
+        return false
+    if _is_excluded(vehicle_id):
+        _last_selection_error = "VEHICLE EXCLUDED"
         return false
     if not available_vehicle_ids().has(vehicle_id):
         _last_selection_error = "SOURCE VEHICLE UNAVAILABLE"
@@ -170,12 +183,20 @@ func close_garage() -> void:
         get_tree().paused = false
         _paused_by_garage = false
 
-func _is_scrapped(vehicle_id: String) -> bool:
-    var normalized := vehicle_id.strip_edges().to_lower()
-    return SCRAPPED_IDS.has(normalized)
+func _normalized_id(vehicle_id: String) -> String:
+    return vehicle_id.strip_edges().to_lower()
+
+func _is_banned(vehicle_id: String) -> bool:
+    return BANNED_IDS.has(_normalized_id(vehicle_id))
+
+func _is_excluded(vehicle_id: String) -> bool:
+    return EXCLUDED_IDS.has(_normalized_id(vehicle_id))
+
+func _is_blocked(vehicle_id: String) -> bool:
+    return _is_banned(vehicle_id) or _is_excluded(vehicle_id)
 
 func _source_ready(vehicle_id: String) -> bool:
-    if _is_scrapped(vehicle_id) or not Catalog.has(vehicle_id):
+    if _is_blocked(vehicle_id) or not Catalog.has(vehicle_id):
         return false
     var profile: Dictionary = Catalog.profile(vehicle_id)
     var hero_scene := str(profile.get("hero_scene", ""))
@@ -229,7 +250,7 @@ func _load_selection() -> void:
         var payload = JSON.parse_string(FileAccess.get_file_as_string(SETTINGS_PATH))
         if payload is Dictionary:
             saved = str(payload.get("selected_vehicle", STARTER_VEHICLE_ID))
-    if not _is_scrapped(saved) and _source_ready(saved):
+    if not _is_blocked(saved) and _source_ready(saved):
         _selected_id = saved
         return
     if _source_ready(STARTER_VEHICLE_ID):
