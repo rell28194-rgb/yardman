@@ -7,6 +7,7 @@ on:
     paths:
       - 'godot/tests/cluster_microbench_test.gd'
       - 'godot/scripts/render_cluster_policy.gd'
+      - 'godot/tools/rdx_cluster_mutation.py'
       - 'godot/scripts/building_streamer.gd'
       - '.github/workflows/rdx-cluster-microbench.yml'
   workflow_dispatch:
@@ -44,3 +45,9 @@ jobs:
           timeout 120 godot --headless --path godot --script res://tests/cluster_microbench_test.gd 2>&1 | tee godot/build/rdx-cluster-test.log
           grep -q 'YARDMAN_RDX_CLUSTER_MICROBENCH result=PASS' godot/build/rdx-cluster-test.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/rdx-cluster-test.log; then exit 1; fi
+      - name: Mutation-grade cluster policy
+        shell: bash
+        run: |
+          timeout 420 python3 godot/tools/rdx_cluster_mutation.py 2>&1 | tee godot/build/rdx-cluster-mutation.log
+          grep -q 'YARDMAN_RDX_CLUSTER_MUTATION score=1.0000' godot/build/rdx-cluster-mutation.log
+          grep -q 'survivors=0 invalid=0' godot/build/rdx-cluster-mutation.log
