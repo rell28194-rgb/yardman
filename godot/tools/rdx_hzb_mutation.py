@@ -115,10 +115,10 @@ MUTANTS = (
         ("res://tests/gpu_real_depth_test.gd",),
     ),
     Mutant(
-        "depth_wrong_ndc_xy",
+        "depth_wrong_clip_depth_range",
         "shaders/gpu_depth_capture.glsl",
         "vec3 ndc = vec3(uv * 2.0 - 1.0, raw_depth);",
-        "vec3 ndc = vec3(uv * 2.0 + 1.0, raw_depth);",
+        "vec3 ndc = vec3(uv * 2.0 - 1.0, raw_depth * 2.0 - 1.0);",
         ("res://tests/gpu_real_depth_test.gd",),
     ),
 )
