@@ -3,7 +3,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from build_hydrology_truth_sidecar import build_sidecar, load_registered_segments
+from build_hydrology_truth_sidecar import build_sidecar, load_evidence, load_registered_segments
 
 
 def main() -> None:
@@ -24,17 +24,27 @@ def main() -> None:
         segments = load_registered_segments(root)
         assert [s["segment_key"] for s in segments] == [key_a, key_b]
 
+        # Canonical WRA payload: authority is recomputed from the exact mapped
+        # unit plus valid line-overlap provenance, not trusted from JSON flags.
         evidence = Path(tmp) / "evidence.json"
         evidence.write_text(json.dumps({"evidence": [{
             "segment_key": key_a,
             "source": "wra",
             "source_feature_id": "lower-morass-01",
-            "layer": "hydrology_region",
-            "mapped_unit": "Lower Morass",
+            "layer": "wmu",
+            "mapped_unit": "Black River Lower Morass",
             "intersection_fraction": 0.75,
-            "evidence_token": "wra:black_river_lower_morass_wmu",
-            "authorized": True,
+            "geometry_valid": True,
+            "geometry_repaired": False,
+            "segment_length_m": 100.0,
+            "intersection_length_m": 75.0,
+            "join_topology": "line_overlap",
         }]}))
+        loaded = load_evidence(evidence)[key_a][0]
+        assert loaded.authorizes_morphology
+        assert loaded.evidence_token == "wra:black_river_lower_morass_wmu"
+        assert loaded.topology_consistent
+
         output = Path(tmp) / "truth-sidecar.json"
         pack = build_sidecar(root, output, evidence)
         assert output.is_file()
@@ -45,6 +55,54 @@ def main() -> None:
         assert pack["segments"][1]["decision"]["status"] == "blocked"
         assert pack["metrics"]["segments_approved"] == 1
         assert pack["metrics"]["segments_blocked_no_evidence"] == 1
+
+        # A producer cannot spoof authority/token when the mapped unit is not an
+        # approved exact contract.
+        spoof = Path(tmp) / "spoof.json"
+        spoof.write_text(json.dumps({"evidence": [{
+            "segment_key": key_a,
+            "source": "wra",
+            "source_feature_id": "unknown-01",
+            "layer": "wmu",
+            "mapped_unit": "Unknown Jamaica Unit",
+            "intersection_fraction": 1.0,
+            "evidence_token": "wra:black_river_lower_morass_wmu",
+            "authorizes_morphology": True,
+        }]}))
+        spoofed = load_evidence(spoof)[key_a][0]
+        assert not spoofed.authorizes_morphology
+        assert spoofed.evidence_token == ""
+
+        # Repaired source geometry stays audit-only even with an exact unit.
+        repaired = Path(tmp) / "repaired.json"
+        repaired.write_text(json.dumps({"evidence": [{
+            "segment_key": key_a,
+            "source": "wra",
+            "source_feature_id": "lower-morass-repaired",
+            "layer": "wmu",
+            "mapped_unit": "Black River Lower Morass",
+            "intersection_fraction": 0.5,
+            "geometry_valid": True,
+            "geometry_repaired": True,
+        }]}))
+        assert not load_evidence(repaired)[key_a][0].authorizes_morphology
+
+        # A length/fraction topology contradiction also stays non-destructive.
+        inconsistent = Path(tmp) / "inconsistent.json"
+        inconsistent.write_text(json.dumps({"evidence": [{
+            "segment_key": key_a,
+            "source": "wra",
+            "source_feature_id": "lower-morass-bad-topology",
+            "layer": "wmu",
+            "mapped_unit": "Black River Lower Morass",
+            "intersection_fraction": 0.8,
+            "segment_length_m": 100.0,
+            "intersection_length_m": 2.0,
+            "join_topology": "line_overlap",
+        }]}))
+        inconsistent_record = load_evidence(inconsistent)[key_a][0]
+        assert not inconsistent_record.topology_consistent
+        assert not inconsistent_record.authorizes_morphology
 
         bad = Path(tmp) / "bad"
         bad.mkdir()
