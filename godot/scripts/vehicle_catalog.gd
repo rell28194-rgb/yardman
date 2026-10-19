@@ -5,6 +5,9 @@ const FleetRegistry = preload("res://scripts/vehicle_fleet_registry.gd")
 
 const DEFAULT_ID := "toyota_crown"
 const FORBIDDEN_IDS := ["toyota_mark_x", "port_royal_992"]
+# These identities remain preserved in the recovery registry but are not
+# selectable until their dedicated hero bytes are restored into the owner pack.
+const HELD_IDS := ["corvette_c7", "delorean_dmc12"]
 const PRODUCTION_IDS := ["toyota_crown"]
 
 # Shared physics fallback for recovered cars. Identity, geometry, wheelbase and
@@ -106,7 +109,7 @@ const CROWN_PROFILE := {
 }
 
 static func _allowed(vehicle_id: String) -> bool:
-    return not vehicle_id.is_empty() and not FORBIDDEN_IDS.has(vehicle_id)
+    return not vehicle_id.is_empty() and not FORBIDDEN_IDS.has(vehicle_id) and not HELD_IDS.has(vehicle_id)
 
 static func profile(vehicle_id: String) -> Dictionary:
     if vehicle_id == DEFAULT_ID:
