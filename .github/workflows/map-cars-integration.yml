@@ -1,0 +1,60 @@
+name: Yardman Map Cars Integration
+
+on:
+  push:
+    branches: [codex/map-cars-integration-20261019]
+    paths:
+      - 'godot/project.godot'
+      - 'godot/scripts/map_quality_bootstrap.gd'
+      - 'godot/scripts/vehicle_selector_runtime.gd'
+      - 'godot/scripts/vehicle_catalog.gd'
+      - 'godot/scripts/vehicle_controller.gd'
+      - 'godot/scripts/vehicle_model.gd'
+      - 'godot/scripts/vehicle_fleet_registry.gd'
+      - 'godot/data/vehicle_fleet_runtime.json'
+      - 'godot/data/vehicle_fleet_supplemental.json'
+      - 'godot/tests/test_map_cars_integration.py'
+      - '.github/workflows/map-cars-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  map-cars-scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify map-and-cars runtime contract
+        run: python -m unittest godot/tests/test_map_cars_integration.py -v
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip'
+          wget -q "$URL" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+          sudo mv /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
+          test "$(godot --version)" = '4.7.2.stable.official.ed1daf0bf'
+
+      - name: Parse integration runtime
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p godot/build
+          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/map-cars-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/map-cars-import.log; then exit 1; fi
+          echo 'YARDMAN_MAP_CARS_PARSE_PASS'
+
+      - name: Preserve focused diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Map-Cars-Integration-Diagnostics
+          path: godot/build/map-cars-import.log
+          if-no-files-found: warn
+          retention-days: 7
