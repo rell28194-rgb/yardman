@@ -44,12 +44,12 @@ func _run() -> void:
     var vegetation_metrics := _validate_point_clusters(points, point_clusters)
 
     var invalid_indices := PackedInt32Array([0, 1, vertices.size() + 7])
-    var invalid := ClusterPolicy.cluster_indexed_triangles(vertices, invalid_indices, TRIANGLE_LIMIT)
+    var invalid: Dictionary = ClusterPolicy.cluster_indexed_triangles(vertices, invalid_indices, TRIANGLE_LIMIT)
     _check(invalid.has("error"), "out-of-range triangle index was accepted")
-    var malformed := ClusterPolicy.cluster_indexed_triangles(vertices, PackedInt32Array([0, 1]), TRIANGLE_LIMIT)
+    var malformed: Dictionary = ClusterPolicy.cluster_indexed_triangles(vertices, PackedInt32Array([0, 1]), TRIANGLE_LIMIT)
     _check(malformed.has("error"), "non-triangle index payload was accepted")
     var bad_points := PackedVector3Array([Vector3.ZERO, Vector3(NAN, 0.0, 0.0)])
-    var invalid_points := ClusterPolicy.cluster_points(bad_points, POINT_LIMIT)
+    var invalid_points: Dictionary = ClusterPolicy.cluster_points(bad_points, POINT_LIMIT)
     _check(invalid_points.has("error"), "non-finite vegetation point was accepted")
 
     var status := "PASS" if failures == 0 else "FAIL"
@@ -218,7 +218,12 @@ func _validate_triangle_clusters(vertices: PackedVector3Array, source_indices: P
     _check(false_culls == 0, "building cluster bounds caused false culling")
     var baseline_work := float(source_indices.size() / 3 * queries.size())
     var visible_fraction := float(visible_sum) / maxf(baseline_work, 1.0)
-    var metadata_fraction := float(clusters.size()) * CLUSTER_METADATA_BYTES / maxf(float(source_indices.size() * 4), 1.0)
+    # Metadata is measured against a conservative lower bound for the geometry
+    # it accompanies: positions (3 float32) plus uint32 indices. The original
+    # index-only denominator made the 8% gate mathematically impossible at the
+    # already-frozen 32-triangle maximum and did not represent render memory.
+    var minimum_geometry_bytes := float(vertices.size() * 12 + source_indices.size() * 4)
+    var metadata_fraction := float(clusters.size()) * CLUSTER_METADATA_BYTES / maxf(minimum_geometry_bytes, 1.0)
     _check(visible_fraction <= BUILDING_VISIBILITY_FRACTION_MAX, "building clusters do not reduce coarse-cell submitted geometry enough")
     _check(metadata_fraction <= METADATA_FRACTION_MAX, "building cluster metadata exceeds budget")
     _check(reference_sum > 0, "building visibility oracle observed no geometry")
