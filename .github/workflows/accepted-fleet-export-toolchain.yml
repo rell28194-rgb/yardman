@@ -1,0 +1,74 @@
+name: Yardman Accepted Fleet Export Toolchain
+
+on:
+  push:
+    branches: [codex/accepted-fleet-garage-001]
+    paths:
+      - '.github/workflows/accepted-fleet-export-toolchain.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+
+jobs:
+  toolchain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools build-tools;35.0.1 platforms;android-35'
+          log-accepted-android-sdk-licenses: 'false'
+
+      - name: Install Godot and Android debug template
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p toolchain/bin toolchain/templates toolchain/android-sdk toolchain/jdk
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          cp "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" toolchain/bin/godot
+          chmod +x toolchain/bin/godot
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_export_templates.tpz" -O /tmp/templates.tpz
+          unzip -q /tmp/templates.tpz -d /tmp/templates
+          cp /tmp/templates/templates/android_debug.apk toolchain/templates/android_debug.apk
+          cp -a "$ANDROID_HOME/build-tools/35.0.1" toolchain/android-sdk/build-tools-35.0.1
+          cp -a "$ANDROID_HOME/platform-tools" toolchain/android-sdk/platform-tools
+          cp -a "$ANDROID_HOME/platforms/android-35" toolchain/android-sdk/platform-35
+          cp -a "$JAVA_HOME"/. toolchain/jdk/
+          toolchain/bin/godot --version | tee toolchain/GODOT_VERSION.txt
+          java -version 2> toolchain/JAVA_VERSION.txt
+          "$ANDROID_HOME/build-tools/35.0.1/apksigner" version | tee toolchain/APKSIGNER_VERSION.txt
+          printf '%s\n' "$GITHUB_SHA" > toolchain/SOURCE_SHA.txt
+
+      - name: Package export toolchain
+        shell: bash
+        run: |
+          set -euxo pipefail
+          tar -czf Yardman-Accepted-Fleet-Export-Toolchain.tgz toolchain
+          sha256sum Yardman-Accepted-Fleet-Export-Toolchain.tgz > Yardman-Accepted-Fleet-Export-Toolchain.tgz.sha256
+
+      - name: Upload export toolchain
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Accepted-Fleet-Export-Toolchain
+          path: |
+            Yardman-Accepted-Fleet-Export-Toolchain.tgz
+            Yardman-Accepted-Fleet-Export-Toolchain.tgz.sha256
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 3
