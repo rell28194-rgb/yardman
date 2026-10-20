@@ -1,10 +1,13 @@
 extends Node
 
+const RoadOverviewScript = preload("res://scripts/road_overview.gd")
+
 # One-shot map-first presentation bootstrap. This branch is deliberately about
 # the Jamaica world itself; it does not add AI, jobs, traffic or placeholder
 # vehicle systems.
 var _applied := false
 var _buildings: JamaicaBuildingStreamer
+var _road_overview
 
 func _ready() -> void:
     set_process(true)
@@ -36,6 +39,13 @@ func _process(_delta: float) -> void:
         sun.shadow_enabled = true
         sun.directional_shadow_max_distance = maxf(sun.directional_shadow_max_distance, 220.0)
         sun.shadow_bias = minf(sun.shadow_bias, 0.035)
+
+    var roads_value = scene.get("roads")
+    if roads_value is JamaicaRoadStreamer and roads_value.get_node_or_null("FarRoadOverview") == null:
+        _road_overview = RoadOverviewScript.new()
+        _road_overview.name = "FarRoadOverview"
+        _road_overview.configure(roads_value)
+        roads_value.add_child(_road_overview)
 
     var buildings_value = scene.get("buildings")
     if buildings_value is JamaicaBuildingStreamer:
