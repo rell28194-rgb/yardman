@@ -18,7 +18,11 @@ func build(hero_scene_filename: String) -> void:
     if hero_scene_filename.is_empty():
         set_meta("yardman_hero_asset_missing_or_invalid", true)
         return
-    var packed: PackedScene = References.scene(hero_scene_filename)
+    # Fleet identities must resolve to the exact private-pack filename. The
+    # accepted Crown runtime deliberately aliases road_car.glb to Crown007, so
+    # going through References.scene() here would make the Chaser masquerade as
+    # the Crown. Fleet loading bypasses that alias and fails closed instead.
+    var packed := _load_exact_private_scene(hero_scene_filename)
     if packed == null:
         set_meta("yardman_requested_hero_scene", hero_scene_filename)
         set_meta("yardman_hero_asset_missing_or_invalid", true)
@@ -47,6 +51,44 @@ func build(hero_scene_filename: String) -> void:
     set_meta("yardman_dedicated_vehicle_mesh", true)
     set_meta("yardman_requested_hero_scene", hero_scene_filename)
     print("YARDMAN_FLEET_VEHICLE asset=%s bounds_m=%s wheelbase_m=%.3f wheels=%d" % [hero_scene_filename, geometry_bounds.size, wheelbase_m, wheels.size()])
+
+func _load_exact_private_scene(filename: String) -> PackedScene:
+    if filename.is_empty() or filename.contains("/") or filename.contains("\\") or filename.contains(".."):
+        return null
+    if filename.get_extension().to_lower() not in ["glb", "gltf"]:
+        return null
+    var manifest := References.manifest()
+    if manifest.is_empty() or int(manifest.get("format_version", 0)) != 1:
+        return null
+    var matched: Dictionary = {}
+    var match_count := 0
+    for raw_record in manifest.get("files", []):
+        if not raw_record is Dictionary:
+            continue
+        var record: Dictionary = raw_record
+        if str(record.get("path", "")) != filename:
+            continue
+        matched = record
+        match_count += 1
+    if match_count != 1:
+        return null
+    var expected_sha := str(matched.get("sha256", "")).to_lower()
+    if expected_sha.length() != 64:
+        return null
+    var path := References.ROOT + filename
+    if not ResourceLoader.exists(path):
+        return null
+    # Development/private preflight has the source bytes, so enforce the pack
+    # manifest byte-for-byte. Android exports can retain only the imported
+    # resource/remap; their source pack is hash-gated before export.
+    if not OS.has_feature("template") and FileAccess.file_exists(path):
+        if FileAccess.get_sha256(path).to_lower() != expected_sha:
+            return null
+        if matched.has("bytes"):
+            var handle := FileAccess.open(path, FileAccess.READ)
+            if handle == null or int(handle.get_length()) != int(matched.get("bytes", -1)):
+                return null
+    return ResourceLoader.load(path) as PackedScene
 
 func _bind_wheels(imported: Node3D) -> void:
     var pivots: Array[Node3D] = []
