@@ -1,0 +1,124 @@
+extends Node3D
+class_name YardmanFleetVehicleModel
+
+const References = preload("res://scripts/reference_assets.gd")
+
+var shell: Node3D
+var front_pivots: Array[Node3D] = []
+var wheels: Array[Node3D] = []
+var is_reference_model := false
+var wheelbase_m := 2.60
+var wheel_radius_m := 0.34
+var geometry_bounds := AABB(Vector3(-0.925, 0.0, -2.2), Vector3(1.85, 1.35, 4.4))
+var _wheel_rotation := 0.0
+var _shell_rest_position := Vector3.ZERO
+var _shell_rest_rotation := Vector3.ZERO
+
+func build(hero_scene_filename: String) -> void:
+    if hero_scene_filename.is_empty():
+        set_meta("yardman_hero_asset_missing_or_invalid", true)
+        return
+    var packed: PackedScene = References.scene(hero_scene_filename)
+    if packed == null:
+        set_meta("yardman_requested_hero_scene", hero_scene_filename)
+        set_meta("yardman_hero_asset_missing_or_invalid", true)
+        return
+    var instance = packed.instantiate()
+    if not instance is Node3D:
+        if instance != null:
+            instance.free()
+        set_meta("yardman_hero_asset_missing_or_invalid", true)
+        return
+    var imported := instance as Node3D
+    var bounds := _measure_mesh_bounds(imported)
+    if not _bounds_are_valid(bounds):
+        imported.free()
+        set_meta("yardman_hero_asset_missing_or_invalid", true)
+        return
+    add_child(imported)
+    shell = imported.find_child("BodyShell", true, false) as Node3D
+    if shell == null:
+        shell = imported
+    geometry_bounds = bounds
+    _shell_rest_position = shell.position
+    _shell_rest_rotation = shell.rotation
+    _bind_wheels(imported)
+    is_reference_model = true
+    set_meta("yardman_dedicated_vehicle_mesh", true)
+    set_meta("yardman_requested_hero_scene", hero_scene_filename)
+    print("YARDMAN_FLEET_VEHICLE asset=%s bounds_m=%s wheelbase_m=%.3f wheels=%d" % [hero_scene_filename, geometry_bounds.size, wheelbase_m, wheels.size()])
+
+func _bind_wheels(imported: Node3D) -> void:
+    var pivots: Array[Node3D] = []
+    var spins: Array[Node3D] = []
+    for wheel_name in ["FrontWheelLeft", "FrontWheelRight", "RearWheelLeft", "RearWheelRight"]:
+        var pivot := imported.find_child(wheel_name, true, false) as Node3D
+        var spin := imported.find_child(wheel_name + "Spin", true, false) as Node3D
+        if pivot == null or spin == null:
+            pivots.clear()
+            spins.clear()
+            break
+        pivots.append(pivot)
+        spins.append(spin)
+    if pivots.size() != 4:
+        return
+    front_pivots.assign([pivots[0], pivots[1]])
+    wheels.assign(spins)
+    var front_z := _relative_pose(pivots[0]).origin.z
+    var rear_z := _relative_pose(pivots[2]).origin.z
+    wheelbase_m = clampf(absf(front_z - rear_z), 1.8, 4.5)
+    var tyre_bounds := _measure_mesh_bounds(spins[0])
+    if tyre_bounds.size.length_squared() > 0.01:
+        wheel_radius_m = clampf(maxf(tyre_bounds.size.y, tyre_bounds.size.z) * 0.5, 0.20, 0.65)
+
+func update_motion(delta: float, speed: float, steering: float, braking: float, reversing: bool, running: bool, pitch: float, roll: float) -> void:
+    if shell == null:
+        return
+    if not wheels.is_empty():
+        _wheel_rotation = fmod(_wheel_rotation - speed * delta / maxf(wheel_radius_m, 0.20), TAU)
+        for wheel in wheels:
+            wheel.rotation.x = _wheel_rotation
+        for pivot in front_pivots:
+            pivot.rotation.y = steering
+    var response := 1.0 - exp(-delta * 8.0)
+    shell.rotation.x = lerpf(shell.rotation.x, _shell_rest_rotation.x + pitch, response)
+    shell.rotation.z = lerpf(shell.rotation.z, _shell_rest_rotation.z + roll, response)
+    shell.position.y = lerpf(shell.position.y, _shell_rest_position.y - minf(absf(roll) * 0.12, 0.018), response)
+
+func _relative_pose(node: Node3D) -> Transform3D:
+    var pose := node.transform
+    var parent: Node = node.get_parent()
+    while parent != null and parent != self:
+        if parent is Node3D:
+            pose = (parent as Node3D).transform * pose
+        parent = parent.get_parent()
+    return pose
+
+func _collect_meshes(node: Node, parent_pose: Transform3D, result: Array[Dictionary]) -> void:
+    var pose := parent_pose
+    if node is Node3D:
+        pose *= (node as Node3D).transform
+    if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+        result.append({"instance": node, "pose": pose})
+    for child in node.get_children():
+        _collect_meshes(child, pose, result)
+
+func _measure_mesh_bounds(node: Node3D) -> AABB:
+    var entries: Array[Dictionary] = []
+    _collect_meshes(node, Transform3D.IDENTITY, entries)
+    var combined := AABB()
+    var first := true
+    for entry in entries:
+        var instance: MeshInstance3D = entry["instance"]
+        var pose: Transform3D = entry["pose"]
+        var bounds: AABB = pose * instance.mesh.get_aabb()
+        combined = bounds if first else combined.merge(bounds)
+        first = false
+    return combined
+
+func _bounds_are_valid(bounds: AABB) -> bool:
+    var size := bounds.size
+    return is_finite(size.x) and is_finite(size.y) and is_finite(size.z) \
+        and size.x >= 0.8 and size.x <= 4.5 \
+        and size.y >= 0.35 and size.y <= 4.5 \
+        and size.z >= 1.8 and size.z <= 12.0
