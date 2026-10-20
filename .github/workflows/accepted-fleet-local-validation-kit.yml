@@ -1,0 +1,87 @@
+name: Yardman Accepted Fleet Local Validation Kit
+
+on:
+  push:
+    branches: [codex/accepted-fleet-garage-001]
+    paths:
+      - '.github/workflows/accepted-fleet-local-validation-kit.yml'
+      - 'godot/scripts/vehicle_catalog.gd'
+      - 'godot/scripts/fleet_vehicle_model.gd'
+      - 'godot/scripts/vehicle_selector_runtime.gd'
+      - 'godot/data/owner_fleet_pack_contract.json'
+      - 'godot/project.godot'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+
+jobs:
+  retain-kit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify accepted fleet source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          contract = json.loads(Path('godot/data/owner_fleet_pack_contract.json').read_text())
+          assert contract['available_vehicle_count'] == 64
+          assert len(contract['available_vehicle_ids']) == 64
+          assert len(set(contract['available_vehicle_ids'])) == 64
+          assert contract['pack_sha256'] == '6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b'
+          assert set(contract['scrapped_vehicle_ids']) == {'port_royal_992', 'toyota_mark_x'}
+          assert set(contract['held_missing_vehicle_ids']) == {'corvette_c7', 'delorean_dmc12'}
+          project = Path('godot/project.godot').read_text()
+          assert 'VehicleGarage="*res://scripts/vehicle_selector_runtime.gd"' in project
+          selector = Path('godot/scripts/vehicle_selector_runtime.gd').read_text()
+          assert 'Dedicated selectable vehicles: %d / 64' in selector
+          assert 'FleetModel' in selector
+          model = Path('godot/scripts/fleet_vehicle_model.gd').read_text()
+          assert '_load_exact_private_scene' in model
+          assert 'References.scene(hero_scene_filename)' not in model
+          print('YARDMAN_ACCEPTED_FLEET_SOURCE_PASS vehicles=64 garage=1 exact_identity=1')
+          PY
+
+      - name: Install exact Godot validator
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          mkdir -p kit/bin
+          unzip -q /tmp/godot.zip -d kit/bin
+          chmod +x kit/bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64
+          kit/bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64 --version | tee kit/godot-version.txt
+
+      - name: Package current accepted source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git rev-parse HEAD | tee kit/source-sha.txt
+          tar -czf kit/yardman-accepted-source.tgz godot AGENTS.md
+          sha256sum kit/yardman-accepted-source.tgz > kit/yardman-accepted-source.tgz.sha256
+          cat > kit/README.txt <<'EOF'
+          YARDMAN ACCEPTED FLEET LOCAL VALIDATION KIT
+          Combine this exact accepted source with:
+          Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip
+          SHA-256 6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b
+          The private pack is deliberately not stored in public GitHub.
+          EOF
+
+      - name: Upload validation kit
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Accepted-Fleet-Local-Validation-Kit
+          path: kit/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
