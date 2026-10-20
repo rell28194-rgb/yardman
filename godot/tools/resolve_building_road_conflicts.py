@@ -102,9 +102,12 @@ def resolve_polygon_conflict(poly,conflicts):
     clipped=poly.difference(exclusion)
     if not clipped.is_valid:clipped=shapely.make_valid(clipped)
     parts=polygon_parts(clipped)
-    if not parts:return poly,False,True,0.0
+    # A severe carriageway conflict that cannot be reconstructed safely is not
+    # allowed to survive as the original road-blocking footprint. An empty
+    # result marks it for omission from runtime building packs.
+    if not parts:return Polygon(),False,True,0.0
     largest=max(parts,key=lambda p:p.area); retained=largest.area/poly.area if poly.area>0 else 0; removed=max(0.,poly.area-largest.area)
-    if retained<MIN_RETAINED_AREA_RATIO or largest.area<MIN_REBUILT_AREA_M2:return poly,False,True,0.0
+    if retained<MIN_RETAINED_AREA_RATIO or largest.area<MIN_REBUILT_AREA_M2:return Polygon(),False,True,0.0
     if removed<MIN_INTERSECTION_AREA_M2:return poly,False,False,0.0
     return largest,True,False,removed
 
@@ -174,7 +177,7 @@ def compile_clearance(roads_root,terrain_root,buildings_root):
     def cached(tx,tz):
         f=road_files.get((tx,tz));return load_road_tile(roads_root/f) if f else []
     radius=max(1,int(math.ceil(float(bm.get("max_footprint_reach_m",0) or 0)/bts)))
-    stats={"records_seen":0,"elevated_or_grade_separated_buildings_skipped":0,"records_with_severe_carriageway_intrusion":0,"adjusted_buildings":0,"unresolved_conflicts":0,"roof_rebuild_failures":0,"removed_building_area_m2":0.0,"tiles_rewritten":0};examples=[]
+    stats={"records_seen":0,"elevated_or_grade_separated_buildings_skipped":0,"records_with_severe_carriageway_intrusion":0,"adjusted_buildings":0,"unresolved_conflicts":0,"dropped_unresolved_buildings":0,"roof_rebuild_failures":0,"removed_building_area_m2":0.0,"tiles_rewritten":0};examples=[]
     staging=buildings_root.with_name(buildings_root.name+".roadclearance")
     if staging.exists():shutil.rmtree(staging)
     staging.mkdir(parents=True);known={str(t["file"]) for t in bm.get("tiles",[])}
@@ -202,15 +205,19 @@ def compile_clearance(roads_root,terrain_root,buildings_root):
                     except ValueError as exc:reason=f"roof_rebuild:{exc}";stats["roof_rebuild_failures"]+=1
                     else:record=new_record;stats["adjusted_buildings"]+=1;stats["removed_building_area_m2"]+=removed;changed_tile=True
                 if reason:
-                    stats["unresolved_conflicts"]+=1
-                    if len(examples)<MAX_UNRESOLVED_EXAMPLES:examples.append({"building_id":str(record[0]),"tile":[tx,tz],"cell":[cx,cz],"area_m2":round(poly.area,3),"reason":reason,"road_keys":[list(r["key"]) for r in conflicts[:8]]})
+                    stats["unresolved_conflicts"]+=1;stats["dropped_unresolved_buildings"]+=1;changed_tile=True
+                    if len(examples)<MAX_UNRESOLVED_EXAMPLES:examples.append({"building_id":str(record[0]),"tile":[tx,tz],"cell":[cx,cz],"area_m2":round(poly.area,3),"reason":reason,"runtime_action":"omitted","road_keys":[list(r["key"]) for r in conflicts[:8]]})
+                    # Severe ground-level road intrusions are less truthful in the
+                    # runtime if preserved than if omitted. Keep the source/report
+                    # evidence, but never render the unresolved obstruction.
+                    continue
                 rewritten.append(record)
             raw=json.dumps(rewritten,separators=(",",":"),allow_nan=False).encode();cells.append((lx,lz,gzip.compress(raw,compresslevel=6,mtime=0)))
         write_pack(staging/fn,cells)
         if changed_tile:stats["tiles_rewritten"]+=1
     stats["removed_building_area_m2"]=round(stats["removed_building_area_m2"],3);bm["record_format"]=max(2,int(bm.get("record_format",1)))
-    bm["road_clearance"]={"policy":"Only severe ground-origin intersections with compiled non-bridge/non-tunnel carriageway ribbons are eligible. Shallow roadside contact is preserved. Adjustments require one dominant footprint retaining at least 68% of registered area; ambiguous or incomplete-roof cases remain unchanged and are reported.","clearance_margin_m":CLEARANCE_MARGIN_M,"minimum_intrusion_depth_m":MIN_INTRUSION_DEPTH_M,"minimum_intersection_area_m2":MIN_INTERSECTION_AREA_M2,"minimum_retained_area_ratio":MIN_RETAINED_AREA_RATIO,"unresolved_examples_file":"road_clearance_report.json"}
-    bm.setdefault("stats",{}).update({"road_clearance_adjusted_buildings":stats["adjusted_buildings"],"road_clearance_unresolved_conflicts":stats["unresolved_conflicts"],"road_clearance_roof_rebuild_failures":stats["roof_rebuild_failures"],"road_clearance_removed_area_m2":stats["removed_building_area_m2"]})
+    bm["road_clearance"]={"policy":"Only severe ground-origin intersections with compiled non-bridge/non-tunnel carriageway ribbons are eligible. Shallow roadside contact is preserved. Adjustments require one dominant footprint retaining at least 68% of registered area. Severe conflicts that cannot be reconstructed safely, including incomplete rebuilt roofs, are omitted from runtime packs and retained in the clearance report instead of being rendered through the road.","clearance_margin_m":CLEARANCE_MARGIN_M,"minimum_intrusion_depth_m":MIN_INTRUSION_DEPTH_M,"minimum_intersection_area_m2":MIN_INTERSECTION_AREA_M2,"minimum_retained_area_ratio":MIN_RETAINED_AREA_RATIO,"unresolved_examples_file":"road_clearance_report.json"}
+    bm.setdefault("stats",{}).update({"road_clearance_adjusted_buildings":stats["adjusted_buildings"],"road_clearance_unresolved_conflicts":stats["unresolved_conflicts"],"road_clearance_dropped_unresolved_buildings":stats["dropped_unresolved_buildings"],"road_clearance_roof_rebuild_failures":stats["roof_rebuild_failures"],"road_clearance_removed_area_m2":stats["removed_building_area_m2"]})
     (staging/"manifest.json").write_text(json.dumps(bm,indent=2,sort_keys=True));(staging/"road_clearance_report.json").write_text(json.dumps({"stats":stats,"unresolved_examples":examples},indent=2,sort_keys=True))
     backup=buildings_root.with_name(buildings_root.name+".pre-roadclearance")
     if backup.exists():shutil.rmtree(backup)
