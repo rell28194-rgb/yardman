@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, Iterator, List, Sequence, Tuple
 
 from pyproj import Transformer
-from road_graph import build_network, partition_id, read_osm_features
+from road_graph import build_network, partition_id, read_osm_features, split_segment
 
 CRS_SOURCE = "EPSG:4326"
 CRS_TARGET = "EPSG:3448"
@@ -33,6 +33,9 @@ ROAD_WIDTHS = {
     "road": 5.8, "track": 3.0, "raceway": 8.0,
 }
 ROAD_CLASSES = {name: i for i, name in enumerate(ROAD_WIDTHS)}
+# The far LOD deliberately keeps Jamaica's arterial hierarchy rather than
+# reproducing every lane/service road at kilometre-scale viewing distances.
+ROAD_OVERVIEW_CLASSES = ("motorway", "trunk", "primary", "secondary", "tertiary")
 
 # CI coverage sentinels. These parish-capital/administrative-centre anchors are
 # only QA points: a partial-island road extract is not allowed to pass.
@@ -91,6 +94,49 @@ def road_flags(properties: dict) -> int:
     return flags
 
 
+def build_road_overview(network: dict, tile_size: float) -> dict:
+    """Compile a cheap arterial road HLOD using the exact registered graph paths.
+
+    The overview owns no collision or navigation. Every centreline piece is split
+    at the same 4096 m world grid as the near renderer so it can stream by sector
+    without forcing neighbouring full road tiles resident.
+    """
+    sectors = defaultdict(list)
+    segment_count = 0
+    for identifier, edge in sorted(network.get("edges", {}).items()):
+        road_class = str(edge.get("class", ""))
+        if road_class not in ROAD_OVERVIEW_CLASSES:
+            continue
+        path = edge.get("path", [])
+        if not isinstance(path, list) or len(path) < 2:
+            continue
+        width = float(edge.get("width_m", ROAD_WIDTHS.get(road_class, 6.0)))
+        class_id = int(edge.get("class_id", ROAD_CLASSES.get(road_class, 0)))
+        flags = int(edge.get("flags", 0))
+        # Tunnels do not draw through the mountain in the distant surface HLOD.
+        # Bridge centreline elevations remain useful and are retained.
+        if flags & 4:
+            continue
+        for a, b in zip(path, path[1:]):
+            if len(a) < 3 or len(b) < 3 or math.dist(a[:3], b[:3]) < 0.25:
+                continue
+            for (tx, tz), p, q in split_segment(a, b, tile_size):
+                sectors[(tx, tz)].append([
+                    round(float(p[0]), 3), round(float(p[1]), 3), round(float(p[2]), 3),
+                    round(float(q[0]), 3), round(float(q[1]), 3), round(float(q[2]), 3),
+                    round(width, 3), class_id,
+                ])
+                segment_count += 1
+    payload = {
+        "format": 1,
+        "tile_size": tile_size,
+        "classes": list(ROAD_OVERVIEW_CLASSES),
+        "segments": segment_count,
+        "sectors": [[tx, tz, segments] for (tx, tz), segments in sorted(sectors.items())],
+    }
+    return payload
+
+
 def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE_SIZE,
                     require_national_coverage: bool = True, height_sampler=None) -> dict:
     if tile_size <= 0 or not math.isfinite(tile_size):
@@ -119,6 +165,9 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
         missing = [p for p, d in stats["parish_anchor_distance_m"].items() if d > 10000]
         if missing:
             raise ValueError("Missing parish coverage: " + ", ".join(missing))
+    overview = build_road_overview(network, tile_size)
+    if require_national_coverage and (overview["segments"] < 1000 or len(overview["sectors"]) < 20):
+        raise ValueError("Far-road overview is too small for national arterial coverage")
     # Build into a sibling staging directory; failed compiles retain old outputs.
     staging = out.with_name(out.name + ".staging")
     if staging.exists():
@@ -137,6 +186,7 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
         for partition, values in sorted(partitions.items()):
             (staging / "graph" / f"{kind}_{partition}.json").write_text(
                 json.dumps(values, separators=(",", ":")), encoding="utf-8")
+    (staging / "overview.json").write_text(json.dumps(overview, separators=(",", ":")), encoding="utf-8")
     manifest = {
         "format": 3, "source": "OpenStreetMap / Geofabrik Jamaica extract",
         "source_sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
@@ -152,6 +202,9 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
                           "markings": "inferred presentation, not surveyed road-paint positions"},
         "graph": {"format": 1, "partition": "sha1(id)[0:2]", "directory": "graph",
                   "nodes": stats["graph_nodes"], "edges": stats["graph_edges"]},
+        "overview": {"format": 1, "file": "overview.json", "classes": list(ROAD_OVERVIEW_CLASSES),
+                     "segments": overview["segments"], "sectors": len(overview["sectors"]),
+                     "purpose": "render-only streamed arterial HLOD; no collision or navigation"},
         "elevation_source": "DEM" if height_sampler else "unmeasured-flat",
         "tiles": tile_entries, "stats": stats,
         "parish_anchors": {name: {**network["anchor_roads"].get(name, {}), "lat": PARISH_COVERAGE_ANCHORS[name][0],
@@ -181,6 +234,8 @@ def main() -> int:
         parish_manifest = compile_parishes(args.input_geojson, args.output_dir.parent / "parishes")
         print("Packaged authoritative parish boundaries:", parish_manifest["stats"])
     print(json.dumps(manifest["stats"], indent=2, sort_keys=True))
+    print("Far-road overview: %s segments / %s sectors" %
+          (manifest["overview"]["segments"], manifest["overview"]["sectors"]))
     print(f"Bounds (m): {manifest['bounds']}")
     print(f"Wrote {len(manifest['tiles'])} road tiles and persistent topology to {args.output_dir}")
     return 0
