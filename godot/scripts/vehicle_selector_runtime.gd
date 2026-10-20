@@ -17,6 +17,33 @@ var _options: OptionButton
 var _status: Label
 var _current_id := Catalog.DEFAULT_ID
 
+func _ready() -> void:
+    # The garage is an isolated autoload so the already owner-accepted main
+    # scene, traversal and HUD code do not need to be rewritten. Wait until the
+    # main scene has configured its existing vehicle controller, then bind once.
+    process_mode = Node.PROCESS_MODE_ALWAYS
+    set_process(true)
+    call_deferred("_try_attach_to_current_game")
+
+func _process(_delta: float) -> void:
+    if _game == null:
+        _try_attach_to_current_game()
+
+func _try_attach_to_current_game() -> void:
+    if _game != null or get_tree() == null:
+        return
+    var candidate := get_tree().current_scene
+    if candidate == null:
+        return
+    var controller = candidate.get("vehicle")
+    if controller == null:
+        return
+    var body = controller.get("body")
+    if not body is CharacterBody3D:
+        return
+    set_process(false)
+    attach(candidate)
+
 func attach(game: Node) -> void:
     _game = game
     _controller = game.get("vehicle") if game != null else null
