@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Compile streamed building HLOD proxies from final post-clearance YMB packs.
 
-This runs after road/building conflict resolution, so distant massing cannot
-resurrect a source footprint that the runtime removed for a severe carriageway
-intrusion. The overview is presentation-only: no collision or navigation.
+The overview is generated only after road/building conflict resolution. It uses
+bounded linear ring math rather than geometry reconstruction, so one million
+source masses do not become a second expensive national geometry pass.
 """
 from __future__ import annotations
 
@@ -12,9 +12,6 @@ import gzip
 import json
 import math
 from pathlib import Path
-
-import shapely
-from shapely.geometry import Polygon
 
 from build_buildings import CELL_SIZE, HEADER, INDEX, MAGIC
 
@@ -48,35 +45,6 @@ def read_pack(path: Path):
         return cells
 
 
-def _closed_ring(points):
-    ring = list(points)
-    if ring and ring[0] != ring[-1]:
-        ring.append(ring[0])
-    return ring
-
-
-def record_polygon(record, cell_x: int, cell_z: int) -> Polygon:
-    if not isinstance(record, list) or len(record) not in {8, 9}:
-        raise ValueError("Unsupported building record")
-    rings = record[5]
-    if not rings or len(rings[0]) < 3:
-        raise ValueError("Building record has no valid footprint ring")
-    origin_x, origin_z = cell_x * CELL_SIZE, cell_z * CELL_SIZE
-    converted = [
-        _closed_ring((origin_x + float(point[0]), origin_z + float(point[2])) for point in ring)
-        for ring in rings
-    ]
-    polygon = Polygon(converted[0], converted[1:])
-    if not polygon.is_valid:
-        polygon = shapely.make_valid(polygon)
-    if isinstance(polygon, Polygon):
-        return polygon
-    parts = [part for part in getattr(polygon, "geoms", []) if isinstance(part, Polygon) and part.area >= 1.0]
-    if not parts:
-        raise ValueError("Building footprint could not be reconstructed")
-    return max(parts, key=lambda part: part.area)
-
-
 def base_offset_from_form(form: dict) -> float:
     try:
         value = float(form.get("min_height_m", 0.0))
@@ -93,50 +61,93 @@ def base_offset_from_form(form: dict) -> float:
     return 0.0
 
 
-def _proxy(record, polygon: Polygon, tile_x: int, tile_z: int):
-    if polygon.is_empty or polygon.area < MIN_PROXY_AREA_M2:
+def _signed_ring_area(points) -> float:
+    area = 0.0
+    for index in range(len(points)):
+        a = points[index]
+        b = points[(index + 1) % len(points)]
+        area += a[0] * b[1] - b[0] * a[1]
+    return area * 0.5
+
+
+def _proxy(record, local_cell_x: int, local_cell_z: int):
+    if not isinstance(record, list) or len(record) not in {8, 9} or not isinstance(record[5], list) or not record[5]:
         return None
-    rectangle = polygon.minimum_rotated_rectangle
-    if rectangle.is_empty or not hasattr(rectangle, "exterior"):
+    origin_x = local_cell_x * CELL_SIZE
+    origin_z = local_cell_z * CELL_SIZE
+    rings = []
+    foundations = []
+    for source_ring in record[5]:
+        if not isinstance(source_ring, list) or len(source_ring) < 3:
+            continue
+        ring = []
+        for point in source_ring:
+            if not isinstance(point, list) or len(point) != 3:
+                continue
+            x = origin_x + float(point[0])
+            y = float(point[1])
+            z = origin_z + float(point[2])
+            if not all(math.isfinite(value) for value in (x, y, z)):
+                return None
+            ring.append((x, z))
+            foundations.append(y)
+        if len(ring) >= 3:
+            rings.append(ring)
+    if not rings or not foundations:
         return None
-    corners = list(rectangle.exterior.coords)[:4]
-    if len(corners) != 4:
+
+    area = abs(_signed_ring_area(rings[0]))
+    for hole in rings[1:]:
+        area -= abs(_signed_ring_area(hole))
+    if not math.isfinite(area) or area < MIN_PROXY_AREA_M2:
         return None
-    edges = []
-    for index in range(4):
-        a, b = corners[index], corners[(index + 1) % 4]
-        length = math.hypot(b[0] - a[0], b[1] - a[1])
-        edges.append((length, a, b))
-    first, second = edges[0], edges[1]
-    if first[0] >= second[0]:
-        width, depth = first[0], second[0]
-        a, b = first[1], first[2]
-    else:
-        width, depth = second[0], first[0]
-        a, b = second[1], second[2]
+
+    outer = rings[0]
+    longest = 0.0
+    axis_x, axis_z = 1.0, 0.0
+    for index in range(len(outer)):
+        a = outer[index]
+        b = outer[(index + 1) % len(outer)]
+        dx, dz = b[0] - a[0], b[1] - a[1]
+        length = math.hypot(dx, dz)
+        if length > longest:
+            longest = length
+            axis_x, axis_z = dx / length, dz / length
+    if longest < 0.5:
+        return None
+    side_x, side_z = -axis_z, axis_x
+    along = [point[0] * axis_x + point[1] * axis_z for point in outer]
+    across = [point[0] * side_x + point[1] * side_z for point in outer]
+    min_along, max_along = min(along), max(along)
+    min_across, max_across = min(across), max(across)
+    width = max_along - min_along
+    depth = max_across - min_across
+    yaw = math.atan2(axis_z, axis_x)
+    if depth > width:
+        width, depth = depth, width
+        yaw += math.pi * 0.5
+        axis_x, axis_z, side_x, side_z = side_x, side_z, -axis_x, -axis_z
+        min_along, max_along, min_across, max_across = min_across, max_across, -max_along, -min_along
     if width < 0.5 or depth < 0.5:
         return None
-    yaw = math.atan2(b[1] - a[1], b[0] - a[0])
+
+    center_along = (min_along + max_along) * 0.5
+    center_across = (min_across + max_across) * 0.5
+    center_x = center_along * axis_x + center_across * side_x
+    center_z = center_along * axis_z + center_across * side_z
     form = record[8] if len(record) == 9 and isinstance(record[8], dict) else {}
-    base_offset = base_offset_from_form(form)
-    foundations = [float(point[1]) for ring in record[5] for point in ring if len(point) == 3]
-    if not foundations:
-        return None
-    base_y = min(foundations) + base_offset
+    base_y = min(foundations) + base_offset_from_form(form)
     top_y = float(record[4])
     height = top_y - base_y
-    if not all(math.isfinite(value) for value in (width, depth, yaw, base_y, top_y, height)) or height < 0.5:
+    if not all(math.isfinite(value) for value in (center_x, center_z, width, depth, yaw, base_y, height)) or height < 0.5:
         return None
-    center = rectangle.centroid
-    local_x = center.x - tile_x * TILE_SIZE
-    local_z = center.y - tile_z * TILE_SIZE
-    if local_x < -64.0 or local_x > TILE_SIZE + 64.0 or local_z < -64.0 or local_z > TILE_SIZE + 64.0:
+    if center_x < -512.0 or center_x > TILE_SIZE + 512.0 or center_z < -512.0 or center_z > TILE_SIZE + 512.0:
         return None
+
     kind = int(record[3]) if len(record) > 3 else 0
-    # [local x, base y, local z, width, height, depth, yaw, building kind]
-    packed = [round(local_x, 2), round(base_y, 2), round(local_z, 2),
+    packed = [round(center_x, 2), round(base_y, 2), round(center_z, 2),
               round(width, 2), round(height, 2), round(depth, 2), round(yaw, 5), kind]
-    score = float(polygon.area) + min(height, 80.0) * 8.0
+    score = area + min(height, 80.0) * 8.0
     return packed, score
 
 
@@ -152,19 +163,18 @@ def compile_overview(buildings_root: Path) -> dict:
     for stale in buildings_root.glob("far_buildings_*.json.gz"):
         stale.unlink()
 
-    source_records = emitted = density_dropped = 0
+    source_records = emitted = density_dropped = invalid_records = 0
     max_tile_instances = 0
     total_bytes = 0
     for tile in manifest.get("tiles", []):
         tx, tz = int(tile["x"]), int(tile["z"])
         bins = {}
         for local_x, local_z, records in read_pack(buildings_root / str(tile["file"])):
-            cell_x, cell_z = tx * 16 + local_x, tz * 16 + local_z
             for record in records:
                 source_records += 1
-                polygon = record_polygon(record, cell_x, cell_z)
-                result = _proxy(record, polygon, tx, tz)
+                result = _proxy(record, local_x, local_z)
                 if result is None:
+                    invalid_records += 1
                     continue
                 proxy, score = result
                 bin_x = max(0, min(127, int(math.floor(proxy[0] / DENSITY_BIN_M))))
@@ -204,6 +214,7 @@ def compile_overview(buildings_root: Path) -> dict:
             "source_records": source_records,
             "instances": emitted,
             "density_dropped": density_dropped,
+            "invalid_or_tiny_records": invalid_records,
             "max_tile_instances": max_tile_instances,
             "compressed_bytes": total_bytes,
             "tiles": len(manifest.get("tiles", [])),
