@@ -135,13 +135,13 @@ func _refresh(force: bool) -> void:
             _build.root.position = _tile_position(_build.tile)
         return
     _last_world = world
-    var current := coordinates.tile_for(world.x, world.y)
+    var current: Vector2i = coordinates.tile_for(world.x, world.y)
     _wanted.clear()
     _queue.clear()
     var radius := ceili(far_distance / tile_size) + 1
     for dz in range(-radius, radius + 1):
         for dx in range(-radius, radius + 1):
-            var tile := current + Vector2i(dx, dz)
+            var tile: Vector2i = current + Vector2i(dx, dz)
             var key := _key(tile)
             if not _tile_files.has(key) or _tile_distance(world, tile) > far_distance + 320.0:
                 continue
