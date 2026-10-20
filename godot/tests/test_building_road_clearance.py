@@ -26,12 +26,21 @@ class BuildingRoadClearanceTests(unittest.TestCase):
         self.assertGreaterEqual(resolved.area/building.area,MIN_RETAINED_AREA_RATIO)
         self.assertLessEqual(resolved.bounds[2],8.25+1e-6)
 
-    def test_centerline_through_building_is_reported_not_invented(self):
+    def test_centerline_through_building_is_marked_for_runtime_omission(self):
         building=Polygon([(0,0),(10,0),(10,10),(0,10)])
         candidate=road(5,-5,5,15,4.0,Polygon([(3,-5),(7,-5),(7,15),(3,15)]))
         conflicts=road_conflicts(building,[candidate],STRtree([candidate["surface"]]))
         resolved,changed,unresolved,removed=resolve_polygon_conflict(building,conflicts)
-        self.assertFalse(changed);self.assertTrue(unresolved);self.assertEqual(removed,0.0);self.assertTrue(resolved.equals(building))
+        self.assertFalse(changed);self.assertTrue(unresolved);self.assertEqual(removed,0.0)
+        self.assertTrue(resolved.is_empty,"destructive severe conflicts must not return the original road-blocking footprint")
+
+    def test_fully_swallowed_building_is_marked_for_runtime_omission(self):
+        building=Polygon([(0,0),(4,0),(4,4),(0,4)])
+        candidate=road(2,-5,2,9,8.0,Polygon([(-2,-5),(6,-5),(6,9),(-2,9)]))
+        conflicts=road_conflicts(building,[candidate],STRtree([candidate["surface"]]))
+        resolved,changed,unresolved,removed=resolve_polygon_conflict(building,conflicts)
+        self.assertEqual(len(conflicts),1)
+        self.assertFalse(changed);self.assertTrue(unresolved);self.assertEqual(removed,0.0);self.assertTrue(resolved.is_empty)
 
     def test_roof_triangulation_covers_concave_clipped_footprint_with_courtyard(self):
         shell=[(0,0),(12,0),(12,3),(8,3),(8,12),(0,12)]
