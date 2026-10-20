@@ -1,6 +1,7 @@
 extends Node
 
 const RoadOverviewScript = preload("res://scripts/road_overview.gd")
+const BuildingOverviewScript = preload("res://scripts/building_overview.gd")
 
 # One-shot map-first presentation bootstrap. This branch is deliberately about
 # the Jamaica world itself; it does not add AI, jobs, traffic or placeholder
@@ -8,6 +9,7 @@ const RoadOverviewScript = preload("res://scripts/road_overview.gd")
 var _applied := false
 var _buildings: JamaicaBuildingStreamer
 var _road_overview
+var _building_overview
 
 func _ready() -> void:
     set_process(true)
@@ -53,6 +55,11 @@ func _process(_delta: float) -> void:
         _buildings.quality = "Quality"
         _buildings.draw_distance = 1400.0
         _buildings.max_loaded_cells = maxi(_buildings.max_loaded_cells, 176)
+        if _buildings.get_node_or_null("FarBuildingOverview") == null:
+            _building_overview = BuildingOverviewScript.new()
+            _building_overview.name = "FarBuildingOverview"
+            _building_overview.configure(_buildings)
+            _buildings.add_child(_building_overview)
         if not _buildings.cell_ready.is_connected(_on_building_cell_ready):
             _buildings.cell_ready.connect(_on_building_cell_ready)
         # Upgrade any cells that were already present before this bootstrap ran.
