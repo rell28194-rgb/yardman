@@ -5,16 +5,16 @@ var output_dir := ""
 
 const CAPTURE_READY_FRAMES := 24
 const CAPTURE_MAX_FRAMES := 1200
+const LOCAL_BUILDING_CELL_RADIUS := 1
 
 func _initialize() -> void:
     call_deferred("_run")
 
 func _suppress_far_overview() -> void:
     # The acceptance runner uses software OpenGL. Building all 2,537 national
-    # far-LOD sectors there can consume most of the 10-minute capture budget,
-    # even though every acceptance frame is a local gameplay view. Keep the
-    # real streamed terrain/roads/buildings and discard only the asynchronous
-    # island-overview assembly in this test process.
+    # terrain overview sectors there can consume most of the capture budget.
+    # This affects only the CI process: real runtime far terrain/road HLODs stay
+    # enabled. Local streamed terrain/roads/buildings remain fully real.
     if scene == null or scene.terrain == null:
         return
     var terrain = scene.terrain
@@ -24,29 +24,48 @@ func _suppress_far_overview() -> void:
         terrain._far_root.queue_free()
         terrain._far_root = null
 
+func _local_buildings_ready(world_x: float, world_z: float) -> bool:
+    if scene.buildings == null or scene.buildings.manifest.is_empty():
+        return true
+    var streamer = scene.buildings
+    var center := Vector2i(floori(world_x / streamer.cell_size), floori(world_z / streamer.cell_size))
+    var required := 0
+    for dz in range(-LOCAL_BUILDING_CELL_RADIUS, LOCAL_BUILDING_CELL_RADIUS + 1):
+        for dx in range(-LOCAL_BUILDING_CELL_RADIUS, LOCAL_BUILDING_CELL_RADIUS + 1):
+            var cell := center + Vector2i(dx, dz)
+            if not streamer._has_cell(cell):
+                continue
+            required += 1
+            if not streamer._loaded.has(streamer._key(cell)):
+                return false
+    # Empty rural cells are valid; populated captures must have their immediate
+    # source cells resident, not the entire 1.45 km Ultra building queue.
+    return required == 0 or required <= streamer._loaded.size()
+
+func _local_surface_ready() -> bool:
+    if scene == null or scene.roads == null or scene.terrain == null:
+        return false
+    var world: PackedFloat64Array = scene.roads.local_to_world(scene.car.position)
+    return bool(scene.world_ready) \
+        and bool(scene.car.is_on_floor()) \
+        and bool(scene.roads.is_world_position_ready(world[0], world[2])) \
+        and bool(scene.terrain.is_world_position_ready(world[0], world[2])) \
+        and _local_buildings_ready(world[0], world[2])
+
 func _wait_world() -> bool:
-    # Acceptance needs the camera-local traversal surface to be current and
-    # renderable. Requiring the asynchronous building streamer to reach a
-    # *global* inflight count of zero can starve forever as streaming
-    # generations replace one another, especially under llvmpipe. Once the
-    # world, vehicle floor, local roads and terrain are settled, require a
-    # bounded run of stable rendered frames. Buildings keep their real runtime
-    # streaming behavior and are not disabled or globally drained for CI.
+    # Acceptance is intentionally local: a playable camera view must not wait
+    # for every Ultra-distance tile in the background queues. Requiring global
+    # inflight_count()==0 made a correct local world look permanently loading
+    # while unrelated 4 km tiles were still compiling under llvmpipe.
     var ready_frames := 0
     for frame in range(CAPTURE_MAX_FRAMES):
         await process_frame
         _suppress_far_overview()
-        var local_surface_ready: bool = bool(scene.world_ready) \
-            and bool(scene.car.is_on_floor()) \
-            and int(scene.roads.inflight_count()) == 0 \
-            and int(scene.terrain.inflight_count()) == 0
-        if local_surface_ready:
+        if _local_surface_ready():
             ready_frames += 1
             if ready_frames >= CAPTURE_READY_FRAMES:
-                var building_inflight := 0
-                if scene.buildings != null:
-                    building_inflight = scene.buildings.inflight_count()
-                print("CAPTURE_TEST: local world ready after %d frames; building_inflight=%d" % [frame + 1, building_inflight])
+                print("CAPTURE_TEST: local world ready after %d frames; road_pending=%d terrain_pending=%d building_pending=%d" % [
+                    frame + 1, scene.roads.inflight_count(), scene.terrain.inflight_count(), scene.buildings.inflight_count()])
                 return true
         else:
             ready_frames = 0
