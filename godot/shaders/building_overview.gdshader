@@ -24,9 +24,12 @@ void fragment() {
         discard;
     }
 
-    vec3 base = mix(vec3(0.61, 0.59, 0.53), vec3(0.48, 0.50, 0.48), clamp(COLOR.a, 0.0, 1.0));
-    base *= 0.94 + hash21(floor(WORLD_MATRIX[3].xz / 24.0)) * 0.10;
-    ALBEDO = base;
+    // At kilometre-scale viewing distances silhouette, density and lighting
+    // continuity matter more than facade microdetail. Keep this material cheap
+    // and stable; the registered near buildings replace it before detail is
+    // expected to resolve.
+    float grain = 0.965 + hash21(floor(FRAGCOORD.xy / 6.0)) * 0.035;
+    ALBEDO = vec3(0.56, 0.55, 0.51) * grain;
     ROUGHNESS = 0.94;
     METALLIC = 0.0;
 }
