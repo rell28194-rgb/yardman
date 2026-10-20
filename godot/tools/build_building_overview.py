@@ -13,7 +13,10 @@ import json
 import math
 from pathlib import Path
 
-from resolve_building_road_conflicts import base_offset_from_form, read_pack, record_polygon
+import shapely
+from shapely.geometry import Polygon
+
+from build_buildings import CELL_SIZE, HEADER, INDEX, MAGIC
 
 TILE_SIZE = 4096.0
 DENSITY_BIN_M = 32.0
@@ -22,7 +25,75 @@ MIN_PROXY_AREA_M2 = 5.0
 MAX_TILE_INSTANCES = 32768
 
 
-def _proxy(record, polygon, tile_x: int, tile_z: int):
+def read_pack(path: Path):
+    with path.open("rb") as handle:
+        magic, count = HEADER.unpack(handle.read(HEADER.size))
+        if magic != MAGIC or count > 256:
+            raise ValueError(f"Invalid building pack header: {path}")
+        size = path.stat().st_size
+        data_start = HEADER.size + count * INDEX.size
+        entries = []
+        for _ in range(count):
+            x, z, offset, length = INDEX.unpack(handle.read(INDEX.size))
+            if offset < data_start or offset + length > size:
+                raise ValueError(f"Invalid building cell index: {path}")
+            entries.append((x, z, offset, length))
+        cells = []
+        for x, z, offset, length in entries:
+            handle.seek(offset)
+            records = json.loads(gzip.decompress(handle.read(length)))
+            if not isinstance(records, list):
+                raise ValueError(f"Building cell is not a record list: {path}")
+            cells.append((x, z, records))
+        return cells
+
+
+def _closed_ring(points):
+    ring = list(points)
+    if ring and ring[0] != ring[-1]:
+        ring.append(ring[0])
+    return ring
+
+
+def record_polygon(record, cell_x: int, cell_z: int) -> Polygon:
+    if not isinstance(record, list) or len(record) not in {8, 9}:
+        raise ValueError("Unsupported building record")
+    rings = record[5]
+    if not rings or len(rings[0]) < 3:
+        raise ValueError("Building record has no valid footprint ring")
+    origin_x, origin_z = cell_x * CELL_SIZE, cell_z * CELL_SIZE
+    converted = [
+        _closed_ring((origin_x + float(point[0]), origin_z + float(point[2])) for point in ring)
+        for ring in rings
+    ]
+    polygon = Polygon(converted[0], converted[1:])
+    if not polygon.is_valid:
+        polygon = shapely.make_valid(polygon)
+    if isinstance(polygon, Polygon):
+        return polygon
+    parts = [part for part in getattr(polygon, "geoms", []) if isinstance(part, Polygon) and part.area >= 1.0]
+    if not parts:
+        raise ValueError("Building footprint could not be reconstructed")
+    return max(parts, key=lambda part: part.area)
+
+
+def base_offset_from_form(form: dict) -> float:
+    try:
+        value = float(form.get("min_height_m", 0.0))
+        if math.isfinite(value) and value > 0.0:
+            return value
+    except (TypeError, ValueError):
+        pass
+    try:
+        value = float(form.get("min_level", 0.0))
+        if math.isfinite(value) and value > 0.0:
+            return value * 3.15
+    except (TypeError, ValueError):
+        pass
+    return 0.0
+
+
+def _proxy(record, polygon: Polygon, tile_x: int, tile_z: int):
     if polygon.is_empty or polygon.area < MIN_PROXY_AREA_M2:
         return None
     rectangle = polygon.minimum_rotated_rectangle
@@ -54,7 +125,7 @@ def _proxy(record, polygon, tile_x: int, tile_z: int):
     base_y = min(foundations) + base_offset
     top_y = float(record[4])
     height = top_y - base_y
-    if not all(math.isfinite(v) for v in (width, depth, yaw, base_y, top_y, height)) or height < 0.5:
+    if not all(math.isfinite(value) for value in (width, depth, yaw, base_y, top_y, height)) or height < 0.5:
         return None
     center = rectangle.centroid
     local_x = center.x - tile_x * TILE_SIZE
@@ -84,24 +155,21 @@ def compile_overview(buildings_root: Path) -> dict:
     source_records = emitted = density_dropped = 0
     max_tile_instances = 0
     total_bytes = 0
-    tile_metadata = []
     for tile in manifest.get("tiles", []):
         tx, tz = int(tile["x"]), int(tile["z"])
         bins = {}
-        tile_source = 0
         for local_x, local_z, records in read_pack(buildings_root / str(tile["file"])):
             cell_x, cell_z = tx * 16 + local_x, tz * 16 + local_z
             for record in records:
                 source_records += 1
-                tile_source += 1
                 polygon = record_polygon(record, cell_x, cell_z)
                 result = _proxy(record, polygon, tx, tz)
                 if result is None:
                     continue
                 proxy, score = result
-                bx = max(0, min(127, int(math.floor(proxy[0] / DENSITY_BIN_M))))
-                bz = max(0, min(127, int(math.floor(proxy[2] / DENSITY_BIN_M))))
-                key = (bx, bz)
+                bin_x = max(0, min(127, int(math.floor(proxy[0] / DENSITY_BIN_M))))
+                bin_z = max(0, min(127, int(math.floor(proxy[2] / DENSITY_BIN_M))))
+                key = (bin_x, bin_z)
                 bucket = bins.setdefault(key, [])
                 bucket.append((score, proxy))
                 bucket.sort(key=lambda item: item[0], reverse=True)
@@ -121,7 +189,6 @@ def compile_overview(buildings_root: Path) -> dict:
         emitted += len(instances)
         max_tile_instances = max(max_tile_instances, len(instances))
         total_bytes += len(compressed)
-        tile_metadata.append([tx, tz, len(instances), tile_source])
 
     manifest["far_overview"] = {
         "format": 1,
@@ -139,7 +206,7 @@ def compile_overview(buildings_root: Path) -> dict:
             "density_dropped": density_dropped,
             "max_tile_instances": max_tile_instances,
             "compressed_bytes": total_bytes,
-            "tiles": len(tile_metadata),
+            "tiles": len(manifest.get("tiles", [])),
         },
     }
     temporary = manifest_path.with_suffix(".json.tmp")
