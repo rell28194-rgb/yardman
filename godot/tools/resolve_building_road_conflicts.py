@@ -225,5 +225,12 @@ def compile_clearance(roads_root,terrain_root,buildings_root):
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument("roads",type=Path);p.add_argument("terrain",type=Path);p.add_argument("buildings",type=Path);a=p.parse_args();stats=compile_clearance(a.roads,a.terrain,a.buildings);print("YARDMAN_BUILDING_ROAD_CLEARANCE_PASS",json.dumps(stats,sort_keys=True),flush=True);return 0
+    p=argparse.ArgumentParser();p.add_argument("roads",type=Path);p.add_argument("terrain",type=Path);p.add_argument("buildings",type=Path);a=p.parse_args()
+    stats=compile_clearance(a.roads,a.terrain,a.buildings)
+    print("YARDMAN_BUILDING_ROAD_CLEARANCE_PASS",json.dumps(stats,sort_keys=True),flush=True)
+    # HLOD is intentionally generated only from the final packs. This ensures a
+    # removed severe road obstruction cannot reappear in the distant renderer.
+    from build_building_overview import compile_overview
+    compile_overview(a.buildings)
+    return 0
 if __name__=="__main__":raise SystemExit(main())
