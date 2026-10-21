@@ -49,19 +49,20 @@ jobs:
           sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
           godot --version
 
-      - name: Reject GDScript parse errors
+      - name: Reject GDScript and shader parse errors
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p godot/build
           timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/environment-import.log
-          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/environment-import.log; then exit 1; fi
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/environment-import.log; then exit 1; fi
 
       - name: Prove released GLBs load and normalize under Android budgets
         shell: bash
         run: |
           set -euo pipefail
           timeout 180 godot --headless --path godot --script tests/environment_content_runtime_test.gd 2>&1 | tee godot/build/environment-runtime.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/environment-runtime.log; then exit 1; fi
           grep -q 'YARDMAN_ENVIRONMENT_CONTENT_RUNTIME_PASS assets=3' godot/build/environment-runtime.log
 
       - name: Upload validation evidence
