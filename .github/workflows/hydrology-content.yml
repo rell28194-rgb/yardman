@@ -1,0 +1,109 @@
+name: Yardman Jamaica Hydrology Pack
+
+on:
+  push:
+    branches:
+      - codex/streamed-content-upgrade-001
+    paths:
+      - '.github/workflows/hydrology-content.yml'
+      - 'tools/compile_hydrology.py'
+      - 'godot/scripts/stream_water_runtime.gd'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile-hydrology:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout streamed-content branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install geospatial compiler dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --disable-pip-version-check --no-cache-dir osmium pyproj shapely
+
+      - name: Download current Jamaica OpenStreetMap extract
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/yardman-hydrology
+          curl --fail --location --retry 3 --retry-all-errors \
+            'https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf' \
+            -o /tmp/yardman-hydrology/jamaica-latest.osm.pbf
+          curl --fail --location --retry 3 --retry-all-errors \
+            'https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf.md5' \
+            -o /tmp/yardman-hydrology/jamaica-latest.osm.pbf.md5
+          cd /tmp/yardman-hydrology
+          md5sum -c jamaica-latest.osm.pbf.md5
+          test "$(stat -c%s jamaica-latest.osm.pbf)" -gt 10000000
+          test "$(stat -c%s jamaica-latest.osm.pbf)" -lt 100000000
+
+      - name: Compile Yardman hydrology tiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build/hydrology
+          python tools/compile_hydrology.py \
+            /tmp/yardman-hydrology/jamaica-latest.osm.pbf \
+            build/hydrology | tee build/hydrology-compile.log
+          grep -q 'YARDMAN_HYDROLOGY_COMPILE_PASS' build/hydrology-compile.log
+
+      - name: Validate pack contract and coordinate grid
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, pathlib
+          root = pathlib.Path('build/hydrology')
+          m = json.loads((root/'manifest.json').read_text())
+          assert m['format_version'] == 1
+          assert m['crs'] == 'EPSG:3448'
+          assert abs(float(m['tile_size']) - 4096.0) < 0.001
+          assert abs(float(m['origin']['easting']) - 771862.3076757698) < 0.001
+          assert abs(float(m['origin']['northing']) - 646846.7138758468) < 0.001
+          assert int(m['stats']['tiles']) > 0
+          assert int(m['stats']['source_ways_compiled']) > 0
+          assert int(m['stats']['tile_pieces']) > 0
+          assert '© OpenStreetMap contributors' in m['attribution']
+          for tile in m['tiles']:
+              p = root/tile['file']
+              assert p.is_file() and p.stat().st_size > 0
+              payload = json.loads(p.read_text())
+              assert payload['tile'] == [tile['x'], tile['z']]
+              for stream in payload['streams']:
+                  assert stream['class'] in {'river','stream','canal','drain','ditch'}
+                  assert 0.35 <= float(stream['width_m']) <= 120.0
+                  assert len(stream['points']) >= 2
+          print('YARDMAN_HYDROLOGY_PACK_VALIDATE_PASS', m['stats'])
+          PY
+
+      - name: Package hydrology content shard
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd build
+          zip -q -r Yardman-Hydrology-OSM-v1.zip hydrology
+          sha256sum Yardman-Hydrology-OSM-v1.zip > Yardman-Hydrology-OSM-v1.zip.sha256
+          ls -lh Yardman-Hydrology-OSM-v1.zip
+
+      - name: Upload hydrology pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Hydrology-OSM-v1
+          path: |
+            build/Yardman-Hydrology-OSM-v1.zip
+            build/Yardman-Hydrology-OSM-v1.zip.sha256
+            build/hydrology-compile.log
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
