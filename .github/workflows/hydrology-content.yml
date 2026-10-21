@@ -11,12 +11,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   compile-hydrology:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      RELEASE_TAG: yardman-hydrology-v1-20261021
+      PACK_NAME: Yardman-Hydrology-OSM-v1.zip
     steps:
       - name: Checkout streamed-content branch
         uses: actions/checkout@v4
@@ -89,33 +92,80 @@ jobs:
           print('YARDMAN_HYDROLOGY_PACK_VALIDATE_PASS', m['stats'])
           PY
 
-      - name: Package hydrology content shard
+      - name: Package deterministic hydrology content shard
         shell: bash
         run: |
           set -euxo pipefail
-          rm -f build/Yardman-Hydrology-OSM-v1.zip build/Yardman-Hydrology-OSM-v1.zip.sha256
-          (cd build/hydrology && zip -q -r ../Yardman-Hydrology-OSM-v1.zip .)
-          sha256sum build/Yardman-Hydrology-OSM-v1.zip > build/Yardman-Hydrology-OSM-v1.zip.sha256
+          rm -f "build/$PACK_NAME" "build/$PACK_NAME.sha256" build/hydrology-pack-metadata.json
           python - <<'PY'
-          import zipfile
-          path = 'build/Yardman-Hydrology-OSM-v1.zip'
-          with zipfile.ZipFile(path) as zf:
+          import hashlib, json, pathlib, zipfile
+          root = pathlib.Path('build/hydrology')
+          target = pathlib.Path('build/Yardman-Hydrology-OSM-v1.zip')
+          epoch = (2020, 1, 1, 0, 0, 0)
+          with zipfile.ZipFile(target, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+              for path in sorted(p for p in root.rglob('*') if p.is_file()):
+                  rel = path.relative_to(root).as_posix()
+                  info = zipfile.ZipInfo(rel, epoch)
+                  info.compress_type = zipfile.ZIP_DEFLATED
+                  info.external_attr = 0o644 << 16
+                  zf.writestr(info, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+          data = target.read_bytes()
+          digest = hashlib.sha256(data).hexdigest()
+          metadata = {'bytes': len(data), 'sha256': digest, 'file': target.name}
+          pathlib.Path('build/Yardman-Hydrology-OSM-v1.zip.sha256').write_text(f'{digest}  {target.name}\n')
+          pathlib.Path('build/hydrology-pack-metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
+          with zipfile.ZipFile(target) as zf:
               names = zf.namelist()
               assert 'manifest.json' in names
               assert 'ATTRIBUTION.txt' in names
               assert not any(name.startswith('hydrology/') for name in names)
               assert sum(name.startswith('water_') and name.endswith('.json') for name in names) >= 300
-          print('YARDMAN_HYDROLOGY_SHARD_LAYOUT_PASS')
+          print('YARDMAN_HYDROLOGY_SHARD_LAYOUT_PASS', metadata)
           PY
-          ls -lh build/Yardman-Hydrology-OSM-v1.zip
+          cat "build/$PACK_NAME.sha256"
+          ls -lh "build/$PACK_NAME"
 
-      - name: Upload hydrology pack
+      - name: Publish immutable hydrology release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          EXPECTED_SHA="$(cut -d' ' -f1 "build/$PACK_NAME.sha256")"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            mkdir -p /tmp/existing-release
+            gh release download "$RELEASE_TAG" --pattern "$PACK_NAME" --dir /tmp/existing-release
+            ACTUAL_SHA="$(sha256sum "/tmp/existing-release/$PACK_NAME" | cut -d' ' -f1)"
+            test "$ACTUAL_SHA" = "$EXPECTED_SHA"
+          else
+            gh release create "$RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --title 'Yardman Jamaica Hydrology Pack v1' \
+              --notes 'Source-backed Jamaica rivers/streams/canals/drains/ditches compiled from OpenStreetMap via Geofabrik. Data attribution: © OpenStreetMap contributors, ODbL 1.0. Runtime content shard for Yardman.'
+            gh release upload "$RELEASE_TAG" \
+              "build/$PACK_NAME" \
+              "build/$PACK_NAME.sha256"
+          fi
+
+      - name: Prove anonymous durable download
+        shell: bash
+        run: |
+          set -euxo pipefail
+          URL="https://github.com/rell28194-rgb/yardman/releases/download/$RELEASE_TAG/$PACK_NAME"
+          curl --fail --location --retry 3 --retry-all-errors "$URL" -o /tmp/released-hydrology.zip
+          EXPECTED_SHA="$(cut -d' ' -f1 "build/$PACK_NAME.sha256")"
+          test "$(sha256sum /tmp/released-hydrology.zip | cut -d' ' -f1)" = "$EXPECTED_SHA"
+          test "$(stat -c%s /tmp/released-hydrology.zip)" = "$(stat -c%s "build/$PACK_NAME")"
+          echo "YARDMAN_HYDROLOGY_DURABLE_DOWNLOAD_PASS $URL"
+
+      - name: Upload hydrology build evidence
         uses: actions/upload-artifact@v4
         with:
           name: Yardman-Hydrology-OSM-v1
           path: |
             build/Yardman-Hydrology-OSM-v1.zip
             build/Yardman-Hydrology-OSM-v1.zip.sha256
+            build/hydrology-pack-metadata.json
             build/hydrology-compile.log
           if-no-files-found: error
           retention-days: 7
