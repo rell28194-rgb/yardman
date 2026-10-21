@@ -1,0 +1,65 @@
+name: Yardman River Ambience Runtime
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - 'godot/scripts/hydrology_renderer.gd'
+      - 'godot/scripts/hydrology_audio_runtime.gd'
+      - 'godot/tests/hydrology_audio_runtime_test.gd'
+      - 'godot/project.godot'
+      - '.github/workflows/hydrology-audio-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Reject project parse errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/hydrology-audio-import.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/hydrology-audio-import.log; then exit 1; fi
+
+      - name: Prove one-voice proximity and loop contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 90 godot --headless --path godot --script tests/hydrology_audio_runtime_test.gd 2>&1 | tee godot/build/hydrology-audio-runtime.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/hydrology-audio-runtime.log; then exit 1; fi
+          grep -q 'YARDMAN_HYDROLOGY_AUDIO_RUNTIME_PASS voices=1 max_distance=130 segments_tested=2 stream_hz=22050 loop=seamless' godot/build/hydrology-audio-runtime.log
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Hydrology-Audio-Evidence
+          path: |
+            godot/build/hydrology-audio-import.log
+            godot/build/hydrology-audio-runtime.log
+          if-no-files-found: ignore
+          retention-days: 3
