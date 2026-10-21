@@ -16,6 +16,7 @@ uniform sampler2D surface_hd_dry : source_color, repeat_enable, filter_linear_mi
 uniform sampler2D surface_hd_soil : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D surface_hd_rock : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool has_surface_hd = false;
+uniform float weather_wetness : hint_range(0.0, 1.0) = 0.0;
 uniform sampler2D tunnel_portal_mask : filter_nearest, repeat_disable;
 uniform bool tunnel_portal_mask_enabled = false;
 uniform float terrain_tile_size = 4096.0;
@@ -109,14 +110,15 @@ void fragment() {
     float rocky = smoothstep(0.22, 0.59, slope) * mix(0.72, 1.0, patch.b);
     vec3 color = mix(mix(grass, soil, bare), rock, rocky);
     float grain = overview ? 1.0 : mix(0.90, 1.08, detail.g);
-    ALBEDO = color * grain;
-    ROUGHNESS = mix(0.96, 0.87, rocky);
-    SPECULAR = 0.14;
+    float wetness = clamp(weather_wetness, 0.0, 1.0) * (overview ? 0.35 : 1.0);
+    ALBEDO = color * grain * mix(1.0, 0.73, wetness);
+    ROUGHNESS = mix(mix(0.96, 0.87, rocky), 0.38, wetness);
+    SPECULAR = mix(0.14, 0.48, wetness);
     // Keep the existing procedural micro-normal: it costs one small shared
     // texture instead of six extra normal maps and remains stable while driving.
     if (!overview) {
         vec2 normal_xy = (detail.rg - vec2(0.5)) * (0.16 + rocky * 0.13);
         NORMAL_MAP = vec3(normal_xy + vec2(0.5), 1.0);
-        NORMAL_MAP_DEPTH = 0.24;
+        NORMAL_MAP_DEPTH = mix(0.24, 0.34, wetness);
     }
 }
