@@ -24,20 +24,28 @@ func _run() -> void:
     var runtime := Runtime.new()
     var textures: Dictionary = {}
     var total := 0
+    var user_root := "user://surface-runtime-test/"
+    DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(user_root))
     for role in expected.keys():
         var filename := str(expected[role][0])
         var expected_bytes := int(expected[role][1])
-        var path := "res://build/surface-runtime-test/" + filename
-        if not FileAccess.file_exists(path):
+        var source_path := "res://build/surface-runtime-test/" + filename
+        var user_path := user_root + filename
+        if not FileAccess.file_exists(source_path):
             _fail("missing downloaded surface: " + filename)
             return
-        var handle := FileAccess.open(path, FileAccess.READ)
-        var bytes := int(handle.get_length()) if handle != null else -1
-        if bytes != expected_bytes:
-            _fail("byte contract failed: %s %d != %d" % [filename, bytes, expected_bytes])
+        var bytes_data := FileAccess.get_file_as_bytes(source_path)
+        if bytes_data.size() != expected_bytes:
+            _fail("byte contract failed: %s %d != %d" % [filename, bytes_data.size(), expected_bytes])
             return
-        total += bytes
-        var texture = runtime.call("_load_texture_file", path)
+        var output := FileAccess.open(user_path, FileAccess.WRITE)
+        if output == null:
+            _fail("could not stage user-storage texture: " + filename)
+            return
+        output.store_buffer(bytes_data)
+        output.close()
+        total += bytes_data.size()
+        var texture = runtime.call("_load_texture_file", user_path)
         if not texture is ImageTexture:
             _fail("JPEG decode failed: " + filename)
             return
@@ -50,7 +58,7 @@ func _run() -> void:
         return
     runtime.set("_textures", textures)
 
-    var terrain := ShaderMaterial.new()
+    var terrain: ShaderMaterial = ShaderMaterial.new()
     terrain.shader = TerrainShader
     runtime.apply_terrain_material(terrain)
     if terrain.get_shader_parameter("has_surface_hd") != true:
@@ -61,14 +69,14 @@ func _run() -> void:
             _fail("terrain texture missing: " + parameter)
             return
 
-    var beach := ShaderMaterial.new()
+    var beach: ShaderMaterial = ShaderMaterial.new()
     beach.shader = BeachShader
     runtime.apply_beach_material(beach)
     if beach.get_shader_parameter("has_surface_hd_sand") != true or beach.get_shader_parameter("surface_hd_sand") == null:
         _fail("beach Surface HD binding failed")
         return
 
-    var road := ShaderMaterial.new()
+    var road: ShaderMaterial = ShaderMaterial.new()
     road.shader = RoadShader
     runtime.apply_road_material(road)
     if road.get_shader_parameter("has_surface_hd_gravel") != true or road.get_shader_parameter("surface_hd_gravel") == null:
@@ -76,4 +84,21 @@ func _run() -> void:
         return
 
     print("YARDMAN_SURFACE_CONTENT_RUNTIME_PASS assets=6 bytes=1438240 dimensions=768 terrain=4 beach=1 road=1 draw_calls_added=0 geometry_added=0")
+
+    # Release all GPU-backed resources before SceneTree teardown so the strict
+    # gate distinguishes real runtime errors from a test that quits too early.
+    terrain = null
+    beach = null
+    road = null
+    runtime.set("_textures", {})
+    textures.clear()
+    runtime.free()
+    await process_frame
+    RenderingServer.sync()
+    await process_frame
+    for role in expected.keys():
+        var filename := str(expected[role][0])
+        var user_path := user_root + filename
+        if FileAccess.file_exists(user_path):
+            DirAccess.remove_absolute(ProjectSettings.globalize_path(user_path))
     quit(0)
