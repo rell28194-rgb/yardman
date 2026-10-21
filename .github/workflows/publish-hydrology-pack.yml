@@ -1,0 +1,123 @@
+name: Publish Jamaica Hydrology Pack
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - 'Tools/compile_hydrology.py'
+      - 'godot/data/world_grid_contract.json'
+      - '.github/workflows/publish-hydrology-pack.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: yardman-hydrology-v1
+  PACK_NAME: Yardman-Jamaica-Hydrology-v1.zip
+  GEOFABRIK_PBF: https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf
+  GEOFABRIK_MD5: https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf.md5
+
+jobs:
+  build-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install hydrology compiler dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --disable-pip-version-check --no-cache-dir osmium==4.1.1 pyproj==3.7.2
+
+      - name: Download and verify current Jamaica OSM extract
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl --fail --location --retry 2 --retry-all-errors "$GEOFABRIK_PBF" -o /tmp/jamaica.osm.pbf
+          curl --fail --location --retry 2 --retry-all-errors "$GEOFABRIK_MD5" -o /tmp/jamaica.osm.pbf.md5
+          EXPECTED="$(awk '{print $1}' /tmp/jamaica.osm.pbf.md5)"
+          ACTUAL="$(md5sum /tmp/jamaica.osm.pbf | awk '{print $1}')"
+          test "$EXPECTED" = "$ACTUAL"
+          echo "YARDMAN_HYDROLOGY_SOURCE bytes=$(stat -c%s /tmp/jamaica.osm.pbf) md5=$ACTUAL"
+
+      - name: Compile OSM waterways into accepted 4096 m world tiles
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -rf build/hydrology
+          python Tools/compile_hydrology.py \
+            --pbf /tmp/jamaica.osm.pbf \
+            --grid godot/data/world_grid_contract.json \
+            --output build/hydrology | tee build/hydrology-compile.log
+          python - <<'PY'
+          import json
+          m=json.load(open('build/hydrology/manifest.json'))
+          print('YARDMAN_HYDROLOGY_STATS',json.dumps(m['stats'],sort_keys=True,separators=(',',':')))
+          assert m['crs']=='EPSG:3448'
+          assert float(m['tile_size'])==4096.0
+          assert int(m['stats']['tiles']) >= 20
+          assert int(m['stats']['parts']) >= 100
+          assert int(m['render_policy']['max_active_tiles']) == 9
+          assert int(m['render_policy']['max_vertices_per_tile']) == 12000
+          PY
+
+      - name: Build deterministic downloadable hydrology archive
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import hashlib,json,os,pathlib,zipfile
+          root=pathlib.Path('build/hydrology')
+          out=pathlib.Path(os.environ['PACK_NAME'])
+          fixed=(2024,1,1,0,0,0)
+          with zipfile.ZipFile(out,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for path in sorted(root.glob('*.json')):
+                  info=zipfile.ZipInfo(path.name,fixed)
+                  info.compress_type=zipfile.ZIP_DEFLATED
+                  info.external_attr=0o644 << 16
+                  z.writestr(info,path.read_bytes(),compress_type=zipfile.ZIP_DEFLATED,compresslevel=9)
+          data=out.read_bytes()
+          manifest=(root/'manifest.json').read_bytes()
+          metadata={
+              'format_version':1,
+              'pack_id':'jamaica_hydrology_osm_v1',
+              'file':out.name,
+              'bytes':len(data),
+              'sha256':hashlib.sha256(data).hexdigest(),
+              'manifest_sha256':hashlib.sha256(manifest).hexdigest(),
+              'source':'OpenStreetMap / Geofabrik Jamaica extract',
+              'attribution':'© OpenStreetMap contributors — https://www.openstreetmap.org/copyright (ODbL)',
+          }
+          pathlib.Path('yardman-hydrology-metadata.json').write_text(json.dumps(metadata,indent=2,sort_keys=True))
+          print('YARDMAN_HYDROLOGY_PACK',json.dumps(metadata,sort_keys=True,separators=(',',':')))
+          PY
+
+      - name: Publish durable hydrology release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --target codex/accepted-fleet-garage-001 \
+              --title 'Yardman Jamaica Hydrology v1' \
+              --notes 'Optional post-install Jamaica river and stream geometry compiled from OpenStreetMap. © OpenStreetMap contributors, ODbL.'
+          fi
+          gh release upload "$RELEASE_TAG" "$PACK_NAME" yardman-hydrology-metadata.json --clobber
+          echo "YARDMAN_HYDROLOGY_RELEASE=https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"
+
+      - name: Upload hydrology validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Hydrology-v1-Evidence
+          path: |
+            build/hydrology-compile.log
+            build/hydrology/manifest.json
+            yardman-hydrology-metadata.json
+          if-no-files-found: ignore
+          retention-days: 3
