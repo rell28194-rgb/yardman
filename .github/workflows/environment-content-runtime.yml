@@ -6,10 +6,12 @@ on:
       - codex/accepted-fleet-garage-001
     paths:
       - 'godot/scripts/environment_content_runtime.gd'
+      - 'godot/scripts/environment_variant_policy.gd'
       - 'godot/scripts/hydrology_content_runtime.gd'
       - 'godot/scripts/remote_fleet_runtime.gd'
       - 'godot/shaders/river_surface.gdshader'
       - 'godot/tests/environment_content_runtime_test.gd'
+      - 'godot/tests/environment_variant_policy_test.gd'
       - 'godot/project.godot'
       - '.github/workflows/environment-content-runtime.yml'
   workflow_dispatch:
@@ -73,6 +75,14 @@ jobs:
           timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/environment-import.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/environment-import.log; then exit 1; fi
 
+      - name: Prove deterministic biome variant policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 60 godot --headless --path godot --script tests/environment_variant_policy_test.gd 2>&1 | tee godot/build/environment-variants.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/environment-variants.log; then exit 1; fi
+          grep -q 'YARDMAN_ENVIRONMENT_VARIANT_POLICY_PASS' godot/build/environment-variants.log
+
       - name: Prove released GLBs load and normalize under Android budgets
         shell: bash
         run: |
@@ -88,6 +98,7 @@ jobs:
           name: Yardman-Environment-HD-Runtime-Evidence
           path: |
             godot/build/environment-import.log
+            godot/build/environment-variants.log
             godot/build/environment-runtime.log
           if-no-files-found: ignore
           retention-days: 3
