@@ -1,0 +1,117 @@
+name: Yardman Surface HD Runtime
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - 'godot/scripts/surface_content_runtime.gd'
+      - 'godot/scripts/surface_content_bridge.gd'
+      - 'godot/shaders/terrain_surface.gdshader'
+      - 'godot/shaders/beach.gdshader'
+      - 'godot/shaders/road_surface.gdshader'
+      - 'godot/tests/surface_content_runtime_test.gd'
+      - 'godot/project.godot'
+      - '.github/workflows/surface-content-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+  RELEASE_ROOT: 'https://github.com/rell28194-rgb/yardman/releases/download/yardman-surface-hd-v1'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reject unsupported Godot 4.7 content APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R -n -E 'keep_partial_download|append_to_download_file|depth_draw_alpha_prepass' \
+              godot/scripts/surface_content_runtime.gd \
+              godot/scripts/environment_content_runtime.gd \
+              godot/scripts/hydrology_content_runtime.gd \
+              godot/scripts/remote_fleet_runtime.gd \
+              godot/shaders/terrain_surface.gdshader \
+              godot/shaders/beach.gdshader \
+              godot/shaders/road_surface.gdshader; then
+            exit 1
+          fi
+
+      - name: Download and verify Surface HD release
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -rf godot/build/surface-runtime-test
+          mkdir -p godot/build/surface-runtime-test
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman-surface-hd-v1-manifest.json" -o godot/build/surface-runtime-test/manifest.json
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/ground_lush.jpg" -o godot/build/surface-runtime-test/ground_lush.jpg
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/ground_dry.jpg" -o godot/build/surface-runtime-test/ground_dry.jpg
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/ground_wet_soil.jpg" -o godot/build/surface-runtime-test/ground_wet_soil.jpg
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/ground_rock.jpg" -o godot/build/surface-runtime-test/ground_rock.jpg
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/beach_sand.jpg" -o godot/build/surface-runtime-test/beach_sand.jpg
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/road_gravel.jpg" -o godot/build/surface-runtime-test/road_gravel.jpg
+          echo '49c30d214eb7c372136b718c4c8222d76ae3c77bd2ad671aecbb2cd851da6a10  godot/build/surface-runtime-test/manifest.json' | sha256sum -c -
+          echo 'd90470ea32086097301478500aeda994c54a7c5e00f4e1985b9396b030157387  godot/build/surface-runtime-test/ground_lush.jpg' | sha256sum -c -
+          echo '1f0f534a1987fc48f3830699b8cd5b69b37f1a71a04d8e56b7ed4a6563624c63  godot/build/surface-runtime-test/ground_dry.jpg' | sha256sum -c -
+          echo '7f83d52d8766d3dd96e1a10c0768cf369b11baafc7f60885a8c2a7b4282f5cca  godot/build/surface-runtime-test/ground_wet_soil.jpg' | sha256sum -c -
+          echo 'dc44af8324f0fb3c5d992cea38520c3dbd728359fb4386dccf159e0ee89c1126  godot/build/surface-runtime-test/ground_rock.jpg' | sha256sum -c -
+          echo '55cabd6d654d6fd37f5451080cf417a7b9da12275be7410534a7e6f89d9acc1e  godot/build/surface-runtime-test/beach_sand.jpg' | sha256sum -c -
+          echo 'cc532fd93f8271c1fba50ecb7d8ed89ff21702eb6bc3f2355b4362cf5eb72c72  godot/build/surface-runtime-test/road_gravel.jpg' | sha256sum -c -
+          python - <<'PY'
+          import json
+          m=json.load(open('godot/build/surface-runtime-test/manifest.json'))
+          assert m['format_version']==1
+          assert m['pack_id']=='yardman_surface_hd_android_v1'
+          assert len(m['files'])==6
+          assert sum(int(x['bytes']) for x in m['files'])==1438240
+          assert all(int(x['width'])==768 and int(x['height'])==768 for x in m['files'])
+          assert m['runtime_policy']['new_geometry'] is False
+          assert m['runtime_policy']['new_draw_calls'] is False
+          print('YARDMAN_SURFACE_HD_MANIFEST_PASS assets=6 bytes=1438240 dimensions=768')
+          PY
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Reject project or shader parse errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/surface-import.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/surface-import.log; then exit 1; fi
+
+      - name: Prove Surface HD decode and material bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 180 godot --headless --path godot --script tests/surface_content_runtime_test.gd 2>&1 | tee godot/build/surface-runtime.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/surface-runtime.log; then exit 1; fi
+          grep -q 'YARDMAN_SURFACE_CONTENT_RUNTIME_PASS assets=6 bytes=1438240' godot/build/surface-runtime.log
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Surface-HD-Runtime-Evidence
+          path: |
+            godot/build/surface-import.log
+            godot/build/surface-runtime.log
+          if-no-files-found: ignore
+          retention-days: 3
