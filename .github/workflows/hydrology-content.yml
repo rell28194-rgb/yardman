@@ -52,6 +52,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p build
           rm -rf build/hydrology
           python tools/compile_hydrology.py \
             /tmp/yardman-hydrology/jamaica-latest.osm.pbf \
@@ -71,9 +72,10 @@ jobs:
           assert abs(float(m['tile_size']) - 4096.0) < 0.001
           assert abs(float(m['origin']['easting']) - 771862.3076757698) < 0.001
           assert abs(float(m['origin']['northing']) - 646846.7138758468) < 0.001
-          assert int(m['stats']['tiles']) > 0
-          assert int(m['stats']['source_ways_compiled']) > 0
-          assert int(m['stats']['tile_pieces']) > 0
+          assert int(m['stats']['tiles']) >= 300
+          assert int(m['stats']['source_ways_compiled']) >= 1000
+          assert int(m['stats']['tile_pieces']) >= 1500
+          assert int(m['stats']['points']) >= 20000
           assert '© OpenStreetMap contributors' in m['attribution']
           for tile in m['tiles']:
               p = root/tile['file']
