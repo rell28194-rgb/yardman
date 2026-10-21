@@ -1,0 +1,78 @@
+name: Yardman Jamaica Hydrology Runtime
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - 'godot/scripts/hydrology_content_runtime.gd'
+      - 'godot/scripts/hydrology_renderer.gd'
+      - 'godot/shaders/river_surface.gdshader'
+      - 'godot/tests/hydrology_runtime_test.gd'
+      - 'godot/project.godot'
+      - '.github/workflows/hydrology-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+  PACK_URL: 'https://github.com/rell28194-rgb/yardman/releases/download/yardman-hydrology-v1/Yardman-Jamaica-Hydrology-v1.zip'
+  PACK_SHA256: '6855fcda76dc85a746eb179f966ed889a6715c2f53d776563f5344ebccce1811'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download and verify released Jamaica hydrology pack
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl --fail --location --retry 2 --retry-all-errors "$PACK_URL" -o /tmp/hydrology.zip
+          echo "$PACK_SHA256  /tmp/hydrology.zip" | sha256sum -c -
+          test "$(stat -c%s /tmp/hydrology.zip)" -eq 662099
+          rm -rf godot/build/hydrology-runtime-test
+          mkdir -p godot/build/hydrology-runtime-test
+          unzip -q /tmp/hydrology.zip -d godot/build/hydrology-runtime-test
+          echo '10987e554748bb16680be0f971bf836a5d8057a9c2cd338cb6930987977e0ccb  godot/build/hydrology-runtime-test/manifest.json' | sha256sum -c -
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Reject GDScript and shader parse errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/hydrology-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/hydrology-import.log; then exit 1; fi
+
+      - name: Prove streamed running-water geometry and budgets
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 180 godot --headless --path godot --script tests/hydrology_runtime_test.gd 2>&1 | tee godot/build/hydrology-runtime.log
+          grep -q 'YARDMAN_HYDROLOGY_RUNTIME_PASS' godot/build/hydrology-runtime.log
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Hydrology-Runtime-Evidence
+          path: |
+            godot/build/hydrology-import.log
+            godot/build/hydrology-runtime.log
+          if-no-files-found: ignore
+          retention-days: 3
