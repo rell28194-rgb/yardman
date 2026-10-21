@@ -8,6 +8,7 @@ uniform bool has_reference_albedo = false;
 uniform bool has_reference_detail = false;
 uniform sampler2D surface_hd_gravel : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool has_surface_hd_gravel = false;
+uniform float weather_wetness : hint_range(0.0, 1.0) = 0.0;
 uniform float visibility_distance = 2600.0;
 varying float camera_distance;
 
@@ -96,8 +97,13 @@ void fragment() {
         line *= smoothstep(2.5, 7.0, endpoint_distance);
     }
 
-    ALBEDO = mix(base, vec3(0.82, 0.815, 0.76), line * (0.80 + grain * 0.13));
+    float wetness = clamp(weather_wetness, 0.0, 1.0);
+    vec3 final_color = mix(base, vec3(0.82, 0.815, 0.76), line * (0.80 + grain * 0.13));
+    final_color *= mix(1.0, unpaved ? 0.72 : 0.62, wetness);
+    ALBEDO = final_color;
     float paved_roughness = mix(0.87, 0.95, max(shoulder, junction_zone * 0.35));
-    ROUGHNESS = unpaved ? 0.98 : paved_roughness;
+    float dry_roughness = unpaved ? 0.98 : paved_roughness;
+    ROUGHNESS = mix(dry_roughness, unpaved ? 0.56 : 0.25, wetness);
+    SPECULAR = mix(unpaved ? 0.12 : 0.18, unpaved ? 0.28 : 0.62, wetness);
     METALLIC = 0.0;
 }
