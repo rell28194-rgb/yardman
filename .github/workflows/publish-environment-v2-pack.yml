@@ -92,7 +92,7 @@ jobs:
               'island_tree_01': ('yardman_tree_coastal_a.glb', 0.07, 0.005, 1024),
               'island_tree_02': ('yardman_tree_coastal_b.glb', 0.07, 0.005, 1024),
               'island_tree_03': ('yardman_tree_coastal_c.glb', 0.07, 0.005, 1024),
-              'jacaranda_tree': ('yardman_tree_broadleaf.glb', 0.22, 0.003, 1024),
+              'jacaranda_tree': ('yardman_tree_broadleaf.glb', 0.07, 0.006, 768),
           }
           out_root = pathlib.Path('build/environment-v2-pack')
           for slug, (name, ratio, error, tex) in specs.items():
