@@ -75,7 +75,21 @@ func _load_exact_private_scene(filename: String) -> PackedScene:
     var expected_sha := str(matched.get("sha256", "")).to_lower()
     if expected_sha.length() != 64:
         return null
-    var path := References.ROOT + filename
+    var path := References.exact_asset_path(filename)
+    if path.is_empty():
+        return null
+
+    # Downloaded owner media never gets trusted merely because it exists.
+    # Verify the exact manifest digest and byte count before runtime glTF import.
+    if path.begins_with("user://"):
+        if FileAccess.get_sha256(path).to_lower() != expected_sha:
+            return null
+        if matched.has("bytes"):
+            var downloaded := FileAccess.open(path, FileAccess.READ)
+            if downloaded == null or int(downloaded.get_length()) != int(matched.get("bytes", -1)):
+                return null
+        return _load_runtime_gltf(path)
+
     if not ResourceLoader.exists(path):
         return null
     # Development/private preflight has the source bytes, so enforce the pack
@@ -89,6 +103,25 @@ func _load_exact_private_scene(filename: String) -> PackedScene:
             if handle == null or int(handle.get_length()) != int(matched.get("bytes", -1)):
                 return null
     return ResourceLoader.load(path) as PackedScene
+
+func _load_runtime_gltf(path: String) -> PackedScene:
+    var state := GLTFState.new()
+    var document := GLTFDocument.new()
+    var absolute_path := ProjectSettings.globalize_path(path)
+    var err := document.append_from_file(absolute_path, state, 0, absolute_path.get_base_dir())
+    if err != OK:
+        return null
+    var generated := document.generate_scene(state)
+    if not generated is Node3D:
+        if generated != null:
+            generated.free()
+        return null
+    var packed := PackedScene.new()
+    if packed.pack(generated) != OK:
+        generated.free()
+        return null
+    generated.free()
+    return packed
 
 func _bind_wheels(imported: Node3D) -> void:
     var pivots: Array[Node3D] = []
