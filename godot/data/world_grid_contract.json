@@ -1,0 +1,22 @@
+{
+  "format_version": 1,
+  "crs": "EPSG:3448",
+  "axis": "X=east, Y=elevation, Z=south, metres",
+  "origin": {
+    "easting": 771862.3076757698,
+    "northing": 646846.7138758468,
+    "lat": 17.9714,
+    "lon": -76.7936
+  },
+  "tile_size": 4096.0,
+  "terrain_sample_spacing_m": 64.0,
+  "terrain_resolution": 65,
+  "world_bounds": {
+    "min_x": -172032.0,
+    "min_z": -65536.0,
+    "max_x": 69632.0,
+    "max_z": 110592.0
+  },
+  "source": "Pinned from the owner-approved Yardman Map Crown Reset road/terrain manifests",
+  "accepted_base_apk_sha256": "1b32465d4fe09865067ae8f47f0cf4de5daca3d4ea8a7f148d826e7ac305a072"
+}
