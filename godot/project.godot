@@ -11,6 +11,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [autoload]
 MapQualityBootstrap="*res://scripts/map_quality_bootstrap.gd"
+GroundcoverDensity="*res://scripts/groundcover_density_runtime.gd"
 EnvironmentContent="*res://scripts/environment_content_runtime.gd"
 HydrologyContent="*res://scripts/hydrology_content_runtime.gd"
 SurfaceContent="*res://scripts/surface_content_runtime.gd"
