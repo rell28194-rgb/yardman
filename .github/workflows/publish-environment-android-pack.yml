@@ -1,0 +1,157 @@
+name: Publish Optimized Android Environment Pack
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - '.github/workflows/publish-environment-android-pack.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: yardman-environment-v1
+  GLTF_TRANSFORM_VERSION: 4.5.1
+
+jobs:
+  build-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download selected CC0 source assets from Poly Haven
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import hashlib, json, os, pathlib, urllib.request
+          root = pathlib.Path('build/environment-src')
+          root.mkdir(parents=True, exist_ok=True)
+          ua = 'Yardman-AssetPipeline/1.0 (+https://github.com/rell28194-rgb/yardman)'
+          for slug in ['shrub_04', 'grass_medium_01', 'island_tree_01']:
+              req = urllib.request.Request(f'https://api.polyhaven.com/files/{slug}', headers={'User-Agent': ua})
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  payload = json.load(response)
+              record = payload['gltf']['1k']['gltf']
+              target = root / slug
+              target.mkdir(parents=True, exist_ok=True)
+              downloads = [(pathlib.Path(record['url']).name, record)]
+              downloads += [(path, item) for path, item in record.get('include', {}).items()]
+              for relative, item in downloads:
+                  out = target / relative
+                  out.parent.mkdir(parents=True, exist_ok=True)
+                  request = urllib.request.Request(item['url'], headers={'User-Agent': ua})
+                  with urllib.request.urlopen(request, timeout=120) as response, open(out, 'wb') as handle:
+                      while True:
+                          chunk = response.read(1024 * 1024)
+                          if not chunk:
+                              break
+                          handle.write(chunk)
+                  data = out.read_bytes()
+                  digest = hashlib.md5(data).hexdigest()
+                  if digest != item['md5'] or len(data) != int(item['size']):
+                      raise SystemExit(f'Poly Haven source verification failed: {slug}/{relative}')
+              print(f'YARDMAN_SOURCE_READY slug={slug} files={len(downloads)}')
+          PY
+
+      - name: Install glTF optimization toolchain
+        shell: bash
+        run: |
+          set -euxo pipefail
+          npm install --global "@gltf-transform/cli@${GLTF_TRANSFORM_VERSION}"
+          gltf-transform --version
+
+      - name: Build Android-resident near-field assets
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p build/environment-pack
+          gltf-transform optimize \
+            build/environment-src/shrub_04/shrub_04_1k.gltf \
+            build/environment-pack/yardman_shrub_near.glb \
+            --compress false --texture-compress auto --texture-size 1024 \
+            --simplify true --simplify-ratio 0.35 --simplify-error 0.003 \
+            --palette false --instance true --flatten true --join true
+          gltf-transform optimize \
+            build/environment-src/grass_medium_01/grass_medium_01_1k.gltf \
+            build/environment-pack/yardman_grass_cluster.glb \
+            --compress false --texture-compress auto --texture-size 1024 \
+            --simplify true --simplify-ratio 0.08 --simplify-error 0.006 \
+            --palette false --instance true --flatten true --join true
+          gltf-transform optimize \
+            build/environment-src/island_tree_01/island_tree_01_1k.gltf \
+            build/environment-pack/yardman_island_tree_near.glb \
+            --compress false --texture-compress auto --texture-size 1024 \
+            --simplify true --simplify-ratio 0.08 --simplify-error 0.004 \
+            --palette false --instance true --flatten true --join true
+          for f in build/environment-pack/*.glb; do
+            echo "YARDMAN_OPTIMIZED_ASSET $f bytes=$(stat -c%s "$f")"
+            gltf-transform inspect "$f" | head -80 || true
+          done
+
+      - name: Create verified runtime manifest
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import hashlib, json, os, pathlib
+          root = pathlib.Path('build/environment-pack')
+          specs = {
+              'yardman_shrub_near.glb': {'role':'shrub_near','max_distance_m':140,'max_active_instances':28},
+              'yardman_grass_cluster.glb': {'role':'grass_near','max_distance_m':55,'max_active_instances':96},
+              'yardman_island_tree_near.glb': {'role':'tree_near','max_distance_m':170,'max_active_instances':18},
+          }
+          files = []
+          for name, policy in specs.items():
+              path = root / name
+              data = path.read_bytes()
+              files.append({
+                  'name': name,
+                  'bytes': len(data),
+                  'sha256': hashlib.sha256(data).hexdigest(),
+                  **policy,
+              })
+          manifest = {
+              'format_version': 1,
+              'pack_id': 'environment_hd_android_v1',
+              'source': 'Poly Haven CC0',
+              'source_api': 'https://api.polyhaven.com',
+              'attribution': 'Environment HD source assets from Poly Haven (CC0).',
+              'files': files,
+              'runtime_policy': {
+                  'android_default_quality': '1k-source-optimized',
+                  'resident_asset_bytes_soft_cap': 96_000_000,
+                  'near_detail_distance_m': 170,
+                  'grass_distance_m': 55,
+                  'use_multimesh_for_repetition': True,
+                  'fallback_to_embedded_assets': True,
+              },
+          }
+          (root / 'yardman-environment-manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True))
+          print('YARDMAN_ENVIRONMENT_MANIFEST', json.dumps(manifest, separators=(',', ':')))
+          PY
+
+      - name: Publish durable downloadable content release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --target codex/accepted-fleet-garage-001 \
+              --title 'Yardman Environment HD Android v1' \
+              --notes 'Optional post-install environment detail assets. Sources: Poly Haven CC0. Optimized for Yardman Android runtime budgets.'
+          fi
+          gh release upload "$RELEASE_TAG" build/environment-pack/* --clobber
+          echo "YARDMAN_ENVIRONMENT_RELEASE=https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"
+
+      - name: Upload optimization evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Environment-HD-Android-v1-Evidence
+          path: build/environment-pack/*
+          retention-days: 3
