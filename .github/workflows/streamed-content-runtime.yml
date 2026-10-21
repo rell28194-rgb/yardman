@@ -8,6 +8,7 @@ on:
       - '.github/workflows/streamed-content-runtime.yml'
       - 'godot/scripts/reference_assets.gd'
       - 'godot/scripts/content_pack_runtime.gd'
+      - 'godot/scripts/content_promotion_runtime.gd'
       - 'godot/scripts/world_detail_runtime.gd'
       - 'godot/scripts/stream_water_runtime.gd'
       - 'godot/data/content_pack_catalog.json'
@@ -43,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p godot/build
-          for SCRIPT in scripts/reference_assets.gd scripts/content_pack_runtime.gd scripts/world_detail_runtime.gd scripts/stream_water_runtime.gd; do
+          for SCRIPT in scripts/reference_assets.gd scripts/content_pack_runtime.gd scripts/content_promotion_runtime.gd scripts/world_detail_runtime.gd scripts/stream_water_runtime.gd; do
             SAFE_NAME="$(basename "$SCRIPT" .gd)"
             godot --headless --path godot --check-only --script "$SCRIPT" 2>&1 | tee "godot/build/check-${SAFE_NAME}.log"
           done
@@ -70,6 +71,7 @@ jobs:
           path: |
             godot/build/check-reference_assets.log
             godot/build/check-content_pack_runtime.log
+            godot/build/check-content_promotion_runtime.log
             godot/build/check-world_detail_runtime.log
             godot/build/check-stream_water_runtime.log
             godot/build/streamed-content-import.log
