@@ -1,0 +1,51 @@
+name: Yardman Accepted Fleet Source Bundle
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - .github/workflows/accepted-fleet-source-bundle.yml
+
+permissions:
+  contents: read
+
+jobs:
+  bundle-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout accepted fleet branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Record exact source identity
+        run: |
+          printf '%s\n' "$GITHUB_SHA" > ACCEPTED_FLEET_SOURCE_SHA.txt
+
+      - name: Package Godot source
+        run: |
+          tar \
+            --exclude='godot/.godot' \
+            --exclude='godot/build' \
+            --exclude='godot/assets/user_reference/*.glb' \
+            --exclude='godot/assets/user_reference/*.gltf' \
+            --exclude='godot/assets/user_reference/*.png' \
+            --exclude='godot/assets/user_reference/*.jpg' \
+            --exclude='godot/assets/user_reference/*.webp' \
+            -czf Yardman-Accepted-Fleet-Source.tgz \
+            godot ACCEPTED_FLEET_SOURCE_SHA.txt
+          sha256sum Yardman-Accepted-Fleet-Source.tgz > Yardman-Accepted-Fleet-Source.tgz.sha256
+
+      - name: Upload accepted fleet source bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Accepted-Fleet-Source
+          path: |
+            Yardman-Accepted-Fleet-Source.tgz
+            Yardman-Accepted-Fleet-Source.tgz.sha256
+            ACCEPTED_FLEET_SOURCE_SHA.txt
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
