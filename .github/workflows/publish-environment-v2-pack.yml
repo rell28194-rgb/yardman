@@ -1,0 +1,193 @@
+name: Publish Biome-Diverse Environment HD v2
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - '.github/workflows/publish-environment-v2-pack.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: yardman-environment-v2
+  GLTF_TRANSFORM_VERSION: 4.5.1
+
+jobs:
+  build-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download and verify selected Poly Haven CC0 source assets
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import hashlib, json, pathlib, urllib.request
+          slugs = [
+              'grass_medium_01',
+              'shrub_01',
+              'shrub_03',
+              'fern_02',
+              'island_tree_01',
+              'island_tree_02',
+              'island_tree_03',
+              'jacaranda_tree',
+          ]
+          root = pathlib.Path('build/environment-v2-src')
+          root.mkdir(parents=True, exist_ok=True)
+          ua = 'Yardman-AssetPipeline/2.0 (+https://github.com/rell28194-rgb/yardman)'
+          index = {}
+          for slug in slugs:
+              req = urllib.request.Request(f'https://api.polyhaven.com/files/{slug}', headers={'User-Agent': ua})
+              with urllib.request.urlopen(req, timeout=45) as response:
+                  payload = json.load(response)
+              record = payload['gltf']['1k']['gltf']
+              target = root / slug
+              target.mkdir(parents=True, exist_ok=True)
+              main_name = pathlib.Path(record['url']).name
+              downloads = [(main_name, record)] + list(record.get('include', {}).items())
+              for relative, item in downloads:
+                  out = target / relative
+                  out.parent.mkdir(parents=True, exist_ok=True)
+                  request = urllib.request.Request(item['url'], headers={'User-Agent': ua})
+                  with urllib.request.urlopen(request, timeout=180) as response, open(out, 'wb') as handle:
+                      while True:
+                          chunk = response.read(1024 * 1024)
+                          if not chunk:
+                              break
+                          handle.write(chunk)
+                  data = out.read_bytes()
+                  if hashlib.md5(data).hexdigest() != item['md5'] or len(data) != int(item['size']):
+                      raise SystemExit(f'Poly Haven verification failed: {slug}/{relative}')
+              index[slug] = str(target / main_name)
+              print(f'YARDMAN_V2_SOURCE_READY slug={slug} files={len(downloads)}')
+          pathlib.Path('build/environment-v2-index.json').write_text(json.dumps(index, indent=2, sort_keys=True))
+          PY
+
+      - name: Install glTF optimization toolchain
+        shell: bash
+        run: |
+          set -euxo pipefail
+          npm install --global "@gltf-transform/cli@${GLTF_TRANSFORM_VERSION}"
+          gltf-transform --version
+
+      - name: Optimize source assets for Android near-field use
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p build/environment-v2-pack
+          python - <<'PY'
+          import json, pathlib, subprocess
+          index = json.loads(pathlib.Path('build/environment-v2-index.json').read_text())
+          specs = {
+              'grass_medium_01': ('yardman_grass_lush.glb', 0.08, 0.006, 768),
+              'shrub_01': ('yardman_shrub_flowering.glb', 0.28, 0.004, 768),
+              'shrub_03': ('yardman_shrub_meadow.glb', 0.45, 0.004, 768),
+              'fern_02': ('yardman_fern_wet.glb', 0.75, 0.003, 768),
+              'island_tree_01': ('yardman_tree_coastal_a.glb', 0.07, 0.005, 1024),
+              'island_tree_02': ('yardman_tree_coastal_b.glb', 0.07, 0.005, 1024),
+              'island_tree_03': ('yardman_tree_coastal_c.glb', 0.07, 0.005, 1024),
+              'jacaranda_tree': ('yardman_tree_broadleaf.glb', 0.22, 0.003, 1024),
+          }
+          out_root = pathlib.Path('build/environment-v2-pack')
+          for slug, (name, ratio, error, tex) in specs.items():
+              cmd = [
+                  'gltf-transform', 'optimize', index[slug], str(out_root / name),
+                  '--compress', 'false', '--texture-compress', 'auto', '--texture-size', str(tex),
+                  '--simplify', 'true', '--simplify-ratio', str(ratio), '--simplify-error', str(error),
+                  '--palette', 'false', '--instance', 'true', '--flatten', 'true', '--join', 'true',
+              ]
+              subprocess.run(cmd, check=True)
+              size = (out_root / name).stat().st_size
+              if size <= 0 or size > 24_000_000:
+                  raise SystemExit(f'Android asset budget exceeded: {name} bytes={size}')
+              print(f'YARDMAN_V2_OPTIMIZED slug={slug} file={name} bytes={size}')
+          PY
+
+      - name: Create variant-aware runtime manifest and enforce pack budget
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import hashlib, json, pathlib
+          root = pathlib.Path('build/environment-v2-pack')
+          specs = [
+              ('yardman_grass_lush.glb', 'grass_near', 'lush', 55, 96, 0.55),
+              ('yardman_shrub_flowering.glb', 'shrub_near', 'flowering', 145, 28, 1.25),
+              ('yardman_shrub_meadow.glb', 'shrub_near', 'meadow', 145, 28, 1.05),
+              ('yardman_fern_wet.glb', 'shrub_near', 'fern_wet', 120, 24, 0.95),
+              ('yardman_tree_coastal_a.glb', 'tree_near', 'coastal_a', 175, 18, 8.2),
+              ('yardman_tree_coastal_b.glb', 'tree_near', 'coastal_b', 175, 18, 7.5),
+              ('yardman_tree_coastal_c.glb', 'tree_near', 'coastal_c', 175, 18, 6.8),
+              ('yardman_tree_broadleaf.glb', 'tree_near', 'broadleaf', 185, 18, 10.5),
+          ]
+          files = []
+          total = 0
+          for name, role, variant, distance, cap, target_height in specs:
+              path = root / name
+              data = path.read_bytes()
+              total += len(data)
+              files.append({
+                  'name': name,
+                  'role': role,
+                  'variant': variant,
+                  'bytes': len(data),
+                  'sha256': hashlib.sha256(data).hexdigest(),
+                  'max_distance_m': distance,
+                  'max_active_instances': cap,
+                  'target_height_m': target_height,
+              })
+          if total > 96_000_000:
+              raise SystemExit(f'Environment v2 pack exceeds 96 MB Android asset budget: {total}')
+          manifest = {
+              'format_version': 2,
+              'pack_id': 'environment_hd_android_v2',
+              'source': 'Poly Haven CC0',
+              'source_api': 'https://api.polyhaven.com',
+              'files': files,
+              'runtime_policy': {
+                  'resident_asset_bytes_soft_cap': 96_000_000,
+                  'max_tree_hd_instances_total': 18,
+                  'max_shrub_hd_instances_total': 28,
+                  'max_grass_hd_instances_total': 96,
+                  'near_detail_distance_m': 185,
+                  'variant_selection': 'deterministic_cell_context',
+                  'fallback_to_embedded_assets': True,
+              },
+          }
+          manifest_path = root / 'yardman-environment-v2-manifest.json'
+          manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True))
+          print(f'YARDMAN_ENVIRONMENT_V2_PACK bytes={total} assets={len(files)}')
+          print('YARDMAN_ENVIRONMENT_V2_MANIFEST_SHA256', hashlib.sha256(manifest_path.read_bytes()).hexdigest())
+          PY
+
+      - name: Publish Environment HD v2 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --target codex/accepted-fleet-garage-001 \
+              --title 'Yardman Environment HD Android v2' \
+              --notes 'Optional biome-diverse near-field vegetation pack. Poly Haven CC0 sources, aggressively optimized for bounded Android runtime residency.'
+          fi
+          gh release upload "$RELEASE_TAG" build/environment-v2-pack/* --clobber
+          echo "YARDMAN_ENVIRONMENT_V2_RELEASE=https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"
+
+      - name: Upload Environment v2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Environment-HD-v2-Evidence
+          path: |
+            build/environment-v2-index.json
+            build/environment-v2-pack/*
+          if-no-files-found: ignore
+          retention-days: 3
