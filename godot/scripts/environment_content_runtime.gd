@@ -5,14 +5,16 @@ signal state_changed(state: String, message: String)
 signal progress_changed(downloaded_bytes: int, total_bytes: int)
 signal installed
 
-const PACK_ID := "environment_hd_android_v1"
-const RELEASE_ROOT := "https://github.com/rell28194-rgb/yardman/releases/download/yardman-environment-v1"
-const MANIFEST_URL := RELEASE_ROOT + "/yardman-environment-manifest.json"
-const MANIFEST_SHA256 := "2bdbad8373f859821ec9c0422b10bbc86f410cd402b44db9d2afd5b794c54d24"
-const ROOT := "user://yardman/content/environment_hd_android_v1/"
-const MANIFEST_PATH := ROOT + "yardman-environment-manifest.json"
+const VariantPolicy = preload("res://scripts/environment_variant_policy.gd")
+const PACK_ID := "environment_hd_android_v2"
+const RELEASE_ROOT := "https://github.com/rell28194-rgb/yardman/releases/download/yardman-environment-v2"
+const MANIFEST_URL := RELEASE_ROOT + "/yardman-environment-v2-manifest.json"
+const MANIFEST_SHA256 := "c343c40fdcd0321c098d92757b5224101bfa33b09abc90b3de543b59ab03074c"
+const ROOT := "user://yardman/content/environment_hd_android_v2/"
+const MANIFEST_PATH := ROOT + "yardman-environment-v2-manifest.json"
 const MARKER_PATH := ROOT + "installed.json"
 const UPDATE_INTERVAL := 0.45
+const MAX_CACHED_VARIANTS := 4
 
 const ROLE_HEIGHTS := {
     "grass_near": 0.55,
@@ -39,9 +41,12 @@ var _status: Label
 var _progress: ProgressBar
 var _download_button: Button
 
-var _meshes: Dictionary = {}
+var _variant_records: Dictionary = {}
 var _policies: Dictionary = {}
 var _cells: Dictionary = {}
+var _mesh_cache: Dictionary = {}
+var _mesh_last_used: Dictionary = {}
+var _mesh_active_refs: Dictionary = {}
 var _update_accumulator := 0.0
 
 func _ready() -> void:
@@ -62,10 +67,10 @@ func _ready() -> void:
     set_process(true)
     if is_installed():
         _load_installed_manifest()
-        _load_detail_meshes()
-        _set_state("installed", "Environment HD installed · optimized near-field detail active.")
+        _reset_mesh_cache()
+        _set_state("installed", "Environment HD v2 installed · biome-diverse near-field detail active.")
     else:
-        _set_state("idle", "Environment HD available · Wi-Fi recommended · about 11 MB.")
+        _set_state("idle", "Environment HD v2 available · Wi-Fi recommended · about 49 MB.")
 
 func _process(delta: float) -> void:
     if _state == "downloading" and _http != null and not _current.is_empty():
@@ -75,7 +80,7 @@ func _process(delta: float) -> void:
             var request_bytes: int = maxi(int(_http.get_downloaded_bytes()), 0)
             var downloaded: int = _downloaded_total + _resume_offset + request_bytes
             _emit_progress(downloaded)
-    if _state != "installed" or _meshes.is_empty():
+    if _state != "installed" or _variant_records.is_empty():
         return
     _update_accumulator += delta
     if _update_accumulator < UPDATE_INTERVAL:
@@ -98,7 +103,7 @@ func _build_ui() -> void:
 
     _panel = PanelContainer.new()
     _panel.position = Vector2(18, 72)
-    _panel.size = Vector2(420, 245)
+    _panel.size = Vector2(430, 255)
     _panel.visible = false
     _layer.add_child(_panel)
 
@@ -112,7 +117,7 @@ func _build_ui() -> void:
     column.add_child(title)
 
     var pack := Label.new()
-    pack.text = "Environment HD · grass / shrubs / island trees"
+    pack.text = "Environment HD v2 · grass / ferns / shrubs / 4 tree variants"
     pack.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     column.add_child(pack)
 
@@ -132,7 +137,7 @@ func _build_ui() -> void:
     column.add_child(actions)
 
     _download_button = Button.new()
-    _download_button.text = "DOWNLOAD HD DETAIL"
+    _download_button.text = "DOWNLOAD BIOME HD"
     _download_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     _download_button.focus_mode = Control.FOCUS_NONE
     _download_button.pressed.connect(start_download)
@@ -161,8 +166,10 @@ func is_installed() -> bool:
     var marker = JSON.parse_string(FileAccess.get_file_as_string(MARKER_PATH))
     if not marker is Dictionary or str(marker.get("pack_id", "")) != PACK_ID:
         return false
+    if str(marker.get("manifest_sha256", "")).to_lower() != MANIFEST_SHA256:
+        return false
     var parsed = JSON.parse_string(FileAccess.get_file_as_string(MANIFEST_PATH))
-    if not parsed is Dictionary or str(parsed.get("pack_id", "")) != PACK_ID:
+    if not parsed is Dictionary or str(parsed.get("pack_id", "")) != PACK_ID or int(parsed.get("format_version", 0)) != 2:
         return false
     for raw_record in parsed.get("files", []):
         if not raw_record is Dictionary:
@@ -184,8 +191,8 @@ func start_download() -> void:
         return
     if is_installed():
         _load_installed_manifest()
-        _load_detail_meshes()
-        _set_state("installed", "Environment HD already installed.")
+        _reset_mesh_cache()
+        _set_state("installed", "Environment HD v2 already installed.")
         installed.emit()
         return
     _queue.clear()
@@ -193,7 +200,7 @@ func start_download() -> void:
     _downloaded_total = 0
     _pack_total = 0
     _mode = "manifest"
-    _set_state("manifest", "Checking Environment HD package…")
+    _set_state("manifest", "Checking Environment HD v2 package…")
     var err := _http.request(MANIFEST_URL)
     if err != OK:
         _set_state("error", "Could not reach Environment HD manifest (%s)." % error_string(err))
@@ -223,12 +230,13 @@ func _finish_manifest_request(result: int, response_code: int, body: PackedByteA
         _set_state("error", "Environment manifest verification failed.")
         return
     var parsed = JSON.parse_string(body.get_string_from_utf8())
-    if not parsed is Dictionary or int(parsed.get("format_version", 0)) != 1 or str(parsed.get("pack_id", "")) != PACK_ID:
+    if not parsed is Dictionary or int(parsed.get("format_version", 0)) != 2 or str(parsed.get("pack_id", "")) != PACK_ID:
         _set_state("error", "Environment manifest is invalid.")
         return
     _manifest = parsed
     _queue.clear()
     _pack_total = 0
+    var seen_roles: Dictionary = {}
     for raw_record in _manifest.get("files", []):
         if not raw_record is Dictionary:
             _set_state("error", "Environment manifest contains an invalid file record.")
@@ -237,14 +245,18 @@ func _finish_manifest_request(result: int, response_code: int, body: PackedByteA
         var name := str(record.get("name", ""))
         var digest := str(record.get("sha256", "")).to_lower()
         var bytes := int(record.get("bytes", 0))
-        if not _safe_filename(name) or digest.length() != 64 or bytes <= 0:
-            _set_state("error", "Environment manifest contains unsafe file metadata.")
+        var role := str(record.get("role", ""))
+        var variant := str(record.get("variant", ""))
+        var target_height := float(record.get("target_height_m", 0.0))
+        if not _safe_filename(name) or digest.length() != 64 or bytes <= 0 or not ROLE_HEIGHTS.has(role) or variant.is_empty() or target_height <= 0.05:
+            _set_state("error", "Environment manifest contains unsafe asset metadata.")
             return
         record["url"] = RELEASE_ROOT + "/" + name
         _queue.append(record)
         _pack_total += bytes
-    if _queue.is_empty() or _pack_total > 96_000_000:
-        _set_state("error", "Environment pack violates the Android resident-asset budget.")
+        seen_roles[role] = true
+    if _queue.size() != 8 or _pack_total > 96_000_000 or seen_roles.size() != ROLE_HEIGHTS.size():
+        _set_state("error", "Environment pack violates the Android content contract.")
         return
     var manifest_file := FileAccess.open(MANIFEST_PATH, FileAccess.WRITE)
     if manifest_file == null:
@@ -314,7 +326,7 @@ func _finish_asset_request(result: int, response_code: int) -> void:
     _start_next_asset()
 
 func _finish_install() -> void:
-    _set_state("installing", "Activating optimized Environment HD detail…")
+    _set_state("installing", "Activating biome-diverse Environment HD detail…")
     var marker := FileAccess.open(MARKER_PATH, FileAccess.WRITE)
     if marker == null:
         _set_state("error", "Could not save Environment HD installation state.")
@@ -327,39 +339,88 @@ func _finish_install() -> void:
     }))
     marker.close()
     _load_installed_manifest()
-    _load_detail_meshes()
-    if _meshes.is_empty():
-        _set_state("error", "Environment HD installed, but Godot could not load its detail meshes.")
+    _reset_mesh_cache()
+    if _variant_records.size() != ROLE_HEIGHTS.size():
+        _set_state("error", "Environment HD installed, but its biome roles are incomplete.")
         return
-    _set_state("installed", "Environment HD installed · optimized near-field detail active.")
+    _set_state("installed", "Environment HD v2 installed · biome-diverse near-field detail active.")
     _emit_progress(_pack_total)
     installed.emit()
 
 func _load_installed_manifest() -> void:
     _manifest = {}
     _policies.clear()
+    _variant_records.clear()
     if not FileAccess.file_exists(MANIFEST_PATH):
         return
     var parsed = JSON.parse_string(FileAccess.get_file_as_string(MANIFEST_PATH))
-    if not parsed is Dictionary or str(parsed.get("pack_id", "")) != PACK_ID:
+    if not parsed is Dictionary or str(parsed.get("pack_id", "")) != PACK_ID or int(parsed.get("format_version", 0)) != 2:
         return
     _manifest = parsed
     for raw_record in _manifest.get("files", []):
-        if raw_record is Dictionary:
-            var role := str(raw_record.get("role", ""))
-            if ROLE_HEIGHTS.has(role):
-                _policies[role] = raw_record
-
-func _load_detail_meshes() -> void:
-    _meshes.clear()
-    for role in ROLE_HEIGHTS.keys():
-        if not _policies.has(role):
+        if not raw_record is Dictionary:
             continue
-        var record: Dictionary = _policies[role]
-        var path := ROOT + str(record.name)
-        var mesh := _load_runtime_mesh(path, float(ROLE_HEIGHTS[role]))
-        if mesh != null:
-            _meshes[role] = mesh
+        var record: Dictionary = raw_record
+        var role := str(record.get("role", ""))
+        if not ROLE_HEIGHTS.has(role):
+            continue
+        if not _variant_records.has(role):
+            _variant_records[role] = []
+        _variant_records[role].append(record)
+    var runtime_policy: Dictionary = _manifest.get("runtime_policy", {})
+    for role in ROLE_HEIGHTS.keys():
+        if not _variant_records.has(role):
+            continue
+        var max_distance := 0.0
+        for raw in _variant_records[role]:
+            if raw is Dictionary:
+                max_distance = maxf(max_distance, float((raw as Dictionary).get("max_distance_m", 0.0)))
+        var cap := 0
+        match role:
+            "tree_near": cap = int(runtime_policy.get("max_tree_hd_instances_total", 18))
+            "shrub_near": cap = int(runtime_policy.get("max_shrub_hd_instances_total", 28))
+            "grass_near": cap = int(runtime_policy.get("max_grass_hd_instances_total", 96))
+        _policies[role] = {"max_distance_m": max_distance, "max_active_instances": cap}
+
+func _reset_mesh_cache() -> void:
+    _mesh_cache.clear()
+    _mesh_last_used.clear()
+    _mesh_active_refs.clear()
+
+func _mesh_for_record(record: Dictionary) -> ArrayMesh:
+    var name := str(record.get("name", ""))
+    if _mesh_cache.has(name):
+        _mesh_last_used[name] = Time.get_ticks_msec()
+        return _mesh_cache[name]
+    var path := ROOT + name
+    var target_height := float(record.get("target_height_m", ROLE_HEIGHTS.get(str(record.get("role", "")), 1.0)))
+    var mesh := _load_runtime_mesh(path, target_height)
+    if mesh != null:
+        _mesh_cache[name] = mesh
+        _mesh_last_used[name] = Time.get_ticks_msec()
+        _mesh_active_refs[name] = int(_mesh_active_refs.get(name, 0))
+    return mesh
+
+func _prune_mesh_cache() -> void:
+    var active_unique := 0
+    for name in _mesh_cache.keys():
+        if int(_mesh_active_refs.get(name, 0)) > 0:
+            active_unique += 1
+    var target := maxi(MAX_CACHED_VARIANTS, active_unique)
+    if _mesh_cache.size() <= target:
+        return
+    var candidates: Array = []
+    for name in _mesh_cache.keys():
+        if int(_mesh_active_refs.get(name, 0)) <= 0:
+            candidates.append({"name": str(name), "last": int(_mesh_last_used.get(name, 0))})
+    candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a.last) < int(b.last))
+    for candidate: Dictionary in candidates:
+        if _mesh_cache.size() <= target:
+            break
+        var name := str(candidate.name)
+        _mesh_cache.erase(name)
+        _mesh_last_used.erase(name)
+        _mesh_active_refs.erase(name)
 
 func _load_runtime_mesh(path: String, target_height: float) -> ArrayMesh:
     if not FileAccess.file_exists(path):
@@ -427,14 +488,23 @@ func _on_node_added(node: Node) -> void:
     _cells[instance.get_instance_id()] = {
         "node": instance,
         "role": role,
+        "stable_key": str(instance.name),
+        "elevation_m": _cell_elevation(instance),
         "original_mesh": instance.multimesh.mesh,
         "original_visible": instance.multimesh.visible_instance_count,
         "original_shadow": instance.cast_shadow,
         "hd": false,
+        "hd_file": "",
+        "hd_variant": -1,
     }
 
 func _on_node_removed(node: Node) -> void:
-    _cells.erase(node.get_instance_id())
+    var id := node.get_instance_id()
+    if _cells.has(id):
+        var entry: Dictionary = _cells[id]
+        if bool(entry.get("hd", false)):
+            _release_mesh_ref(str(entry.get("hd_file", "")))
+    _cells.erase(id)
 
 func _role_for_cell(instance: MultiMeshInstance3D) -> String:
     var label := str(instance.name).to_lower()
@@ -445,6 +515,21 @@ func _role_for_cell(instance: MultiMeshInstance3D) -> String:
     if "_broadleaf" in label and not label.ends_with("_distant"):
         return "tree_near"
     return ""
+
+func _cell_elevation(instance: MultiMeshInstance3D) -> float:
+    if instance.multimesh == null or instance.multimesh.instance_count <= 0:
+        return 0.0
+    var sample_count := mini(instance.multimesh.instance_count, 4)
+    var total := 0.0
+    for index in range(sample_count):
+        total += instance.multimesh.get_instance_transform(index).origin.y
+    return total / float(sample_count)
+
+func _variant_for_cell(role: String, entry: Dictionary) -> int:
+    if not _variant_records.has(role):
+        return -1
+    var records: Array = _variant_records[role]
+    return VariantPolicy.choose(role, records, str(entry.get("stable_key", "")), float(entry.get("elevation_m", 0.0)))
 
 func _update_detail_cells() -> void:
     var camera := get_viewport().get_camera_3d()
@@ -462,18 +547,23 @@ func _update_detail_cells() -> void:
             continue
         var instance := node as MultiMeshInstance3D
         var role := str(entry.role)
-        if not _meshes.has(role) or not _policies.has(role):
-            _set_cell_hd(id, false, -1)
+        if not _variant_records.has(role) or not _policies.has(role):
+            _set_cell_hd(id, false, -1, -1)
             continue
-        var policy: Dictionary = _policies[role]
-        var max_distance := float(policy.get("max_distance_m", 0.0))
+        var variant_index := _variant_for_cell(role, entry)
+        var records: Array = _variant_records[role]
+        if variant_index < 0 or variant_index >= records.size():
+            _set_cell_hd(id, false, -1, -1)
+            continue
+        var record: Dictionary = records[variant_index]
+        var max_distance := float(record.get("max_distance_m", _policies[role].get("max_distance_m", 0.0)))
         var distance := camera_position.distance_to(instance.global_position)
         if distance > max_distance:
-            _set_cell_hd(id, false, -1)
+            _set_cell_hd(id, false, -1, -1)
             continue
         if not candidates.has(role):
             candidates[role] = []
-        candidates[role].append({"id": id, "distance": distance})
+        candidates[role].append({"id": id, "distance": distance, "variant": variant_index})
     for id in stale:
         _cells.erase(id)
     for role in candidates.keys():
@@ -487,12 +577,13 @@ func _update_detail_cells() -> void:
             var count := instance.multimesh.instance_count
             var allowed := mini(count, maxi(remaining, 0))
             if allowed > 0:
-                _set_cell_hd(id, true, allowed)
+                _set_cell_hd(id, true, allowed, int(candidate.variant))
                 remaining -= allowed
             else:
-                _set_cell_hd(id, false, -1)
+                _set_cell_hd(id, false, -1, -1)
+    _prune_mesh_cache()
 
-func _set_cell_hd(id: int, enabled: bool, visible_count: int) -> void:
+func _set_cell_hd(id: int, enabled: bool, visible_count: int, variant_index: int) -> void:
     if not _cells.has(id):
         return
     var entry: Dictionary = _cells[id]
@@ -503,21 +594,50 @@ func _set_cell_hd(id: int, enabled: bool, visible_count: int) -> void:
     if instance.multimesh == null:
         return
     var role := str(entry.role)
-    if enabled and _meshes.has(role):
+    if enabled and _variant_records.has(role):
+        var records: Array = _variant_records[role]
+        if variant_index < 0 or variant_index >= records.size():
+            return
+        var record: Dictionary = records[variant_index]
+        var file_name := str(record.get("name", ""))
+        var mesh := _mesh_for_record(record)
+        if mesh == null:
+            return
         if not bool(entry.hd):
             entry["original_visible"] = instance.multimesh.visible_instance_count
             entry["original_shadow"] = instance.cast_shadow
-        instance.multimesh.mesh = _meshes[role]
+            _acquire_mesh_ref(file_name)
+        elif str(entry.get("hd_file", "")) != file_name:
+            _release_mesh_ref(str(entry.get("hd_file", "")))
+            _acquire_mesh_ref(file_name)
+        instance.multimesh.mesh = mesh
         instance.multimesh.visible_instance_count = visible_count
         instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if role == "tree_near" else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
         entry["hd"] = true
+        entry["hd_file"] = file_name
+        entry["hd_variant"] = variant_index
+        _mesh_last_used[file_name] = Time.get_ticks_msec()
     else:
         if bool(entry.hd):
+            _release_mesh_ref(str(entry.get("hd_file", "")))
             instance.multimesh.mesh = entry.original_mesh
             instance.multimesh.visible_instance_count = int(entry.original_visible)
             instance.cast_shadow = int(entry.original_shadow)
         entry["hd"] = false
+        entry["hd_file"] = ""
+        entry["hd_variant"] = -1
     _cells[id] = entry
+
+func _acquire_mesh_ref(name: String) -> void:
+    if name.is_empty():
+        return
+    _mesh_active_refs[name] = int(_mesh_active_refs.get(name, 0)) + 1
+
+func _release_mesh_ref(name: String) -> void:
+    if name.is_empty():
+        return
+    _mesh_active_refs[name] = maxi(int(_mesh_active_refs.get(name, 0)) - 1, 0)
+    _mesh_last_used[name] = Time.get_ticks_msec()
 
 func _safe_filename(name: String) -> bool:
     return not name.is_empty() and not name.contains("/") and not name.contains("\\") and not name.contains("..") and name.get_extension().to_lower() == "glb"
@@ -540,10 +660,10 @@ func _set_state(value: String, message: String) -> void:
     if _download_button != null:
         _download_button.disabled = value in ["manifest", "downloading", "verifying", "installing"]
         if value == "installed":
-            _download_button.text = "ENVIRONMENT HD INSTALLED"
+            _download_button.text = "BIOME HD INSTALLED"
         elif value == "error":
             _download_button.text = "RETRY DOWNLOAD"
         else:
-            _download_button.text = "DOWNLOAD HD DETAIL"
+            _download_button.text = "DOWNLOAD BIOME HD"
     if _button != null:
-        _button.text = "CONTENT · HD" if value == "installed" else "CONTENT"
+        _button.text = "CONTENT · HD2" if value == "installed" else "CONTENT"
