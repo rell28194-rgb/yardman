@@ -78,7 +78,7 @@ jobs:
           set -euxo pipefail
           PACK=/tmp/Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip
           curl --fail --location --retry 2 --retry-all-errors \
-            'https://uce3b918e041dd44ecdab76ddb7d.dl.dropboxusercontent.com/cd/0/get/DKZSPffjDDeIJwJCTE1FBwG9y8Scc7hYr9RzIU62I7UVYqK8DU5V_my9OtWGdiMSIQHheIF4rja1zPcOo9UCLSffzVjx6QSReorTAw4hBNMJh4w1QTvnmayjxlZSakDVRMefenqkKFUI9fH8gCS_1fumeUn62f3Y4gHrkATHng9cWw/file?c_luid=48a05ebe' \
+            'https://uc2e8e91156111e75e7f67d7ae91.dl.dropboxusercontent.com/cd/0/get/DKZl168HKMQp96zAcuF1rI1ckBPXF1V6IQLWS4Tff7OOEt1GSScFnXnh0PZHMxhGR70VOKoD_gv57OwTMJ5Idl0vgrIZJ5QXhAVVpwzIFrzFx9RIiOdXuJ1UFzLyiIAaGlVlhi7SrCGOY8ojpyHtgcpdflH_rmdQ9us33lNV-cygXw/file?c_luid=48a05ebe' \
             -o "$PACK"
           echo '6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b  /tmp/Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip' | sha256sum -c -
           rm -rf godot/assets/user_reference
@@ -198,16 +198,16 @@ jobs:
               if int(contract.get('available_vehicle_count', 0)) != 64:
                   raise SystemExit('fleet contract is not 64 vehicles')
               road_tiles = sum(1 for n in names if n.startswith('assets/data/roads/tile_') and n.endswith('.json'))
-              coast_tiles = sum(1 for n in names if n.startswith('assets/data/coast/tile_') and n.endswith('.json'))
+              coast_files = sum(1 for n in names if n.startswith('assets/data/coast/') and n != 'assets/data/coast/manifest.json')
               building_tiles = sum(1 for n in names if n.startswith('assets/data/buildings/buildings_') and n.endswith('.ymb'))
               abis = sorted({n.split('/')[1] for n in names if n.startswith('lib/') and n.endswith('.so')})
           digest = hashlib.sha256(open(apk,'rb').read()).hexdigest()
           size = os.path.getsize(apk)
-          if road_tiles < 700 or coast_tiles < 2500 or building_tiles < 700:
-              raise SystemExit(f'accepted world incomplete roads={road_tiles} coast={coast_tiles} buildings={building_tiles}')
+          if road_tiles < 700 or coast_files < 2500 or building_tiles < 700:
+              raise SystemExit(f'accepted world incomplete roads={road_tiles} coast_files={coast_files} buildings={building_tiles}')
           if abis != ['arm64-v8a']:
               raise SystemExit('unexpected ABI set: ' + repr(abis))
-          print(f'YARDMAN_FLEET64_OWNER_APK_PASS bytes={size} sha256={digest} roads={road_tiles} coast={coast_tiles} buildings={building_tiles} fleet=64 abis={abis}')
+          print(f'YARDMAN_FLEET64_OWNER_APK_PASS bytes={size} sha256={digest} roads={road_tiles} coast_files={coast_files} buildings={building_tiles} fleet=64 abis={abis}')
           open('godot/build/Yardman-Fleet64-Owner.apk.sha256','w').write(digest + '  Yardman-Fleet64-Owner.apk\n')
           PY
 
