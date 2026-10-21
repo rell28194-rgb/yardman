@@ -12,11 +12,11 @@ const ROOT := "user://yardman/fleet64/"
 const ARCHIVE_PATH := "user://yardman/fleet64-download.zip.part"
 const MARKER_PATH := "user://yardman/fleet64-installed.json"
 const MANIFEST_PATH := ROOT + "manifest.json"
+const MAX_ARCHIVE_ENTRY_BYTES := 100663296
 
 var _http: HTTPRequest
 var _state := "idle"
 var _message := "Vehicle pack not installed."
-var _resume_offset: int = 0
 var _last_progress_emit_msec: int = 0
 
 func _ready() -> void:
@@ -29,7 +29,6 @@ func _ready() -> void:
     _http.download_chunk_size = 262144
     _http.max_redirects = 8
     _http.timeout = 0.0
-    _http.keep_partial_download = true
     _http.request_completed.connect(_on_request_completed)
     add_child(_http)
     set_process(true)
@@ -45,7 +44,7 @@ func _process(_delta: float) -> void:
     if now - _last_progress_emit_msec < 200:
         return
     _last_progress_emit_msec = now
-    var downloaded: int = _resume_offset + maxi(_http.get_downloaded_bytes(), 0)
+    var downloaded: int = maxi(_http.get_downloaded_bytes(), 0)
     progress_changed.emit(mini(downloaded, PACK_BYTES), PACK_BYTES)
 
 func get_state() -> String:
@@ -57,10 +56,11 @@ func get_message() -> String:
 func is_installed() -> bool:
     if not FileAccess.file_exists(MARKER_PATH) or not FileAccess.file_exists(MANIFEST_PATH):
         return false
-    var marker = JSON.parse_string(FileAccess.get_file_as_string(MARKER_PATH))
+    var marker: Variant = JSON.parse_string(FileAccess.get_file_as_string(MARKER_PATH))
     if not marker is Dictionary:
         return false
-    return str(marker.get("pack_sha256", "")).to_lower() == PACK_SHA256 and int(marker.get("pack_bytes", 0)) == PACK_BYTES
+    var payload: Dictionary = marker as Dictionary
+    return str(payload.get("pack_sha256", "")).to_lower() == PACK_SHA256 and int(payload.get("pack_bytes", 0)) == PACK_BYTES
 
 func start_download() -> bool:
     if is_installed():
@@ -69,24 +69,12 @@ func start_download() -> bool:
         return true
     if _state in ["downloading", "verifying", "installing"]:
         return false
-
-    _resume_offset = 0
-    var headers := PackedStringArray()
     if FileAccess.file_exists(ARCHIVE_PATH):
-        var existing := FileAccess.open(ARCHIVE_PATH, FileAccess.READ)
-        if existing != null:
-            _resume_offset = int(existing.get_length())
-        if _resume_offset <= 0 or _resume_offset >= PACK_BYTES:
-            DirAccess.remove_absolute(ProjectSettings.globalize_path(ARCHIVE_PATH))
-            _resume_offset = 0
-        else:
-            headers.append("Range: bytes=%d-" % _resume_offset)
-
+        DirAccess.remove_absolute(ProjectSettings.globalize_path(ARCHIVE_PATH))
     _http.download_file = ARCHIVE_PATH
-    _http.append_to_download_file = _resume_offset > 0
     _set_state("downloading", "Downloading vehicle pack… keep the game open and stay on Wi-Fi.")
-    progress_changed.emit(_resume_offset, PACK_BYTES)
-    var err := _http.request(PACK_URL, headers)
+    progress_changed.emit(0, PACK_BYTES)
+    var err: Error = _http.request(PACK_URL)
     if err != OK:
         _set_state("error", "Could not start vehicle download (%s)." % error_string(err))
         return false
@@ -95,24 +83,25 @@ func start_download() -> bool:
 func cancel_download() -> void:
     if _state == "downloading" and _http != null:
         _http.cancel_request()
-        _set_state("idle", "Vehicle download paused. Tap download to resume.")
+        _set_state("idle", "Vehicle download paused. This single legacy pack restarts when resumed.")
 
 func _on_request_completed(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
-    if result != HTTPRequest.RESULT_SUCCESS or response_code not in [200, 206]:
-        _set_state("error", "Vehicle download failed. Tap download to resume.")
+    if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+        _set_state("error", "Vehicle download failed. Tap download to retry.")
         return
     if not FileAccess.file_exists(ARCHIVE_PATH):
         _set_state("error", "Vehicle download finished without a file.")
         return
 
-    var handle := FileAccess.open(ARCHIVE_PATH, FileAccess.READ)
+    var handle: FileAccess = FileAccess.open(ARCHIVE_PATH, FileAccess.READ)
     var size: int = int(handle.get_length()) if handle != null else -1
     if size != PACK_BYTES:
-        _set_state("error", "Vehicle download is incomplete (%d / %d bytes). Tap download to resume." % [maxi(size, 0), PACK_BYTES])
+        DirAccess.remove_absolute(ProjectSettings.globalize_path(ARCHIVE_PATH))
+        _set_state("error", "Vehicle download is incomplete (%d / %d bytes)." % [maxi(size, 0), PACK_BYTES])
         return
 
     _set_state("verifying", "Verifying vehicle pack…")
-    var digest := FileAccess.get_sha256(ARCHIVE_PATH).to_lower()
+    var digest: String = FileAccess.get_sha256(ARCHIVE_PATH).to_lower()
     if digest != PACK_SHA256:
         DirAccess.remove_absolute(ProjectSettings.globalize_path(ARCHIVE_PATH))
         _set_state("error", "Vehicle pack verification failed. The bad download was discarded.")
@@ -126,7 +115,7 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
         _set_state("error", "Vehicle pack manifest is missing after install.")
         return
 
-    var marker_file := FileAccess.open(MARKER_PATH, FileAccess.WRITE)
+    var marker_file: FileAccess = FileAccess.open(MARKER_PATH, FileAccess.WRITE)
     if marker_file == null:
         _set_state("error", "Could not save vehicle installation state.")
         return
@@ -145,23 +134,26 @@ func _extract_archive() -> bool:
     var reader := ZIPReader.new()
     if reader.open(ARCHIVE_PATH) != OK:
         return false
-    var root_abs := ProjectSettings.globalize_path(ROOT)
+    var root_abs: String = ProjectSettings.globalize_path(ROOT)
     DirAccess.make_dir_recursive_absolute(root_abs)
-    for entry in reader.get_files():
-        var clean := entry.replace("\\", "/")
-        if clean.is_empty() or clean.begins_with("/") or clean.contains("../") or clean == "..":
+    for entry: String in reader.get_files():
+        var clean: String = entry.replace("\\", "/")
+        if clean.is_empty() or clean.begins_with("/") or clean.contains("../") or clean == ".." or clean.contains(":"):
             reader.close()
             return false
         if clean.ends_with("/"):
             DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(ROOT + clean))
             continue
-        var target := ROOT + clean
+        var bytes: PackedByteArray = reader.read_file(entry)
+        if bytes.size() > MAX_ARCHIVE_ENTRY_BYTES:
+            reader.close()
+            return false
+        var target: String = ROOT + clean
         DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(target.get_base_dir()))
-        var output := FileAccess.open(target, FileAccess.WRITE)
+        var output: FileAccess = FileAccess.open(target, FileAccess.WRITE)
         if output == null:
             reader.close()
             return false
-        var bytes := reader.read_file(entry)
         output.store_buffer(bytes)
         output.close()
     reader.close()
