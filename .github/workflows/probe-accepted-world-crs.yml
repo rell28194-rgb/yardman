@@ -1,0 +1,47 @@
+name: Probe Accepted World CRS
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - '.github/workflows/probe-accepted-world-crs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore accepted road and terrain manifests only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl --fail --location \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12284873612/zip" \
+            -o /tmp/base.zip
+          unzip -p /tmp/base.zip Yardman-Map-Crown-Reset.apk > /tmp/base.apk
+          echo '1b32465d4fe09865067ae8f47f0cf4de5daca3d4ea8a7f148d826e7ac305a072  /tmp/base.apk' | sha256sum -c -
+          unzip -p /tmp/base.apk assets/data/roads/manifest.json > /tmp/roads.json
+          unzip -p /tmp/base.apk assets/data/terrain/manifest.json > /tmp/terrain.json
+          python - <<'PY'
+          import json
+          for kind in ('roads','terrain'):
+              data=json.load(open(f'/tmp/{kind}.json'))
+              picked={k:data.get(k) for k in ('format_version','crs','projection','epsg','origin','tile_size','sample_spacing_m') if k in data}
+              print('YARDMAN_ACCEPTED_WORLD_GRID',kind,json.dumps(picked,sort_keys=True,separators=(',',':')))
+          roads=json.load(open('/tmp/roads.json'))
+          terrain=json.load(open('/tmp/terrain.json'))
+          if roads.get('origin') != terrain.get('origin') or float(roads.get('tile_size',0)) != float(terrain.get('tile_size',0)):
+              raise SystemExit('road/terrain world grids differ')
+          PY
