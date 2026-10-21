@@ -21,7 +21,6 @@ const UPDATE_INTERVAL := 0.45
 var _http: HTTPRequest
 var _state := "idle"
 var _message := "Jamaica running water is optional."
-var _resume_offset := 0
 var _last_progress_emit_msec := 0
 var _update_accumulator := 0.0
 var _renderer: YardmanHydrologyRenderer
@@ -44,7 +43,6 @@ func _ready() -> void:
     _http.download_chunk_size = 262144
     _http.max_redirects = 8
     _http.timeout = 0.0
-    _http.keep_partial_download = true
     _http.request_completed.connect(_on_request_completed)
     add_child(_http)
     _build_ui()
@@ -59,8 +57,7 @@ func _process(delta: float) -> void:
         var now := Time.get_ticks_msec()
         if now - _last_progress_emit_msec >= 150:
             _last_progress_emit_msec = now
-            var request_bytes: int = maxi(int(_http.get_downloaded_bytes()), 0)
-            _emit_progress(_resume_offset + request_bytes)
+            _emit_progress(maxi(int(_http.get_downloaded_bytes()), 0))
     if _state != "installed":
         return
     _update_accumulator += delta
@@ -158,43 +155,28 @@ func start_download() -> void:
         return
     if _state in ["downloading", "verifying", "installing"]:
         return
-    _resume_offset = 0
-    var headers := PackedStringArray()
     if FileAccess.file_exists(ARCHIVE_PATH):
-        var existing := FileAccess.open(ARCHIVE_PATH, FileAccess.READ)
-        if existing != null:
-            _resume_offset = int(existing.get_length())
-        if _resume_offset <= 0 or _resume_offset >= PACK_BYTES:
-            DirAccess.remove_absolute(ProjectSettings.globalize_path(ARCHIVE_PATH))
-            _resume_offset = 0
-        else:
-            headers.append("Range: bytes=%d-" % _resume_offset)
+        DirAccess.remove_absolute(ProjectSettings.globalize_path(ARCHIVE_PATH))
     _http.download_file = ARCHIVE_PATH
-    _http.append_to_download_file = _resume_offset > 0
     _set_state("downloading", "Downloading Jamaica running-water data…")
-    _emit_progress(_resume_offset)
-    var err := _http.request(PACK_URL, headers)
+    _emit_progress(0)
+    var err := _http.request(PACK_URL)
     if err != OK:
         _set_state("error", "Could not start hydrology download (%s)." % error_string(err))
 
 func cancel_download() -> void:
     if _state == "downloading" and _http != null:
         _http.cancel_request()
-        _set_state("idle", "Hydrology download paused. Tap download to resume.")
+        _set_state("idle", "Hydrology download paused. Tap download to restart.")
 
 func _on_request_completed(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
-    if result != HTTPRequest.RESULT_SUCCESS or response_code not in [200, 206]:
-        _set_state("error", "Hydrology download failed. Tap download to resume.")
-        return
-    if _resume_offset > 0 and response_code == 200:
-        DirAccess.remove_absolute(ProjectSettings.globalize_path(ARCHIVE_PATH))
-        _resume_offset = 0
-        _set_state("idle", "Server restarted the transfer. Tap download once more.")
+    if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+        _set_state("error", "Hydrology download failed. Tap download to retry.")
         return
     var handle := FileAccess.open(ARCHIVE_PATH, FileAccess.READ)
     var size: int = int(handle.get_length()) if handle != null else -1
     if size != PACK_BYTES:
-        _set_state("error", "Hydrology download is incomplete (%d / %d bytes). Tap download to resume." % [maxi(size, 0), PACK_BYTES])
+        _set_state("error", "Hydrology download is incomplete (%d / %d bytes). Tap download to retry." % [maxi(size, 0), PACK_BYTES])
         return
     _set_state("verifying", "Verifying Jamaica hydrology pack…")
     if FileAccess.get_sha256(ARCHIVE_PATH).to_lower() != PACK_SHA256:
