@@ -36,11 +36,20 @@ jobs:
           sudo mv /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
           godot --version
 
-      - name: Parse project and autoloads
+      - name: Parse streamed-content scripts directly
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p godot/build
+          for SCRIPT in scripts/reference_assets.gd scripts/world_detail_runtime.gd scripts/stream_water_runtime.gd; do
+            SAFE_NAME="$(basename "$SCRIPT" .gd)"
+            godot --headless --path godot --check-only --script "$SCRIPT" 2>&1 | tee "godot/build/check-${SAFE_NAME}.log"
+          done
+
+      - name: Parse project and autoloads
+        shell: bash
+        run: |
+          set -euo pipefail
           timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/streamed-content-import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR: Failed to load script|Failed to create an autoload' godot/build/streamed-content-import.log; then exit 1; fi
 
@@ -57,6 +66,9 @@ jobs:
         with:
           name: Yardman-Streamed-Content-Evidence
           path: |
+            godot/build/check-reference_assets.log
+            godot/build/check-world_detail_runtime.log
+            godot/build/check-stream_water_runtime.log
             godot/build/streamed-content-import.log
             godot/build/streamed-content-runtime.log
           if-no-files-found: ignore
