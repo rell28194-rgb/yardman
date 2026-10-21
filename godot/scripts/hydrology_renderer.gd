@@ -6,6 +6,7 @@ const DEFAULT_ACTIVE_RADIUS := 1
 const DEFAULT_VERTEX_CAP := 12000
 const WATER_LIFT_M := 0.075
 const UV_METRES_PER_REPEAT := 8.0
+const AUDIO_SEGMENT_CAP_PER_TILE := 96
 
 var terrain
 var coordinates
@@ -16,6 +17,7 @@ var active_radius := DEFAULT_ACTIVE_RADIUS
 var vertex_cap := DEFAULT_VERTEX_CAP
 var _tile_files: Dictionary = {}
 var _loaded: Dictionary = {}
+var _audio_geometry: Dictionary = {}
 var _water_material: ShaderMaterial
 var _last_center := Vector2i(2147483647, 2147483647)
 
@@ -41,6 +43,7 @@ func configure(root_path: String, coordinate_system, terrain_streamer) -> bool:
     active_radius = clampi(int(policy.get("active_tile_radius", DEFAULT_ACTIVE_RADIUS)), 0, 2)
     vertex_cap = clampi(int(policy.get("max_vertices_per_tile", DEFAULT_VERTEX_CAP)), 1000, 24000)
     _tile_files.clear()
+    _audio_geometry.clear()
     for raw in manifest.get("tiles", []):
         if not raw is Dictionary:
             continue
@@ -71,6 +74,7 @@ func update_world(world_x: float, world_z: float) -> void:
         if is_instance_valid(old):
             old.queue_free()
         _loaded.erase(key)
+        _audio_geometry.erase(key)
     for key in wanted.keys():
         var tile: Vector2i = wanted[key]
         if not _loaded.has(key):
@@ -83,10 +87,43 @@ func clear() -> void:
         if is_instance_valid(node):
             node.queue_free()
     _loaded.clear()
+    _audio_geometry.clear()
     _last_center = Vector2i(2147483647, 2147483647)
 
 func loaded_tile_count() -> int:
     return _loaded.size()
+
+func audio_segment_count() -> int:
+    var total := 0
+    for raw in _audio_geometry.values():
+        if raw is Dictionary:
+            total += (raw as Dictionary).get("segments", PackedVector4Array()).size()
+    return total
+
+func nearest_water_distance(world_x: float, world_z: float, max_distance: float = 180.0) -> float:
+    if not is_finite(world_x) or not is_finite(world_z) or not is_finite(max_distance) or max_distance <= 0.0:
+        return INF
+    var point := Vector2(world_x, world_z)
+    var best := max_distance
+    for raw in _audio_geometry.values():
+        if not raw is Dictionary:
+            continue
+        var geometry: Dictionary = raw
+        var segments: PackedVector4Array = geometry.get("segments", PackedVector4Array())
+        var half_widths: PackedFloat32Array = geometry.get("half_widths", PackedFloat32Array())
+        var count := mini(segments.size(), half_widths.size())
+        for index in range(count):
+            var segment := segments[index]
+            var a := Vector2(segment.x, segment.y)
+            var b := Vector2(segment.z, segment.w)
+            var delta := b - a
+            var t := clampf((point - a).dot(delta) / maxf(delta.length_squared(), 0.000001), 0.0, 1.0)
+            var edge_distance := maxf(0.0, point.distance_to(a + delta * t) - float(half_widths[index]))
+            if edge_distance < best:
+                best = edge_distance
+                if best <= 0.01:
+                    return 0.0
+    return best if best < max_distance else INF
 
 func _try_load_tile(tile: Vector2i) -> bool:
     var key := _tile_key(tile.x, tile.y)
@@ -116,7 +153,53 @@ func _try_load_tile(tile: Vector2i) -> bool:
     instance.position = coordinates.world_to_local(float(tile.x) * tile_size, float(tile.y) * tile_size, 0.0)
     add_child(instance)
     _loaded[key] = instance
+    _audio_geometry[key] = _build_audio_geometry(tile, payload)
     return true
+
+func _build_audio_geometry(tile: Vector2i, payload: Dictionary) -> Dictionary:
+    # Audio never needs render-level polyline density. Sample a capped set of
+    # canonical 2D segments per loaded tile; at 3x3 tiles this is <=864 tests
+    # per 5 Hz proximity update, independent of island-wide waterway count.
+    var all_segments: Array[Vector4] = []
+    var all_widths: Array[float] = []
+    var tile_world_x := float(tile.x) * tile_size
+    var tile_world_z := float(tile.y) * tile_size
+    for raw_record in payload.get("waterways", []):
+        if not raw_record is Dictionary:
+            continue
+        var record: Dictionary = raw_record
+        var width := clampf(float(record.get("width_m", 2.5)), 0.7, 45.0)
+        if bool(record.get("intermittent", false)):
+            width *= 0.82
+        for raw_part in record.get("parts", []):
+            if not raw_part is Array or raw_part.size() < 2:
+                continue
+            for point_index in range(raw_part.size() - 1):
+                var raw_a = raw_part[point_index]
+                var raw_b = raw_part[point_index + 1]
+                if not raw_a is Array or not raw_b is Array or raw_a.size() < 2 or raw_b.size() < 2:
+                    continue
+                var ax := tile_world_x + float(raw_a[0])
+                var az := tile_world_z + float(raw_a[1])
+                var bx := tile_world_x + float(raw_b[0])
+                var bz := tile_world_z + float(raw_b[1])
+                if not is_finite(ax) or not is_finite(az) or not is_finite(bx) or not is_finite(bz):
+                    continue
+                if Vector2(ax, az).distance_squared_to(Vector2(bx, bz)) < 0.01:
+                    continue
+                all_segments.append(Vector4(ax, az, bx, bz))
+                all_widths.append(width * 0.5)
+    var segments := PackedVector4Array()
+    var half_widths := PackedFloat32Array()
+    if all_segments.is_empty():
+        return {"segments": segments, "half_widths": half_widths}
+    var stride := maxi(1, int(ceil(float(all_segments.size()) / float(AUDIO_SEGMENT_CAP_PER_TILE))))
+    var index := 0
+    while index < all_segments.size() and segments.size() < AUDIO_SEGMENT_CAP_PER_TILE:
+        segments.append(all_segments[index])
+        half_widths.append(all_widths[index])
+        index += stride
+    return {"segments": segments, "half_widths": half_widths}
 
 func _build_tile_mesh(tile: Vector2i, payload: Dictionary) -> ArrayMesh:
     var vertices := PackedVector3Array()
