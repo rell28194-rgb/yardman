@@ -1,0 +1,61 @@
+name: Yardman Fleet64 Artifact Recovery Probe
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - '.github/workflows/fleet64-artifact-recovery-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download retained Fleet64 owner artifact and inspect embedded recovery files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl --fail --location \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12336906664/zip" \
+            -o /tmp/fleet64-artifact.zip
+          python - <<'PY'
+          import hashlib, os, zipfile
+          outer = '/tmp/fleet64-artifact.zip'
+          with zipfile.ZipFile(outer) as zf:
+              apk_names = [n for n in zf.namelist() if n.endswith('.apk')]
+              print('ARTIFACT_APKS', apk_names)
+              if len(apk_names) != 1:
+                  raise SystemExit('expected exactly one APK in retained Fleet64 artifact')
+              with zf.open(apk_names[0]) as src, open('/tmp/fleet64.apk', 'wb') as out:
+                  while True:
+                      chunk = src.read(1024 * 1024)
+                      if not chunk:
+                          break
+                      out.write(chunk)
+          print('FLEET64_APK_BYTES', os.path.getsize('/tmp/fleet64.apk'))
+          with zipfile.ZipFile('/tmp/fleet64.apk') as apk:
+              names = apk.namelist()
+              interesting = [n for n in names if (
+                  'toyota_crown_2013' in n or
+                  'user_reference/manifest' in n or
+                  'owner_fleet_pack_contract' in n or
+                  ('user_reference' in n and n.endswith('.scn'))
+              )]
+              print('RECOVERY_MATCH_COUNT', len(interesting))
+              for name in interesting:
+                  info = apk.getinfo(name)
+                  digest = hashlib.sha256(apk.read(name)).hexdigest()
+                  print('RECOVERY_MATCH', name, 'bytes='+str(info.file_size), 'sha256='+digest)
+          PY
