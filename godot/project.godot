@@ -16,6 +16,7 @@ RemoteFleet="*res://scripts/remote_fleet_runtime.gd"
 WorldDetail="*res://scripts/world_detail_runtime.gd"
 RunningWater="*res://scripts/stream_water_runtime.gd"
 ContentPromotion="*res://scripts/content_promotion_runtime.gd"
+ContentDownloads="*res://scripts/content_pack_ui.gd"
 VehicleGarage="*res://scripts/vehicle_selector_runtime.gd"
 
 [display]
