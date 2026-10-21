@@ -1,0 +1,109 @@
+name: Yardman Fleet64 Exact Transfer Parts
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - '.github/workflows/fleet64-exact-transfer-parts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Recover exact validated Fleet64 APK from retained artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl --fail --location \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12336906664/zip" \
+            -o /tmp/fleet64-artifact.zip
+          echo '227d70440c2803ab5e6ba8829ddfb761eb3eef4b96542b655c5262b08fc926d3  /tmp/fleet64-artifact.zip' | sha256sum -c -
+          mkdir -p /tmp/fleet64-transfer
+          python - <<'PY'
+          import os, zipfile
+          outer = '/tmp/fleet64-artifact.zip'
+          with zipfile.ZipFile(outer) as zf:
+              apk_names = [n for n in zf.namelist() if n.endswith('Yardman-Fleet64-Owner.apk')]
+              sha_names = [n for n in zf.namelist() if n.endswith('Yardman-Fleet64-Owner.apk.sha256')]
+              if len(apk_names) != 1 or len(sha_names) != 1:
+                  raise SystemExit(f'unexpected Fleet64 artifact contents apk={apk_names} sha={sha_names}')
+              for src_name, dst_name in [
+                  (apk_names[0], '/tmp/fleet64-transfer/Yardman-Fleet64-Owner.apk'),
+                  (sha_names[0], '/tmp/fleet64-transfer/Yardman-Fleet64-Owner.apk.sha256'),
+              ]:
+                  with zf.open(src_name) as src, open(dst_name, 'wb') as out:
+                      while True:
+                          chunk = src.read(1024 * 1024)
+                          if not chunk:
+                              break
+                          out.write(chunk)
+          print('EXACT_FLEET64_APK_BYTES', os.path.getsize('/tmp/fleet64-transfer/Yardman-Fleet64-Owner.apk'))
+          PY
+          cd /tmp/fleet64-transfer
+          sha256sum -c Yardman-Fleet64-Owner.apk.sha256
+          split -b 140M -d -a 2 Yardman-Fleet64-Owner.apk part-
+          test "$(find . -maxdepth 1 -type f -name 'part-*' | wc -l)" -eq 4
+          sha256sum part-* > parts.sha256
+          wc -c part-* | tee parts.bytes
+
+      - name: Upload part 00
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Fleet64-Part-00
+          path: /tmp/fleet64-transfer/part-00
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Upload part 01
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Fleet64-Part-01
+          path: /tmp/fleet64-transfer/part-01
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Upload part 02
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Fleet64-Part-02
+          path: /tmp/fleet64-transfer/part-02
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Upload part 03
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Fleet64-Part-03
+          path: /tmp/fleet64-transfer/part-03
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Upload checksum contract
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Fleet64-Transfer-Checksums
+          path: |
+            /tmp/fleet64-transfer/Yardman-Fleet64-Owner.apk.sha256
+            /tmp/fleet64-transfer/parts.sha256
+            /tmp/fleet64-transfer/parts.bytes
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
