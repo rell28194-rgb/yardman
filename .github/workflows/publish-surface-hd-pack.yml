@@ -1,0 +1,160 @@
+name: Publish Yardman Surface HD Pack
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - '.github/workflows/publish-surface-hd-pack.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: yardman-surface-hd-v1
+
+jobs:
+  build-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install image pipeline
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --disable-pip-version-check --no-cache-dir pillow==12.0.0
+
+      - name: Download verified Poly Haven CC0 source maps and build Android textures
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -rf build/surface-hd-v1
+          mkdir -p build/surface-hd-v1
+          python - <<'PY'
+          import hashlib, json, pathlib, urllib.request
+          from PIL import Image
+
+          assets = {
+              'ground_lush': 'grass_ground',
+              'ground_dry': 'withered_grass',
+              'ground_wet_soil': 'mud_forest',
+              'beach_sand': 'coast_sand_01',
+              'ground_rock': 'rock_ground',
+              'road_gravel': 'gravel_ground_01',
+          }
+          root = pathlib.Path('build/surface-hd-v1')
+          ua = 'Yardman-AssetPipeline/3.0 (+https://github.com/rell28194-rgb/yardman; Powered by Poly Haven)'
+          records = []
+          total = 0
+
+          def find_diffuse(payload):
+              table = None
+              for key, value in payload.items():
+                  if str(key).lower() in ('diffuse', 'color', 'albedo') and isinstance(value, dict):
+                      table = value
+                      break
+              if not table:
+                  raise RuntimeError('Diffuse/Color map missing')
+              res = table.get('1k') or table.get('2k')
+              if not isinstance(res, dict):
+                  raise RuntimeError('1k/2k map missing')
+              for fmt in ('jpg', 'png'):
+                  item = res.get(fmt)
+                  if isinstance(item, dict) and item.get('url'):
+                      return item
+              raise RuntimeError('JPG/PNG diffuse map missing')
+
+          for role, slug in assets.items():
+              req = urllib.request.Request(f'https://api.polyhaven.com/files/{slug}', headers={'User-Agent': ua})
+              with urllib.request.urlopen(req, timeout=45) as response:
+                  payload = json.load(response)
+              item = find_diffuse(payload)
+              source = root / f'{slug}-source'
+              request = urllib.request.Request(item['url'], headers={'User-Agent': ua})
+              with urllib.request.urlopen(request, timeout=120) as response, open(source, 'wb') as handle:
+                  while True:
+                      chunk = response.read(1024 * 1024)
+                      if not chunk:
+                          break
+                      handle.write(chunk)
+              data = source.read_bytes()
+              if len(data) != int(item['size']) or hashlib.md5(data).hexdigest() != item['md5']:
+                  raise RuntimeError(f'Poly Haven verification failed: {slug}')
+              with Image.open(source) as image:
+                  image = image.convert('RGB')
+                  image.thumbnail((768, 768), Image.Resampling.LANCZOS)
+                  canvas = Image.new('RGB', (768, 768))
+                  left = (768 - image.width) // 2
+                  top = (768 - image.height) // 2
+                  canvas.paste(image, (left, top))
+                  out = root / f'{role}.jpg'
+                  canvas.save(out, 'JPEG', quality=88, optimize=True, progressive=True, subsampling=0)
+              source.unlink()
+              cooked = out.read_bytes()
+              if len(cooked) <= 0 or len(cooked) > 1_800_000:
+                  raise RuntimeError(f'Android texture budget exceeded: {out.name} bytes={len(cooked)}')
+              total += len(cooked)
+              records.append({
+                  'role': role,
+                  'source_slug': slug,
+                  'file': out.name,
+                  'bytes': len(cooked),
+                  'sha256': hashlib.sha256(cooked).hexdigest(),
+                  'width': 768,
+                  'height': 768,
+                  'format': 'jpeg',
+              })
+              print(f'YARDMAN_SURFACE_TEXTURE role={role} slug={slug} bytes={len(cooked)} sha256={records[-1]["sha256"]}')
+
+          if total > 8_000_000:
+              raise RuntimeError(f'Surface HD transfer budget exceeded: {total}')
+          manifest = {
+              'format_version': 1,
+              'pack_id': 'yardman_surface_hd_android_v1',
+              'source': 'Poly Haven CC0',
+              'source_api': 'https://api.polyhaven.com',
+              'credit': 'Powered by Poly Haven',
+              'files': records,
+              'runtime_policy': {
+                  'texture_dimension': 768,
+                  'max_download_bytes': 8_000_000,
+                  'terrain_roles': ['ground_lush','ground_dry','ground_wet_soil','ground_rock'],
+                  'beach_role': 'beach_sand',
+                  'road_role': 'road_gravel',
+                  'normal_detail': 'existing_procedural_micro_normal',
+                  'new_geometry': False,
+                  'new_draw_calls': False,
+              },
+          }
+          manifest_path = root / 'yardman-surface-hd-v1-manifest.json'
+          manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True))
+          print(f'YARDMAN_SURFACE_HD_PACK assets={len(records)} bytes={total}')
+          print('YARDMAN_SURFACE_HD_MANIFEST_SHA256', hashlib.sha256(manifest_path.read_bytes()).hexdigest())
+          PY
+
+      - name: Publish durable Surface HD release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --target codex/accepted-fleet-garage-001 \
+              --title 'Yardman Surface HD Android v1' \
+              --notes 'Optional Android-optimized CC0 ground, beach and gravel surface materials. Powered by Poly Haven.'
+          fi
+          gh release upload "$RELEASE_TAG" build/surface-hd-v1/* --clobber
+          echo "YARDMAN_SURFACE_HD_RELEASE=https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"
+
+      - name: Upload Surface HD evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Surface-HD-v1-Evidence
+          path: build/surface-hd-v1/*
+          if-no-files-found: ignore
+          retention-days: 3
