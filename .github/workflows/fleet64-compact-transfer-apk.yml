@@ -1,0 +1,276 @@
+name: Yardman Fleet64 Compact Transfer APK
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - '.github/workflows/fleet64-compact-transfer-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  compact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Recover exact validated Fleet64 APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/fleet64-compact
+          curl --fail --location \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12336906664/zip" \
+            -o /tmp/fleet64-artifact.zip
+          echo '227d70440c2803ab5e6ba8829ddfb761eb3eef4b96542b655c5262b08fc926d3  /tmp/fleet64-artifact.zip' | sha256sum -c -
+          python - <<'PY'
+          import zipfile
+          outer = '/tmp/fleet64-artifact.zip'
+          dst = '/tmp/fleet64-compact/original.apk'
+          with zipfile.ZipFile(outer) as zf:
+              names = [n for n in zf.namelist() if n.endswith('Yardman-Fleet64-Owner.apk')]
+              if len(names) != 1:
+                  raise SystemExit(f'unexpected original artifact APKs: {names}')
+              with zf.open(names[0]) as src, open(dst, 'wb') as out:
+                  while True:
+                      chunk = src.read(1024 * 1024)
+                      if not chunk:
+                          break
+                      out.write(chunk)
+          PY
+          echo '3aba9038a31e09f8c1ac1c7e52ea5e5405fd3484ab279e2820a1b2379ff0d18a  /tmp/fleet64-compact/original.apk' | sha256sum -c -
+          stat -c 'ORIGINAL_APK_BYTES=%s' /tmp/fleet64-compact/original.apk
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools build-tools;35.0.1 platforms;android-35'
+          log-accepted-android-sdk-licenses: 'false'
+
+      - name: Restore original development signing identity
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/yardman-signing
+          key: yardman-android-debug-v1-${{ runner.os }}
+          fail-on-cache-miss: true
+
+      - name: Install deterministic ZIP optimizer
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq advancecomp
+          advzip --version | head -n 2
+
+      - name: Record accepted signing certificate
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.1/apksigner"
+          "$APKSIGNER" verify --verbose --print-certs /tmp/fleet64-compact/original.apk | tee /tmp/fleet64-compact/original-signing.txt
+          grep 'Signer #1 certificate SHA-256 digest:' /tmp/fleet64-compact/original-signing.txt | head -n 1 | sed 's/.*digest: //' > /tmp/fleet64-compact/original-cert.sha256
+          test -s /tmp/fleet64-compact/original-cert.sha256
+          cat /tmp/fleet64-compact/original-cert.sha256
+
+      - name: Repack exact logical content with stronger ZIP compression
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import os, shutil, zipfile
+          src = '/tmp/fleet64-compact/original.apk'
+          dst = '/tmp/fleet64-compact/compact-unsigned.apk'
+          stale_sig_suffixes = ('.SF', '.RSA', '.DSA', '.EC')
+          with zipfile.ZipFile(src, 'r') as zin, zipfile.ZipFile(dst, 'w', allowZip64=True) as zout:
+              for info in zin.infolist():
+                  upper = info.filename.upper()
+                  if upper == 'META-INF/MANIFEST.MF' or (upper.startswith('META-INF/') and upper.endswith(stale_sig_suffixes)):
+                      continue
+                  data = zin.read(info.filename)
+                  clone = zipfile.ZipInfo(info.filename, info.date_time)
+                  clone.comment = info.comment
+                  clone.extra = info.extra
+                  clone.create_system = info.create_system
+                  clone.create_version = info.create_version
+                  clone.extract_version = info.extract_version
+                  clone.flag_bits = info.flag_bits & ~0x08
+                  clone.internal_attr = info.internal_attr
+                  clone.external_attr = info.external_attr
+                  if info.is_dir():
+                      method = zipfile.ZIP_STORED
+                      level = None
+                  elif info.compress_type == zipfile.ZIP_DEFLATED:
+                      method = zipfile.ZIP_DEFLATED
+                      level = 9
+                  else:
+                      # First pass preserves Godot's deliberate STORE choice for
+                      # already-compressed resources. advzip improves only the
+                      # existing DEFLATE streams; logical bytes never change.
+                      method = info.compress_type
+                      level = None
+                  clone.compress_type = method
+                  if level is None:
+                      zout.writestr(clone, data, compress_type=method)
+                  else:
+                      zout.writestr(clone, data, compress_type=method, compresslevel=level)
+          print('PASS1_BYTES', os.path.getsize(dst))
+          PY
+          advzip -z -4 /tmp/fleet64-compact/compact-unsigned.apk
+          stat -c 'PASS1_OPTIMIZED_BYTES=%s' /tmp/fleet64-compact/compact-unsigned.apk
+
+      - name: Escalate compression only if the safe pass needs more room
+        shell: bash
+        run: |
+          set -euxo pipefail
+          LIMIT=534500000
+          CURRENT=$(stat -c %s /tmp/fleet64-compact/compact-unsigned.apk)
+          if [ "$CURRENT" -le "$LIMIT" ]; then
+            echo "Safe compression pass is already transferable: $CURRENT bytes"
+            exit 0
+          fi
+          echo "Safe pass is $CURRENT bytes; deflating Godot project resources without changing their bytes"
+          python - <<'PY'
+          import os, zipfile
+          src = '/tmp/fleet64-compact/original.apk'
+          dst = '/tmp/fleet64-compact/compact-unsigned.apk'
+          tmp = dst + '.tmp'
+          stale_sig_suffixes = ('.SF', '.RSA', '.DSA', '.EC')
+          with zipfile.ZipFile(src, 'r') as zin, zipfile.ZipFile(tmp, 'w', allowZip64=True) as zout:
+              for info in zin.infolist():
+                  upper = info.filename.upper()
+                  if upper == 'META-INF/MANIFEST.MF' or (upper.startswith('META-INF/') and upper.endswith(stale_sig_suffixes)):
+                      continue
+                  data = zin.read(info.filename)
+                  clone = zipfile.ZipInfo(info.filename, info.date_time)
+                  clone.comment = info.comment
+                  clone.extra = info.extra
+                  clone.create_system = info.create_system
+                  clone.create_version = info.create_version
+                  clone.extract_version = info.extract_version
+                  clone.flag_bits = info.flag_bits & ~0x08
+                  clone.internal_attr = info.internal_attr
+                  clone.external_attr = info.external_attr
+                  if info.is_dir():
+                      method = zipfile.ZIP_STORED
+                  elif info.filename.startswith('assets/'):
+                      method = zipfile.ZIP_DEFLATED
+                  else:
+                      method = info.compress_type
+                  clone.compress_type = method
+                  if method == zipfile.ZIP_DEFLATED:
+                      zout.writestr(clone, data, compress_type=method, compresslevel=9)
+                  else:
+                      zout.writestr(clone, data, compress_type=method)
+          os.replace(tmp, dst)
+          print('PASS2_BYTES', os.path.getsize(dst))
+          PY
+          advzip -z -4 /tmp/fleet64-compact/compact-unsigned.apk
+          stat -c 'PASS2_OPTIMIZED_BYTES=%s' /tmp/fleet64-compact/compact-unsigned.apk
+
+      - name: Align and sign with the accepted key
+        shell: bash
+        run: |
+          set -euxo pipefail
+          KEYSTORE="$HOME/.local/share/yardman-signing/debug.keystore"
+          test -s "$KEYSTORE"
+          ZIPALIGN="$ANDROID_HOME/build-tools/35.0.1/zipalign"
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.1/apksigner"
+          "$ZIPALIGN" -f -p 4 /tmp/fleet64-compact/compact-unsigned.apk /tmp/fleet64-compact/Yardman-Fleet64-Owner-Compact.apk
+          "$APKSIGNER" sign \
+            --ks "$KEYSTORE" \
+            --ks-key-alias androiddebugkey \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --out /tmp/fleet64-compact/Yardman-Fleet64-Owner-Compact.signed.apk \
+            /tmp/fleet64-compact/Yardman-Fleet64-Owner-Compact.apk
+          mv /tmp/fleet64-compact/Yardman-Fleet64-Owner-Compact.signed.apk /tmp/fleet64-compact/Yardman-Fleet64-Owner-Compact.apk
+          "$APKSIGNER" verify --verbose --print-certs /tmp/fleet64-compact/Yardman-Fleet64-Owner-Compact.apk | tee /tmp/fleet64-compact/compact-signing.txt
+          grep 'Signer #1 certificate SHA-256 digest:' /tmp/fleet64-compact/compact-signing.txt | head -n 1 | sed 's/.*digest: //' > /tmp/fleet64-compact/compact-cert.sha256
+          diff -u /tmp/fleet64-compact/original-cert.sha256 /tmp/fleet64-compact/compact-cert.sha256
+          "$ZIPALIGN" -c -p 4 /tmp/fleet64-compact/Yardman-Fleet64-Owner-Compact.apk
+
+      - name: Prove every project/runtime byte is unchanged
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import hashlib, json, os, zipfile
+          original = '/tmp/fleet64-compact/original.apk'
+          compact = '/tmp/fleet64-compact/Yardman-Fleet64-Owner-Compact.apk'
+          def payload_hashes(path):
+              out = {}
+              with zipfile.ZipFile(path) as zf:
+                  for info in zf.infolist():
+                      upper = info.filename.upper()
+                      if upper.startswith('META-INF/'):
+                          continue
+                      out[info.filename] = (info.file_size, hashlib.sha256(zf.read(info.filename)).hexdigest())
+              return out
+          before = payload_hashes(original)
+          after = payload_hashes(compact)
+          if before != after:
+              missing = sorted(set(before) - set(after))
+              added = sorted(set(after) - set(before))
+              changed = sorted(k for k in set(before) & set(after) if before[k] != after[k])
+              raise SystemExit(f'logical APK drift missing={missing[:10]} added={added[:10]} changed={changed[:10]}')
+          size = os.path.getsize(compact)
+          if size >= 534_500_000:
+              raise SystemExit(f'compact APK still above transfer safety ceiling: {size}')
+          with zipfile.ZipFile(compact) as zf:
+              contract = json.loads(zf.read('assets/data/owner_fleet_pack_contract.json'))
+              if int(contract.get('available_vehicle_count', 0)) != 64 or len(contract.get('available_vehicle_ids', [])) != 64:
+                  raise SystemExit('64-car contract changed')
+              names = set(zf.namelist())
+              required = {
+                  'assets/.godot/imported/toyota_crown_2013.glb-6ec01e928ae54ac12e5bc0f6ba8bd627.scn',
+                  'assets/.godot/imported/fleet_audi_r8.glb-b147f995f2466cc771b5df090f620143.scn',
+                  'assets/data/parishes/manifest.json',
+                  'assets/assets.sparsepck',
+              }
+              missing = sorted(required - names)
+              if missing:
+                  raise SystemExit('required accepted runtime payload missing: ' + repr(missing))
+          digest = hashlib.sha256(open(compact, 'rb').read()).hexdigest()
+          open('/tmp/fleet64-compact/Yardman-Fleet64-Owner-Compact.apk.sha256', 'w').write(digest + '  Yardman-Fleet64-Owner-Compact.apk\n')
+          print(f'YARDMAN_FLEET64_COMPACT_PASS bytes={size} sha256={digest} logical_entries={len(before)} fleet=64 cert=unchanged')
+          PY
+
+      - name: Upload compact owner APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Fleet64-Owner-Compact
+          path: |
+            /tmp/fleet64-compact/Yardman-Fleet64-Owner-Compact.apk
+            /tmp/fleet64-compact/Yardman-Fleet64-Owner-Compact.apk.sha256
+            /tmp/fleet64-compact/original-cert.sha256
+            /tmp/fleet64-compact/compact-cert.sha256
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+      - name: Upload compaction evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Fleet64-Compact-Evidence
+          path: |
+            /tmp/fleet64-compact/original-signing.txt
+            /tmp/fleet64-compact/compact-signing.txt
+          if-no-files-found: ignore
+          retention-days: 3
