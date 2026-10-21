@@ -48,6 +48,7 @@ jobs:
         run: |
           set -euxo pipefail
           rm -rf build/hydrology
+          mkdir -p build
           python Tools/compile_hydrology.py \
             --pbf /tmp/jamaica.osm.pbf \
             --grid godot/data/world_grid_contract.json \
