@@ -16,70 +16,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Remove unsupported HTTPRequest resume properties
+      - name: Patch Environment HD runtime
+        run: python Tools/patch_environment_godot47.py
+      - name: Verify unsupported properties are gone
         shell: bash
         run: |
           set -euxo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          p=Path('godot/scripts/environment_content_runtime.gd')
-          s=p.read_text()
-          s=s.replace('    _http.keep_partial_download = true\n','')
-          old='''        _resume_offset = 0
-        var part_path := final_path + ".part"
-        var headers := PackedStringArray()
-        if FileAccess.file_exists(part_path):
-            var partial := FileAccess.open(part_path, FileAccess.READ)
-            if partial != null:
-                _resume_offset = int(partial.get_length())
-            if _resume_offset <= 0 or _resume_offset >= expected_bytes:
-                DirAccess.remove_absolute(ProjectSettings.globalize_path(part_path))
-                _resume_offset = 0
-            else:
-                headers.append("Range: bytes=%d-" % _resume_offset)
-        _http.download_file = part_path
-        _http.append_to_download_file = _resume_offset > 0
-        _set_state("downloading", "Downloading Environment HD · %s" % name)
-        _emit_progress(_downloaded_total + _resume_offset)
-        var err := _http.request(str(_current.url), headers)
-'''
-          new='''        _resume_offset = 0
-        var part_path := final_path + ".part"
-        if FileAccess.file_exists(part_path):
-            DirAccess.remove_absolute(ProjectSettings.globalize_path(part_path))
-        _http.download_file = part_path
-        _set_state("downloading", "Downloading Environment HD · %s" % name)
-        _emit_progress(_downloaded_total)
-        var err := _http.request(str(_current.url))
-'''
-          if old not in s:
-              raise SystemExit('Environment HD download block changed; refusing blind patch')
-          s=s.replace(old,new)
-          s=s.replace('''    if result != HTTPRequest.RESULT_SUCCESS or response_code not in [200, 206]:
-        _set_state("error", "Environment asset download failed. Tap download to resume.")
-        return
-    if _resume_offset > 0 and response_code == 200:
-        DirAccess.remove_absolute(ProjectSettings.globalize_path(part_path))
-        _resume_offset = 0
-        _queue.push_front(_current)
-        _current = {}
-        _start_next_asset()
-        return
-''','''    if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
-        _set_state("error", "Environment asset download failed. Tap download to retry.")
-        return
-''')
-          s=s.replace('Tap download to resume.', 'Tap download to retry.')
-          p.write_text(s)
-          PY
           ! grep -R 'keep_partial_download\|append_to_download_file' godot/scripts/environment_content_runtime.gd
           git diff --check
       - name: Commit compatibility repair
         shell: bash
         run: |
           set -euxo pipefail
-          git config user.name 'yardman-ci'
-          git config user.email 'actions@users.noreply.github.com'
+          git config user.name yardman-ci
+          git config user.email actions@users.noreply.github.com
           git add godot/scripts/environment_content_runtime.gd
           git commit -m 'content: make Environment HD downloader Godot 4.7 safe'
           git push origin HEAD:codex/accepted-fleet-garage-001
