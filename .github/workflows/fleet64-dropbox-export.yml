@@ -1,0 +1,118 @@
+name: Yardman Fleet64 Dropbox Export
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - '.github/workflows/fleet64-dropbox-export.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-split:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore accepted world from owner-approved APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl --fail --location --retry 2 'https://www.dropbox.com/scl/fi/tawjyjzp9neoqq9rkil7q/Yardman-Map-Crown-Reset-Fixed.apk?rlkey=x15t4zbue1377p8qafwbsg2pf&dl=1' -o /tmp/base.apk
+          echo '1b32465d4fe09865067ae8f47f0cf4de5daca3d4ea8a7f148d826e7ac305a072  /tmp/base.apk' | sha256sum -c -
+          rm -rf godot/data/roads godot/data/terrain godot/data/coast godot/data/buildings godot/data/parishes
+          python - /tmp/base.apk <<'PY'
+          import os, sys, zipfile
+          with zipfile.ZipFile(sys.argv[1]) as zf:
+              for info in zf.infolist():
+                  if info.filename.startswith('assets/data/') and not info.is_dir():
+                      rel=info.filename[len('assets/'):]
+                      dst=os.path.join('godot', rel)
+                      os.makedirs(os.path.dirname(dst), exist_ok=True)
+                      with zf.open(info) as src, open(dst,'wb') as out: out.write(src.read())
+          PY
+
+      - name: Restore private 64-vehicle pack
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl --fail --location --retry 2 --retry-all-errors 'https://uc2e8e91156111e75e7f67d7ae91.dl.dropboxusercontent.com/cd/0/get/DKZl168HKMQp96zAcuF1rI1ckBPXF1V6IQLWS4Tff7OOEt1GSScFnXnh0PZHMxhGR70VOKoD_gv57OwTMJ5Idl0vgrIZJ5QXhAVVpwzIFrzFx9RIiOdXuJ1UFzLyiIAaGlVlhi7SrCGOY8ojpyHtgcpdflH_rmdQ9us33lNV-cygXw/file?c_luid=48a05ebe' -o /tmp/fleet.zip
+          echo '6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b  /tmp/fleet.zip' | sha256sum -c -
+          rm -rf godot/assets/user_reference
+          mkdir -p godot/assets/user_reference
+          unzip -q /tmp/fleet.zip -d godot/assets/user_reference
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools build-tools;35.0.1 platforms;android-35'
+          log-accepted-android-sdk-licenses: 'false'
+
+      - name: Install Godot
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE='https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable'
+          wget -q "$BASE/Godot_v4.7.2-stable_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+          sudo mv /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
+          wget -q "$BASE/Godot_v4.7.2-stable_export_templates.tpz" -O /tmp/templates.tpz
+          unzip -q /tmp/templates.tpz -d /tmp/templates
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.7.2.stable"
+          cp -a /tmp/templates/templates/. "$HOME/.local/share/godot/export_templates/4.7.2.stable/"
+
+      - name: Configure Android export
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "$HOME/.config/godot" "$HOME/.local/share/yardman-signing" godot/build
+          KEYSTORE="$HOME/.local/share/yardman-signing/debug.keystore"
+          keytool -genkeypair -v -keystore "$KEYSTORE" -storepass android -alias androiddebugkey -keypass android -dname 'CN=Android Debug,O=Yardman,C=US' -keyalg RSA -keysize 2048 -validity 10000
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/debug_keystore = "$KEYSTORE"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+          timeout 300 godot --headless --path godot --editor --quit
+
+      - name: Validate fleet and garage
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 600 godot --headless --path godot --script tests/owner_fleet_64_test.gd | tee /tmp/fleet-test.log
+          grep -q 'YARDMAN_OWNER_FLEET_64_PASS selectors=64 available=64 built=64 failures=0' /tmp/fleet-test.log
+          timeout 600 godot --headless --path godot --script tests/owner_garage_runtime_test.gd | tee /tmp/garage-test.log
+          grep -q 'YARDMAN_OWNER_GARAGE_RUNTIME_PASS selector=64 default=toyota_crown switch=toyota_crown>audi_r8>toyota_crown' /tmp/garage-test.log
+
+      - name: Export APK and split for transfer
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd godot
+          godot --headless --export-debug Android build/Yardman-Fleet64-Owner.apk
+          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose build/Yardman-Fleet64-Owner.apk
+          sha256sum build/Yardman-Fleet64-Owner.apk > build/Yardman-Fleet64-Owner.apk.sha256
+          mkdir -p build/parts
+          split -b 150M -d -a 2 build/Yardman-Fleet64-Owner.apk build/parts/part-
+
+      - name: Upload transfer parts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Fleet64-Transfer-Parts
+          path: |
+            godot/build/parts/*
+            godot/build/Yardman-Fleet64-Owner.apk.sha256
+          compression-level: 0
+          retention-days: 1
