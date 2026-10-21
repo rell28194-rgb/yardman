@@ -12,6 +12,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 [autoload]
 MapQualityBootstrap="*res://scripts/map_quality_bootstrap.gd"
 EnvironmentContent="*res://scripts/environment_content_runtime.gd"
+HydrologyContent="*res://scripts/hydrology_content_runtime.gd"
 RemoteFleet="*res://scripts/remote_fleet_runtime.gd"
 VehicleGarage="*res://scripts/vehicle_selector_runtime.gd"
 
