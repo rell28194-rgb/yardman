@@ -15,6 +15,9 @@ var _button: Button
 var _panel: PanelContainer
 var _options: OptionButton
 var _status: Label
+var _download_button: Button
+var _download_progress: ProgressBar
+var _remote: Node
 var _current_id := Catalog.DEFAULT_ID
 
 func _ready() -> void:
@@ -50,12 +53,17 @@ func attach(game: Node) -> void:
     _body = _controller.get("body") as CharacterBody3D if _controller != null else null
     layer = 45
     _build_ui()
+    _bind_remote_fleet()
     _populate()
     if _controller == null or _body == null:
         _disable("Vehicle runtime unavailable.")
         return
     if _vehicle_ids.is_empty():
-        _disable("Owner vehicle media is not installed in this build.")
+        # Keep the garage reachable even when optional media is absent. This is
+        # the recovery path for the lightweight APK: the game remains usable
+        # and the owner can fetch the fleet without reinstalling the world.
+        _button.text = "GARAGE · GET CARS"
+        _status.text = "Vehicle media is not installed. Download the fleet over Wi-Fi."
         return
     var saved := _load_saved_id()
     var initial := saved if _vehicle_ids.has(saved) else Catalog.DEFAULT_ID
@@ -81,7 +89,7 @@ func _build_ui() -> void:
     _panel = PanelContainer.new()
     _panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
     _panel.position = Vector2(-408, 72)
-    _panel.size = Vector2(390, 214)
+    _panel.size = Vector2(390, 300)
     _panel.visible = false
     add_child(_panel)
 
@@ -116,14 +124,97 @@ func _build_ui() -> void:
     close.pressed.connect(func() -> void: _panel.visible = false)
     actions.add_child(close)
 
+    _download_button = Button.new()
+    _download_button.text = "DOWNLOAD VEHICLES · WI-FI"
+    _download_button.custom_minimum_size = Vector2(360, 42)
+    _download_button.focus_mode = Control.FOCUS_NONE
+    _download_button.pressed.connect(_start_or_resume_download)
+    column.add_child(_download_button)
+
+    _download_progress = ProgressBar.new()
+    _download_progress.min_value = 0.0
+    _download_progress.max_value = 100.0
+    _download_progress.value = 0.0
+    _download_progress.show_percentage = true
+    _download_progress.custom_minimum_size = Vector2(360, 24)
+    column.add_child(_download_progress)
+
     _status = Label.new()
     _status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     _status.text = "Checking dedicated owner fleet..."
     column.add_child(_status)
 
+func _bind_remote_fleet() -> void:
+    _remote = get_node_or_null("/root/RemoteFleet")
+    if _remote == null:
+        _download_button.disabled = true
+        _download_button.text = "VEHICLE DOWNLOAD UNAVAILABLE"
+        return
+    var state_cb := Callable(self, "_on_remote_state_changed")
+    var progress_cb := Callable(self, "_on_remote_progress")
+    var installed_cb := Callable(self, "_on_remote_installed")
+    if _remote.has_signal("state_changed") and not _remote.is_connected("state_changed", state_cb):
+        _remote.connect("state_changed", state_cb)
+    if _remote.has_signal("progress_changed") and not _remote.is_connected("progress_changed", progress_cb):
+        _remote.connect("progress_changed", progress_cb)
+    if _remote.has_signal("installed") and not _remote.is_connected("installed", installed_cb):
+        _remote.connect("installed", installed_cb)
+    if _remote.has_method("get_state") and _remote.has_method("get_message"):
+        _on_remote_state_changed(str(_remote.call("get_state")), str(_remote.call("get_message")))
+
+func _start_or_resume_download() -> void:
+    if _remote == null or not _remote.has_method("start_download"):
+        _status.text = "Vehicle downloader is unavailable."
+        return
+    var state := str(_remote.call("get_state")) if _remote.has_method("get_state") else ""
+    if state == "downloading" and _remote.has_method("cancel_download"):
+        _remote.call("cancel_download")
+        return
+    _panel.visible = true
+    _remote.call("start_download")
+
+func _on_remote_state_changed(state: String, message: String) -> void:
+    if _download_button == null or _status == null:
+        return
+    match state:
+        "installed":
+            _download_button.text = "VEHICLES INSTALLED"
+            _download_button.disabled = true
+            _download_progress.value = 100.0
+        "downloading":
+            _download_button.text = "PAUSE DOWNLOAD"
+            _download_button.disabled = false
+        "verifying":
+            _download_button.text = "VERIFYING VEHICLES…"
+            _download_button.disabled = true
+        "installing":
+            _download_button.text = "INSTALLING VEHICLES…"
+            _download_button.disabled = true
+        "error":
+            _download_button.text = "RETRY VEHICLE DOWNLOAD"
+            _download_button.disabled = false
+        _:
+            _download_button.text = "DOWNLOAD VEHICLES · WI-FI"
+            _download_button.disabled = false
+    if not message.is_empty():
+        _status.text = message
+
+func _on_remote_progress(downloaded_bytes: int, total_bytes: int) -> void:
+    if _download_progress == null or total_bytes <= 0:
+        return
+    _download_progress.value = clampf(float(downloaded_bytes) * 100.0 / float(total_bytes), 0.0, 100.0)
+
+func _on_remote_installed() -> void:
+    _populate()
+    if _vehicle_ids.has(Catalog.DEFAULT_ID):
+        _current_id = Catalog.DEFAULT_ID
+        _select_id(_current_id)
+        _update_labels()
+    _status.text = "%d dedicated vehicles installed and ready." % _vehicle_ids.size()
+
 func _disable(message: String) -> void:
     _button.disabled = true
-    _button.text = "GARAGE · MEDIA REQUIRED"
+    _button.text = "GARAGE · UNAVAILABLE"
     _status.text = message
 
 func _manifest_has_exact_file(filename: String) -> bool:
@@ -145,7 +236,7 @@ func _dedicated_asset_available(vehicle_id: String) -> bool:
     var hero := Catalog.hero_scene(vehicle_id)
     if hero.is_empty() or not _manifest_has_exact_file(hero):
         return false
-    return ResourceLoader.exists(References.ROOT + hero)
+    return References.exact_asset_exists(hero)
 
 func _populate() -> void:
     _vehicle_ids.clear()
@@ -159,7 +250,9 @@ func _populate() -> void:
         _select_id(Catalog.DEFAULT_ID)
     elif not _vehicle_ids.is_empty():
         _options.select(0)
-    _status.text = "Dedicated selectable vehicles: %d / 64" % _vehicle_ids.size()
+    var remote_state := str(_remote.call("get_state")) if _remote != null and _remote.has_method("get_state") else ""
+    if remote_state not in ["downloading", "verifying", "installing"]:
+        _status.text = "Dedicated selectable vehicles: %d / 64" % _vehicle_ids.size()
 
 func _apply_selected() -> void:
     if _options.selected < 0 or _options.selected >= _vehicle_ids.size():
