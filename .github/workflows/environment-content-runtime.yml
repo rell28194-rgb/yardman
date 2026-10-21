@@ -22,12 +22,12 @@ permissions:
 env:
   GODOT_VERSION: '4.7.2'
   GODOT_CHANNEL: stable
-  RELEASE_ROOT: 'https://github.com/rell28194-rgb/yardman/releases/download/yardman-environment-v1'
+  RELEASE_ROOT: 'https://github.com/rell28194-rgb/yardman/releases/download/yardman-environment-v2'
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -43,18 +43,42 @@ jobs:
             exit 1
           fi
 
-      - name: Download released Environment HD test assets
+      - name: Download and verify Environment HD v2 release
         shell: bash
         run: |
           set -euxo pipefail
           rm -rf godot/build/environment-runtime-test
           mkdir -p godot/build/environment-runtime-test
-          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman_grass_cluster.glb" -o godot/build/environment-runtime-test/yardman_grass_cluster.glb
-          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman_shrub_near.glb" -o godot/build/environment-runtime-test/yardman_shrub_near.glb
-          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman_island_tree_near.glb" -o godot/build/environment-runtime-test/yardman_island_tree_near.glb
-          echo '3a9d6a3e8dc31c89cb759edc946f37abed71338022f01bba0334333f394240ac  godot/build/environment-runtime-test/yardman_grass_cluster.glb' | sha256sum -c -
-          echo '755d2644659ced036f503112658dcee6006a715daeb7cc95019566d34524abf6  godot/build/environment-runtime-test/yardman_shrub_near.glb' | sha256sum -c -
-          echo 'cc867fa46cdbe7b34c84b0d28f35ecea40801f519f45cb689b5400fb7fab3e83  godot/build/environment-runtime-test/yardman_island_tree_near.glb' | sha256sum -c -
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman-environment-v2-manifest.json" -o godot/build/environment-runtime-test/manifest.json
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman_grass_lush.glb" -o godot/build/environment-runtime-test/yardman_grass_lush.glb
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman_shrub_flowering.glb" -o godot/build/environment-runtime-test/yardman_shrub_flowering.glb
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman_shrub_meadow.glb" -o godot/build/environment-runtime-test/yardman_shrub_meadow.glb
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman_fern_wet.glb" -o godot/build/environment-runtime-test/yardman_fern_wet.glb
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman_tree_coastal_a.glb" -o godot/build/environment-runtime-test/yardman_tree_coastal_a.glb
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman_tree_coastal_b.glb" -o godot/build/environment-runtime-test/yardman_tree_coastal_b.glb
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman_tree_coastal_c.glb" -o godot/build/environment-runtime-test/yardman_tree_coastal_c.glb
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman_tree_broadleaf.glb" -o godot/build/environment-runtime-test/yardman_tree_broadleaf.glb
+          echo 'c343c40fdcd0321c098d92757b5224101bfa33b09abc90b3de543b59ab03074c  godot/build/environment-runtime-test/manifest.json' | sha256sum -c -
+          echo '6fc865e34c5b738d46e55986a604cc8cdd4f01ec52d3fc5e52a4435e170d1072  godot/build/environment-runtime-test/yardman_grass_lush.glb' | sha256sum -c -
+          echo 'e46ec8d435eba3920ed0fca38c514852e1c192c4d1791233ca00fe4a52d81aac  godot/build/environment-runtime-test/yardman_shrub_flowering.glb' | sha256sum -c -
+          echo 'ef6b97c557ce0f2aeb80db4f4ba997d8024d5a26e2e33e98aa7f04a241c69328  godot/build/environment-runtime-test/yardman_shrub_meadow.glb' | sha256sum -c -
+          echo 'b266761a486f37f9781b9a4306e07bd0691be06bd7dcc653494f7f102b8c6649  godot/build/environment-runtime-test/yardman_fern_wet.glb' | sha256sum -c -
+          echo '093b58c1fbce1c6b465d1f57a070fec599f9a9ace6b9e09c763d42484fea16f7  godot/build/environment-runtime-test/yardman_tree_coastal_a.glb' | sha256sum -c -
+          echo '6b3a296e21a22e652ace99c6ee642b366994421d9b9fec2806a4b5eee5006788  godot/build/environment-runtime-test/yardman_tree_coastal_b.glb' | sha256sum -c -
+          echo 'c26acaca0ae9e71a613dfc2dfd76f2dac86e70a2c7ded21f935f6e91a68a4635  godot/build/environment-runtime-test/yardman_tree_coastal_c.glb' | sha256sum -c -
+          echo '9220a73fdd7f3858c7f04364eea768ee35325f94cbff5da390be4bd55386b24d  godot/build/environment-runtime-test/yardman_tree_broadleaf.glb' | sha256sum -c -
+          python - <<'PY'
+          import json
+          m=json.load(open('godot/build/environment-runtime-test/manifest.json'))
+          assert m['format_version']==2
+          assert m['pack_id']=='environment_hd_android_v2'
+          assert len(m['files'])==8
+          assert m['runtime_policy']['max_tree_hd_instances_total']==18
+          assert m['runtime_policy']['max_shrub_hd_instances_total']==28
+          assert m['runtime_policy']['max_grass_hd_instances_total']==96
+          assert sum(int(x['bytes']) for x in m['files'])==50881392
+          print('YARDMAN_ENVIRONMENT_V2_MANIFEST_PASS assets=8 bytes=50881392')
+          PY
 
       - name: Install Godot 4.7.2
         shell: bash
@@ -83,19 +107,19 @@ jobs:
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/environment-variants.log; then exit 1; fi
           grep -q 'YARDMAN_ENVIRONMENT_VARIANT_POLICY_PASS' godot/build/environment-variants.log
 
-      - name: Prove released GLBs load and normalize under Android budgets
+      - name: Prove all v2 GLBs load and normalize under Android budgets
         shell: bash
         run: |
           set -euo pipefail
-          timeout 180 godot --headless --path godot --script tests/environment_content_runtime_test.gd 2>&1 | tee godot/build/environment-runtime.log
+          timeout 240 godot --headless --path godot --script tests/environment_content_runtime_test.gd 2>&1 | tee godot/build/environment-runtime.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/environment-runtime.log; then exit 1; fi
-          grep -q 'YARDMAN_ENVIRONMENT_CONTENT_RUNTIME_PASS assets=3' godot/build/environment-runtime.log
+          grep -q 'YARDMAN_ENVIRONMENT_CONTENT_RUNTIME_V2_PASS assets=8' godot/build/environment-runtime.log
 
       - name: Upload validation evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Yardman-Environment-HD-Runtime-Evidence
+          name: Yardman-Environment-HD-v2-Runtime-Evidence
           path: |
             godot/build/environment-import.log
             godot/build/environment-variants.log
