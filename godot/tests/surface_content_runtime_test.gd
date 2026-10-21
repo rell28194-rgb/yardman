@@ -23,6 +23,7 @@ func _run() -> void:
     }
     var runtime := Runtime.new()
     var textures: Dictionary = {}
+    var loaded_texture: ImageTexture = null
     var total := 0
     var user_root := "user://surface-runtime-test/"
     DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(user_root))
@@ -45,14 +46,15 @@ func _run() -> void:
         output.store_buffer(bytes_data)
         output.close()
         total += bytes_data.size()
-        var texture = runtime.call("_load_texture_file", user_path)
-        if not texture is ImageTexture:
+        loaded_texture = runtime.call("_load_texture_file", user_path)
+        if loaded_texture == null:
             _fail("JPEG decode failed: " + filename)
             return
-        if texture.get_width() != 768 or texture.get_height() != 768:
+        if loaded_texture.get_width() != 768 or loaded_texture.get_height() != 768:
             _fail("texture dimensions changed: " + filename)
             return
-        textures[role] = texture
+        textures[role] = loaded_texture
+    loaded_texture = null
     if total != 1_438_240:
         _fail("pack byte contract changed: %d" % total)
         return
@@ -85,20 +87,33 @@ func _run() -> void:
 
     print("YARDMAN_SURFACE_CONTENT_RUNTIME_PASS assets=6 bytes=1438240 dimensions=768 terrain=4 beach=1 road=1 draw_calls_added=0 geometry_added=0")
 
-    # Release all GPU-backed resources before SceneTree teardown so the strict
-    # gate distinguishes real runtime errors from a test that quits too early.
+    # Explicitly sever every material -> texture reference before dropping the
+    # textures. Godot 4.7 has no RenderingServer.sync() API; allowing several
+    # idle frames is sufficient for the ref-counted resources to retire.
+    for parameter in ["surface_hd_lush", "surface_hd_dry", "surface_hd_soil", "surface_hd_rock"]:
+        terrain.set_shader_parameter(parameter, null)
+    terrain.set_shader_parameter("has_surface_hd", false)
+    beach.set_shader_parameter("surface_hd_sand", null)
+    beach.set_shader_parameter("has_surface_hd_sand", false)
+    road.set_shader_parameter("surface_hd_gravel", null)
+    road.set_shader_parameter("has_surface_hd_gravel", false)
+    terrain.shader = null
+    beach.shader = null
+    road.shader = null
+    runtime.set("_textures", {})
+    textures.clear()
     terrain = null
     beach = null
     road = null
-    runtime.set("_textures", {})
-    textures.clear()
     runtime.free()
-    await process_frame
-    RenderingServer.sync()
-    await process_frame
+    for _frame in range(6):
+        await process_frame
+
     for role in expected.keys():
         var filename := str(expected[role][0])
         var user_path := user_root + filename
         if FileAccess.file_exists(user_path):
             DirAccess.remove_absolute(ProjectSettings.globalize_path(user_path))
+    for _frame in range(2):
+        await process_frame
     quit(0)
