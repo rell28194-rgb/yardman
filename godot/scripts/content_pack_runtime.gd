@@ -19,8 +19,6 @@ var _http: HTTPRequest
 var _active_pack_id: String = ""
 var _active_record: Dictionary = {}
 var _active_chunk_index: int = -1
-var _resume_offset: int = 0
-var _retry_without_resume: bool = false
 var _last_progress_emit_msec: int = 0
 
 func _ready() -> void:
@@ -37,7 +35,6 @@ func _ready() -> void:
     _http.download_chunk_size = 262144
     _http.max_redirects = 8
     _http.timeout = 0.0
-    _http.keep_partial_download = true
     _http.request_completed.connect(_on_request_completed)
     add_child(_http)
     set_process(true)
@@ -52,7 +49,7 @@ func _process(_delta: float) -> void:
     if now - _last_progress_emit_msec < 200:
         return
     _last_progress_emit_msec = now
-    var downloaded: int = _completed_chunk_bytes() + _resume_offset + maxi(_http.get_downloaded_bytes(), 0)
+    var downloaded: int = _completed_chunk_bytes() + maxi(_http.get_downloaded_bytes(), 0)
     pack_progress.emit(_active_pack_id, downloaded, _active_total_bytes())
 
 func pack_ids() -> PackedStringArray:
@@ -64,6 +61,9 @@ func pack_ids() -> PackedStringArray:
 
 func pack_record(pack_id: String) -> Dictionary:
     return (_packs.get(pack_id, {}) as Dictionary).duplicate(true)
+
+func active_pack_id() -> String:
+    return _active_pack_id
 
 func pack_status(pack_id: String) -> Dictionary:
     var record: Dictionary = _packs.get(pack_id, {}) as Dictionary
@@ -110,11 +110,13 @@ func start_pack(pack_id: String) -> bool:
         pack_installed.emit(pack_id, version)
         return true
     if int(existing.get("installed_version", 0)) != version:
-        _state.packs[pack_id] = {
+        var packs_state: Dictionary = _state.get("packs", {}) as Dictionary
+        packs_state[pack_id] = {
             "installed_version": version,
             "installed_chunks": [],
             "complete": false,
         }
+        _state["packs"] = packs_state
         _save_state()
     _active_pack_id = pack_id
     _active_record = record
@@ -122,7 +124,7 @@ func start_pack(pack_id: String) -> bool:
     if _active_chunk_index < 0:
         _complete_active_pack()
         return true
-    _start_current_chunk(true)
+    _start_current_chunk()
     return true
 
 func cancel_active_download() -> void:
@@ -132,7 +134,7 @@ func cancel_active_download() -> void:
     if _http != null:
         _http.cancel_request()
     _clear_active()
-    _emit_state(pack_id, "paused", "Content download paused. Progress is kept for resume.")
+    _emit_state(pack_id, "paused", "Download paused. Completed shards are kept; the current shard restarts when resumed.")
 
 func reload_catalog() -> bool:
     if not _active_pack_id.is_empty():
@@ -235,7 +237,7 @@ func _next_missing_chunk_index(record: Dictionary, pack_state: Dictionary) -> in
             return i
     return -1
 
-func _start_current_chunk(allow_resume: bool) -> void:
+func _start_current_chunk() -> void:
     if _active_pack_id.is_empty() or _active_chunk_index < 0:
         return
     var chunks: Array = _active_record.get("chunks", []) as Array
@@ -244,26 +246,14 @@ func _start_current_chunk(allow_resume: bool) -> void:
         return
     var chunk: Dictionary = chunks[_active_chunk_index]
     var temp_path: String = _chunk_temp_path(_active_record, chunk)
-    _resume_offset = 0
-    _retry_without_resume = not allow_resume
-    var headers := PackedStringArray()
-    if allow_resume and FileAccess.file_exists(temp_path):
-        var existing: FileAccess = FileAccess.open(temp_path, FileAccess.READ)
-        if existing != null:
-            _resume_offset = int(existing.get_length())
-        var expected_bytes: int = int(chunk.get("bytes", 0))
-        if _resume_offset <= 0 or _resume_offset >= expected_bytes:
-            DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
-            _resume_offset = 0
-        else:
-            headers.append("Range: bytes=%d-" % _resume_offset)
+    if FileAccess.file_exists(temp_path):
+        DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
     _http.download_file = temp_path
-    _http.append_to_download_file = _resume_offset > 0
     _emit_state(_active_pack_id, "downloading", "Downloading %s · shard %d/%d" % [
         str(_active_record.get("label", _active_pack_id)), _active_chunk_index + 1, chunks.size()
     ])
-    pack_progress.emit(_active_pack_id, _completed_chunk_bytes() + _resume_offset, _active_total_bytes())
-    var err: Error = _http.request(str(chunk.get("url", "")), headers)
+    pack_progress.emit(_active_pack_id, _completed_chunk_bytes(), _active_total_bytes())
+    var err: Error = _http.request(str(chunk.get("url", "")))
     if err != OK:
         _fail_active("Could not start content download (%s)." % error_string(err))
 
@@ -277,14 +267,11 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
     var chunk: Dictionary = chunks[_active_chunk_index]
     var temp_path: String = _chunk_temp_path(_active_record, chunk)
     if result != HTTPRequest.RESULT_SUCCESS:
-        _fail_active("Content download failed. Tap retry to resume.")
+        _fail_active("Content shard download failed. Retry resumes from the last verified shard.")
         return
-    if _resume_offset > 0 and response_code == 200 and not _retry_without_resume:
-        DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
-        _resume_offset = 0
-        call_deferred("_start_current_chunk", false)
-        return
-    if response_code not in [200, 206]:
+    if response_code != 200:
+        if FileAccess.file_exists(temp_path):
+            DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
         _fail_active("Content server returned HTTP %d." % response_code)
         return
     if not FileAccess.file_exists(temp_path):
@@ -294,6 +281,7 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
     var actual_bytes: int = int(handle.get_length()) if handle != null else -1
     var expected_bytes: int = int(chunk.get("bytes", 0))
     if actual_bytes != expected_bytes:
+        DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
         _fail_active("Content shard is incomplete (%d / %d bytes)." % [maxi(actual_bytes, 0), expected_bytes])
         return
     _emit_state(_active_pack_id, "verifying", "Verifying downloaded content…")
@@ -308,13 +296,13 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
         _fail_active("Content shard could not be installed.")
         return
     _mark_chunk_installed(_active_pack_id, int(_active_record.get("version", 0)), str(chunk.get("id", "")))
-    if str(chunk.get("kind", "pck")) == "zip":
+    if str(chunk.get("kind", "pck")) == "zip" and FileAccess.file_exists(temp_path):
         DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
     _active_chunk_index = _next_missing_chunk_index(_active_record, _pack_state(_active_pack_id))
     if _active_chunk_index < 0:
         _complete_active_pack()
     else:
-        _start_current_chunk(true)
+        _start_current_chunk()
 
 func _install_chunk(record: Dictionary, chunk: Dictionary, temp_path: String) -> bool:
     var kind: String = str(chunk.get("kind", "pck"))
@@ -397,8 +385,6 @@ func _clear_active() -> void:
     _active_pack_id = ""
     _active_record.clear()
     _active_chunk_index = -1
-    _resume_offset = 0
-    _retry_without_resume = false
 
 func _mount_installed_pcks() -> void:
     for raw_id: Variant in _packs.keys():
