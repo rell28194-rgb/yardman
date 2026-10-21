@@ -14,6 +14,7 @@ on:
       - 'godot/data/content_pack_catalog.json'
       - 'godot/shaders/stream_water.gdshader'
       - 'godot/tests/streamed_content_runtime_test.gd'
+      - 'godot/tests/hydrology_pack_download_test.gd'
       - 'godot/project.godot'
   workflow_dispatch:
 
@@ -61,7 +62,14 @@ jobs:
         run: |
           set -euo pipefail
           timeout 120 godot --headless --path godot --script tests/streamed_content_runtime_test.gd 2>&1 | tee godot/build/streamed-content-runtime.log
-          grep -q 'YARDMAN_STREAMED_CONTENT_RUNTIME_PASS cell=256 budget_us=1400 max_detail_samples=470 water_segments=8192 pack_manager=sharded-pck' godot/build/streamed-content-runtime.log
+          grep -q 'YARDMAN_STREAMED_CONTENT_RUNTIME_PASS cell=256 budget_us=1400 max_detail_samples=470 water_segments=8192 pack_manager=sharded-pck hydrology=durable' godot/build/streamed-content-runtime.log
+
+      - name: Download and install hydrology through Godot runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/hydrology_pack_download_test.gd 2>&1 | tee godot/build/hydrology-runtime-download.log
+          grep -q 'YARDMAN_HYDROLOGY_RUNTIME_DOWNLOAD_PASS bytes=844549 tiles=421 install=user://yardman/packs/hydrology' godot/build/hydrology-runtime-download.log
 
       - name: Upload validation evidence
         if: always()
@@ -76,5 +84,6 @@ jobs:
             godot/build/check-stream_water_runtime.log
             godot/build/streamed-content-import.log
             godot/build/streamed-content-runtime.log
+            godot/build/hydrology-runtime-download.log
           if-no-files-found: ignore
           retention-days: 3
