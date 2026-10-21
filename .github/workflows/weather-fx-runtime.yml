@@ -1,0 +1,68 @@
+name: Yardman Bounded Weather FX
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - 'godot/scripts/weather_fx_runtime.gd'
+      - 'godot/shaders/rain_streak.gdshader'
+      - 'godot/shaders/terrain_surface.gdshader'
+      - 'godot/shaders/road_surface.gdshader'
+      - 'godot/shaders/beach.gdshader'
+      - 'godot/tests/weather_fx_runtime_test.gd'
+      - 'godot/project.godot'
+      - '.github/workflows/weather-fx-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Reject project and shader parse errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/weather-import.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/weather-import.log; then exit 1; fi
+
+      - name: Prove one-batch rain and wetness budgets
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 90 godot --headless --path godot --script tests/weather_fx_runtime_test.gd 2>&1 | tee godot/build/weather-runtime.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/weather-runtime.log; then exit 1; fi
+          grep -q 'YARDMAN_WEATHER_FX_RUNTIME_PASS rain_batches=1 max_drops=320 balanced_cap=150 ultra_cap=300 reduced_motion_cap=165 wetness_materials=3 dynamic=deterministic' godot/build/weather-runtime.log
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Weather-FX-Evidence
+          path: |
+            godot/build/weather-import.log
+            godot/build/weather-runtime.log
+          if-no-files-found: ignore
+          retention-days: 3
