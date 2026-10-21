@@ -1,0 +1,38 @@
+name: Probe Public Environment Asset API
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - '.github/workflows/polyhaven-content-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe selected CC0 environment assets
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p build/polyhaven
+          for slug in shrub_04 grass_medium_01 island_tree_01; do
+            curl --fail --location \
+              -H 'User-Agent: Yardman-AssetPipeline/1.0 (+https://github.com/rell28194-rgb/yardman)' \
+              "https://api.polyhaven.com/files/${slug}" \
+              -o "build/polyhaven/${slug}.json"
+            echo "YARDMAN_POLYHAVEN_ASSET ${slug}"
+            jq -r 'keys[]' "build/polyhaven/${slug}.json" | sed 's/^/ROOT_KEY /'
+            jq -r '.. | objects | to_entries[]? | select(.value|type=="string") | select(.value|startswith("https://")) | [.key,.value] | @tsv' "build/polyhaven/${slug}.json" | head -80
+          done
+      - name: Upload probe responses
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-PolyHaven-Probe
+          path: build/polyhaven/*.json
+          retention-days: 3
