@@ -16,8 +16,8 @@ const MANIFEST_PATH := ROOT + "manifest.json"
 var _http: HTTPRequest
 var _state := "idle"
 var _message := "Vehicle pack not installed."
-var _resume_offset := 0
-var _last_progress_emit_msec := 0
+var _resume_offset: int = 0
+var _last_progress_emit_msec: int = 0
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -41,12 +41,12 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
     if _state != "downloading" or _http == null:
         return
-    var now := Time.get_ticks_msec()
+    var now: int = Time.get_ticks_msec()
     if now - _last_progress_emit_msec < 200:
         return
     _last_progress_emit_msec = now
-    var downloaded := _resume_offset + max(_http.get_downloaded_bytes(), 0)
-    progress_changed.emit(min(downloaded, PACK_BYTES), PACK_BYTES)
+    var downloaded: int = _resume_offset + maxi(_http.get_downloaded_bytes(), 0)
+    progress_changed.emit(mini(downloaded, PACK_BYTES), PACK_BYTES)
 
 func get_state() -> String:
     return _state
@@ -106,9 +106,9 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
         return
 
     var handle := FileAccess.open(ARCHIVE_PATH, FileAccess.READ)
-    var size := int(handle.get_length()) if handle != null else -1
+    var size: int = int(handle.get_length()) if handle != null else -1
     if size != PACK_BYTES:
-        _set_state("error", "Vehicle download is incomplete (%d / %d bytes). Tap download to resume." % [max(size, 0), PACK_BYTES])
+        _set_state("error", "Vehicle download is incomplete (%d / %d bytes). Tap download to resume." % [maxi(size, 0), PACK_BYTES])
         return
 
     _set_state("verifying", "Verifying vehicle pack…")
