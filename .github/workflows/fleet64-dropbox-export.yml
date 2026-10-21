@@ -13,121 +13,72 @@ permissions:
   actions: read
 
 jobs:
-  build-and-split:
+  split-validated-owner-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Restore accepted world from owner-approved APK artifact
+      - name: Download already-validated Fleet64 owner artifact
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
-          BASE_ARTIFACT=/tmp/accepted-base.zip
-          BASE_APK=/tmp/Yardman-Map-Crown-Reset-Fixed.apk
           curl --fail --location \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12284873612/zip" \
-            -o "$BASE_ARTIFACT"
-          unzip -p "$BASE_ARTIFACT" Yardman-Map-Crown-Reset.apk > "$BASE_APK"
-          echo '1b32465d4fe09865067ae8f47f0cf4de5daca3d4ea8a7f148d826e7ac305a072  /tmp/Yardman-Map-Crown-Reset-Fixed.apk' | sha256sum -c -
-          rm -rf godot/data/roads godot/data/terrain godot/data/coast godot/data/buildings godot/data/parishes
-          python - "$BASE_APK" <<'PY'
-          import os, sys, zipfile
-          with zipfile.ZipFile(sys.argv[1]) as zf:
-              for info in zf.infolist():
-                  if info.filename.startswith('assets/data/') and not info.is_dir():
-                      rel = info.filename[len('assets/'):]
-                      dst = os.path.join('godot', rel)
-                      os.makedirs(os.path.dirname(dst), exist_ok=True)
-                      with zf.open(info) as src, open(dst, 'wb') as out:
-                          out.write(src.read())
-          PY
+            "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12336906664/zip" \
+            -o /tmp/fleet64-owner.zip
+          mkdir -p /tmp/fleet64
+          unzip -q /tmp/fleet64-owner.zip -d /tmp/fleet64
+          test -s /tmp/fleet64/Yardman-Fleet64-Owner.apk
+          test -s /tmp/fleet64/Yardman-Fleet64-Owner.apk.sha256
+          cd /tmp/fleet64
+          sha256sum -c Yardman-Fleet64-Owner.apk.sha256
+          mkdir -p parts
+          split -b 150M -d -a 2 Yardman-Fleet64-Owner.apk parts/part-
+          test -s parts/part-00
+          test -s parts/part-01
+          test -s parts/part-02
+          test -s parts/part-03
+          ls -lh parts Yardman-Fleet64-Owner.apk.sha256
 
-      - name: Restore private 64-vehicle pack
-        shell: bash
-        run: |
-          set -euxo pipefail
-          curl --fail --location --retry 2 --retry-all-errors \
-            'https://ucacd9695ab1a87255bff5cc8f5f.dl.dropboxusercontent.com/cd/0/get/DKZO0BjG9Xw5__DH-oglGhV66FO6mleLBerueScCJulMLokD5CemGOgmweOtdAIvaMngIF9Woru4-bYfYK8ccUC2iiXJlmALHJYqLS80z3W4Z4f7FQB6SsoymCgO-OS9Cx7PED1RD-qrmmZPBCAUsPk9iKRhzQRTJeGWCQU3617Tnw/file?c_luid=48a05ebe' \
-            -o /tmp/fleet.zip
-          echo '6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b  /tmp/fleet.zip' | sha256sum -c -
-          rm -rf godot/assets/user_reference
-          mkdir -p godot/assets/user_reference
-          unzip -q /tmp/fleet.zip -d godot/assets/user_reference
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - uses: android-actions/setup-android@v4
-        with:
-          packages: 'platform-tools build-tools;35.0.1 platforms;android-35'
-          log-accepted-android-sdk-licenses: 'false'
-
-      - name: Install Godot
-        shell: bash
-        run: |
-          set -euxo pipefail
-          BASE='https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable'
-          wget -q "$BASE/Godot_v4.7.2-stable_linux.x86_64.zip" -O /tmp/godot.zip
-          unzip -q /tmp/godot.zip -d /tmp/godot-bin
-          chmod +x /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
-          sudo mv /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
-          wget -q "$BASE/Godot_v4.7.2-stable_export_templates.tpz" -O /tmp/templates.tpz
-          unzip -q /tmp/templates.tpz -d /tmp/templates
-          mkdir -p "$HOME/.local/share/godot/export_templates/4.7.2.stable"
-          cp -a /tmp/templates/templates/. "$HOME/.local/share/godot/export_templates/4.7.2.stable/"
-
-      - name: Configure Android export
-        shell: bash
-        run: |
-          set -euxo pipefail
-          mkdir -p "$HOME/.config/godot" "$HOME/.local/share/yardman-signing" godot/build
-          KEYSTORE="$HOME/.local/share/yardman-signing/debug.keystore"
-          keytool -genkeypair -v -keystore "$KEYSTORE" -storepass android -alias androiddebugkey -keypass android -dname 'CN=Android Debug,O=Yardman,C=US' -keyalg RSA -keysize 2048 -validity 10000
-          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
-          [gd_resource type="EditorSettings" format=3]
-          [resource]
-          export/android/java_sdk_path = "$JAVA_HOME"
-          export/android/android_sdk_path = "$ANDROID_HOME"
-          export/android/debug_keystore = "$KEYSTORE"
-          export/android/debug_keystore_user = "androiddebugkey"
-          export/android/debug_keystore_pass = "android"
-          EOF
-          timeout 300 godot --headless --path godot --editor --quit
-
-      - name: Validate fleet and garage
-        shell: bash
-        run: |
-          set -euo pipefail
-          timeout 600 godot --headless --path godot --script tests/owner_fleet_64_test.gd | tee /tmp/fleet-test.log
-          grep -q 'YARDMAN_OWNER_FLEET_64_PASS selectors=64 available=64 built=64 failures=0' /tmp/fleet-test.log
-          timeout 600 godot --headless --path godot --script tests/owner_garage_runtime_test.gd | tee /tmp/garage-test.log
-          grep -q 'YARDMAN_OWNER_GARAGE_RUNTIME_PASS selector=64 default=toyota_crown switch=toyota_crown>audi_r8>toyota_crown' /tmp/garage-test.log
-
-      - name: Export APK and split for transfer
-        shell: bash
-        run: |
-          set -euxo pipefail
-          cd godot
-          godot --headless --export-debug Android build/Yardman-Fleet64-Owner.apk
-          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose build/Yardman-Fleet64-Owner.apk
-          sha256sum build/Yardman-Fleet64-Owner.apk > build/Yardman-Fleet64-Owner.apk.sha256
-          mkdir -p build/parts
-          split -b 150M -d -a 2 build/Yardman-Fleet64-Owner.apk build/parts/part-
-
-      - name: Upload transfer parts
+      - name: Upload part 00
         uses: actions/upload-artifact@v4
         with:
-          name: Yardman-Fleet64-Transfer-Parts
-          path: |
-            godot/build/parts/*
-            godot/build/Yardman-Fleet64-Owner.apk.sha256
+          name: Yardman-Fleet64-Part-00
+          path: /tmp/fleet64/parts/part-00
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload part 01
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Fleet64-Part-01
+          path: /tmp/fleet64/parts/part-01
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload part 02
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Fleet64-Part-02
+          path: /tmp/fleet64/parts/part-02
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload part 03
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Fleet64-Part-03
+          path: /tmp/fleet64/parts/part-03
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Fleet64-Checksum
+          path: /tmp/fleet64/Yardman-Fleet64-Owner.apk.sha256
           compression-level: 0
           retention-days: 1
