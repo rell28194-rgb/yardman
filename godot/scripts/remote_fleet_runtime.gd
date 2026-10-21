@@ -16,7 +16,6 @@ const MANIFEST_PATH := ROOT + "manifest.json"
 var _http: HTTPRequest
 var _state := "idle"
 var _message := "Vehicle pack not installed."
-var _resume_offset: int = 0
 var _last_progress_emit_msec: int = 0
 
 func _ready() -> void:
@@ -29,7 +28,6 @@ func _ready() -> void:
     _http.download_chunk_size = 262144
     _http.max_redirects = 8
     _http.timeout = 0.0
-    _http.keep_partial_download = true
     _http.request_completed.connect(_on_request_completed)
     add_child(_http)
     set_process(true)
@@ -45,7 +43,7 @@ func _process(_delta: float) -> void:
     if now - _last_progress_emit_msec < 200:
         return
     _last_progress_emit_msec = now
-    var downloaded: int = _resume_offset + maxi(_http.get_downloaded_bytes(), 0)
+    var downloaded: int = maxi(int(_http.get_downloaded_bytes()), 0)
     progress_changed.emit(mini(downloaded, PACK_BYTES), PACK_BYTES)
 
 func get_state() -> String:
@@ -69,24 +67,12 @@ func start_download() -> bool:
         return true
     if _state in ["downloading", "verifying", "installing"]:
         return false
-
-    _resume_offset = 0
-    var headers := PackedStringArray()
     if FileAccess.file_exists(ARCHIVE_PATH):
-        var existing := FileAccess.open(ARCHIVE_PATH, FileAccess.READ)
-        if existing != null:
-            _resume_offset = int(existing.get_length())
-        if _resume_offset <= 0 or _resume_offset >= PACK_BYTES:
-            DirAccess.remove_absolute(ProjectSettings.globalize_path(ARCHIVE_PATH))
-            _resume_offset = 0
-        else:
-            headers.append("Range: bytes=%d-" % _resume_offset)
-
+        DirAccess.remove_absolute(ProjectSettings.globalize_path(ARCHIVE_PATH))
     _http.download_file = ARCHIVE_PATH
-    _http.append_to_download_file = _resume_offset > 0
     _set_state("downloading", "Downloading vehicle pack… keep the game open and stay on Wi-Fi.")
-    progress_changed.emit(_resume_offset, PACK_BYTES)
-    var err := _http.request(PACK_URL, headers)
+    progress_changed.emit(0, PACK_BYTES)
+    var err := _http.request(PACK_URL)
     if err != OK:
         _set_state("error", "Could not start vehicle download (%s)." % error_string(err))
         return false
@@ -95,29 +81,27 @@ func start_download() -> bool:
 func cancel_download() -> void:
     if _state == "downloading" and _http != null:
         _http.cancel_request()
-        _set_state("idle", "Vehicle download paused. Tap download to resume.")
+        _set_state("idle", "Vehicle download stopped. Tap download to restart.")
 
 func _on_request_completed(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
-    if result != HTTPRequest.RESULT_SUCCESS or response_code not in [200, 206]:
-        _set_state("error", "Vehicle download failed. Tap download to resume.")
+    if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+        _set_state("error", "Vehicle download source is unavailable or incomplete. The base game remains usable.")
         return
     if not FileAccess.file_exists(ARCHIVE_PATH):
         _set_state("error", "Vehicle download finished without a file.")
         return
-
     var handle := FileAccess.open(ARCHIVE_PATH, FileAccess.READ)
     var size: int = int(handle.get_length()) if handle != null else -1
     if size != PACK_BYTES:
-        _set_state("error", "Vehicle download is incomplete (%d / %d bytes). Tap download to resume." % [maxi(size, 0), PACK_BYTES])
+        DirAccess.remove_absolute(ProjectSettings.globalize_path(ARCHIVE_PATH))
+        _set_state("error", "Vehicle download is incomplete (%d / %d bytes)." % [maxi(size, 0), PACK_BYTES])
         return
-
     _set_state("verifying", "Verifying vehicle pack…")
     var digest := FileAccess.get_sha256(ARCHIVE_PATH).to_lower()
     if digest != PACK_SHA256:
         DirAccess.remove_absolute(ProjectSettings.globalize_path(ARCHIVE_PATH))
         _set_state("error", "Vehicle pack verification failed. The bad download was discarded.")
         return
-
     _set_state("installing", "Installing vehicles…")
     if not _extract_archive():
         _set_state("error", "Vehicle pack could not be installed.")
@@ -125,7 +109,6 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
     if not FileAccess.file_exists(MANIFEST_PATH):
         _set_state("error", "Vehicle pack manifest is missing after install.")
         return
-
     var marker_file := FileAccess.open(MARKER_PATH, FileAccess.WRITE)
     if marker_file == null:
         _set_state("error", "Could not save vehicle installation state.")
