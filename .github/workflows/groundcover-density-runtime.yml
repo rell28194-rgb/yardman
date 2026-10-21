@@ -1,0 +1,64 @@
+name: Yardman Batched Groundcover Density
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - 'godot/scripts/groundcover_density_runtime.gd'
+      - 'godot/tests/groundcover_density_runtime_test.gd'
+      - 'godot/project.godot'
+      - '.github/workflows/groundcover-density-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Reject project parse errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/groundcover-import.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/groundcover-import.log; then exit 1; fi
+
+      - name: Prove density expands inside the existing MultiMesh batch
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 60 godot --headless --path godot --script tests/groundcover_density_runtime_test.gd 2>&1 | tee godot/build/groundcover-runtime.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/groundcover-runtime.log; then exit 1; fi
+          grep -q 'YARDMAN_GROUNDCOVER_DENSITY_PASS anchors=2 tufts=8 factor=4 multimesh_batches_added=0 shadows_added=0' godot/build/groundcover-runtime.log
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Groundcover-Density-Evidence
+          path: |
+            godot/build/groundcover-import.log
+            godot/build/groundcover-runtime.log
+          if-no-files-found: ignore
+          retention-days: 3
