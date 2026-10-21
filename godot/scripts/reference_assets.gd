@@ -3,6 +3,7 @@ extends RefCounted
 class_name YardmanReferenceAssets
 
 const ROOT := "res://assets/user_reference/"
+const REMOTE_ROOT := "user://yardman/fleet64/"
 # The reset branch has one owner vehicle only. Keep the old runtime call site
 # stable while replacing its generic road-car art with the accepted Crown007.
 const SCENE_UPGRADES := {
@@ -15,6 +16,20 @@ static var _scenes: Dictionary = {}
 static func _valid_name(filename: String, extensions: PackedStringArray) -> bool:
     return not filename.is_empty() and not filename.contains("/") and not filename.contains("\\") \
         and not filename.contains("..") and filename.get_extension().to_lower() in extensions
+
+static func exact_asset_path(filename: String) -> String:
+    if not _valid_name(filename, PackedStringArray(["glb", "gltf", "png", "jpg", "webp", "wav", "ogg", "json"])):
+        return ""
+    var local := ROOT + filename
+    if ResourceLoader.exists(local) or FileAccess.file_exists(local):
+        return local
+    var downloaded := REMOTE_ROOT + filename
+    if FileAccess.file_exists(downloaded):
+        return downloaded
+    return ""
+
+static func exact_asset_exists(filename: String) -> bool:
+    return not exact_asset_path(filename).is_empty()
 
 static func texture(filename: String) -> Texture2D:
     if not _valid_name(filename, PackedStringArray(["png", "jpg", "webp"])):
@@ -68,8 +83,10 @@ static func audio(filename: String, loop: bool = false) -> AudioStream:
     return media
 
 static func manifest() -> Dictionary:
-    var path := ROOT + "manifest.json"
-    if not FileAccess.file_exists(path):
-        return {}
-    var payload = JSON.parse_string(FileAccess.get_file_as_string(path))
-    return payload if payload is Dictionary and int(payload.get("format_version", 0)) == 1 else {}
+    for path in [REMOTE_ROOT + "manifest.json", ROOT + "manifest.json"]:
+        if not FileAccess.file_exists(path):
+            continue
+        var payload = JSON.parse_string(FileAccess.get_file_as_string(path))
+        if payload is Dictionary and int(payload.get("format_version", 0)) == 1:
+            return payload
+    return {}
