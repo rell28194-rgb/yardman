@@ -7,8 +7,10 @@ on:
     paths:
       - '.github/workflows/streamed-content-runtime.yml'
       - 'godot/scripts/reference_assets.gd'
+      - 'godot/scripts/content_pack_runtime.gd'
       - 'godot/scripts/world_detail_runtime.gd'
       - 'godot/scripts/stream_water_runtime.gd'
+      - 'godot/data/content_pack_catalog.json'
       - 'godot/shaders/stream_water.gdshader'
       - 'godot/tests/streamed_content_runtime_test.gd'
       - 'godot/project.godot'
@@ -41,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p godot/build
-          for SCRIPT in scripts/reference_assets.gd scripts/world_detail_runtime.gd scripts/stream_water_runtime.gd; do
+          for SCRIPT in scripts/reference_assets.gd scripts/content_pack_runtime.gd scripts/world_detail_runtime.gd scripts/stream_water_runtime.gd; do
             SAFE_NAME="$(basename "$SCRIPT" .gd)"
             godot --headless --path godot --check-only --script "$SCRIPT" 2>&1 | tee "godot/build/check-${SAFE_NAME}.log"
           done
@@ -58,7 +60,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 120 godot --headless --path godot --script tests/streamed_content_runtime_test.gd 2>&1 | tee godot/build/streamed-content-runtime.log
-          grep -q 'YARDMAN_STREAMED_CONTENT_RUNTIME_PASS cell=256 budget_us=1400 max_detail_samples=470 water_segments=8192' godot/build/streamed-content-runtime.log
+          grep -q 'YARDMAN_STREAMED_CONTENT_RUNTIME_PASS cell=256 budget_us=1400 max_detail_samples=470 water_segments=8192 pack_manager=sharded-pck' godot/build/streamed-content-runtime.log
 
       - name: Upload validation evidence
         if: always()
@@ -67,6 +69,7 @@ jobs:
           name: Yardman-Streamed-Content-Evidence
           path: |
             godot/build/check-reference_assets.log
+            godot/build/check-content_pack_runtime.log
             godot/build/check-world_detail_runtime.log
             godot/build/check-stream_water_runtime.log
             godot/build/streamed-content-import.log
