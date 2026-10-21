@@ -6,9 +6,11 @@ on:
       - codex/accepted-fleet-garage-001
     paths:
       - '.github/workflows/fleet64-dropbox-export.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build-and-split:
@@ -17,29 +19,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Restore accepted world from owner-approved APK
+      - name: Restore accepted world from owner-approved APK artifact
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
-          curl --fail --location --retry 2 'https://www.dropbox.com/scl/fi/tawjyjzp9neoqq9rkil7q/Yardman-Map-Crown-Reset-Fixed.apk?rlkey=x15t4zbue1377p8qafwbsg2pf&dl=1' -o /tmp/base.apk
-          echo '1b32465d4fe09865067ae8f47f0cf4de5daca3d4ea8a7f148d826e7ac305a072  /tmp/base.apk' | sha256sum -c -
+          BASE_ARTIFACT=/tmp/accepted-base.zip
+          BASE_APK=/tmp/Yardman-Map-Crown-Reset-Fixed.apk
+          curl --fail --location \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12284873612/zip" \
+            -o "$BASE_ARTIFACT"
+          unzip -p "$BASE_ARTIFACT" Yardman-Map-Crown-Reset.apk > "$BASE_APK"
+          echo '1b32465d4fe09865067ae8f47f0cf4de5daca3d4ea8a7f148d826e7ac305a072  /tmp/Yardman-Map-Crown-Reset-Fixed.apk' | sha256sum -c -
           rm -rf godot/data/roads godot/data/terrain godot/data/coast godot/data/buildings godot/data/parishes
-          python - /tmp/base.apk <<'PY'
+          python - "$BASE_APK" <<'PY'
           import os, sys, zipfile
           with zipfile.ZipFile(sys.argv[1]) as zf:
               for info in zf.infolist():
                   if info.filename.startswith('assets/data/') and not info.is_dir():
-                      rel=info.filename[len('assets/'):]
-                      dst=os.path.join('godot', rel)
+                      rel = info.filename[len('assets/'):]
+                      dst = os.path.join('godot', rel)
                       os.makedirs(os.path.dirname(dst), exist_ok=True)
-                      with zf.open(info) as src, open(dst,'wb') as out: out.write(src.read())
+                      with zf.open(info) as src, open(dst, 'wb') as out:
+                          out.write(src.read())
           PY
 
       - name: Restore private 64-vehicle pack
         shell: bash
         run: |
           set -euxo pipefail
-          curl --fail --location --retry 2 --retry-all-errors 'https://uc2e8e91156111e75e7f67d7ae91.dl.dropboxusercontent.com/cd/0/get/DKZl168HKMQp96zAcuF1rI1ckBPXF1V6IQLWS4Tff7OOEt1GSScFnXnh0PZHMxhGR70VOKoD_gv57OwTMJ5Idl0vgrIZJ5QXhAVVpwzIFrzFx9RIiOdXuJ1UFzLyiIAaGlVlhi7SrCGOY8ojpyHtgcpdflH_rmdQ9us33lNV-cygXw/file?c_luid=48a05ebe' -o /tmp/fleet.zip
+          curl --fail --location --retry 2 --retry-all-errors \
+            'https://www.dropbox.com/scl/fi/jv54iuqhthvejvuy6zezc/Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip?rlkey=80kgw28rol81hnia2xbikuspe&dl=1' \
+            -o /tmp/fleet.zip
           echo '6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b  /tmp/fleet.zip' | sha256sum -c -
           rm -rf godot/assets/user_reference
           mkdir -p godot/assets/user_reference
