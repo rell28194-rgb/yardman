@@ -2,6 +2,7 @@ extends SceneTree
 
 const DetailRuntime = preload("res://scripts/world_detail_runtime.gd")
 const WaterRuntime = preload("res://scripts/stream_water_runtime.gd")
+const PackRuntime = preload("res://scripts/content_pack_runtime.gd")
 const References = preload("res://scripts/reference_assets.gd")
 
 func _initialize() -> void:
@@ -50,9 +51,51 @@ func _run() -> void:
         return
     water.free()
 
+    var manager = PackRuntime.new()
+    if not bool(manager.call("_safe_id", "world-detail")) or bool(manager.call("_safe_id", "../escape")):
+        manager.free()
+        _fail("content-pack identifier safety contract failed")
+        return
+    var valid_record := {
+        "id": "test-pack",
+        "label": "Test",
+        "version": 1,
+        "install_root": "test-pack",
+        "chunks": [{
+            "id": "visuals-001",
+            "kind": "pck",
+            "url": "https://example.invalid/test.pck",
+            "sha256": "a".repeat(64),
+            "bytes": 1024,
+        }],
+    }
+    if not bool(manager.call("_validate_pack_record", valid_record)):
+        manager.free()
+        _fail("valid sharded PCK record was rejected")
+        return
+    var invalid_record: Dictionary = valid_record.duplicate(true)
+    invalid_record.chunks[0].url = "http://example.invalid/test.pck"
+    if bool(manager.call("_validate_pack_record", invalid_record)):
+        manager.free()
+        _fail("non-HTTPS content shard was accepted")
+        return
+    if int(PackRuntime.MAX_ZIP_ENTRY_BYTES) > 100663296:
+        manager.free()
+        _fail("ZIP entry memory safety cap exceeded")
+        return
+    manager.free()
+
+    var catalog_raw: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/content_pack_catalog.json"))
+    if not catalog_raw is Dictionary or int((catalog_raw as Dictionary).get("format_version", 0)) != 1:
+        _fail("content-pack catalog is invalid")
+        return
+    if ((catalog_raw as Dictionary).get("packs", []) as Array).size() < 4:
+        _fail("content-pack catalog is missing planned world packs")
+        return
+
     if not References.exact_asset_path("../escape.glb").is_empty():
         _fail("downloaded asset path traversal was not rejected")
         return
 
-    print("YARDMAN_STREAMED_CONTENT_RUNTIME_PASS cell=256 budget_us=1400 max_detail_samples=470 water_segments=8192")
+    print("YARDMAN_STREAMED_CONTENT_RUNTIME_PASS cell=256 budget_us=1400 max_detail_samples=470 water_segments=8192 pack_manager=sharded-pck")
     quit(0)
