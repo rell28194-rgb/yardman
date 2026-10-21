@@ -1,0 +1,229 @@
+name: Yardman Accepted World Fleet64 Owner APK
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - '.github/workflows/accepted-fleet-owner-apk.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: yardman-accepted-fleet64-owner
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+
+jobs:
+  build-owner-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout accepted fleet branch
+        uses: actions/checkout@v4
+
+      - name: Restore exact accepted-world data from owner-approved APK
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          BASE_ARTIFACT=/tmp/accepted-base.zip
+          BASE_APK=/tmp/Yardman-Map-Crown-Reset.apk
+          curl --fail --location \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12268479891/zip" \
+            -o "$BASE_ARTIFACT"
+          unzip -p "$BASE_ARTIFACT" Yardman-Map-Crown-Reset.apk > "$BASE_APK"
+          echo '0250e86ad0f3b7c3c4ebc8fecb01c5c1b5ef345ee17862dc2267b86625deb8b2  /tmp/Yardman-Map-Crown-Reset.apk' | sha256sum -c -
+          rm -rf godot/data/roads godot/data/terrain godot/data/coast godot/data/buildings
+          python - "$BASE_APK" <<'PY'
+          import os, sys, zipfile
+          apk = sys.argv[1]
+          prefixes = ('assets/data/roads/', 'assets/data/terrain/', 'assets/data/coast/', 'assets/data/buildings/')
+          copied = {p: 0 for p in prefixes}
+          with zipfile.ZipFile(apk) as zf:
+              for info in zf.infolist():
+                  for prefix in prefixes:
+                      if info.filename.startswith(prefix) and not info.is_dir():
+                          rel = info.filename[len('assets/'):]
+                          dst = os.path.join('godot', rel)
+                          os.makedirs(os.path.dirname(dst), exist_ok=True)
+                          with zf.open(info) as src, open(dst, 'wb') as out:
+                              out.write(src.read())
+                          copied[prefix] += 1
+                          break
+          print('YARDMAN_ACCEPTED_WORLD_RESTORED', copied)
+          if copied['assets/data/roads/'] < 700 or copied['assets/data/terrain/'] < 2500 or copied['assets/data/coast/'] < 2500 or copied['assets/data/buildings/'] < 700:
+              raise SystemExit('accepted-world payload incomplete')
+          PY
+
+      - name: Restore authoritative private 64-vehicle pack from Dropbox
+        shell: bash
+        run: |
+          set -euxo pipefail
+          PACK=/tmp/Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip
+          curl --fail --location --retry 2 --retry-all-errors \
+            'https://ucb1aa72cba624b1752158e972e9.dl.dropboxusercontent.com/cd/0/get/DKbpR-RJy_dSymztv-TBE44nT0JfsKhngrMDMzS-HSgLAUD33SVoS1NAmRxUdcg1DLGJrILzzBeTk-xKomn9JbvUjG5PdDczeTP1T3V75j1Yr0SipDZwR1pxslMUFLZ-btFIwioru_At-tLUp3TSHdUXOSln_JowJAE8X9Km9ekhBw/file?c_luid=48a05ebe' \
+            -o "$PACK"
+          echo '6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b  /tmp/Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip' | sha256sum -c -
+          rm -rf godot/assets/user_reference
+          mkdir -p godot/assets/user_reference
+          unzip -q "$PACK" -d godot/assets/user_reference
+          test -s godot/assets/user_reference/manifest.json
+          test -s godot/assets/user_reference/toyota_crown_2013.glb
+          test -s godot/assets/user_reference/fleet_audi_r8.glb
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools build-tools;35.0.1 platforms;android-35'
+          log-accepted-android-sdk-licenses: 'false'
+
+      - name: Install Godot 4.7.2 and export templates
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_export_templates.tpz" -O /tmp/templates.tpz
+          rm -rf /tmp/godot-templates && mkdir -p /tmp/godot-templates
+          unzip -q /tmp/templates.tpz -d /tmp/godot-templates
+          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_CHANNEL}"
+          mkdir -p "$TEMPLATE_DIR"
+          cp -a /tmp/godot-templates/templates/. "$TEMPLATE_DIR/"
+          godot --version
+
+      - name: Keep development signing identity
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/yardman-signing
+          key: yardman-android-debug-v1-${{ runner.os }}
+
+      - name: Configure Android exporter
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "$HOME/.config/godot" "$HOME/.local/share/yardman-signing" godot/build
+          KEYSTORE="$HOME/.local/share/yardman-signing/debug.keystore"
+          if [ ! -s "$KEYSTORE" ]; then
+            keytool -genkeypair -v -keystore "$KEYSTORE" -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Yardman,C=US" -keyalg RSA -keysize 2048 -validity 10000
+          fi
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/debug_keystore = "$KEYSTORE"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+
+      - name: Import exact owner fleet and accepted world
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 300 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/import.log; then exit 1; fi
+
+      - name: Prove all 64 dedicated vehicle assets build
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 600 godot --headless --path godot --script tests/owner_fleet_64_test.gd 2>&1 | tee godot/build/owner-fleet-64.log
+          grep -q 'YARDMAN_OWNER_FLEET_64_PASS selectors=64 available=64 built=64 failures=0' godot/build/owner-fleet-64.log
+
+      - name: Prove GARAGE UI, Crown default and runtime switching
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 600 godot --headless --path godot --script tests/owner_garage_runtime_test.gd 2>&1 | tee godot/build/owner-garage-runtime.log
+          grep -q 'YARDMAN_OWNER_GARAGE_RUNTIME_PASS selector=64 default=toyota_crown switch=toyota_crown>audi_r8>toyota_crown' godot/build/owner-garage-runtime.log
+
+      - name: Export real Fleet64 owner APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd godot
+          godot --headless --export-debug Android build/Yardman-Fleet64-Owner.apk 2>&1 | tee build/export.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' build/export.log; then exit 1; fi
+          test -s build/Yardman-Fleet64-Owner.apk
+
+      - name: Validate signed owner APK and embedded fleet runtime
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APK=godot/build/Yardman-Fleet64-Owner.apk
+          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose --print-certs "$APK" | tee godot/build/apksigner.txt
+          python - "$APK" <<'PY'
+          import hashlib, json, os, sys, zipfile
+          apk = sys.argv[1]
+          with zipfile.ZipFile(apk) as zf:
+              names = set(zf.namelist())
+              required = {
+                  'assets/data/owner_fleet_pack_contract.json',
+                  'assets/scripts/vehicle_selector_runtime.gdc',
+                  'assets/scripts/vehicle_catalog.gdc',
+                  'assets/scripts/fleet_vehicle_model.gdc',
+              }
+              missing = sorted(required - names)
+              if missing:
+                  raise SystemExit('missing fleet runtime in APK: ' + repr(missing))
+              contract = json.loads(zf.read('assets/data/owner_fleet_pack_contract.json'))
+              if int(contract.get('available_vehicle_count', 0)) != 64:
+                  raise SystemExit('fleet contract is not 64 vehicles')
+              road_tiles = sum(1 for n in names if n.startswith('assets/data/roads/tile_') and n.endswith('.json'))
+              coast_tiles = sum(1 for n in names if n.startswith('assets/data/coast/coast_') and n.endswith('.json'))
+              building_tiles = sum(1 for n in names if n.startswith('assets/data/buildings/buildings_') and n.endswith('.ymb'))
+              abis = sorted({n.split('/')[1] for n in names if n.startswith('lib/') and n.endswith('.so')})
+          digest = hashlib.sha256(open(apk,'rb').read()).hexdigest()
+          size = os.path.getsize(apk)
+          if road_tiles < 700 or coast_tiles < 2500 or building_tiles < 700:
+              raise SystemExit(f'accepted world incomplete roads={road_tiles} coast={coast_tiles} buildings={building_tiles}')
+          if abis != ['arm64-v8a']:
+              raise SystemExit('unexpected ABI set: ' + repr(abis))
+          print(f'YARDMAN_FLEET64_OWNER_APK_PASS bytes={size} sha256={digest} roads={road_tiles} coast={coast_tiles} buildings={building_tiles} fleet=64 abis={abis}')
+          open('godot/build/Yardman-Fleet64-Owner.apk.sha256','w').write(digest + '  Yardman-Fleet64-Owner.apk\n')
+          PY
+
+      - name: Upload real owner APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Fleet64-Owner
+          path: |
+            godot/build/Yardman-Fleet64-Owner.apk
+            godot/build/Yardman-Fleet64-Owner.apk.sha256
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Fleet64-Owner-Evidence
+          path: |
+            godot/build/import.log
+            godot/build/owner-fleet-64.log
+            godot/build/owner-garage-runtime.log
+            godot/build/export.log
+            godot/build/apksigner.txt
+          if-no-files-found: ignore
+          retention-days: 3
