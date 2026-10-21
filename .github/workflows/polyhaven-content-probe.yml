@@ -27,8 +27,7 @@ jobs:
               "https://api.polyhaven.com/files/${slug}" \
               -o "build/polyhaven/${slug}.json"
             echo "YARDMAN_POLYHAVEN_ASSET ${slug}"
-            jq -r 'keys[]' "build/polyhaven/${slug}.json" | sed 's/^/ROOT_KEY /'
-            jq -r '.. | objects | to_entries[]? | select(.value|type=="string") | select(.value|startswith("https://")) | [.key,.value] | @tsv' "build/polyhaven/${slug}.json" | head -80
+            jq -c '{asset:"'"${slug}"'",gltf_1k:.gltf["1k"],gltf_2k:.gltf["2k"]}' "build/polyhaven/${slug}.json"
           done
       - name: Upload probe responses
         uses: actions/upload-artifact@v4
