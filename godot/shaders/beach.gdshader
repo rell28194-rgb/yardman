@@ -6,6 +6,7 @@ uniform sampler2D reference_sand : source_color, repeat_enable, filter_linear_mi
 uniform bool has_reference_sand = false;
 uniform sampler2D surface_hd_sand : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool has_surface_hd_sand = false;
+uniform float weather_wetness : hint_range(0.0, 1.0) = 0.0;
 
 float grain(vec2 p) {
     p = fract(p * vec2(0.1031, 0.1030));
@@ -36,7 +37,8 @@ void fragment() {
     } else if (has_reference_sand) {
         sand = clamp(texture(reference_sand, UV).rgb * 1.28, vec3(0.15), vec3(0.86));
     }
-    ALBEDO = sand * (0.91 + broad * 0.10 + detail * 0.045 + fine * 0.035);
-    ROUGHNESS = 0.96;
-    SPECULAR = 0.14;
+    float wetness = clamp(weather_wetness, 0.0, 1.0);
+    ALBEDO = sand * (0.91 + broad * 0.10 + detail * 0.045 + fine * 0.035) * mix(1.0, 0.68, wetness);
+    ROUGHNESS = mix(0.96, 0.48, wetness);
+    SPECULAR = mix(0.14, 0.34, wetness);
 }
