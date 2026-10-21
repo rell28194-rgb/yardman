@@ -4,10 +4,10 @@ class_name YardmanStreamWaterRuntime
 const References = preload("res://scripts/reference_assets.gd")
 const StreamShader = preload("res://shaders/stream_water.gdshader")
 
-const ROOTS: PackedStringArray = PackedStringArray([
+const ROOTS := [
     "user://yardman/packs/hydrology/",
     "res://data/hydrology/",
-])
+]
 const MANIFEST_POLL_SECONDS := 2.0
 const MAX_STREAMS_PER_TILE := 256
 const MAX_SEGMENTS_PER_TILE := 8192
