@@ -8,6 +8,8 @@ on:
     paths:
       - 'godot/scripts/hydrology_content_runtime.gd'
       - 'godot/scripts/hydrology_renderer.gd'
+      - 'godot/scripts/environment_content_runtime.gd'
+      - 'godot/scripts/remote_fleet_runtime.gd'
       - 'godot/shaders/river_surface.gdshader'
       - 'godot/tests/hydrology_runtime_test.gd'
       - 'godot/project.godot'
@@ -29,6 +31,18 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+
+      - name: Reject unsupported Godot 4.7 content APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R -n -E 'keep_partial_download|append_to_download_file|depth_draw_alpha_prepass' \
+              godot/scripts/environment_content_runtime.gd \
+              godot/scripts/hydrology_content_runtime.gd \
+              godot/scripts/remote_fleet_runtime.gd \
+              godot/shaders/river_surface.gdshader; then
+            exit 1
+          fi
 
       - name: Download and verify released Jamaica hydrology pack
         shell: bash
@@ -57,6 +71,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p godot/build
           timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/hydrology-import.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/hydrology-import.log; then exit 1; fi
 
