@@ -6,6 +6,9 @@ on:
       - codex/accepted-fleet-garage-001
     paths:
       - 'godot/scripts/environment_content_runtime.gd'
+      - 'godot/scripts/hydrology_content_runtime.gd'
+      - 'godot/scripts/remote_fleet_runtime.gd'
+      - 'godot/shaders/river_surface.gdshader'
       - 'godot/tests/environment_content_runtime_test.gd'
       - 'godot/project.godot'
       - '.github/workflows/environment-content-runtime.yml'
@@ -26,14 +29,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Reject unsupported Godot 4.7 content APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R -n -E 'keep_partial_download|append_to_download_file|depth_draw_alpha_prepass' \
+              godot/scripts/environment_content_runtime.gd \
+              godot/scripts/hydrology_content_runtime.gd \
+              godot/scripts/remote_fleet_runtime.gd \
+              godot/shaders/river_surface.gdshader; then
+            exit 1
+          fi
+
       - name: Download released Environment HD test assets
         shell: bash
         run: |
           set -euxo pipefail
+          rm -rf godot/build/environment-runtime-test
           mkdir -p godot/build/environment-runtime-test
-          curl --fail --location "$RELEASE_ROOT/yardman_grass_cluster.glb" -o godot/build/environment-runtime-test/yardman_grass_cluster.glb
-          curl --fail --location "$RELEASE_ROOT/yardman_shrub_near.glb" -o godot/build/environment-runtime-test/yardman_shrub_near.glb
-          curl --fail --location "$RELEASE_ROOT/yardman_island_tree_near.glb" -o godot/build/environment-runtime-test/yardman_island_tree_near.glb
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman_grass_cluster.glb" -o godot/build/environment-runtime-test/yardman_grass_cluster.glb
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman_shrub_near.glb" -o godot/build/environment-runtime-test/yardman_shrub_near.glb
+          curl --fail --location --retry 2 --retry-all-errors "$RELEASE_ROOT/yardman_island_tree_near.glb" -o godot/build/environment-runtime-test/yardman_island_tree_near.glb
           echo '3a9d6a3e8dc31c89cb759edc946f37abed71338022f01bba0334333f394240ac  godot/build/environment-runtime-test/yardman_grass_cluster.glb' | sha256sum -c -
           echo '755d2644659ced036f503112658dcee6006a715daeb7cc95019566d34524abf6  godot/build/environment-runtime-test/yardman_shrub_near.glb' | sha256sum -c -
           echo 'cc867fa46cdbe7b34c84b0d28f35ecea40801f519f45cb689b5400fb7fab3e83  godot/build/environment-runtime-test/yardman_island_tree_near.glb' | sha256sum -c -
