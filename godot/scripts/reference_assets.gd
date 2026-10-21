@@ -36,7 +36,7 @@ static func _read_manifest(path: String) -> Dictionary:
 static func _manifest_record(filename: String, payload: Dictionary) -> Dictionary:
     if payload.is_empty():
         return {}
-    var match: Dictionary = {}
+    var matched: Dictionary = {}
     var count: int = 0
     for raw_record: Variant in payload.get("files", []):
         if not raw_record is Dictionary:
@@ -44,9 +44,9 @@ static func _manifest_record(filename: String, payload: Dictionary) -> Dictionar
         var record: Dictionary = raw_record as Dictionary
         if str(record.get("path", "")) != filename:
             continue
-        match = record
+        matched = record
         count += 1
-    return match if count == 1 else {}
+    return matched if count == 1 else {}
 
 static func _verify_downloaded_file(path: String, filename: String, payload: Dictionary) -> bool:
     if not FileAccess.file_exists(path):
