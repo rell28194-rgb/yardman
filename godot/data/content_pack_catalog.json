@@ -17,7 +17,15 @@
       "install_root": "hydrology",
       "optional": true,
       "description": "Source-backed rivers, streams, gullies, waterfalls and running-water detail.",
-      "chunks": []
+      "chunks": [
+        {
+          "id": "jamaica-osm-20261021",
+          "kind": "zip",
+          "url": "https://github.com/rell28194-rgb/yardman/releases/download/yardman-hydrology-v1-20261021/Yardman-Hydrology-OSM-v1.zip",
+          "sha256": "add3376085691ae9d36f5026f949defe47f1e043ac5a78d7eb53c9c8b5b17ce2",
+          "bytes": 844549
+        }
+      ]
     },
     {
       "id": "atmosphere",
