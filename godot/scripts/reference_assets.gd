@@ -18,6 +18,11 @@ static var _textures: Dictionary = {}
 static var _scenes: Dictionary = {}
 static var _verified_downloads: Dictionary = {}
 
+static func invalidate_runtime_caches() -> void:
+    _textures.clear()
+    _scenes.clear()
+    _verified_downloads.clear()
+
 static func _valid_name(filename: String, extensions: PackedStringArray) -> bool:
     return not filename.is_empty() and not filename.contains("/") and not filename.contains("\\") \
         and not filename.contains("..") and filename.get_extension().to_lower() in extensions
