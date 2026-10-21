@@ -93,10 +93,21 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          cd build
-          zip -q -r Yardman-Hydrology-OSM-v1.zip hydrology
-          sha256sum Yardman-Hydrology-OSM-v1.zip > Yardman-Hydrology-OSM-v1.zip.sha256
-          ls -lh Yardman-Hydrology-OSM-v1.zip
+          rm -f build/Yardman-Hydrology-OSM-v1.zip build/Yardman-Hydrology-OSM-v1.zip.sha256
+          (cd build/hydrology && zip -q -r ../Yardman-Hydrology-OSM-v1.zip .)
+          sha256sum build/Yardman-Hydrology-OSM-v1.zip > build/Yardman-Hydrology-OSM-v1.zip.sha256
+          python - <<'PY'
+          import zipfile
+          path = 'build/Yardman-Hydrology-OSM-v1.zip'
+          with zipfile.ZipFile(path) as zf:
+              names = zf.namelist()
+              assert 'manifest.json' in names
+              assert 'ATTRIBUTION.txt' in names
+              assert not any(name.startswith('hydrology/') for name in names)
+              assert sum(name.startswith('water_') and name.endswith('.json') for name in names) >= 300
+          print('YARDMAN_HYDROLOGY_SHARD_LAYOUT_PASS')
+          PY
+          ls -lh build/Yardman-Hydrology-OSM-v1.zip
 
       - name: Upload hydrology pack
         uses: actions/upload-artifact@v4
