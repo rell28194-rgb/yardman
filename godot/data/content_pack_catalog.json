@@ -1,0 +1,41 @@
+{
+  "format_version": 1,
+  "packs": [
+    {
+      "id": "world-detail",
+      "label": "World Detail",
+      "version": 1,
+      "install_root": "world-detail",
+      "optional": true,
+      "description": "High-detail Jamaica vegetation, ground clutter, rocks and regional environmental props.",
+      "chunks": []
+    },
+    {
+      "id": "hydrology",
+      "label": "Hydrology",
+      "version": 1,
+      "install_root": "hydrology",
+      "optional": true,
+      "description": "Source-backed rivers, streams, gullies, waterfalls and running-water detail.",
+      "chunks": []
+    },
+    {
+      "id": "atmosphere",
+      "label": "Atmosphere",
+      "version": 1,
+      "install_root": "atmosphere",
+      "optional": true,
+      "description": "Higher-detail cloud, fog, weather, sky and environmental audio media.",
+      "chunks": []
+    },
+    {
+      "id": "urban-props",
+      "label": "Urban Props",
+      "version": 1,
+      "install_root": "urban-props",
+      "optional": true,
+      "description": "Street furniture, signs, walls, utility detail and settlement-specific props.",
+      "chunks": []
+    }
+  ]
+}
