@@ -54,7 +54,6 @@ func _ready() -> void:
     _http.download_chunk_size = 262144
     _http.max_redirects = 8
     _http.timeout = 0.0
-    _http.keep_partial_download = true
     _http.request_completed.connect(_on_request_completed)
     add_child(_http)
     _build_ui()
@@ -202,7 +201,7 @@ func start_download() -> void:
 func cancel_download() -> void:
     if _state in ["manifest", "downloading"] and _http != null:
         _http.cancel_request()
-        _set_state("idle", "Environment HD download paused. Tap download to resume.")
+        _set_state("idle", "Environment HD download paused. Tap download to retry.")
 
 func _on_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     if _mode == "manifest":
@@ -272,21 +271,12 @@ func _start_next_asset() -> void:
             DirAccess.remove_absolute(ProjectSettings.globalize_path(final_path))
         _resume_offset = 0
         var part_path := final_path + ".part"
-        var headers := PackedStringArray()
         if FileAccess.file_exists(part_path):
-            var partial := FileAccess.open(part_path, FileAccess.READ)
-            if partial != null:
-                _resume_offset = int(partial.get_length())
-            if _resume_offset <= 0 or _resume_offset >= expected_bytes:
-                DirAccess.remove_absolute(ProjectSettings.globalize_path(part_path))
-                _resume_offset = 0
-            else:
-                headers.append("Range: bytes=%d-" % _resume_offset)
+            DirAccess.remove_absolute(ProjectSettings.globalize_path(part_path))
         _http.download_file = part_path
-        _http.append_to_download_file = _resume_offset > 0
         _set_state("downloading", "Downloading Environment HD · %s" % name)
-        _emit_progress(_downloaded_total + _resume_offset)
-        var err := _http.request(str(_current.url), headers)
+        _emit_progress(_downloaded_total)
+        var err := _http.request(str(_current.url))
         if err != OK:
             _set_state("error", "Could not start Environment HD asset download (%s)." % error_string(err))
         return
@@ -298,21 +288,14 @@ func _finish_asset_request(result: int, response_code: int) -> void:
         return
     var final_path := ROOT + str(_current.name)
     var part_path := final_path + ".part"
-    if result != HTTPRequest.RESULT_SUCCESS or response_code not in [200, 206]:
-        _set_state("error", "Environment asset download failed. Tap download to resume.")
-        return
-    if _resume_offset > 0 and response_code == 200:
-        DirAccess.remove_absolute(ProjectSettings.globalize_path(part_path))
-        _resume_offset = 0
-        _queue.push_front(_current)
-        _current = {}
-        _start_next_asset()
+    if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+        _set_state("error", "Environment asset download failed. Tap download to retry.")
         return
     var handle := FileAccess.open(part_path, FileAccess.READ)
     var size: int = int(handle.get_length()) if handle != null else -1
     var expected_bytes := int(_current.bytes)
     if size != expected_bytes:
-        _set_state("error", "Environment asset is incomplete (%d / %d bytes). Tap download to resume." % [maxi(size, 0), expected_bytes])
+        _set_state("error", "Environment asset is incomplete (%d / %d bytes). Tap download to retry." % [maxi(size, 0), expected_bytes])
         return
     _set_state("verifying", "Verifying Environment HD asset…")
     if FileAccess.get_sha256(part_path).to_lower() != str(_current.sha256).to_lower():
