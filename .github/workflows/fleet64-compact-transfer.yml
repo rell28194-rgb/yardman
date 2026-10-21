@@ -41,6 +41,14 @@ jobs:
           packages: 'platform-tools build-tools;35.0.1'
           log-accepted-android-sdk-licenses: 'false'
 
+      - name: Install high-ratio ZIP packer
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq p7zip-full
+          7z | head -n 3
+
       - name: Replace debug engine with matching Godot release engine and repack
         shell: bash
         run: |
@@ -63,7 +71,9 @@ jobs:
           unzip -q /tmp/owner/Yardman-Fleet64-Owner.apk
           rm -rf META-INF
           cp /tmp/libgodot_android_release.so lib/arm64-v8a/libgodot_android.so
-          zip -q -9 -r /tmp/fleet64-compact-unaligned.apk .
+
+          7z a -tzip -mx=9 -mm=Deflate -mfb=258 -mpass=15 /tmp/fleet64-compact-unaligned.apk . >/tmp/7z.log
+          tail -n 8 /tmp/7z.log
           "$ANDROID_HOME/build-tools/35.0.1/zipalign" -f -p 4 /tmp/fleet64-compact-unaligned.apk /tmp/fleet64-compact-aligned.apk
 
           KEYSTORE=/tmp/yardman-transfer.keystore
