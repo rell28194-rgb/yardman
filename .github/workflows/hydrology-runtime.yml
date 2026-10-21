@@ -57,13 +57,14 @@ jobs:
         run: |
           set -euo pipefail
           timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/hydrology-import.log
-          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/hydrology-import.log; then exit 1; fi
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/hydrology-import.log; then exit 1; fi
 
       - name: Prove streamed running-water geometry and budgets
         shell: bash
         run: |
           set -euo pipefail
           timeout 180 godot --headless --path godot --script tests/hydrology_runtime_test.gd 2>&1 | tee godot/build/hydrology-runtime.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/hydrology-runtime.log; then exit 1; fi
           grep -q 'YARDMAN_HYDROLOGY_RUNTIME_PASS' godot/build/hydrology-runtime.log
 
       - name: Upload validation evidence
