@@ -1,0 +1,76 @@
+name: Yardman Environment HD Runtime
+
+on:
+  push:
+    branches:
+      - codex/accepted-fleet-garage-001
+    paths:
+      - 'godot/scripts/environment_content_runtime.gd'
+      - 'godot/tests/environment_content_runtime_test.gd'
+      - 'godot/project.godot'
+      - '.github/workflows/environment-content-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+  RELEASE_ROOT: 'https://github.com/rell28194-rgb/yardman/releases/download/yardman-environment-v1'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download released Environment HD test assets
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p godot/build/environment-runtime-test
+          curl --fail --location "$RELEASE_ROOT/yardman_grass_cluster.glb" -o godot/build/environment-runtime-test/yardman_grass_cluster.glb
+          curl --fail --location "$RELEASE_ROOT/yardman_shrub_near.glb" -o godot/build/environment-runtime-test/yardman_shrub_near.glb
+          curl --fail --location "$RELEASE_ROOT/yardman_island_tree_near.glb" -o godot/build/environment-runtime-test/yardman_island_tree_near.glb
+          echo '3a9d6a3e8dc31c89cb759edc946f37abed71338022f01bba0334333f394240ac  godot/build/environment-runtime-test/yardman_grass_cluster.glb' | sha256sum -c -
+          echo '755d2644659ced036f503112658dcee6006a715daeb7cc95019566d34524abf6  godot/build/environment-runtime-test/yardman_shrub_near.glb' | sha256sum -c -
+          echo 'cc867fa46cdbe7b34c84b0d28f35ecea40801f519f45cb689b5400fb7fab3e83  godot/build/environment-runtime-test/yardman_island_tree_near.glb' | sha256sum -c -
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Reject GDScript parse errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 180 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/environment-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/environment-import.log; then exit 1; fi
+
+      - name: Prove released GLBs load and normalize under Android budgets
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 180 godot --headless --path godot --script tests/environment_content_runtime_test.gd 2>&1 | tee godot/build/environment-runtime.log
+          grep -q 'YARDMAN_ENVIRONMENT_CONTENT_RUNTIME_PASS assets=3' godot/build/environment-runtime.log
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Environment-HD-Runtime-Evidence
+          path: |
+            godot/build/environment-import.log
+            godot/build/environment-runtime.log
+          if-no-files-found: ignore
+          retention-days: 3
