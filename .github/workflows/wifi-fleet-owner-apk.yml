@@ -81,7 +81,7 @@ jobs:
           set -euxo pipefail
           PACK=/tmp/Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip
           curl --fail --location --retry 2 --retry-all-errors \
-            'https://ucddf549a1be06458753233ab4b8.dl.dropboxusercontent.com/cd/0/get/DKZvkTvXF6nM-RsEeVvWmn_eLLEVqygXYi4dUROmZoF6p-A82OKqf8xqf8vgO0CuR4KggkdVDpEembGX5U5kwb5ylIh1MQfYNLjOK3ksxHqqq1T--hJUamiygsBZwLW6EsYoUB915piTqIu0NJpHwhjGNUNlRuSGRfTnZuPKq3G5Fg/file?c_luid=48a05ebe' \
+            'https://www.dropbox.com/scl/fi/jv54iuqhthvejvuy6zezc/Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip?rlkey=80kgw28rol81hnia2xbikuspe&dl=1' \
             -o "$PACK"
           echo '6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b  /tmp/Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip' | sha256sum -c -
           rm -rf godot/assets/user_reference
