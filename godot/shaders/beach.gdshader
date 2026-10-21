@@ -4,6 +4,8 @@ render_mode cull_back;
 uniform vec3 sand_color : source_color = vec3(0.70, 0.65, 0.50);
 uniform sampler2D reference_sand : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool has_reference_sand = false;
+uniform sampler2D surface_hd_sand : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform bool has_surface_hd_sand = false;
 
 float grain(vec2 p) {
     p = fract(p * vec2(0.1031, 0.1030));
@@ -20,16 +22,18 @@ float smooth_grain(vec2 p) {
 }
 
 void fragment() {
-    // Continuous variation replaces the conspicuous eight-metre square tiles.
     float broad = smooth_grain(UV * 0.55);
     float detail = smooth_grain(UV * 5.5);
     float fine = grain(floor(UV * 40.0));
     float filter_amount = smoothstep(0.45, 1.5, max(fwidth(UV.x * 40.0), fwidth(UV.y * 40.0)));
     fine = mix(fine, 0.5, filter_amount);
     vec3 sand = sand_color;
-    if (has_reference_sand) {
-        // The supplied sand image repeats every three real metres; the same
-        // world UV survives tile streaming and a floating-origin shift.
+    if (has_surface_hd_sand) {
+        // UV is already canonical world-space / 3 m from coastline.gd.
+        sand = texture(surface_hd_sand, UV).rgb;
+        float luma = dot(sand, vec3(0.2126, 0.7152, 0.0722));
+        sand = mix(vec3(luma), sand, 0.84) * 1.04;
+    } else if (has_reference_sand) {
         sand = clamp(texture(reference_sand, UV).rgb * 1.28, vec3(0.15), vec3(0.86));
     }
     ALBEDO = sand * (0.91 + broad * 0.10 + detail * 0.045 + fine * 0.035);
