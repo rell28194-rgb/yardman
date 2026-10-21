@@ -5,6 +5,10 @@ const WaterRuntime = preload("res://scripts/stream_water_runtime.gd")
 const PackRuntime = preload("res://scripts/content_pack_runtime.gd")
 const References = preload("res://scripts/reference_assets.gd")
 
+const HYDROLOGY_URL := "https://github.com/rell28194-rgb/yardman/releases/download/yardman-hydrology-v1-20261021/Yardman-Hydrology-OSM-v1.zip"
+const HYDROLOGY_SHA256 := "add3376085691ae9d36f5026f949defe47f1e043ac5a78d7eb53c9c8b5b17ce2"
+const HYDROLOGY_BYTES := 844549
+
 func _initialize() -> void:
     call_deferred("_run")
 
@@ -89,13 +93,34 @@ func _run() -> void:
     if not catalog_raw is Dictionary or int((catalog_raw as Dictionary).get("format_version", 0)) != 1:
         _fail("content-pack catalog is invalid")
         return
-    if ((catalog_raw as Dictionary).get("packs", []) as Array).size() < 4:
+    var catalog: Dictionary = catalog_raw as Dictionary
+    var packs: Array = catalog.get("packs", []) as Array
+    if packs.size() < 4:
         _fail("content-pack catalog is missing planned world packs")
+        return
+    var hydrology: Dictionary = {}
+    for raw_pack: Variant in packs:
+        if raw_pack is Dictionary and str((raw_pack as Dictionary).get("id", "")) == "hydrology":
+            hydrology = raw_pack as Dictionary
+            break
+    if hydrology.is_empty():
+        _fail("hydrology pack missing from content catalog")
+        return
+    var hydrology_chunks: Array = hydrology.get("chunks", []) as Array
+    if hydrology_chunks.size() != 1:
+        _fail("hydrology pack must pin exactly one v1 shard")
+        return
+    var hydrology_chunk: Dictionary = hydrology_chunks[0] as Dictionary
+    if str(hydrology_chunk.get("kind", "")) != "zip" \
+        or str(hydrology_chunk.get("url", "")) != HYDROLOGY_URL \
+        or str(hydrology_chunk.get("sha256", "")) != HYDROLOGY_SHA256 \
+        or int(hydrology_chunk.get("bytes", 0)) != HYDROLOGY_BYTES:
+        _fail("durable hydrology shard contract drifted")
         return
 
     if not References.exact_asset_path("../escape.glb").is_empty():
         _fail("downloaded asset path traversal was not rejected")
         return
 
-    print("YARDMAN_STREAMED_CONTENT_RUNTIME_PASS cell=256 budget_us=1400 max_detail_samples=470 water_segments=8192 pack_manager=sharded-pck")
+    print("YARDMAN_STREAMED_CONTENT_RUNTIME_PASS cell=256 budget_us=1400 max_detail_samples=470 water_segments=8192 pack_manager=sharded-pck hydrology=durable")
     quit(0)
