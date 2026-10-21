@@ -5,11 +5,11 @@ class_name YardmanReferenceAssets
 const ROOT := "res://assets/user_reference/"
 const REMOTE_ROOT := "user://yardman/fleet64/"
 const REMOTE_MARKER := "user://yardman/fleet64-installed.json"
-const OPTIONAL_ROOTS: PackedStringArray = PackedStringArray([
+const OPTIONAL_ROOTS := [
     "user://yardman/packs/world-detail/",
     "user://yardman/packs/hydrology/",
     "user://yardman/packs/atmosphere/",
-])
+]
 const SCENE_UPGRADES := {
     "road_car.glb": "toyota_crown_2013.glb",
 }
