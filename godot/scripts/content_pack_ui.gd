@@ -166,8 +166,8 @@ func _refresh_row(pack_id: String) -> void:
     var status_label: Label = row.status
     var progress: ProgressBar = row.progress
     var status: Dictionary = _manager.call("pack_status", pack_id)
-    var installed := bool(status.get("installed", false))
-    var available := bool(status.get("available", false))
+    var installed: bool = bool(status.get("installed", false))
+    var available: bool = bool(status.get("available", false))
     if installed:
         status_label.text = "Installed · v%d" % int(status.get("version", 0))
         status_label.add_theme_color_override("font_color", GREEN)
@@ -262,14 +262,14 @@ func _on_menu_toggled(open: bool) -> void:
 func _relayout() -> void:
     if _panel == null:
         return
-    var viewport_size := get_viewport().get_visible_rect().size
-    var width := minf(430.0, viewport_size.x - 40.0)
-    var height := minf(450.0, viewport_size.y - 110.0)
+    var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+    var width: float = minf(430.0, viewport_size.x - 40.0)
+    var height: float = minf(450.0, viewport_size.y - 110.0)
     _panel.size = Vector2(width, height)
     _panel.position = Vector2(20.0, viewport_size.y - height - 20.0)
 
 func _format_bytes(value: int) -> String:
-    var bytes := max(value, 0)
+    var bytes: int = maxi(value, 0)
     if bytes >= 1073741824:
         return "%.1f GB" % (float(bytes) / 1073741824.0)
     if bytes >= 1048576:
