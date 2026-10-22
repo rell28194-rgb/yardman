@@ -6,7 +6,9 @@ on:
       - codex/world-reconciliation-001
     paths:
       - 'godot/scripts/**'
+      - 'godot/main.tscn'
       - 'godot/tests/mesh_geometry_guard_test.gd'
+      - 'godot/tests/bridge_geometry_test.gd'
       - '.github/workflows/world-reconciliation-godot.yml'
   workflow_dispatch:
 
@@ -42,7 +44,7 @@ jobs:
           set -euo pipefail
           mkdir -p godot/build
           timeout 300 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/world-reconciliation-import.log
-          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/world-reconciliation-import.log; then exit 1; fi
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/world-reconciliation-import.log; then exit 1; fi
 
       - name: Prove catastrophic geometry rejection contract
         shell: bash
@@ -50,6 +52,14 @@ jobs:
           set -euo pipefail
           timeout 120 godot --headless --path godot --script tests/mesh_geometry_guard_test.gd 2>&1 | tee godot/build/mesh-geometry-guard.log
           grep -q 'YARDMAN_MESH_GEOMETRY_GUARD_TEST PASS finite=1 topology=1 bounds=1 edges=1 degeneracy=1' godot/build/mesh-geometry-guard.log
+
+      - name: Prove streamed bridge structure geometry
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/bridge_geometry_test.gd 2>&1 | tee godot/build/bridge-geometry.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/bridge-geometry.log; then exit 1; fi
+          grep -q 'YARDMAN_BRIDGE_GEOMETRY_TEST PASS deck=1 rails=2 abutments=2 pier_stations=1 pier_columns=2 collision_shapes=6' godot/build/bridge-geometry.log
 
       - name: Upload reconciliation gate evidence
         if: always()
@@ -59,5 +69,6 @@ jobs:
           path: |
             godot/build/world-reconciliation-import.log
             godot/build/mesh-geometry-guard.log
+            godot/build/bridge-geometry.log
           if-no-files-found: ignore
           retention-days: 3
