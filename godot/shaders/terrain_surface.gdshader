@@ -8,9 +8,11 @@ uniform sampler2D surface_noise : repeat_enable, filter_linear_mipmap_anisotropi
 uniform sampler2D reference_grass : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_dry_grass : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_rock : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_rock_alternate : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_grass_normal : repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool has_reference_ground = false;
 uniform bool has_reference_rock = false;
+uniform bool has_reference_rock_alternate = false;
 uniform bool has_reference_grass_normal = false;
 uniform sampler2D surface_hd_lush : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D surface_hd_dry : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
@@ -60,9 +62,6 @@ void fragment() {
     float dry = clamp(regional_dryness + (patch.g - 0.5) * 0.43 - highland * 0.17, 0.0, 0.8);
     float moisture = clamp(1.0 - dry + highland * 0.16 + (macro_patch.b - 0.5) * 0.12, 0.0, 1.0);
 
-    // Richer wet/highland vegetation and warmer dry-zone soil replace the old
-    // global desaturation pass. This remains a visual biome proxy, not surveyed
-    // land-cover truth; registered terrain heights and coastline are untouched.
     vec3 lowland_wet = vec3(0.17, 0.37, 0.075);
     vec3 highland_wet = vec3(0.10, 0.31, 0.16);
     vec3 wet_grass = mix(lowland_wet, highland_wet, highland);
@@ -71,8 +70,6 @@ void fragment() {
     vec3 soil = mix(vec3(0.31, 0.205, 0.105), vec3(0.57, 0.385, 0.22), patch.b);
     vec3 rock = mix(vec3(0.32, 0.33, 0.27), vec3(0.66, 0.65, 0.55), detail.r);
 
-    // Break visible 4-6 m material grids without another noise fetch: the
-    // existing 64 m and 512 m fields smoothly warp canonical UVs and vary scale.
     vec2 uv_warp = (patch.rg - vec2(0.5)) * 5.0 + (macro_patch.gb - vec2(0.5)) * 13.0;
     float family_scale = mix(0.90, 1.12, macro_patch.b);
     vec2 material_position = p.xz + uv_warp;
@@ -103,6 +100,20 @@ void fragment() {
             rock = texture(reference_rock, warped.yz / 8.0).rgb * blend.x
                 + texture(reference_rock, warped.xz / 8.0).rgb * blend.y
                 + texture(reference_rock, warped.xy / 8.0).rgb * blend.z;
+            if (has_reference_rock_alternate && !overview) {
+                // Use one dominant-axis lookup instead of another full triplanar
+                // set: the alternate recovered rock breaks family repetition at
+                // a bounded single texture-sample cost on private builds.
+                vec2 alternate_uv = warped.xz / (10.0 * family_scale);
+                if (blend.x > blend.y && blend.x > blend.z) {
+                    alternate_uv = warped.yz / (10.0 * family_scale);
+                } else if (blend.z > blend.y) {
+                    alternate_uv = warped.xy / (10.0 * family_scale);
+                }
+                vec3 alternate_rock = texture(reference_rock_alternate, alternate_uv).rgb * 1.08;
+                float alternate_mix = smoothstep(0.36, 0.76, macro_patch.r) * 0.62;
+                rock = mix(rock, alternate_rock, alternate_mix);
+            }
             rock *= 1.10;
         }
     }
@@ -110,13 +121,10 @@ void fragment() {
     grass *= mix(0.80, 1.12, patch.r) * mix(0.90, 1.08, macro);
     float grass_luma = dot(grass, vec3(0.2126, 0.7152, 0.0722));
     grass = clamp(mix(vec3(grass_luma), grass, 1.06) * mix(0.92, 1.02, moisture), vec3(0.0), vec3(0.95));
-    // Keep dry districts warmer and wet/highland districts visibly greener.
     grass *= mix(vec3(0.96, 1.04, 0.94), vec3(1.05, 0.96, 0.86), dry);
     soil *= mix(0.87, 1.10, patch.b) * mix(vec3(0.93, 0.98, 0.94), vec3(1.08, 0.96, 0.86), dry);
     rock *= mix(0.92, 1.10, detail.r);
 
-    // A restrained pale-rock visual family helps limestone country read apart
-    // from dark wet rock. It is procedural presentation only, not geology data.
     float pale_rock = smoothstep(0.62, 0.88, macro_patch.g) * smoothstep(0.16, 0.58, slope) * (1.0 - highland * 0.34);
     rock = mix(rock, rock * vec3(1.16, 1.15, 1.08), pale_rock * 0.46);
 
@@ -131,9 +139,6 @@ void fragment() {
     if (!overview) {
         vec2 normal_xy = (detail.rg - vec2(0.5)) * (0.16 + rocky * 0.13);
         if (has_reference_grass_normal) {
-            // Direct Beta2 scrub normal is used only as near-field micro relief.
-            // Canonical geometry, slope classification and macro biome blending
-            // remain Yardman's own authoritative systems.
             vec2 source_normal = texture(reference_grass_normal, material_position / (8.0 * family_scale)).rg - vec2(0.5);
             float grass_normal_weight = (1.0 - smoothstep(0.20, 0.62, rocky)) * (1.0 - bare * 0.70) * 0.72;
             normal_xy = mix(normal_xy, source_normal * 0.82, grass_normal_weight);
