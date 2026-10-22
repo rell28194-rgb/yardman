@@ -7,6 +7,12 @@ const RUNTIME_PANELS := [
     "HydrologyContent",
     "SurfaceContent",
 ]
+const LEGACY_LAUNCHERS := {
+    "VehicleGarage": ["GARAGE", "GARAGE · GET CARS"],
+    "EnvironmentContent": ["CONTENT"],
+    "HydrologyContent": ["RIVERS"],
+    "SurfaceContent": ["SURFACES"],
+}
 const WEATHER_MODES := ["Dynamic", "Clear", "Shower"]
 
 var _hud: Control
@@ -14,11 +20,19 @@ var _rows: VBoxContainer
 var _weather_menu: OptionButton
 var _attached := false
 var _clock := 0.0
+var _suppressed_launchers := 0
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
+    if get_tree() != null and not get_tree().node_added.is_connected(_on_node_added):
+        get_tree().node_added.connect(_on_node_added)
     set_process(true)
     call_deferred("_try_attach")
+
+func _exit_tree() -> void:
+    var tree := get_tree()
+    if tree != null and tree.node_added.is_connected(_on_node_added):
+        tree.node_added.disconnect(_on_node_added)
 
 func _process(delta: float) -> void:
     _clock += maxf(delta, 0.0)
@@ -31,6 +45,41 @@ func _process(delta: float) -> void:
         _clock = 0.0
         _hide_legacy_launchers()
         _sync_weather_menu()
+
+func _on_node_added(node: Node) -> void:
+    # This bridge is deliberately ordered before the content/garage autoloads.
+    # Their launcher buttons are therefore hidden on creation instead of
+    # flashing for a frame and relying on a later polling pass.
+    if node is Button:
+        call_deferred("_hide_launcher_weak", weakref(node))
+
+func _hide_launcher_weak(reference: WeakRef) -> void:
+    var node: Variant = reference.get_ref()
+    if node is Button and suppress_legacy_launcher(node as Button):
+        _suppressed_launchers += 1
+
+static func launcher_owner_name(node: Node) -> String:
+    var current := node.get_parent() if node != null else null
+    while current != null:
+        var name := str(current.name)
+        if LEGACY_LAUNCHERS.has(name):
+            return name
+        current = current.get_parent()
+    return ""
+
+static func suppress_legacy_launcher(button: Button) -> bool:
+    if button == null:
+        return false
+    var owner := launcher_owner_name(button)
+    if owner.is_empty():
+        return false
+    var captions: Array = LEGACY_LAUNCHERS.get(owner, [])
+    if button.text not in captions:
+        return false
+    button.visible = false
+    button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    button.focus_mode = Control.FOCUS_NONE
+    return true
 
 func _try_attach() -> void:
     if get_tree() == null or get_tree().current_scene == null:
@@ -146,8 +195,10 @@ func _hide_legacy_launchers() -> void:
         if runtime == null:
             continue
         var button = runtime.get("_button")
-        if button is Control:
-            button.visible = false
+        if button is Button:
+            suppress_legacy_launcher(button)
+    # Weather no longer owns a standalone launcher, but tolerate old/private
+    # runtime versions during transition and suppress them if present.
     var weather := get_node_or_null("/root/WeatherFX")
     if weather != null:
         var weather_button = weather.get("_button")
@@ -173,3 +224,12 @@ func _sync_weather_menu() -> void:
     var index := WEATHER_MODES.find(mode)
     if index >= 0 and _weather_menu.selected != index:
         _weather_menu.select(index)
+
+func debug_state() -> Dictionary:
+    return {
+        "attached": _attached,
+        "runtime_panels": RUNTIME_PANELS.size(),
+        "legacy_launcher_families": LEGACY_LAUNCHERS.size(),
+        "suppressed_launchers": _suppressed_launchers,
+        "weather_modes": WEATHER_MODES.size(),
+    }
