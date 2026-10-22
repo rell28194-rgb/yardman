@@ -4,8 +4,6 @@ class_name YardmanReferenceAssets
 
 const ROOT := "res://assets/user_reference/"
 const REMOTE_ROOT := "user://yardman/fleet64/"
-# The reset branch has one owner vehicle only. Keep the old runtime call site
-# stable while replacing its generic road-car art with the accepted Crown007.
 const SCENE_UPGRADES := {
     "road_car.glb": "toyota_crown_2013.glb",
 }
@@ -23,6 +21,8 @@ static func exact_asset_path(filename: String) -> String:
     var local := ROOT + filename
     if ResourceLoader.exists(local) or FileAccess.file_exists(local):
         return local
+    if filename == "toyota_crown_2013.glb" and ResourceLoader.exists(CROWN_CACHE_PATH):
+        return CROWN_CACHE_PATH
     var downloaded := REMOTE_ROOT + filename
     if FileAccess.file_exists(downloaded):
         return downloaded
@@ -55,9 +55,6 @@ static func scene(filename: String) -> PackedScene:
     if ResourceLoader.exists(path):
         media = ResourceLoader.load(path) as PackedScene
     elif resolved == "toyota_crown_2013.glb" and ResourceLoader.exists(CROWN_CACHE_PATH):
-        # Owner APK CI can recover the exact hash-pinned Godot import from the
-        # previously accepted Crown build when the temporary source-pack URL
-        # has expired. The workflow verifies the cache digest before import.
         media = ResourceLoader.load(CROWN_CACHE_PATH) as PackedScene
     if media != null:
         _scenes[filename] = media
@@ -70,13 +67,13 @@ static func audio(filename: String, loop: bool = false) -> AudioStream:
     if not ResourceLoader.exists(path):
         return null
     var media := ResourceLoader.load(path) as AudioStream
-    if loop and media is AudioStreamWAV:
+    if media != null and loop and media is AudioStreamWAV:
         var looping := media.duplicate() as AudioStreamWAV
         looping.loop_mode = AudioStreamWAV.LOOP_FORWARD
         looping.loop_begin = 0
         looping.loop_end = int(round(looping.get_length() * looping.mix_rate))
         return looping
-    if loop and media is AudioStreamOggVorbis:
+    if media != null and loop and media is AudioStreamOggVorbis:
         var looping := media.duplicate() as AudioStreamOggVorbis
         looping.loop = true
         return looping
