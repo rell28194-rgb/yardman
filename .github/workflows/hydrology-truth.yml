@@ -78,7 +78,7 @@ jobs:
           python godot/tools/build_hydrology.py /tmp/jamaica.osm.pbf godot/data/terrain godot/data/hydrology | tee /tmp/hydrology.log
           python godot/tools/build_hydrology_truth_sidecar.py godot/data/hydrology godot/data/hydrology/truth-sidecar.json | tee /tmp/hydrology-sidecar.log
           python godot/tools/build_hydrology_crossings.py godot/data/roads godot/data/hydrology godot/data/hydrology/crossings.json --osm-pbf /tmp/jamaica.osm.pbf | tee /tmp/hydrology-crossings.log
-          python godot/tools/build_hydrology_runtime_v2.py godot/data/hydrology godot/data/hydrology-runtime-v2 | tee /tmp/hydrology-runtime-v2.log
+          python godot/tools/build_hydrology_runtime_v2.py godot/data/hydrology godot/data/hydrology-runtime-v2 --roads-root godot/data/roads | tee /tmp/hydrology-runtime-v2.log
           python - <<'PY'
           import json
           from pathlib import Path
@@ -104,7 +104,8 @@ jobs:
               raise SystemExit(f'evidence-free national sidecar must fail closed for every segment: {sidecar_metrics}')
           crossings = json.loads(Path('godot/data/hydrology/crossings.json').read_text())
           crossing_stats = crossings.get('stats', {})
-          if int(crossing_stats.get('crossings', 0)) < 1:
+          crossing_count = int(crossing_stats.get('crossings', 0))
+          if crossing_count < 1:
               raise SystemExit(f'national road/water crossing inventory unexpectedly empty: {crossing_stats}')
           runtime = json.loads(Path('godot/data/hydrology-runtime-v2/manifest.json').read_text())
           if int(runtime.get('format_version', 0)) != 2 or runtime.get('pack_id') != 'jamaica_hydrology_reconciled_v2':
@@ -112,8 +113,10 @@ jobs:
           runtime_stats = runtime.get('stats', {})
           if int(runtime_stats.get('segments', 0)) != segments:
               raise SystemExit(f'runtime-v2 segment coverage mismatch: truth={segments} runtime={runtime_stats}')
-          if int(runtime_stats.get('crossings', 0)) != int(crossing_stats.get('crossings', -1)):
+          if int(runtime_stats.get('crossings', 0)) != crossing_count:
               raise SystemExit(f'runtime-v2 crossing coverage mismatch: truth={crossing_stats} runtime={runtime_stats}')
+          if int(runtime_stats.get('crossings_with_road_width', 0)) != crossing_count:
+              raise SystemExit(f'runtime-v2 road-width coverage incomplete: truth={crossing_count} runtime={runtime_stats}')
           print('YARDMAN_HYDROLOGY_TRUTH_PASS', json.dumps(stats, sort_keys=True), 'tiles=', len(manifest['tiles']))
           print('YARDMAN_HYDROLOGY_SIDECAR_COVERAGE_PASS', json.dumps(sidecar_metrics, sort_keys=True))
           print('YARDMAN_HYDROLOGY_CROSSINGS_PASS', json.dumps(crossing_stats, sort_keys=True))
