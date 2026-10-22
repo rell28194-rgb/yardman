@@ -8,6 +8,7 @@ on:
       - '.github/workflows/fleet64-release-bridge.yml'
       - 'godot/project.godot'
       - 'godot/scripts/input_router.gd'
+      - 'godot/scripts/building_overview.gd'
       - 'godot/tests/input_router_test.gd'
   workflow_dispatch:
 
@@ -22,7 +23,7 @@ permissions:
 env:
   GODOT_VERSION: '4.7.2'
   GODOT_CHANNEL: stable
-  SOURCE_COMMIT: '8cc974f1a8c8cde8e47a6fbefc737a6b10b1faee'
+  SOURCE_COMMIT: 'd3becbe25d2a6ec73bd767f6a8693448ec8f4448'
   SOURCE_ARTIFACT_ID: '12336906664'
   SOURCE_APK_SHA256: '3aba9038a31e09f8c1ac1c7e52ea5e5405fd3484ab279e2820a1b2379ff0d18a'
 
@@ -31,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - name: Checkout exact validated Fleet64 source commit
+      - name: Checkout exact strict-validated Fleet64 source commit
         uses: actions/checkout@v4
         with:
           ref: ${{ env.SOURCE_COMMIT }}
@@ -52,15 +53,14 @@ jobs:
           unzip -p /tmp/fleet64-artifact.zip Yardman-Fleet64-Owner.apk > /tmp/Yardman-Fleet64-Owner.apk
           echo "${SOURCE_APK_SHA256}  /tmp/Yardman-Fleet64-Owner.apk" | sha256sum -c -
           python - <<'PY'
-          import os, zipfile
+          import os, shutil, zipfile
           apk='/tmp/Yardman-Fleet64-Owner.apk'
           roots={
               'assets/data/': 'godot/data/',
               'assets/assets/user_reference/': 'godot/assets/user_reference/',
               'assets/.godot/imported/': 'godot/.godot/imported/',
           }
-          for dst in ['godot/data','godot/assets/user_reference','godot/.godot/imported']:
-              import shutil
+          for dst in roots.values():
               shutil.rmtree(dst, ignore_errors=True)
               os.makedirs(dst, exist_ok=True)
           counts={k:0 for k in roots}
@@ -74,7 +74,7 @@ jobs:
                           dst=os.path.join(dstroot, rel)
                           os.makedirs(os.path.dirname(dst), exist_ok=True)
                           with zf.open(info) as src, open(dst,'wb') as out:
-                              out.write(src.read())
+                              shutil.copyfileobj(src, out)
                           counts[prefix]+=1
                           break
           print('YARDMAN_RELEASE_BRIDGE_RECOVERY', counts)
@@ -117,6 +117,15 @@ jobs:
           cp -a /tmp/godot-templates/templates/. "$TEMPLATE_DIR/"
           godot --version
 
+      - name: Rebuild Godot script class cache and reject parse errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 600 godot --headless --editor --path godot --quit 2>&1 | tee godot/build/strict-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/strict-import.log; then exit 1; fi
+          test -s godot/.godot/global_script_class_cache.cfg
+
       - name: Restore accepted signing identity
         uses: actions/cache@v4
         with:
@@ -143,16 +152,21 @@ jobs:
           EOF
           "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose --print-certs /tmp/Yardman-Fleet64-Owner.apk > godot/build/source-apksigner.txt
 
-      - name: Prove recovered Fleet64 runtime before export
+      - name: Prove strict Fleet64 garage and controller runtime before export
         shell: bash
         run: |
           set -euo pipefail
-          timeout 600 godot --headless --path godot --script tests/owner_fleet_64_test.gd 2>&1 | tee godot/build/owner-fleet-64.log
-          grep -q 'YARDMAN_OWNER_FLEET_64_PASS selectors=64 available=64 built=64 failures=0' godot/build/owner-fleet-64.log
-          timeout 600 godot --headless --path godot --script tests/owner_garage_runtime_test.gd 2>&1 | tee godot/build/owner-garage-runtime.log
-          grep -q 'YARDMAN_OWNER_GARAGE_RUNTIME_PASS selector=64 default=toyota_crown switch=toyota_crown>audi_r8>toyota_crown' godot/build/owner-garage-runtime.log
-          timeout 600 godot --headless --path godot --script tests/input_router_test.gd 2>&1 | tee godot/build/input-router.log
-          grep -q 'YARDMAN_INPUT_ROUTER_PASS keyboard=true dualsense=true analog=true garage=true' godot/build/input-router.log
+          run_test() {
+            local script="$1"
+            local log="$2"
+            local marker="$3"
+            timeout 600 godot --headless --path godot --script "$script" 2>&1 | tee "$log"
+            if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' "$log"; then exit 1; fi
+            grep -q "$marker" "$log"
+          }
+          run_test tests/owner_fleet_64_test.gd godot/build/owner-fleet-64.log 'YARDMAN_OWNER_FLEET_64_PASS selectors=64 available=64 built=64 failures=0'
+          run_test tests/owner_garage_runtime_test.gd godot/build/owner-garage-runtime.log 'YARDMAN_OWNER_GARAGE_RUNTIME_PASS selector=64 default=toyota_crown switch=toyota_crown>audi_r8>toyota_crown'
+          run_test tests/input_router_test.gd godot/build/input-router.log 'YARDMAN_INPUT_ROUTER_PASS keyboard=true dualsense=true analog=true garage=true'
 
       - name: Export signed release APK
         shell: bash
@@ -187,6 +201,7 @@ jobs:
                   'assets/scripts/vehicle_catalog.gdc',
                   'assets/scripts/fleet_vehicle_model.gdc',
                   'assets/scripts/input_router.gdc',
+                  'assets/scripts/building_overview.gdc',
                   'assets/data/parishes/manifest.json',
               }
               missing=sorted(required-names)
@@ -235,6 +250,7 @@ jobs:
         with:
           name: Yardman-Fleet64-Owner-Release-Bridge-Evidence
           path: |
+            godot/build/strict-import.log
             godot/build/owner-fleet-64.log
             godot/build/owner-garage-runtime.log
             godot/build/input-router.log
