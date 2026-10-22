@@ -20,9 +20,14 @@ func _run() -> void:
     for player in audio.get_children():
         var stream := player.stream as AudioStreamWAV
         _check(stream != null and stream.format == AudioStreamWAV.FORMAT_16_BITS and not stream.stereo, "Voice PCM format is invalid")
-        _check(stream.mix_rate == 22050 and stream.loop_mode == AudioStreamWAV.LOOP_FORWARD, "Voice is not a bounded cached loop")
-        _check(stream.loop_begin == 0 and stream.loop_end * 2 == stream.data.size(), "Loop sample range exceeds PCM data")
-        _check(stream.data.decode_s16(0) == stream.data.decode_s16(stream.data.size() - 2), "Loop endpoints are discontinuous")
+        var recovered_step := player == audio.footsteps and bool(audio.debug_state().footstep_one_shot)
+        if recovered_step:
+            _check(stream.mix_rate == 44100 and stream.loop_mode == AudioStreamWAV.LOOP_DISABLED, "Recovered footstep is not the expected bounded one-shot")
+            _check(stream.get_length() > 0.08 and stream.get_length() < 0.25, "Recovered footstep one-shot duration is invalid")
+        else:
+            _check(stream.mix_rate == 22050 and stream.loop_mode == AudioStreamWAV.LOOP_FORWARD, "Voice is not a bounded cached loop")
+            _check(stream.loop_begin == 0 and stream.loop_end * 2 == stream.data.size(), "Loop sample range exceeds PCM data")
+            _check(stream.data.decode_s16(0) == stream.data.decode_s16(stream.data.size() - 2), "Loop endpoints are discontinuous")
         var energy := 0.0
         var maximum := 0
         for byte in range(0, stream.data.size(), 2):
