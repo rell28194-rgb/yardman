@@ -31,10 +31,21 @@ func _run() -> void:
             maximum = maxi(maximum, absi(sample))
         _check(energy > 10000.0 and maximum < 30000, "Voice is empty or its source PCM clips")
         _check(player.max_polyphony == 1 and not player.playing, "Voice started before an active world state")
-    var state := {"driving": true, "speed_mps": 0.0, "rpm": 900.0, "on_road": true, "walk_speed": 0.0, "ready": true, "menu_open": false}
+
+    var contract := AudioScript.optional_audio_contract()
+    var files: Dictionary = contract.get("files", {})
+    _check(int(contract.get("voice_budget", 0)) == 4, "Recovered variants changed the voice budget")
+    _check(str(files.get("engine_drive", "")) == "engine_drive_loop.wav", "Drive-loop recovery binding drifted")
+    _check(str(files.get("road_gravel", "")) == "gravel_skid_loop.wav", "Gravel-loop recovery binding drifted")
+    _check(str(files.get("road_grass", "")) == "grass_roll_loop.wav", "Grass-loop recovery binding drifted")
+    _check(str(files.get("road_skid", "")) == "tire_skid_loop.wav", "Tire-skid recovery binding drifted")
+
+    var state := {"driving": true, "speed_mps": 0.0, "rpm": 900.0, "on_road": true, "surface": "paved", "brake": 0.0,
+        "walk_speed": 0.0, "ready": true, "menu_open": false}
     audio.update_state(1.0 / 60.0, state)
     await process_frame
     _check(audio.engine.playing and not audio.footsteps.playing, "Idle driving did not select engine exclusively")
+    _check(str(audio.debug_state().engine_stream_key) == "engine", "Idle engine selected drive source")
     var idle_pitch: float = audio.engine.pitch_scale
     state.rpm = 6000.0
     state.speed_mps = 35.0
@@ -42,12 +53,29 @@ func _run() -> void:
     _check(audio.engine.pitch_scale > idle_pitch and audio.engine.pitch_scale < 1.0, "RPM/gear transition is not smoothed")
     for frame in range(120):
         audio.update_state(1.0 / 60.0, state)
-    var road_pitch: float = audio.road_roll.pitch_scale
+    var paved_pitch: float = audio.road_roll.pitch_scale
     _check(audio.engine.pitch_scale > 3.0 and audio.engine.pitch_scale <= 3.4 and audio.road_roll.playing, "Speed/RPM did not influence engine and road voices within bounds")
+    _check(str(audio.debug_state().engine_stream_key) == "engine_drive", "Driving load did not route recovered drive loop")
     _check(audio.engine.volume_db <= -14.0 and audio.road_roll.volume_db <= -14.0 and audio.wind.volume_db < audio.engine.volume_db, "Driving mix exceeds its tame volume or wind dominates")
+
+    state.surface = "unpaved"
     state.on_road = false
     audio.update_state(1.0 / 60.0, state)
-    _check(audio.road_roll.pitch_scale < road_pitch, "Grass did not change roll timbre")
+    _check(str(audio.debug_state().road_stream_key) == "road_gravel", "Compiled unpaved surface did not route gravel loop")
+    _check(audio.road_roll.pitch_scale < paved_pitch, "Gravel did not lower rolling timbre")
+
+    state.surface = "offroad"
+    audio.update_state(1.0 / 60.0, state)
+    _check(str(audio.debug_state().road_stream_key) == "road_grass", "Off-road surface did not route grass loop")
+
+    state.surface = "paved"
+    state.on_road = true
+    state.brake = 1.0
+    audio.update_state(1.0 / 60.0, state)
+    _check(str(audio.debug_state().road_stream_key) == "road_skid", "Strong paved braking did not route tire-skid loop")
+    _check(audio.get_child_count() == 4 and audio.debug_state().voices == 4, "Surface routing allocated extra voices")
+
+    state.brake = 0.0
     state.driving = false
     state.walk_speed = 4.5
     audio.update_state(1.0 / 60.0, state)
@@ -81,5 +109,5 @@ func _run() -> void:
     await process_frame
     await process_frame
     _check(AudioScript._stream_cache.is_empty(), "Cached PCM outlived all audio owners")
-    print("YARDMAN_AUDIO_TEST %s cached_pcm=1 loop_seams=1 voices=4 rpm_smoothing=1 grass=1 footsteps=1 menu_silence=1 cache_cleanup=1" % ("PASS" if failures == 0 else "FAIL"))
+    print("YARDMAN_AUDIO_TEST %s cached_pcm=1 loop_seams=1 voices=4 rpm_smoothing=1 drive=1 gravel=1 grass=1 skid=1 footsteps=1 menu_silence=1 cache_cleanup=1" % ("PASS" if failures == 0 else "FAIL"))
     quit(0 if failures == 0 else 1)
