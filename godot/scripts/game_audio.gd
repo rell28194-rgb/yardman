@@ -3,9 +3,17 @@ extends Node
 class_name YardmanGameAudio
 
 # Owner-supplied samples replace cached fallback PCM in personal builds.
+# Surface variants share the existing four AudioStreamPlayer voices: recovered
+# media improves timbre without reopening the old voice-budget overflow path.
 const References = preload("res://scripts/reference_assets.gd")
 const SAMPLE_RATE := 22050
 const SILENT_DB := -80.0
+const OPTIONAL_AUDIO_FILES := {
+    "engine_drive": "engine_drive_loop.wav",
+    "road_gravel": "gravel_skid_loop.wav",
+    "road_grass": "grass_roll_loop.wav",
+    "road_skid": "tire_skid_loop.wav",
+}
 static var _stream_cache: Dictionary = {}
 static var _cache_build_count := 0
 static var _active_instances := 0
@@ -22,6 +30,8 @@ var _rpm := 900.0
 var _load := 0.0
 var _previous_speed := 0.0
 var _last_driving := false
+var _engine_stream_key := "engine"
+var _road_stream_key := "road"
 
 func _ready() -> void:
     if not _configured:
@@ -68,6 +78,10 @@ func update_state(delta: float, state: Dictionary) -> void:
     var desired_load := clampf(0.12 + maxf(acceleration, 0.0) / 7.0, 0.0, 1.0)
     if state.has("throttle"):
         desired_load = absf(_finite_value(state.throttle, -1.0, 1.0))
+    var braking := absf(_finite_value(state.get("brake", 0.0), 0.0, 1.0))
+    var surface := str(state.get("surface", "paved" if bool(state.get("on_road", true)) else "offroad"))
+    if surface not in ["paved", "unpaved", "offroad"]:
+        surface = "offroad"
     _rpm = lerpf(_rpm, desired_rpm, 1.0 - exp(-dt * 6.0))
     _load = lerpf(_load, desired_load, 1.0 - exp(-dt * 7.0))
     _previous_speed = speed
@@ -75,14 +89,33 @@ func update_state(delta: float, state: Dictionary) -> void:
     if not active or volume <= 0.0001:
         _silence()
         return
-    var road_surface := bool(state.get("on_road", true))
+
+    _engine_stream_key = engine_stream_key(absf(speed), _load, _rpm)
+    _road_stream_key = road_stream_key(surface, braking, absf(speed))
+    _route_stream(engine, _engine_stream_key)
+    _route_stream(road_roll, _road_stream_key)
+
     var speed_fraction := clampf(absf(speed) / 42.0, 0.0, 1.0)
     var engine_pitch := clampf(_rpm / 1800.0, 0.48, 3.40)
     var engine_db := -31.0 + speed_fraction * 6.0 + _load * 7.0
     _voice(engine, driving and desired_rpm > 0.0, engine_db, engine_pitch)
-    var roll_pitch := (0.60 + absf(speed) * 0.042) * (1.0 if road_surface else 0.70)
-    var roll_db := -43.0 + speed_fraction * 12.0 + (0.0 if road_surface else 2.5)
+
+    var surface_pitch := 1.0
+    var surface_gain := 0.0
+    match _road_stream_key:
+        "road_gravel":
+            surface_pitch = 0.82
+            surface_gain = 2.0
+        "road_grass":
+            surface_pitch = 0.70
+            surface_gain = 2.5
+        "road_skid":
+            surface_pitch = 1.05
+            surface_gain = 4.0
+    var roll_pitch := (0.60 + absf(speed) * 0.042) * surface_pitch
+    var roll_db := -43.0 + speed_fraction * 12.0 + surface_gain
     _voice(road_roll, driving and absf(speed) > 0.5, roll_db, roll_pitch)
+
     var step_pitch := clampf(pow(maxf(walk_speed, 0.1) / 3.8, 0.35), 0.75, 1.65)
     var step_db := -32.0 + clampf(walk_speed / 8.0, 0.0, 1.0) * 5.0
     _voice(footsteps, not driving and walk_speed > 0.35, step_db, step_pitch)
@@ -99,6 +132,7 @@ func debug_state() -> Dictionary:
         "engine_pitch": engine.pitch_scale if engine != null else 1.0,
         "engine_db": engine.volume_db if engine != null else SILENT_DB,
         "road_pitch": road_roll.pitch_scale if road_roll != null else 1.0,
+        "engine_stream_key": _engine_stream_key, "road_stream_key": _road_stream_key,
         "rpm": _rpm, "load": _load, "volume": volume,
     }
 
@@ -116,6 +150,16 @@ func _make_voice(voice_name: String, stream: AudioStreamWAV) -> AudioStreamPlaye
     _voices.append(player)
     return player
 
+func _route_stream(player: AudioStreamPlayer, key: String) -> void:
+    var stream: AudioStream = _stream_cache.get(key) as AudioStream
+    if stream == null or player.stream == stream:
+        return
+    var was_playing := player.playing
+    player.stop()
+    player.stream = stream
+    if was_playing:
+        player.play()
+
 func _voice(player: AudioStreamPlayer, enabled: bool, decibels: float, pitch: float) -> void:
     if not enabled:
         player.volume_db = SILENT_DB
@@ -130,6 +174,30 @@ func _silence() -> void:
     for player in _voices:
         player.volume_db = SILENT_DB
         player.stop()
+
+static func engine_stream_key(speed_mps: float, load: float, rpm: float) -> String:
+    if not is_finite(speed_mps) or not is_finite(load) or not is_finite(rpm):
+        return "engine"
+    return "engine_drive" if speed_mps > 3.0 or load > 0.24 or rpm > 1800.0 else "engine"
+
+static func road_stream_key(surface: String, braking: float, speed_mps: float) -> String:
+    if not is_finite(braking) or not is_finite(speed_mps):
+        return "road"
+    if surface == "paved" and braking >= 0.68 and speed_mps >= 5.0:
+        return "road_skid"
+    if surface == "unpaved":
+        return "road_gravel"
+    if surface == "offroad":
+        return "road_grass"
+    return "road"
+
+static func optional_audio_contract() -> Dictionary:
+    return {
+        "files": OPTIONAL_AUDIO_FILES.duplicate(),
+        "voice_budget": 4,
+        "surface_routing": true,
+        "fallback_safe": true,
+    }
 
 static func _prepare_streams() -> void:
     if not _stream_cache.is_empty():
@@ -159,6 +227,15 @@ static func _prepare_streams() -> void:
         var reference := References.audio(filename, true) as AudioStreamWAV
         if reference != null:
             _stream_cache[kind] = reference
+    var fallbacks := {
+        "engine_drive": "engine",
+        "road_gravel": "road",
+        "road_grass": "road",
+        "road_skid": "road",
+    }
+    for key: String in OPTIONAL_AUDIO_FILES:
+        var reference := References.audio(str(OPTIONAL_AUDIO_FILES[key]), true) as AudioStreamWAV
+        _stream_cache[key] = reference if reference != null else _stream_cache[str(fallbacks[key])]
     _cache_build_count += 1
 
 static func _sample(kind: String, t: float) -> float:
