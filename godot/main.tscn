@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource path="res://scripts/main.gd" type="Script" id="1"]
 [ext_resource path="res://scripts/road_structure_collision.gd" type="Script" id="2"]
@@ -17,6 +17,7 @@
 [ext_resource path="res://scripts/beta1_rock_outcrop_runtime.gd" type="Script" id="15"]
 [ext_resource path="res://scripts/beta1_ui_audio_runtime.gd" type="Script" id="16"]
 [ext_resource path="res://scripts/culvert_structure_runtime.gd" type="Script" id="17"]
+[ext_resource path="res://scripts/ford_surface_runtime.gd" type="Script" id="18"]
 
 [node name="Yardman" type="Node3D"]
 script = ExtResource("1")
@@ -65,6 +66,9 @@ script = ExtResource("16")
 
 [node name="CulvertStructures" type="Node3D" parent="."]
 script = ExtResource("17")
+
+[node name="FordSurfaces" type="Node3D" parent="."]
+script = ExtResource("18")
 
 [node name="ParishNavigation" type="Control" parent="."]
 script = ExtResource("4")
