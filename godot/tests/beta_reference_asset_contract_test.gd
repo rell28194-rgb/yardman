@@ -29,6 +29,10 @@ func _run() -> void:
     if not terrain_code.contains("reference_grass_normal") or not terrain_code.contains("has_reference_grass_normal"):
         _fail("terrain shader lacks optional recovered scrub normal contract")
         return
+    if not terrain_code.contains("reference_rock_alternate") or not terrain_code.contains("has_reference_rock_alternate") \
+            or not terrain_code.contains("dominant-axis lookup"):
+        _fail("terrain shader lacks bounded alternate-rock contract")
+        return
     var water_code := WaterShader.code
     if not water_code.contains("reference_normal") or not water_code.contains("has_reference_normal"):
         _fail("water shader lacks optional recovered WaterBump contract")
@@ -43,6 +47,12 @@ func _run() -> void:
     if str(contract.get("terrain_normal", "")) != "beta2_ucaptain_scrub_grass_normal.ktx":
         _fail("terrain normal runtime filename drifted")
         return
+    if str(contract.get("terrain_alt_rock", "")) != "ground_rock_alternate.png":
+        _fail("alternate rock runtime filename drifted")
+        return
+    if int(contract.get("alternate_rock_extra_samples", 99)) != 1:
+        _fail("alternate rock exceeded its one-sample shader budget")
+        return
     if str(contract.get("water_normal", "")) != "beta2_ucaptain_water_bump.ktx":
         _fail("water normal runtime filename drifted")
         return
@@ -56,12 +66,10 @@ func _run() -> void:
         _fail("asset-absent fallback is not explicit")
         return
 
-    # The public repository is allowed to omit private recovered media. Calling
-    # the optional paths must remain safe whether those files are absent or a
-    # private owner build stages them before import.
     References.texture("beta2_ucaptain_scrub_grass_normal.ktx")
+    References.texture("ground_rock_alternate.png")
     References.texture("beta2_ucaptain_water_bump.ktx")
     References.texture("building_concrete.png")
 
-    print("YARDMAN_BETA_REFERENCE_ASSET_CONTRACT_TEST PASS aliases=2 ktx=1 terrain_normal=1 water_normal=1 concrete=1 fallback=1")
+    print("YARDMAN_BETA_REFERENCE_ASSET_CONTRACT_TEST PASS aliases=2 ktx=1 terrain_normal=1 alt_rock=1 water_normal=1 concrete=1 fallback=1")
     quit(0)
