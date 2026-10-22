@@ -1,15 +1,23 @@
 extends Node3D
 class_name YardmanCulvertStructureRuntime
 
-# Visual engineering for reconciled v2 culverts. Crossing position, road width,
-# channel width/direction and elevation come from the compiled hydrology pack.
-# The structure never changes water, road, terrain, collision or source truth.
+# Visual engineering for reconciled v2 culverts. Crossing position, road edge,
+# exact road width, channel width/direction and elevation come from compiled
+# truth. The structure never changes water, road, terrain, collision or source
+# truth; if the matching road segment is not loaded or does not reconcile, it
+# fails closed until streaming makes the exact road evidence available.
 const References = preload("res://scripts/reference_assets.gd")
 const CONCRETE_ASSET := "building_concrete.png"
 const MAX_CULVERTS := 32
 const VISIBILITY_END_M := 220.0
 const VISIBILITY_FADE_M := 30.0
 const ROAD_EDGE_MARGIN_M := 0.30
+const ROAD_LOOKUP_RADIUS_M := 48.0
+const ROAD_CENTER_TOLERANCE_M := 0.35
+const ROAD_WIDTH_TOLERANCE_M := 0.05
+const MIN_CROSSING_NORMAL_DOT := 0.25
+const MAX_OBLIQUE_FACTOR := 4.0
+const MAX_MOUTH_OFFSET_M := 35.0
 const HEADWALL_THICKNESS_M := 0.30
 const WING_LENGTH_M := 1.35
 const WATER_CLEARANCE_M := 0.20
@@ -51,12 +59,19 @@ func _bind() -> void:
 func _state_signature() -> String:
     if _hydrology == null or _roads == null or _roads.coordinates == null:
         return ""
-    var keys: Array[String] = []
+    var hydro_keys: Array[String] = []
     for raw: Variant in _hydrology._loaded.keys():
-        keys.append(str(raw))
-    keys.sort()
+        hydro_keys.append(str(raw))
+    hydro_keys.sort()
+    # Road tiles can finish after hydrology. Include the actual indexed-road
+    # keys so a previously fail-closed culvert is retried when its edge arrives.
+    var road_keys: Array[String] = []
+    for raw: Variant in _roads._surface_indices.keys():
+        road_keys.append(str(raw))
+    road_keys.sort()
     var c = _roads.coordinates
-    return "%s|%.1f|%.1f|%d" % [",".join(keys), float(c.render_origin_x), float(c.render_origin_z), int(_hydrology.format_version())]
+    return "%s|%s|%.1f|%.1f|%d" % [",".join(hydro_keys), ",".join(road_keys),
+        float(c.render_origin_x), float(c.render_origin_z), int(_hydrology.format_version())]
 
 func _clear() -> void:
     var old := get_node_or_null("ReconciledCulverts")
@@ -115,7 +130,10 @@ func _rebuild() -> void:
                 var identity := crossing_identity(crossing)
                 if identity.is_empty() or seen.has(identity):
                     continue
-                var plan := culvert_plan(crossing, a, b, water_width)
+                var road_record := _resolve_road_record(crossing)
+                if road_record.is_empty():
+                    continue
+                var plan := culvert_plan(crossing, a, b, water_width, road_record)
                 if plan.is_empty():
                     continue
                 seen[identity] = true
@@ -140,13 +158,21 @@ func _rebuild() -> void:
     instance.visibility_range_end = VISIBILITY_END_M
     instance.visibility_range_end_margin = VISIBILITY_FADE_M
     instance.set_meta("culvert_count", plans.size())
-    instance.set_meta("source_contract", "approved reconciled v2 culvert crossing + compiled channel segment + exact road_width_m")
+    instance.set_meta("source_contract", "approved reconciled v2 culvert + exact compiled road edge/tangent/width + compiled channel segment")
     instance.set_meta("open_aperture", true)
+    instance.set_meta("oblique_road_edges", true)
     instance.set_meta("terrain_mutation", false)
     instance.set_meta("water_mutation", false)
     instance.set_meta("road_mutation", false)
     instance.set_meta("collision", false)
     add_child(instance)
+
+func _resolve_road_record(crossing: Dictionary) -> Dictionary:
+    if _roads == null or not is_instance_valid(_roads):
+        return {}
+    var records: Dictionary = _roads._nearby_surface_segments(float(crossing.get("x", NAN)),
+        float(crossing.get("z", NAN)), ROAD_LOOKUP_RADIUS_M)
+    return select_road_record(crossing, records.values())
 
 func _append_plan(surface: SurfaceTool, plan: Dictionary) -> void:
     var channel: Vector2 = plan.channel_dir
@@ -160,7 +186,6 @@ func _append_plan(surface: SurfaceTool, plan: Dictionary) -> void:
         var opening_height: float = float(plan.opening_height_m)
         var post_width := maxf(0.18, (wall_width - opening_width) * 0.5)
         var post_offset := opening_width * 0.5 + post_width * 0.5
-        # Two posts and a lintel leave the water opening visibly unobstructed.
         _append_box(surface, center_local + Vector3(side.x, 0.0, side.y) * post_offset,
             side, channel, post_width, height, HEADWALL_THICKNESS_M)
         _append_box(surface, center_local - Vector3(side.x, 0.0, side.y) * post_offset,
@@ -168,8 +193,6 @@ func _append_plan(surface: SurfaceTool, plan: Dictionary) -> void:
         var lintel_height := maxf(0.20, height - opening_height)
         var lintel_base := center_local + Vector3.UP * opening_height
         _append_box(surface, lintel_base, side, channel, wall_width, lintel_height, HEADWALL_THICKNESS_M)
-        # Wing walls flare away from the road/channel opening. Their plan is
-        # deterministic presentation derived from the same channel axis only.
         var outward: Vector2 = channel * float(mouth.outward_sign)
         var wing_center_a: Vector3 = center_local + Vector3(side.x, 0.0, side.y) * (wall_width * 0.5 + 0.18) \
             + Vector3(outward.x, 0.0, outward.y) * (WING_LENGTH_M * 0.42)
@@ -211,20 +234,59 @@ func _concrete_material() -> StandardMaterial3D:
         _material.uv1_scale = Vector3(0.55, 0.55, 0.55)
     return _material
 
+static func _segment_distance_squared(point: Vector2, a: Vector2, b: Vector2) -> float:
+    var direction := b - a
+    var length_squared := direction.length_squared()
+    if length_squared < 0.000001:
+        return point.distance_squared_to(a)
+    var fraction := clampf((point - a).dot(direction) / length_squared, 0.0, 1.0)
+    return point.distance_squared_to(a + direction * fraction)
+
 static func crossing_eligible(crossing: Dictionary) -> bool:
     return str(crossing.get("status", "unresolved")) == "approved" \
         and str(crossing.get("kind", "unknown")) == "culvert" \
         and is_finite(float(crossing.get("x", NAN))) \
         and is_finite(float(crossing.get("z", NAN))) \
+        and not str(crossing.get("road_edge", "")).is_empty() \
         and float(crossing.get("road_width_m", 0.0)) > 0.0
 
 static func crossing_identity(crossing: Dictionary) -> String:
     if not crossing_eligible(crossing):
         return ""
-    return "%d:%d:%s" % [roundi(float(crossing.x) * 10.0), roundi(float(crossing.z) * 10.0), str(crossing.get("road_edge_id", crossing.get("edge_id", "")))]
+    return "%d:%d:%s" % [roundi(float(crossing.x) * 10.0), roundi(float(crossing.z) * 10.0), str(crossing.road_edge)]
 
-static func culvert_plan(crossing: Dictionary, a: Vector3, b: Vector3, water_width_m: float) -> Dictionary:
-    if not crossing_eligible(crossing) or not a.is_finite() or not b.is_finite() or not is_finite(water_width_m):
+static func select_road_record(crossing: Dictionary, records: Array) -> Dictionary:
+    if not crossing_eligible(crossing):
+        return {}
+    var expected_edge := str(crossing.road_edge)
+    var expected_width := float(crossing.road_width_m)
+    var point := Vector2(float(crossing.x), float(crossing.z))
+    var best: Dictionary = {}
+    var best_distance_squared := INF
+    for raw: Variant in records:
+        if not raw is Dictionary:
+            continue
+        var record: Dictionary = raw
+        if str(record.get("edge_id", "")) != expected_edge:
+            continue
+        var width := float(record.get("width_m", NAN))
+        if not is_finite(width) or absf(width - expected_width) > ROAD_WIDTH_TOLERANCE_M:
+            continue
+        var a: Vector2 = record.get("a", Vector2(INF, INF))
+        var b: Vector2 = record.get("b", Vector2(INF, INF))
+        if not a.is_finite() or not b.is_finite() or a.distance_squared_to(b) < 0.25:
+            continue
+        var distance_squared := _segment_distance_squared(point, a, b)
+        if distance_squared < best_distance_squared:
+            best_distance_squared = distance_squared
+            best = record
+    if best.is_empty() or best_distance_squared > ROAD_CENTER_TOLERANCE_M * ROAD_CENTER_TOLERANCE_M:
+        return {}
+    return best.duplicate(true)
+
+static func culvert_plan(crossing: Dictionary, a: Vector3, b: Vector3, water_width_m: float,
+        road_record: Dictionary = {}) -> Dictionary:
+    if not crossing_eligible(crossing) or road_record.is_empty() or not a.is_finite() or not b.is_finite() or not is_finite(water_width_m):
         return {}
     var delta := Vector2(b.x - a.x, b.z - a.z)
     var length_sq := delta.length_squared()
@@ -237,12 +299,36 @@ static func culvert_plan(crossing: Dictionary, a: Vector3, b: Vector3, water_wid
     var nearest := segment_a + delta * t
     if nearest.distance_to(crossing_point) > 1.25:
         return {}
-    var road_width := clampf(float(crossing.road_width_m), 1.5, 40.0)
+
+    var road_a: Vector2 = road_record.get("a", Vector2(INF, INF))
+    var road_b: Vector2 = road_record.get("b", Vector2(INF, INF))
+    var road_delta := road_b - road_a
+    if not road_a.is_finite() or not road_b.is_finite() or road_delta.length_squared() < 0.25:
+        return {}
+    if str(road_record.get("edge_id", "")) != str(crossing.road_edge):
+        return {}
+    var road_width := float(road_record.get("width_m", NAN))
+    if not is_finite(road_width) or absf(road_width - float(crossing.road_width_m)) > ROAD_WIDTH_TOLERANCE_M:
+        return {}
+    road_width = clampf(road_width, 1.5, 40.0)
+    if _segment_distance_squared(crossing_point, road_a, road_b) > ROAD_CENTER_TOLERANCE_M * ROAD_CENTER_TOLERANCE_M:
+        return {}
+    var road_tangent := road_delta.normalized()
+    var road_normal := Vector2(-road_tangent.y, road_tangent.x)
+    var normal_dot := absf(channel.dot(road_normal))
+    if normal_dot < MIN_CROSSING_NORMAL_DOT:
+        return {}
+    var oblique_factor := 1.0 / normal_dot
+    if not is_finite(oblique_factor) or oblique_factor > MAX_OBLIQUE_FACTOR + 0.0001:
+        return {}
+    var mouth_offset := (road_width * 0.5 + ROAD_EDGE_MARGIN_M) * oblique_factor
+    if not is_finite(mouth_offset) or mouth_offset > MAX_MOUTH_OFFSET_M:
+        return {}
+
     var water_width := clampf(water_width_m, 0.7, 18.0)
     var elevation := lerpf(a.y, b.y, t) + WATER_CLEARANCE_M
     if not is_finite(elevation):
         return {}
-    var mouth_offset := road_width * 0.5 + ROAD_EDGE_MARGIN_M
     var opening_width := clampf(water_width * 0.86, 0.70, 8.5)
     var opening_height := clampf(0.62 + water_width * 0.24, 0.82, 2.25)
     var wall_width := clampf(maxf(water_width + 1.10, opening_width + 0.70), 2.0, 12.0)
@@ -251,13 +337,18 @@ static func culvert_plan(crossing: Dictionary, a: Vector3, b: Vector3, water_wid
     var mouth_b := crossing_point + channel * mouth_offset
     return {
         "channel_dir": channel,
+        "road_tangent": road_tangent,
+        "road_normal": road_normal,
         "road_width_m": road_width,
         "water_width_m": water_width,
+        "oblique_factor": oblique_factor,
+        "mouth_offset_m": mouth_offset,
         "headwall_width_m": wall_width,
         "headwall_height_m": wall_height,
         "opening_width_m": opening_width,
         "opening_height_m": opening_height,
         "crossing": crossing_point,
+        "road_edge": str(crossing.road_edge),
         "source_unchanged": true,
         "mouths": [
             {"center": Vector3(mouth_a.x, elevation, mouth_a.y), "outward_sign": -1.0},
@@ -274,6 +365,11 @@ static func runtime_contract() -> Dictionary:
         "visibility_m": VISIBILITY_END_M,
         "material_asset": CONCRETE_ASSET,
         "open_aperture": true,
+        "exact_road_edge_required": true,
+        "oblique_road_edges": true,
+        "max_oblique_factor": MAX_OBLIQUE_FACTOR,
+        "road_center_tolerance_m": ROAD_CENTER_TOLERANCE_M,
+        "road_width_tolerance_m": ROAD_WIDTH_TOLERANCE_M,
         "terrain_mutation": false,
         "water_mutation": false,
         "road_mutation": false,
