@@ -1,0 +1,63 @@
+name: Yardman World Reconciliation Godot Gate
+
+on:
+  push:
+    branches:
+      - codex/world-reconciliation-001
+    paths:
+      - 'godot/scripts/**'
+      - 'godot/tests/mesh_geometry_guard_test.gd'
+      - '.github/workflows/world-reconciliation-godot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+
+jobs:
+  geometry-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout reconciliation branch
+        uses: actions/checkout@v4
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Import project and reject GDScript parse errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 300 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/world-reconciliation-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/world-reconciliation-import.log; then exit 1; fi
+
+      - name: Prove catastrophic geometry rejection contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/mesh_geometry_guard_test.gd 2>&1 | tee godot/build/mesh-geometry-guard.log
+          grep -q 'YARDMAN_MESH_GEOMETRY_GUARD_TEST PASS finite=1 topology=1 bounds=1 edges=1 degeneracy=1' godot/build/mesh-geometry-guard.log
+
+      - name: Upload reconciliation gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-World-Reconciliation-Godot-Evidence
+          path: |
+            godot/build/world-reconciliation-import.log
+            godot/build/mesh-geometry-guard.log
+          if-no-files-found: ignore
+          retention-days: 3
