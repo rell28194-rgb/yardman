@@ -11,8 +11,10 @@ from build_hydrology_runtime_v2 import compile_runtime_v2
 def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp) / "truth"
+        roads = Path(tmp) / "roads"
         out = Path(tmp) / "runtime"
         (root / "tiles").mkdir(parents=True)
+        (roads / "graph").mkdir(parents=True)
         fields = ["ax", "ay", "az", "bx", "by", "bz", "source_way", "waterway", "name", "width_m",
                   "width_source", "intermittent", "tidal", "grade_permille", "channel_seed_depth_m",
                   "channel_depth_source", "segment_key"]
@@ -43,19 +45,24 @@ def main() -> int:
             "evidence": ["osm:road_bridge"], "source_crossing_evidence": {"bridge": True},
         }]}
         (root / "crossings.json").write_text(json.dumps(crossings), encoding="utf-8")
+        (roads / "graph" / "edges_0.json").write_text(json.dumps({
+            "road-1": {"id": "road-1", "width_m": 7.35},
+        }), encoding="utf-8")
 
-        result = compile_runtime_v2(root, out)
+        result = compile_runtime_v2(root, out, roads)
         assert result["format_version"] == 2
         assert result["pack_id"] == "jamaica_hydrology_reconciled_v2"
         assert result["terrain_mutation_policy"].startswith("runtime pack grants no DEM mutation permission")
         assert int(result["stats"]["segments"]) == 2
         assert int(result["stats"]["crossings"]) == 1
+        assert int(result["stats"]["crossings_with_road_width"]) == 1
         runtime_tile = json.loads((out / "tile_0_0.json").read_text(encoding="utf-8"))
         assert len(runtime_tile["segments"]) == 2
         first = runtime_tile["segments"][0]
         assert first[1] == 12.0 and first[4] == 11.5, "compiled DEM elevation was not preserved"
         assert first[17] == "blocked" and first[18] == "none"
         assert len(first[19]) == 1 and first[19][0]["kind"] == "bridge"
+        assert first[19][0]["road_width_m"] == 7.35, "compiled road width was not preserved"
         assert runtime_tile["segments"][1][19] == []
 
         # Reconciliation must fail closed if a crossing is not actually on its
@@ -63,13 +70,25 @@ def main() -> int:
         crossings["crossings"][0]["x"] = 500.0
         (root / "crossings.json").write_text(json.dumps(crossings), encoding="utf-8")
         try:
-            compile_runtime_v2(root, out)
+            compile_runtime_v2(root, out, roads)
         except ValueError as exc:
             assert "reconciliation exceeded" in str(exc)
         else:
             raise AssertionError("off-geometry crossing was accepted into runtime v2")
 
-    print("YARDMAN_HYDROLOGY_RUNTIME_V2_COMPILER_PASS")
+        # A national build that asks for road widths must not silently fall
+        # back to a heuristic when a crossing references a missing edge.
+        crossings["crossings"][0]["x"] = 110.0
+        crossings["crossings"][0]["road_edge"] = "missing-road"
+        (root / "crossings.json").write_text(json.dumps(crossings), encoding="utf-8")
+        try:
+            compile_runtime_v2(root, out, roads)
+        except ValueError as exc:
+            assert "absent from compiled graph" in str(exc)
+        else:
+            raise AssertionError("missing crossing road width was accepted")
+
+    print("YARDMAN_HYDROLOGY_RUNTIME_V2_COMPILER_PASS road_width=1")
     return 0
 
 
