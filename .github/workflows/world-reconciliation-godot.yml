@@ -9,6 +9,7 @@ on:
       - 'godot/shaders/**'
       - 'godot/main.tscn'
       - 'godot/tests/audio_test.gd'
+      - 'godot/tests/weather_fx_runtime_test.gd'
       - 'godot/tests/mesh_geometry_guard_test.gd'
       - 'godot/tests/bridge_geometry_test.gd'
       - 'godot/tests/tunnel_geometry_runtime_test.gd'
@@ -70,6 +71,14 @@ jobs:
           timeout 120 godot --headless --path godot --script tests/audio_test.gd 2>&1 | tee godot/build/audio-routing.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/audio-routing.log; then exit 1; fi
           grep -q 'YARDMAN_AUDIO_TEST PASS cached_pcm=1 loop_seams=1 voices=4 rpm_smoothing=1 drive=1 gravel=1 grass=1 skid=1 footsteps=1 menu_silence=1 cache_cleanup=1' godot/build/audio-routing.log
+
+      - name: Prove rain wetness and clean weather HUD
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/weather_fx_runtime_test.gd 2>&1 | tee godot/build/weather-fx.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/weather-fx.log; then exit 1; fi
+          grep -q 'YARDMAN_WEATHER_FX_RUNTIME_PASS rain_batches=1 max_drops=320 balanced_cap=150 ultra_cap=300 reduced_motion_cap=165 wetness_materials=4 standalone_ui=0 dynamic=deterministic' godot/build/weather-fx.log
 
       - name: Prove terrain material variation contract
         shell: bash
@@ -215,6 +224,7 @@ jobs:
           path: |
             godot/build/world-reconciliation-import.log
             godot/build/audio-routing.log
+            godot/build/weather-fx.log
             godot/build/terrain-surface-shader.log
             godot/build/beta-reference-assets.log
             godot/build/beta1-street-furniture.log
