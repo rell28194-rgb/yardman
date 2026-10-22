@@ -6,6 +6,7 @@ const References = preload("res://scripts/reference_assets.gd")
 const AcceptedModel = preload("res://scripts/vehicle_model.gd")
 const FleetModel = preload("res://scripts/fleet_vehicle_model.gd")
 const SAVE_PATH := "user://yardman/vehicle-selection.json"
+const GARAGE_LAYER := 110
 
 var _game: Node
 var _controller
@@ -19,18 +20,66 @@ var _download_button: Button
 var _download_progress: ProgressBar
 var _remote: Node
 var _current_id := Catalog.DEFAULT_ID
+var _touch_input_before_panel := true
 
 func _ready() -> void:
-    # The garage is an isolated autoload so the already owner-accepted main
-    # scene, traversal and HUD code do not need to be rewritten. Wait until the
-    # main scene has configured its existing vehicle controller, then bind once.
     process_mode = Node.PROCESS_MODE_ALWAYS
     set_process(true)
+    set_process_input(true)
     call_deferred("_try_attach_to_current_game")
 
 func _process(_delta: float) -> void:
     if _game == null:
         _try_attach_to_current_game()
+
+func _input(event: InputEvent) -> void:
+    if _garage_key_pressed(event):
+        _toggle_panel()
+        get_viewport().set_input_as_handled()
+        return
+    if event is InputEventScreenTouch:
+        var touch_event := event as InputEventScreenTouch
+        if touch_event.pressed and _garage_button_hit(touch_event.position):
+            _toggle_panel()
+            get_viewport().set_input_as_handled()
+
+func _garage_key_pressed(event: InputEvent) -> bool:
+    if not event is InputEventKey:
+        return false
+    var key_event := event as InputEventKey
+    if not key_event.pressed or key_event.echo:
+        return false
+    return key_event.keycode == KEY_G or key_event.physical_keycode == KEY_G
+
+func _garage_button_hit(point: Vector2) -> bool:
+    return _button != null and _button.visible and not _button.disabled and _button.get_global_rect().has_point(point)
+
+func _toggle_panel() -> void:
+    if _panel == null:
+        return
+    _set_panel_visible(not _panel.visible)
+
+func _set_panel_visible(value: bool) -> void:
+    if _panel == null:
+        return
+    if _panel.visible == value:
+        return
+    _panel.visible = value
+    _set_gameplay_touch_enabled(not value)
+
+func _set_gameplay_touch_enabled(enabled: bool) -> void:
+    if _game == null:
+        return
+    var touch = _game.get("touch")
+    if touch == null:
+        return
+    if enabled:
+        touch.set("input_enabled", _touch_input_before_panel)
+    else:
+        _touch_input_before_panel = bool(touch.get("input_enabled"))
+        touch.set("input_enabled", false)
+        if touch.has_method("clear_input"):
+            touch.call("clear_input")
 
 func _try_attach_to_current_game() -> void:
     if _game != null or get_tree() == null:
@@ -51,7 +100,7 @@ func attach(game: Node) -> void:
     _game = game
     _controller = game.get("vehicle") if game != null else null
     _body = _controller.get("body") as CharacterBody3D if _controller != null else null
-    layer = 45
+    layer = GARAGE_LAYER
     _build_ui()
     _bind_remote_fleet()
     _populate()
@@ -59,9 +108,6 @@ func attach(game: Node) -> void:
         _disable("Vehicle runtime unavailable.")
         return
     if _vehicle_ids.is_empty():
-        # Keep the garage reachable even when optional media is absent. This is
-        # the recovery path for the lightweight APK: the game remains usable
-        # and the owner can fetch the fleet without reinstalling the world.
         _button.text = "GARAGE · GET CARS"
         _status.text = "Vehicle media is not installed. Download the fleet over Wi-Fi."
         return
@@ -80,16 +126,19 @@ func _build_ui() -> void:
     _button = Button.new()
     _button.text = "GARAGE"
     _button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-    _button.position = Vector2(-178, 18)
-    _button.size = Vector2(160, 46)
+    _button.position = Vector2(-228, 14)
+    _button.size = Vector2(210, 58)
     _button.focus_mode = Control.FOCUS_NONE
-    _button.pressed.connect(func() -> void: _panel.visible = not _panel.visible)
+    _button.mouse_filter = Control.MOUSE_FILTER_STOP
+    _button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+    _button.pressed.connect(_toggle_panel)
     add_child(_button)
 
     _panel = PanelContainer.new()
     _panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-    _panel.position = Vector2(-408, 72)
-    _panel.size = Vector2(390, 300)
+    _panel.position = Vector2(-448, 78)
+    _panel.size = Vector2(430, 330)
+    _panel.mouse_filter = Control.MOUSE_FILTER_STOP
     _panel.visible = false
     add_child(_panel)
 
@@ -99,11 +148,16 @@ func _build_ui() -> void:
 
     var title := Label.new()
     title.text = "OWNER GARAGE"
-    title.add_theme_font_size_override("font_size", 19)
+    title.add_theme_font_size_override("font_size", 20)
     column.add_child(title)
 
+    var hint := Label.new()
+    hint.text = "Tap GARAGE or press G"
+    hint.add_theme_font_size_override("font_size", 13)
+    column.add_child(hint)
+
     _options = OptionButton.new()
-    _options.custom_minimum_size = Vector2(360, 46)
+    _options.custom_minimum_size = Vector2(400, 48)
     _options.focus_mode = Control.FOCUS_NONE
     column.add_child(_options)
 
@@ -114,19 +168,21 @@ func _build_ui() -> void:
     var use_button := Button.new()
     use_button.text = "USE VEHICLE"
     use_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    use_button.custom_minimum_size.y = 48.0
     use_button.focus_mode = Control.FOCUS_NONE
     use_button.pressed.connect(_apply_selected)
     actions.add_child(use_button)
 
     var close := Button.new()
     close.text = "CLOSE"
+    close.custom_minimum_size = Vector2(100.0, 48.0)
     close.focus_mode = Control.FOCUS_NONE
-    close.pressed.connect(func() -> void: _panel.visible = false)
+    close.pressed.connect(func() -> void: _set_panel_visible(false))
     actions.add_child(close)
 
     _download_button = Button.new()
     _download_button.text = "DOWNLOAD VEHICLES · WI-FI"
-    _download_button.custom_minimum_size = Vector2(360, 42)
+    _download_button.custom_minimum_size = Vector2(400, 48)
     _download_button.focus_mode = Control.FOCUS_NONE
     _download_button.pressed.connect(_start_or_resume_download)
     column.add_child(_download_button)
@@ -136,7 +192,7 @@ func _build_ui() -> void:
     _download_progress.max_value = 100.0
     _download_progress.value = 0.0
     _download_progress.show_percentage = true
-    _download_progress.custom_minimum_size = Vector2(360, 24)
+    _download_progress.custom_minimum_size = Vector2(400, 30)
     column.add_child(_download_progress)
 
     _status = Label.new()
@@ -170,7 +226,7 @@ func _start_or_resume_download() -> void:
     if state == "downloading" and _remote.has_method("cancel_download"):
         _remote.call("cancel_download")
         return
-    _panel.visible = true
+    _set_panel_visible(true)
     _remote.call("start_download")
 
 func _on_remote_state_changed(state: String, message: String) -> void:
@@ -182,17 +238,21 @@ func _on_remote_state_changed(state: String, message: String) -> void:
             _download_button.disabled = true
             _download_progress.value = 100.0
         "downloading":
-            _download_button.text = "PAUSE DOWNLOAD"
+            _download_button.text = "DOWNLOADING VEHICLES · TAP TO STOP"
             _download_button.disabled = false
+            _set_panel_visible(true)
         "verifying":
             _download_button.text = "VERIFYING VEHICLES…"
             _download_button.disabled = true
+            _set_panel_visible(true)
         "installing":
             _download_button.text = "INSTALLING VEHICLES…"
             _download_button.disabled = true
+            _set_panel_visible(true)
         "error":
             _download_button.text = "RETRY VEHICLE DOWNLOAD"
             _download_button.disabled = false
+            _set_panel_visible(true)
         _:
             _download_button.text = "DOWNLOAD VEHICLES · WI-FI"
             _download_button.disabled = false
@@ -202,7 +262,14 @@ func _on_remote_state_changed(state: String, message: String) -> void:
 func _on_remote_progress(downloaded_bytes: int, total_bytes: int) -> void:
     if _download_progress == null or total_bytes <= 0:
         return
-    _download_progress.value = clampf(float(downloaded_bytes) * 100.0 / float(total_bytes), 0.0, 100.0)
+    var percent := clampf(float(downloaded_bytes) * 100.0 / float(total_bytes), 0.0, 100.0)
+    _download_progress.value = percent
+    if _status != null:
+        _status.text = "DOWNLOADING VEHICLES · %.1f%% · %.1f / %.1f MB" % [
+            percent,
+            float(maxi(downloaded_bytes, 0)) / 1_000_000.0,
+            float(total_bytes) / 1_000_000.0,
+        ]
 
 func _on_remote_installed() -> void:
     _populate()
@@ -251,6 +318,10 @@ func _populate() -> void:
     elif not _vehicle_ids.is_empty():
         _options.select(0)
     var remote_state := str(_remote.call("get_state")) if _remote != null and _remote.has_method("get_state") else ""
+    if _vehicle_ids.size() >= 64:
+        _download_button.text = "ALL 64 VEHICLES READY"
+        _download_button.disabled = true
+        _download_progress.value = 100.0
     if remote_state not in ["downloading", "verifying", "installing"]:
         _status.text = "Dedicated selectable vehicles: %d / 64" % _vehicle_ids.size()
 
