@@ -107,13 +107,13 @@ static func download_indicator_model(label: String, state: String, downloaded_by
         # than sitting at a misleading integer 0%.
         text += (" %.1f%%" % percent) if percent > 0.0 and percent < 10.0 else (" %d%%" % int(floor(percent + 0.5)))
     else:
-        var stage := {
+        var stage: String = str({
             "manifest": "CHECK",
             "downloading": "START",
             "verifying": "VERIFY",
             "installing": "INSTALL",
-        }.get(state, state.to_upper())
-        text += " · %s" % str(stage)
+        }.get(state, state.to_upper()))
+        text += " · %s" % stage
     if additional_active > 0:
         text += " +%d" % additional_active
     return {"visible": true, "text": text, "percent": percent, "show_bar": show_bar}
