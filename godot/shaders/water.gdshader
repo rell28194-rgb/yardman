@@ -6,10 +6,12 @@ uniform vec3 coastal_color : source_color = vec3(0.10, 0.37, 0.40);
 uniform float wave_height = 0.045;
 uniform sampler2D reference_surface : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_foam : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_foam_alternate : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_caustics : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_normal : repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool has_reference_surface = false;
 uniform bool has_reference_foam = false;
+uniform bool has_reference_foam_alternate = false;
 uniform bool has_reference_caustics = false;
 uniform bool has_reference_normal = false;
 varying vec2 ocean_uv;
@@ -103,6 +105,15 @@ void fragment() {
         // Source River explicitly reads foam red for opacity, not image alpha.
         float foam = texture(reference_foam,
             ocean_uv * 6.1 + vec2(0.0, TIME * 0.011)).r;
+        if (has_reference_foam_alternate) {
+            // Recovered alternate foam is presentation-only. One differently
+            // oriented read breaks obvious source repetition but never changes
+            // the registered coast, shore-distance field, or sea-level mesh.
+            float alternate_foam = texture(reference_foam_alternate,
+                ocean_uv.yx * 4.7 + vec2(-TIME * 0.006, TIME * 0.008)).r;
+            float family_mix = smoothstep(0.28, 0.72, swell.x);
+            foam = mix(foam, alternate_foam, family_mix * 0.48);
+        }
         surf *= 0.56 + smoothstep(0.10, 0.46, foam) * 0.64;
     }
     ALBEDO = mix(water, vec3(0.76, 0.82, 0.79), surf * 0.43);
