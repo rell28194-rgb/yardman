@@ -134,30 +134,31 @@ func _build_tile(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
         return
     var groups: Dictionary = {}
     var tile_origin := Vector2(float(tile.x) * float(roads.tile_size), float(tile.y) * float(roads.tile_size))
-    var density := _quality_density()
+    var density: float = _quality_density()
     var built_here := 0
     for record: Dictionary in _records(segments):
         var a: Vector2 = record.a
         var b: Vector2 = record.b
-        var delta := b - a
-        var length_m := delta.length()
-        var direction := delta / length_m
+        var delta: Vector2 = b - a
+        var length_m: float = delta.length()
+        var direction: Vector2 = delta / length_m
         var right := Vector2(-direction.y, direction.x)
         var steps := maxi(1, int(ceil(length_m / ANCHOR_SPACING_M)))
         for step in range(steps):
-            for side in [-1.0, 1.0]:
+            for side_raw in [-1.0, 1.0]:
+                var side: float = float(side_raw)
                 var seed_value := posmod(int(record.seed) + step * 7919 + (104729 if side > 0.0 else 0), 2147483647)
                 if _stable_fraction(seed_value) > density:
                     rejected_density += 1
                     continue
-                var along_jitter := (_stable_fraction(seed_value * 31 + 17) - 0.5) * ANCHOR_SPACING_M * 0.55
-                var station := clampf((float(step) + 0.5) * length_m / float(steps) + along_jitter, 0.5, length_m - 0.5)
-                var verge_jitter := _stable_fraction(seed_value * 47 + 29)
-                var offset := float(record.width) * 0.5 + MIN_ROAD_CLEARANCE_M + verge_jitter * VERGE_WIDTH_M
-                var point := a + direction * station + right * offset * side
+                var along_jitter: float = (_stable_fraction(seed_value * 31 + 17) - 0.5) * ANCHOR_SPACING_M * 0.55
+                var station: float = clampf((float(step) + 0.5) * length_m / float(steps) + along_jitter, 0.5, length_m - 0.5)
+                var verge_jitter: float = _stable_fraction(seed_value * 47 + 29)
+                var offset: float = float(record.width) * 0.5 + MIN_ROAD_CLEARANCE_M + verge_jitter * VERGE_WIDTH_M
+                var point: Vector2 = a + direction * station + right * offset * side
                 if int(floor(point.x / float(roads.tile_size))) != tile.x or int(floor(point.y / float(roads.tile_size))) != tile.y:
                     continue
-                var height := float(terrain.height_at(point.x, point.y))
+                var height: float = float(terrain.height_at(point.x, point.y))
                 if not is_finite(height) or height < 1.25:
                     rejected_height += 1
                     continue
@@ -169,8 +170,8 @@ func _build_tile(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
                 var anchors: Array = groups[cell_key].anchors
                 if anchors.size() >= MAX_ANCHORS_PER_CELL:
                     continue
-                var scale_value := 0.76 + _stable_fraction(seed_value * 67 + 43) * 0.68
-                var yaw := _stable_fraction(seed_value * 89 + 71) * TAU
+                var scale_value: float = 0.76 + _stable_fraction(seed_value * 67 + 43) * 0.68
+                var yaw: float = _stable_fraction(seed_value * 89 + 71) * TAU
                 anchors.append({
                     "transform": Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * scale_value), local),
                     "seed": seed_value,
@@ -201,7 +202,7 @@ func _make_cell(parent: Node3D, group: Dictionary) -> void:
     var center := Vector3((float(cell.x) + 0.5) * CELL_M, 0.0, (float(cell.y) + 0.5) * CELL_M)
     var average_y := 0.0
     for anchor: Dictionary in anchors:
-        average_y += float(anchor.transform.origin.y)
+        average_y += anchor.transform.origin.y
     center.y = average_y / float(anchors.size())
     var multi := MultiMesh.new()
     multi.transform_format = MultiMesh.TRANSFORM_3D
