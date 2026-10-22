@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - codex/map-cars-reset-001
+      - codex/world-reconciliation-001
     paths:
       - 'godot/tools/build_hydrology.py'
       - 'godot/tools/hydrology_channel_model.py'
