@@ -22,6 +22,8 @@ on:
       - 'godot/tools/test_hydrology_truth_pack.py'
       - 'godot/tools/build_hydrology_truth_sidecar.py'
       - 'godot/tools/test_build_hydrology_truth_sidecar.py'
+      - 'godot/tools/build_hydrology_runtime_v2.py'
+      - 'godot/tools/test_build_hydrology_runtime_v2.py'
       - 'Tests/Python/test_hydrology_geometry.py'
       - 'Tests/Python/test_hydrology_channel_model.py'
       - 'Tests/Python/test_hydrology_terrain_plan.py'
@@ -60,6 +62,7 @@ jobs:
           python godot/tools/test_hydrology_evidence_reconciliation.py
           python godot/tools/test_hydrology_truth_pack.py
           python godot/tools/test_build_hydrology_truth_sidecar.py
+          python godot/tools/test_build_hydrology_runtime_v2.py
           python godot/tests/test_hydrology_crossings.py
           python godot/tests/test_hydrology_crossing_inventory.py
           python godot/tests/test_crossing_source_evidence.py
@@ -69,6 +72,7 @@ jobs:
           python godot/tools/build_hydrology.py /tmp/jamaica.osm.pbf godot/data/terrain godot/data/hydrology | tee /tmp/hydrology.log
           python godot/tools/build_hydrology_truth_sidecar.py godot/data/hydrology godot/data/hydrology/truth-sidecar.json | tee /tmp/hydrology-sidecar.log
           python godot/tools/build_hydrology_crossings.py godot/data/roads godot/data/hydrology godot/data/hydrology/crossings.json --osm-pbf /tmp/jamaica.osm.pbf | tee /tmp/hydrology-crossings.log
+          python godot/tools/build_hydrology_runtime_v2.py godot/data/hydrology godot/data/hydrology-runtime-v2 | tee /tmp/hydrology-runtime-v2.log
           python - <<'PY'
           import json
           from pathlib import Path
@@ -96,9 +100,18 @@ jobs:
           crossing_stats = crossings.get('stats', {})
           if int(crossing_stats.get('crossings', 0)) < 1:
               raise SystemExit(f'national road/water crossing inventory unexpectedly empty: {crossing_stats}')
+          runtime = json.loads(Path('godot/data/hydrology-runtime-v2/manifest.json').read_text())
+          if int(runtime.get('format_version', 0)) != 2 or runtime.get('pack_id') != 'jamaica_hydrology_reconciled_v2':
+              raise SystemExit('reconciled hydrology runtime manifest invalid')
+          runtime_stats = runtime.get('stats', {})
+          if int(runtime_stats.get('segments', 0)) != segments:
+              raise SystemExit(f'runtime-v2 segment coverage mismatch: truth={segments} runtime={runtime_stats}')
+          if int(runtime_stats.get('crossings', 0)) != int(crossing_stats.get('crossings', -1)):
+              raise SystemExit(f'runtime-v2 crossing coverage mismatch: truth={crossing_stats} runtime={runtime_stats}')
           print('YARDMAN_HYDROLOGY_TRUTH_PASS', json.dumps(stats, sort_keys=True), 'tiles=', len(manifest['tiles']))
           print('YARDMAN_HYDROLOGY_SIDECAR_COVERAGE_PASS', json.dumps(sidecar_metrics, sort_keys=True))
           print('YARDMAN_HYDROLOGY_CROSSINGS_PASS', json.dumps(crossing_stats, sort_keys=True))
+          print('YARDMAN_HYDROLOGY_RUNTIME_V2_PASS', json.dumps(runtime_stats, sort_keys=True), 'tiles=', len(runtime['tiles']))
           PY
 
       - name: Upload national hydrology truth pack
@@ -107,8 +120,10 @@ jobs:
           name: Yardman-Hydrology-Truth
           path: |
             godot/data/hydrology/**
+            godot/data/hydrology-runtime-v2/**
             /tmp/hydrology.log
             /tmp/hydrology-sidecar.log
             /tmp/hydrology-crossings.log
+            /tmp/hydrology-runtime-v2.log
           retention-days: 7
           compression-level: 6
