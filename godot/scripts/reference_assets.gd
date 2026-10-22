@@ -7,6 +7,13 @@ const REMOTE_ROOT := "user://yardman/fleet64/"
 const SCENE_UPGRADES := {
     "road_car.glb": "toyota_crown_2013.glb",
 }
+# Semantic callers keep stable fallback names while a validated owner-authorized
+# recovery can supply higher-detail source media. Missing private files always
+# fall through to the original public/reference asset.
+const TEXTURE_UPGRADES := {
+    "ground_grass.png": "beta2_ucaptain_scrub_grass_albedo.ktx",
+    "ground_rock.png": "beta2_ucaptain_mountain_terrain_albedo.ktx",
+}
 const CROWN_CACHE_PATH := "res://.godot/imported/toyota_crown_2013.glb-6ec01e928ae54ac12e5bc0f6ba8bd627.scn"
 static var _textures: Dictionary = {}
 static var _scenes: Dictionary = {}
@@ -16,7 +23,7 @@ static func _valid_name(filename: String, extensions: PackedStringArray) -> bool
         and not filename.contains("..") and filename.get_extension().to_lower() in extensions
 
 static func exact_asset_path(filename: String) -> String:
-    if not _valid_name(filename, PackedStringArray(["glb", "gltf", "png", "jpg", "webp", "wav", "ogg", "json"])):
+    if not _valid_name(filename, PackedStringArray(["glb", "gltf", "png", "jpg", "webp", "ktx", "wav", "ogg", "json"])):
         return ""
     var local := ROOT + filename
     if ResourceLoader.exists(local) or FileAccess.file_exists(local):
@@ -32,17 +39,26 @@ static func exact_asset_exists(filename: String) -> bool:
     return not exact_asset_path(filename).is_empty()
 
 static func texture(filename: String) -> Texture2D:
-    if not _valid_name(filename, PackedStringArray(["png", "jpg", "webp"])):
+    # KTX keeps recovered GPU-compressed source mip chains intact. The upgrade
+    # lookup is optional and deterministic; public/asset-absent CI uses fallback.
+    if not _valid_name(filename, PackedStringArray(["png", "jpg", "webp", "ktx"])):
         return null
     if _textures.has(filename):
         return _textures[filename] as Texture2D
-    var path := ROOT + filename
-    if not ResourceLoader.exists(path):
-        return null
-    var media := ResourceLoader.load(path) as Texture2D
-    if media != null:
-        _textures[filename] = media
-    return media
+    var candidates: Array[String] = []
+    var upgraded := str(TEXTURE_UPGRADES.get(filename, ""))
+    if not upgraded.is_empty():
+        candidates.append(upgraded)
+    candidates.append(filename)
+    for candidate: String in candidates:
+        var path := ROOT + candidate
+        if not ResourceLoader.exists(path):
+            continue
+        var media := ResourceLoader.load(path) as Texture2D
+        if media != null:
+            _textures[filename] = media
+            return media
+    return null
 
 static func scene(filename: String) -> PackedScene:
     if not _valid_name(filename, PackedStringArray(["glb", "gltf"])):
