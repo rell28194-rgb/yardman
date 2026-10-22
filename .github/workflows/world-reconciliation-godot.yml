@@ -9,6 +9,7 @@ on:
       - 'godot/main.tscn'
       - 'godot/tests/mesh_geometry_guard_test.gd'
       - 'godot/tests/bridge_geometry_test.gd'
+      - 'godot/tests/tunnel_geometry_runtime_test.gd'
       - '.github/workflows/world-reconciliation-godot.yml'
   workflow_dispatch:
 
@@ -61,6 +62,14 @@ jobs:
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/bridge-geometry.log; then exit 1; fi
           grep -q 'YARDMAN_BRIDGE_GEOMETRY_TEST PASS deck=1 rails=2 abutments=2 pier_stations=1 pier_columns=2 collision_shapes=6' godot/build/bridge-geometry.log
 
+      - name: Prove tunnel portal, shell and lighting runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/tunnel_geometry_runtime_test.gd 2>&1 | tee godot/build/tunnel-geometry-runtime.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/tunnel-geometry-runtime.log; then exit 1; fi
+          grep -q 'YARDMAN_TUNNEL_GEOMETRY_RUNTIME_TEST PASS portal=1 portal_light=1 shell=1 interior_lights=2 collision=6 terrain_mutation=0' godot/build/tunnel-geometry-runtime.log
+
       - name: Upload reconciliation gate evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -70,5 +79,6 @@ jobs:
             godot/build/world-reconciliation-import.log
             godot/build/mesh-geometry-guard.log
             godot/build/bridge-geometry.log
+            godot/build/tunnel-geometry-runtime.log
           if-no-files-found: ignore
           retention-days: 3
