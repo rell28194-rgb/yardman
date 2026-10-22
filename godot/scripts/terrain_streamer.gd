@@ -3,6 +3,7 @@ class_name JamaicaTerrainStreamer
 
 const CoastGeometryScript = preload("res://scripts/coast_geometry.gd")
 const CoastlineScript = preload("res://scripts/coastline.gd")
+const MeshGeometryGuard = preload("res://scripts/mesh_geometry_guard.gd")
 var resolution := 65
 var spacing := 64.0
 var coast_root := "res://data/coast"
@@ -221,6 +222,13 @@ func _append_near_triangle(job: Dictionary, vertices: PackedVector3Array, cursor
 func _mesh(job: Dictionary, origin: Vector2, overview: bool = false) -> ArrayMesh:
     var mesh := ArrayMesh.new()
     if job.indices.is_empty():
+        return mesh
+    var guard_limit := maxf(tile_size * 1.75, spacing * float(resolution) * 1.75)
+    var safety := MeshGeometryGuard.validate(job.vertices, job.indices, guard_limit, guard_limit, 500000)
+    if not bool(safety.get("ok", false)):
+        var scope := "overview" if overview else "near"
+        push_error(MeshGeometryGuard.rejection_message("terrain %s %.0f:%.0f" % [scope, origin.x, origin.y], safety))
+        job["indices"] = PackedInt32Array()
         return mesh
     var arrays: Array = []
     arrays.resize(Mesh.ARRAY_MAX)
