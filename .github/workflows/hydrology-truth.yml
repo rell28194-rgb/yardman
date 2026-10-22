@@ -24,6 +24,8 @@ on:
       - 'godot/tools/test_build_hydrology_truth_sidecar.py'
       - 'godot/tools/build_hydrology_runtime_v2.py'
       - 'godot/tools/test_build_hydrology_runtime_v2.py'
+      - 'godot/scripts/hydrology_renderer.gd'
+      - 'godot/tests/hydrology_reconciled_runtime_test.gd'
       - 'Tests/Python/test_hydrology_geometry.py'
       - 'Tests/Python/test_hydrology_channel_model.py'
       - 'Tests/Python/test_hydrology_terrain_plan.py'
@@ -37,10 +39,14 @@ on:
 permissions:
   contents: read
 
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+
 jobs:
   national-hydrology:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -114,6 +120,34 @@ jobs:
           print('YARDMAN_HYDROLOGY_RUNTIME_V2_PASS', json.dumps(runtime_stats, sort_keys=True), 'tiles=', len(runtime['tiles']))
           PY
 
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Import current Godot runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 300 godot --headless --path godot --editor --quit 2>&1 | tee /tmp/hydrology-runtime-v2-import.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' /tmp/hydrology-runtime-v2-import.log; then exit 1; fi
+
+      - name: Prove national reconciled hydrology v2 in Godot
+        shell: bash
+        run: |
+          set -euo pipefail
+          export YARDMAN_HYDROLOGY_V2_ROOT="$PWD/godot/data/hydrology-runtime-v2"
+          timeout 300 godot --headless --path godot --script tests/hydrology_reconciled_runtime_test.gd 2>&1 | tee /tmp/hydrology-runtime-v2-godot.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' /tmp/hydrology-runtime-v2-godot.log; then exit 1; fi
+          grep -q 'YARDMAN_HYDROLOGY_RECONCILED_RUNTIME_PASS' /tmp/hydrology-runtime-v2-godot.log
+
       - name: Upload national hydrology truth pack
         uses: actions/upload-artifact@v4
         with:
@@ -125,5 +159,7 @@ jobs:
             /tmp/hydrology-sidecar.log
             /tmp/hydrology-crossings.log
             /tmp/hydrology-runtime-v2.log
+            /tmp/hydrology-runtime-v2-import.log
+            /tmp/hydrology-runtime-v2-godot.log
           retention-days: 7
           compression-level: 6
