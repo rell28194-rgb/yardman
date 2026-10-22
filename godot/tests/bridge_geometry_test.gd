@@ -32,8 +32,10 @@ func _fail(message: String) -> void:
 
 func _run() -> void:
     var helper := BridgeGeometry.new()
-    helper.roads = FakeRoads.new()
-    helper.terrain = FakeTerrain.new()
+    var fake_roads := FakeRoads.new()
+    var fake_terrain := FakeTerrain.new()
+    helper.roads = fake_roads
+    helper.terrain = fake_terrain
     var tile_root := Node3D.new()
     root.add_child(tile_root)
     var segment := [
@@ -48,34 +50,29 @@ func _run() -> void:
     if bridge == null:
         _fail("bridge root was not generated")
         return
-    if helper.deck_spans_built != 1:
-        _fail("expected one profiled deck underside")
-        return
-    if helper.rails_built != 2:
-        _fail("expected two collision-backed rails")
-        return
-    if helper.abutments_built != 2:
-        _fail("true bridge endpoints did not receive both abutments")
+    if helper.deck_spans_built != 1 or helper.rails_built != 2 or helper.abutments_built != 2:
+        _fail("deck/rail/abutment build counters are wrong")
         return
     if helper.pier_stations_built != 1 or helper.pier_columns_built != 2:
         _fail("48 m wide bridge should receive one two-column inferred pier station")
         return
-    if helper.terrain.calls != 1:
+    if fake_terrain.calls != 1:
         _fail("pier terrain sampling should occur once at the deterministic 24 m station")
         return
-    var deck_count := bridge.find_children("BridgeDeckUnderside", "MeshInstance3D", true, false).size()
-    var rail_count := bridge.find_children("BridgeRail", "MeshInstance3D", true, false).size()
-    var abutment_count := bridge.find_children("BridgeAbutment", "MeshInstance3D", true, false).size()
-    var pier_count := bridge.find_children("BridgePier", "MeshInstance3D", true, false).size()
+    var deck_count := bridge.find_children("BridgeDeckUnderside*", "MeshInstance3D", true, false).size()
+    var rail_count := bridge.find_children("BridgeRail*", "MeshInstance3D", true, false).size()
+    var abutment_count := bridge.find_children("BridgeAbutment*", "MeshInstance3D", true, false).size()
+    var pier_count := bridge.find_children("BridgePier*", "MeshInstance3D", true, false).size()
     if deck_count != 1 or rail_count != 2 or abutment_count != 2 or pier_count != 2:
-        _fail("bridge visual node inventory mismatch")
+        _fail("bridge visual node inventory mismatch deck=%d rails=%d abutments=%d piers=%d" % [deck_count, rail_count, abutment_count, pier_count])
         return
     var collision_body := bridge.get_node_or_null("BridgeStructureCollision") as StaticBody3D
-    if collision_body == null:
-        _fail("bridge structure collision body missing")
+    if collision_body == null or collision_body.get_child_count() != 6:
+        _fail("bridge structure collision shape count mismatch")
         return
-    if collision_body.get_child_count() != 6:
-        _fail("unexpected bridge structure collision shape count: %d" % collision_body.get_child_count())
-        return
+    tile_root.free()
+    helper.free()
+    fake_roads.free()
+    fake_terrain.free()
     print("YARDMAN_BRIDGE_GEOMETRY_TEST PASS deck=1 rails=2 abutments=2 pier_stations=1 pier_columns=2 collision_shapes=6")
     quit(0)
