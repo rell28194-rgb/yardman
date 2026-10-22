@@ -13,6 +13,7 @@ on:
       - 'godot/tests/tunnel_geometry_runtime_test.gd'
       - 'godot/tests/terrain_surface_shader_contract_test.gd'
       - 'godot/tests/near_field_groundcover_runtime_test.gd'
+      - 'godot/tests/vegetation_lod_blend_runtime_test.gd'
       - '.github/workflows/world-reconciliation-godot.yml'
   workflow_dispatch:
 
@@ -66,6 +67,14 @@ jobs:
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/near-field-groundcover.log; then exit 1; fi
           grep -q 'YARDMAN_NEAR_FIELD_GROUNDCOVER_RUNTIME_TEST PASS anchors=38 cells=1 road_clearance=1 terrain=1 multimesh=1 shadows=0 collision=0' godot/build/near-field-groundcover.log
 
+      - name: Prove vegetation LOD blending
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/vegetation_lod_blend_runtime_test.gd 2>&1 | tee godot/build/vegetation-lod-blend.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/vegetation-lod-blend.log; then exit 1; fi
+          grep -q 'YARDMAN_VEGETATION_LOD_BLEND_RUNTIME_TEST PASS near=2 distant=2 grass=1 overlap=1 duplicate_safe=1 unrelated=0' godot/build/vegetation-lod-blend.log
+
       - name: Prove catastrophic geometry rejection contract
         shell: bash
         run: |
@@ -98,6 +107,7 @@ jobs:
             godot/build/world-reconciliation-import.log
             godot/build/terrain-surface-shader.log
             godot/build/near-field-groundcover.log
+            godot/build/vegetation-lod-blend.log
             godot/build/mesh-geometry-guard.log
             godot/build/bridge-geometry.log
             godot/build/tunnel-geometry-runtime.log
