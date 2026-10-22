@@ -13,10 +13,12 @@ const OPTIONAL_AUDIO_FILES := {
     "road_gravel": "gravel_skid_loop.wav",
     "road_grass": "grass_roll_loop.wav",
     "road_skid": "tire_skid_loop.wav",
+    "footstep_one_shot": "footsteps.wav",
 }
 static var _stream_cache: Dictionary = {}
 static var _cache_build_count := 0
 static var _active_instances := 0
+static var _footstep_one_shot_available := false
 
 var engine: AudioStreamPlayer
 var road_roll: AudioStreamPlayer
@@ -34,6 +36,8 @@ var _engine_stream_key := "engine"
 var _road_stream_key := "road"
 var _surface_probe_clock := 0.0
 var _surface_hint := "offroad"
+var _step_clock := 0.0
+var _step_index := 0
 
 func _ready() -> void:
     if not _configured:
@@ -45,7 +49,7 @@ func configure(profile: String = "Balanced", default_volume: float = 0.60) -> vo
         _prepare_streams()
         engine = _make_voice("Engine", _stream_cache.engine)
         road_roll = _make_voice("RoadRoll", _stream_cache.road)
-        footsteps = _make_voice("Footsteps", _stream_cache.footsteps)
+        footsteps = _make_voice("Footsteps", _stream_cache.footstep_one_shot if _footstep_one_shot_available else _stream_cache.footsteps)
         wind = _make_voice("Wind", _stream_cache.wind)
         _configured = true
         _active_instances += 1
@@ -61,6 +65,7 @@ func _exit_tree() -> void:
     if _active_instances == 0:
         _stream_cache.clear()
         _cache_build_count = 0
+        _footstep_one_shot_available = false
 
 func set_volume(value: float) -> void:
     volume = clampf(value, 0.0, 1.0) if is_finite(value) else 0.0
@@ -118,11 +123,37 @@ func update_state(delta: float, state: Dictionary) -> void:
 
     var step_pitch := clampf(pow(maxf(walk_speed, 0.1) / 3.8, 0.35), 0.75, 1.65)
     var step_db := -32.0 + clampf(walk_speed / 8.0, 0.0, 1.0) * 5.0
-    _voice(footsteps, not driving and walk_speed > 0.35, step_db, step_pitch)
+    if _footstep_one_shot_available:
+        _one_shot_footsteps(not driving and walk_speed > 0.35, walk_speed, step_db, step_pitch, dt)
+    else:
+        _voice(footsteps, not driving and walk_speed > 0.35, step_db, step_pitch)
     # Low wind is deliberately subordinate to engine/footstep cues. It is a
     # general breeze, not an invented surf location or a geographic audio map.
     var ambient_speed := absf(speed) if driving else walk_speed
     _voice(wind, true, -49.0 + clampf(ambient_speed / 42.0, 0.0, 1.0) * 9.0, 0.70 + clampf(ambient_speed / 42.0, 0.0, 1.0) * 0.35)
+
+func _one_shot_footsteps(enabled: bool, walk_speed: float, decibels: float, pitch: float, dt: float) -> void:
+    if not enabled:
+        footsteps.volume_db = SILENT_DB
+        footsteps.stop()
+        _step_clock = 0.0
+        return
+    footsteps.pitch_scale = clampf(pitch * (0.98 if (_step_index & 1) == 0 else 1.02), 0.45, 3.40)
+    footsteps.volume_db = clampf(decibels + linear_to_db(maxf(volume, 0.0001)), SILENT_DB, -14.0)
+    _step_clock -= dt
+    if _step_clock > 0.0:
+        return
+    footsteps.stop()
+    footsteps.play()
+    _step_index += 1
+    _step_clock = footstep_interval(walk_speed)
+
+static func footstep_interval(walk_speed: float) -> float:
+    if not is_finite(walk_speed):
+        return 0.5
+    # Walk ~2 Hz, fast run ~3.5 Hz. The source hit remains a one-shot rather
+    # than being stretched into another continuous ambience loop.
+    return clampf(0.60 - clampf(walk_speed, 0.0, 10.0) * 0.043, 0.28, 0.56)
 
 func _resolve_surface(state: Dictionary, dt: float) -> String:
     if state.has("surface"):
@@ -173,7 +204,7 @@ func debug_state() -> Dictionary:
         "engine_db": engine.volume_db if engine != null else SILENT_DB,
         "road_pitch": road_roll.pitch_scale if road_roll != null else 1.0,
         "engine_stream_key": _engine_stream_key, "road_stream_key": _road_stream_key,
-        "surface_hint": _surface_hint,
+        "surface_hint": _surface_hint, "footstep_one_shot": _footstep_one_shot_available,
         "rpm": _rpm, "load": _load, "volume": volume,
     }
 
@@ -212,6 +243,7 @@ func _voice(player: AudioStreamPlayer, enabled: bool, decibels: float, pitch: fl
         player.play()
 
 func _silence() -> void:
+    _step_clock = 0.0
     for player in _voices:
         player.volume_db = SILENT_DB
         player.stop()
@@ -237,6 +269,7 @@ static func optional_audio_contract() -> Dictionary:
         "files": OPTIONAL_AUDIO_FILES.duplicate(),
         "voice_budget": 4,
         "surface_routing": true,
+        "footstep_one_shot": true,
         "fallback_safe": true,
         "compiled_surface_probe_hz": 5,
     }
@@ -275,9 +308,12 @@ static func _prepare_streams() -> void:
         "road_grass": "road",
         "road_skid": "road",
     }
-    for key: String in OPTIONAL_AUDIO_FILES:
+    for key: String in ["engine_drive", "road_gravel", "road_grass", "road_skid"]:
         var reference := References.audio(str(OPTIONAL_AUDIO_FILES[key]), true) as AudioStreamWAV
         _stream_cache[key] = reference if reference != null else _stream_cache[str(fallbacks[key])]
+    var footstep_one_shot := References.audio(str(OPTIONAL_AUDIO_FILES.footstep_one_shot), false) as AudioStreamWAV
+    _footstep_one_shot_available = footstep_one_shot != null
+    _stream_cache.footstep_one_shot = footstep_one_shot if footstep_one_shot != null else _stream_cache.footsteps
     _cache_build_count += 1
 
 static func _sample(kind: String, t: float) -> float:
