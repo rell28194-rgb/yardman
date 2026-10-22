@@ -13,6 +13,7 @@ on:
       - 'godot/tests/bridge_geometry_test.gd'
       - 'godot/tests/tunnel_geometry_runtime_test.gd'
       - 'godot/tests/culvert_structure_runtime_test.gd'
+      - 'godot/tests/ford_surface_runtime_test.gd'
       - 'godot/tests/terrain_surface_shader_contract_test.gd'
       - 'godot/tests/beta_reference_asset_contract_test.gd'
       - 'godot/tests/beta1_street_furniture_runtime_test.gd'
@@ -135,6 +136,14 @@ jobs:
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/culvert-structures.log; then exit 1; fi
           grep -q 'YARDMAN_CULVERT_STRUCTURE_RUNTIME_TEST PASS approved=1 mouths=2 road_width_exact=1 channel_clear=1 bridge_rejected=1 ford_rejected=1 unresolved_rejected=1 conflict_rejected=1 off_segment_rejected=1 source_unchanged=1 terrain_mutation=0 water_mutation=0 road_mutation=0 collision=0 shadows=0' godot/build/culvert-structures.log
 
+      - name: Prove approved ford shallow-water reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/ford_surface_runtime_test.gd 2>&1 | tee godot/build/ford-surfaces.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/ford-surfaces.log; then exit 1; fi
+          grep -q 'YARDMAN_FORD_SURFACE_RUNTIME_TEST PASS approved=1 continuous_water=1 exact_edge=1 oblique=1 unpaved=1 bridge_rejected=1 tunnel_rejected=1 unresolved_rejected=1 source_unchanged=1 terrain_mutation=0 hydrology_mutation=0 road_mutation=0 collision=0 shadows=0' godot/build/ford-surfaces.log
+
       - name: Prove near-field groundcover batching
         shell: bash
         run: |
@@ -214,6 +223,7 @@ jobs:
             godot/build/beta1-ui-audio.log
             godot/build/beta1-rock-outcrops.log
             godot/build/culvert-structures.log
+            godot/build/ford-surfaces.log
             godot/build/near-field-groundcover.log
             godot/build/near-field-built-environment.log
             godot/build/near-field-road-edge.log
