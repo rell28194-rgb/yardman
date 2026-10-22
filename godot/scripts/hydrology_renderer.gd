@@ -2,6 +2,7 @@ extends Node3D
 class_name YardmanHydrologyRenderer
 
 const WATER_SHADER = preload("res://shaders/river_surface.gdshader")
+const MeshGeometryGuard = preload("res://scripts/mesh_geometry_guard.gd")
 const DEFAULT_ACTIVE_RADIUS := 1
 const DEFAULT_VERTEX_CAP := 12000
 const WATER_LIFT_M := 0.075
@@ -224,6 +225,10 @@ func _build_tile_mesh(tile: Vector2i, payload: Dictionary) -> ArrayMesh:
         if vertices.size() >= vertex_cap:
             break
     if indices.is_empty():
+        return null
+    var safety := MeshGeometryGuard.validate(vertices, indices, tile_size * 1.75, tile_size * 1.75, vertex_cap)
+    if not bool(safety.get("ok", false)):
+        push_error(MeshGeometryGuard.rejection_message("hydrology tile %d:%d" % [tile.x, tile.y], safety))
         return null
     var arrays: Array = []
     arrays.resize(Mesh.ARRAY_MAX)
