@@ -1,9 +1,10 @@
 # Asset execution and completion gates
 
-Updated 2026-10-11 UTC from the owner's execution directive. The work order is
-Beta 1 exhaustive recovery and validation, then Beta 2 independent inventory
-and quality replacements, then continued game polishing and terminal packaging.
-Android CI remains an internal build-health check throughout.
+Updated 2026-10-22 UTC from the owner's execution directive and the current
+private recovery checkpoints. The work order remains exhaustive Beta 1 recovery
+and validation, Beta 2 independent inventory and quality replacements, then
+continued game polishing and terminal packaging. Android CI remains an internal
+build-health check throughout.
 
 ## Current verified scope
 
@@ -24,44 +25,87 @@ members verified and 95,834 objects across 81 types enumerated. Its family
 classification/integration remains open. The four-member GTA map archive was
 fully inspected and rejected for runtime substitution: a combined fictional
 relief and UV-specific baked imagery cannot replace registered Jamaica terrain
-or independent road/building kits. Beta 2 contents have not been inspected.
+or independent road/building kits.
 
-The private pack currently has 16 decoded GLBs plus surface media/audio. That
-count includes distant LODs and staged props, not 16 accepted gameplay systems.
-The bush is an eight-vertex crossed-card asset suitable for distant LOD; the
-same geometry cannot count as a detailed nearby shrub. Source foliage has a
-separate red-channel opacity mask which the initial exporter omitted. The
-seven-model correction now passes imported alpha/material/bake checks and six
-actual Compatibility captures. The close-up green checks isolate their target
-plant against neutral ground; neighboring foliage cannot hide a brown crown.
-`asset_recovery/foliage_batch_001.json` preserves the exact hashes and scope.
-That accepts the specific atlas/alpha regression; close-view photographic
-leaf cards, broader family recovery and geographic placement remain open.
+Beta 2 is no longer an unopened library. The owner-private outer inventory now
+covers 232 parts, 488 outer entries and 12,126,506,954 logical bytes across
+sources including RR3, Tropico, Car Parking Multiplayer, SimCity, uCaptain and
+ARK. This establishes outer-container coverage, not exhaustive useful-family
+acceptance. Direct uCaptain recovery has produced a mountain-terrain albedo,
+scrub-grass albedo and normal, and WaterBump normal in the private reference
+pack. The reconciliation runtime now treats those as optional quality inputs:
+mountain/scrub albedos can replace semantic terrain textures, scrub normal adds
+near-field micro relief, and WaterBump adds ocean micro-normal detail. Registered
+DEM, coastline, sea level, road geometry and hydrology remain authoritative;
+none of these source textures grants geographic or terrain-mutation authority.
+Missing private media always falls back to the public/procedural path.
 
-The recovered grass brightness translation now has a paired actual-render gate:
+The private pack currently contains recovered GLBs plus surface media/audio.
+That count includes distant LODs and staged props, not an equivalent number of
+accepted gameplay systems. The bush is an eight-vertex crossed-card asset
+suitable for distant LOD; the same geometry cannot count as a detailed nearby
+shrub. Source foliage has a separate red-channel opacity mask which the initial
+exporter omitted. The seven-model correction passes imported
+alpha/material/bake checks and six actual Compatibility captures. The close-up
+green checks isolate their target plant against neutral ground; neighboring
+foliage cannot hide a brown crown. `asset_recovery/foliage_batch_001.json`
+preserves the exact hashes and scope. That accepts the specific atlas/alpha
+regression; close-view photographic leaf cards, broader family recovery and
+geographic placement remain open.
+
+The recovered grass brightness translation has a paired actual-render gate:
 `terrain_reference_render_test.gd` compares the production shader against the
 same source texture under identical runtime lighting. Removing the extra 1.30
 gain changes the measured brightness ratio from 1.2927 (expected failure) to
 1.0044 (pass). `asset_recovery/ground_batch_001.json` identifies the batch and
-capture hashes. Broader terrain/material/coast acceptance remains open.
+capture hashes. The newer Beta 2 scrub/mountain material hooks preserve this
+fallback and do not alter registered terrain geometry. Broader
+terrain/material/coast acceptance remains open.
 
 The Highway APK full static pass enumerates 162,374 objects across 74 types;
 all 1,284 ZIP members were CRC/SHA checked. FMOD banks and 417 samples are
-indexed; decoding/listening and category/family acceptance remain open.
+indexed; exhaustive listening and category/family acceptance remain open.
 The tested water shader adaptation is recorded in
 `asset_recovery/water_batch_001.json`: actual River source channels are
 inspected, repetitive highlights reduced, and clipped sea level/UV/rebase
 registration preserved. Real before/after national coast captures and a
-frozen-clock seam/rebase/source-detail test pass. Full water/material and
-Android performance acceptance remain open.
+frozen-clock seam/rebase/source-detail test pass. The private Beta 2 WaterBump
+normal is now an optional micro-normal input on top of that registered coast
+system. Full water/material and Android performance acceptance remain open.
 
-Three recovered neutral window modules now bind to fitting registered external
-walls at original metre dimensions. Cell work is bounded to 32 hosts and three
-shared MultiMeshes; existing host geometry and collision remain intact.
+Three recovered neutral window modules bind to fitting registered external walls
+at original metre dimensions. Cell work is bounded to 32 hosts and three shared
+MultiMeshes; existing host geometry and collision remain intact.
 `asset_recovery/building_facade_batch_001.json` records near collision, rebase,
 unload/reload and six actual renders, including unchanged distant fallback.
-These are modest-distance components; broader architectural quality and
-national placement/performance acceptance remain open.
+A previously idle `building_concrete.png` source is also now bound to the
+existing deterministic wall-material family at palette alpha 0.6. It shares the
+same building material batch and adds no footprint, node, collision or draw
+call. These are presentation improvements only; broader architectural quality
+and national placement/performance acceptance remain open.
+
+Recovered neutral Beta 1 settlement furniture is now used conservatively in the
+near field. `settlement_waste_bin.glb`, `settlement_fire_hydrant.glb` and
+`settlement_metal_cabinet.glb` can be placed only from registered road-facing
+building frontage, compiled road geometry and registered terrain height. The
+runtime is range/density bounded, source metre scale is preserved, and the
+props add no collision. Construction cones, portable fences and concrete
+barriers remain deliberately withheld: the current road compiler filters
+`highway=construction`, so it cannot yet prove work-zone placement. Those assets
+must not become random scenery just to increase utilization.
+
+Recovered Beta 1 audio now contributes more source variety without expanding
+the established four-voice runtime budget. `engine_drive_loop.wav`,
+`gravel_skid_loop.wav`, `grass_roll_loop.wav` and `tire_skid_loop.wav` route
+through the existing engine/road players. Compiled paved/unpaved/off-road
+surface state selects road timbre, strong paved braking can select the skid
+source, and all private-media paths fall back to the existing cached loops when
+missing. The headless audio gate verifies the four-voice cap, routing, mix
+bounds, loop behavior and cleanup. Listening/device acceptance remains open.
+
+None of these integrations marks Beta 1 or Beta 2 complete. Exhaustive family
+classification, provenance decisions, private rendered comparisons, Android
+performance/device evidence and further useful-source recovery remain open.
 
 ## Evidence ledger
 
@@ -124,7 +168,8 @@ dump in the public project.
 ```bash
 # Validates ledger structure and reports honest blockers; unfinished work is OK.
 python godot/tools/validate_asset_milestone.py
-# Required before opening Beta 2 contents; exits nonzero while Beta 1 is open.
+# Beta 2 work already has independent outer/recovery evidence; this command
+# still reports whether the formal ledger transition requirements are complete.
 python godot/tools/validate_asset_milestone.py --require beta2
 # Required only for terminal packaging, after both libraries and polishing.
 python godot/tools/validate_asset_milestone.py --require final_packaging
@@ -137,9 +182,9 @@ phone performance. Final acceptance still needs real rendered game inspection,
 playable controls/driving, coast/road correctness and available Android runtime
 evidence. A fixture or signed package alone does not establish any of those.
 
-Private checkpoints saved during the exhaustive pass:
-`Yardman-Beta1-Exhaustive-Inventory.zip` and
-`Yardman-Beta1-Building-Families-Checkpoint.zip`. Restore their newest versions
-from the project's handoff alongside the canonical pack/conversion checkpoint.
-Keep this ledger synchronized with each stable batch; document pending work
-before any session ends.
+Private checkpoints saved during the exhaustive pass include
+`Yardman-Beta1-Exhaustive-Inventory.zip`,
+`Yardman-Beta1-Building-Families-Checkpoint.zip`, the Beta 2 outer inventory,
+and the canonical personal reference pack. Restore their newest versions from
+the project's handoff. Keep this ledger synchronized with each stable batch;
+document pending work before any session ends.
