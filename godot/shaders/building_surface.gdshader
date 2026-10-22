@@ -5,12 +5,14 @@ uniform bool roof_surface = false;
 uniform float visibility_distance = 800.0;
 uniform sampler2D reference_plaster : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_brick : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_concrete : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_timber : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_stone : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_roof : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_tiles : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool has_reference_plaster = false;
 uniform bool has_reference_brick = false;
+uniform bool has_reference_concrete = false;
 uniform bool has_reference_timber = false;
 uniform bool has_reference_stone = false;
 uniform bool has_reference_roof = false;
@@ -52,6 +54,14 @@ void fragment() {
         }
         if (COLOR.a > 0.3 && COLOR.a < 0.5 && has_reference_brick) {
             surface = texture(reference_brick, UV / 1.28).rgb * 1.35;
+        }
+        // The deterministic palette already reserves alpha 0.6 for one wall
+        // family. Recovered Beta1 concrete fills that existing slot without
+        // creating new geometry, materials, nodes, or draw calls.
+        if (COLOR.a > 0.5 && COLOR.a < 0.7 && has_reference_concrete) {
+            surface = texture(reference_concrete, UV / 2.9).rgb * 1.38
+                * mix(vec3(0.91), COLOR.rgb * 1.42, 0.22);
+            ROUGHNESS = 0.94;
         }
         if (COLOR.a > 0.7 && COLOR.a < 0.9 && has_reference_stone) {
             surface = texture(reference_stone, UV / 3.5).rgb * 1.4;
