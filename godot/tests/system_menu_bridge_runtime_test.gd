@@ -59,6 +59,35 @@ func _run() -> void:
         return
     unrelated_fixture.owner.free()
 
+    # Normal HUD gets exactly one passive indicator. It is hidden outside active
+    # transfer states and uses real byte totals when available.
+    var idle := Bridge.download_indicator_model("VEHICLES", "idle", 0, 159594070)
+    if bool(idle.visible) or bool(idle.show_bar):
+        _fail("download indicator remains visible while idle")
+        return
+    var early := Bridge.download_indicator_model("VEHICLES", "downloading", 220000, 159594070)
+    if not bool(early.visible) or not bool(early.show_bar) or not str(early.text).contains("VEHICLES 0.1%"):
+        _fail("sub-percent resumable fleet progress is not visible")
+        return
+    if absf(float(early.percent) - (220000.0 / 159594070.0 * 100.0)) > 0.0001:
+        _fail("download indicator percent is not based on real byte progress")
+        return
+    var middle := Bridge.download_indicator_model("ENV", "downloading", 24500000, 49000000, 1)
+    if str(middle.text) != "↓ ENV 50% +1" or absf(float(middle.percent) - 50.0) > 0.001:
+        _fail("compact concurrent-download indicator drifted")
+        return
+    var verifying := Bridge.download_indicator_model("SURFACES", "verifying", 1438240, 1438240)
+    if not bool(verifying.visible) or bool(verifying.show_bar) or str(verifying.text) != "↓ SURFACES · VERIFY":
+        _fail("verification stage does not replace misleading completed progress bar")
+        return
+    var installing := Bridge.download_indicator_model("RIVERS", "installing", 662099, 662099)
+    if str(installing.text) != "↓ RIVERS · INSTALL":
+        _fail("install stage label drifted")
+        return
+    if Bridge.DOWNLOAD_ORDER.size() != 4 or Bridge.DOWNLOAD_ACTIVE_STATES.size() != 4:
+        _fail("consolidated download source/state contract drifted")
+        return
+
     var project_text := FileAccess.get_file_as_string("res://project.godot")
     var bridge_pos := project_text.find("SystemMenuBridge=\"*res://scripts/system_menu_bridge.gd\"")
     if bridge_pos < 0:
@@ -79,5 +108,5 @@ func _run() -> void:
         _fail("consolidated runtime family count drifted")
         return
 
-    print("YARDMAN_SYSTEM_MENU_BRIDGE_RUNTIME_TEST PASS launchers=4 actions_preserved=1 unrelated_preserved=1 preautoload=1 standalone_engineering_ui=0")
+    print("YARDMAN_SYSTEM_MENU_BRIDGE_RUNTIME_TEST PASS launchers=4 actions_preserved=1 unrelated_preserved=1 preautoload=1 standalone_engineering_ui=0 download_sources=4 passive_indicator=1 subpercent=1")
     quit(0)
