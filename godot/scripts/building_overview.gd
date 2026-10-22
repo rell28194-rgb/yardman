@@ -214,7 +214,13 @@ func _poll_jobs() -> void:
             push_error(str(payload.error))
             continue
         var tile := _tile(str(key))
-        if payload.get("tile", []) != [tile.x, tile.y]:
+        var payload_tile: Variant = payload.get("tile", null)
+        var identity_matches := false
+        if payload_tile is Array and payload_tile.size() == 2:
+            var payload_x := float(payload_tile[0])
+            var payload_z := float(payload_tile[1])
+            identity_matches = is_finite(payload_x) and is_finite(payload_z) and is_equal_approx(payload_x, float(tile.x)) and is_equal_approx(payload_z, float(tile.y))
+        if not identity_matches:
             _failed[key] = true
             push_error("Building HLOD tile identity mismatch: " + key)
             continue
