@@ -1,6 +1,6 @@
 extends SceneTree
 
-const FleetModel = preload("res://scripts/fleet_vehicle_model.gd")
+const References = preload("res://scripts/reference_assets.gd")
 const RemoteFleetRuntime = preload("res://scripts/remote_fleet_runtime.gd")
 
 func _initialize() -> void:
@@ -14,33 +14,18 @@ func _run() -> void:
     if RemoteFleetRuntime.PACK_BYTES != 159594070:
         _fail("unexpected remote pack byte contract")
         return
+    if RemoteFleetRuntime.CHUNK_BYTES != 4 * 1024 * 1024:
+        _fail("unexpected resumable chunk contract")
+        return
     if str(RemoteFleetRuntime.PACK_SHA256) != "6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b":
         _fail("unexpected remote pack digest contract")
         return
-
-    # Prove Android/runtime-style user:// GLB loading works without depending on
-    # editor import remaps. Use the accepted Crown bytes as a small local fixture.
-    var source := "res://assets/user_reference/toyota_crown_2013.glb"
-    if not FileAccess.file_exists(source):
-        _fail("accepted Crown source missing")
+    if not References.exact_asset_exists("toyota_crown_2013.glb"):
+        _fail("accepted Crown cache/source missing")
         return
-    var fixture_dir := "user://yardman/runtime-gltf-test"
-    DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(fixture_dir))
-    var fixture := fixture_dir + "/crown.glb"
-    var input := FileAccess.open(source, FileAccess.READ)
-    var output := FileAccess.open(fixture, FileAccess.WRITE)
-    if input == null or output == null:
-        _fail("could not prepare runtime GLB fixture")
-        return
-    output.store_buffer(input.get_buffer(input.get_length()))
-    input.close()
-    output.close()
-    var model := FleetModel.new()
-    var packed = model.call("_load_runtime_gltf", fixture)
-    model.free()
-    DirAccess.remove_absolute(ProjectSettings.globalize_path(fixture))
-    if not packed is PackedScene:
-        _fail("runtime user:// GLB import failed")
+    var crown := References.scene("toyota_crown_2013.glb")
+    if not crown is PackedScene:
+        _fail("accepted Crown scene failed to load")
         return
 
     var err := change_scene_to_file("res://main.tscn")
@@ -83,5 +68,10 @@ func _run() -> void:
         _fail("default vehicle is not accepted Crown")
         return
 
-    print("YARDMAN_OWNER_WIFI_FLEET_BASE_PASS base=toyota_crown embedded=1 remote_pack_bytes=%d runtime_gltf=user:// garage=download-ready" % RemoteFleetRuntime.PACK_BYTES)
+    var bridge := root.get_node_or_null("SystemMenuBridge")
+    if bridge == null:
+        _fail("consolidated system menu bridge missing")
+        return
+
+    print("YARDMAN_OWNER_WIFI_FLEET_BASE_PASS base=toyota_crown embedded=1 remote_pack_bytes=%d resumable=4194304 garage=download-ready hud=consolidated" % RemoteFleetRuntime.PACK_BYTES)
     quit(0)
