@@ -30,7 +30,7 @@ func _exit_tree() -> void:
         _terrain.tile_ready.disconnect(_on_tile_ready)
 
 func _try_bind() -> void:
-    var root := get_parent()
+    var root: Node = get_parent()
     if root == null:
         return
     _terrain = root.get_node_or_null("JamaicaTerrainStreamer")
@@ -43,17 +43,17 @@ func _try_bind() -> void:
     _apply_ocean_normal()
     for raw: Variant in _terrain._loaded.values():
         if raw is Node3D:
-            _apply_terrain_normal(raw)
+            _apply_terrain_normal(raw as Node3D)
     _bound = true
     set_process(false)
 
 func _on_tile_ready(tile: Vector2i) -> void:
     if _terrain == null or not is_instance_valid(_terrain):
         return
-    var key := _terrain._tile_key(tile.x, tile.y)
-    var tile_root = _terrain._loaded.get(key)
+    var key: String = str(_terrain._tile_key(tile.x, tile.y))
+    var tile_root: Variant = _terrain._loaded.get(key)
     if tile_root is Node3D:
-        _apply_terrain_normal(tile_root)
+        _apply_terrain_normal(tile_root as Node3D)
     # Coastline material is shared. Reapplying is cheap and covers a renderer
     # that was created after this runtime first bound.
     _apply_ocean_normal()
@@ -74,7 +74,7 @@ func _apply_terrain_normal(tile_root: Node3D) -> void:
 func _apply_ocean_normal() -> void:
     if _water_normal == null or _terrain == null or not is_instance_valid(_terrain):
         return
-    var coastline = _terrain.coastline
+    var coastline: Variant = _terrain.coastline
     if coastline == null or not is_instance_valid(coastline):
         return
     var material := coastline.water_material as ShaderMaterial
