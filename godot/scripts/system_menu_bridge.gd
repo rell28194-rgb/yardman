@@ -61,9 +61,6 @@ func _process(delta: float) -> void:
     _refresh_download_indicator()
 
 func _on_node_added(node: Node) -> void:
-    # This bridge is deliberately ordered before the content/garage autoloads.
-    # Their launcher buttons are therefore hidden on creation instead of
-    # flashing for a frame and relying on a later polling pass.
     if node is Button:
         call_deferred("_hide_launcher_weak", weakref(node))
 
@@ -105,7 +102,10 @@ static func download_indicator_model(label: String, state: String, downloaded_by
     var percent := clampf(float(safe_downloaded) / float(safe_total) * 100.0, 0.0, 100.0) if show_bar else 0.0
     var text := "↓ %s" % label
     if show_bar:
-        text += " %d%%" % int(floor(percent + 0.5))
+        # Large vehicle packs can spend meaningful time below one percent. Keep
+        # one decimal below 10% so resumed/in-flight progress is visible rather
+        # than sitting at a misleading integer 0%.
+        text += (" %.1f%%" % percent) if percent > 0.0 and percent < 10.0 else (" %d%%" % int(floor(percent + 0.5)))
     else:
         var stage := {
             "manifest": "CHECK",
@@ -353,8 +353,6 @@ func _hide_legacy_launchers() -> void:
         var button = runtime.get("_button")
         if button is Button:
             suppress_legacy_launcher(button)
-    # Weather no longer owns a standalone launcher, but tolerate old/private
-    # runtime versions during transition and suppress them if present.
     var weather := get_node_or_null("/root/WeatherFX")
     if weather != null:
         var weather_button = weather.get("_button")
