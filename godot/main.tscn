@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource path="res://scripts/main.gd" type="Script" id="1"]
 [ext_resource path="res://scripts/road_structure_collision.gd" type="Script" id="2"]
@@ -10,6 +10,7 @@
 [ext_resource path="res://scripts/hydrology_visual_hierarchy_runtime.gd" type="Script" id="8"]
 [ext_resource path="res://scripts/near_field_built_environment_runtime.gd" type="Script" id="9"]
 [ext_resource path="res://scripts/near_field_road_edge_runtime.gd" type="Script" id="10"]
+[ext_resource path="res://scripts/beta_reference_asset_runtime.gd" type="Script" id="11"]
 
 [node name="Yardman" type="Node3D"]
 script = ExtResource("1")
@@ -37,6 +38,9 @@ script = ExtResource("9")
 
 [node name="NearFieldRoadEdge" type="Node3D" parent="."]
 script = ExtResource("10")
+
+[node name="BetaReferenceAssets" type="Node" parent="."]
+script = ExtResource("11")
 
 [node name="ParishNavigation" type="Control" parent="."]
 script = ExtResource("4")
