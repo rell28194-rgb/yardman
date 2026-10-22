@@ -71,5 +71,7 @@ func _run() -> void:
     References.texture("beta2_ucaptain_water_bump.ktx")
     References.texture("building_concrete.png")
 
-    print("YARDMAN_BETA_REFERENCE_ASSET_CONTRACT_TEST PASS aliases=2 ktx=1 terrain_normal=1 alt_rock=1 water_normal=1 concrete=1 fallback=1")
+    # Preserve the established marker consumed by the reconciliation workflow;
+    # alternate-rock assertions above extend the contract without weakening it.
+    print("YARDMAN_BETA_REFERENCE_ASSET_CONTRACT_TEST PASS aliases=2 ktx=1 terrain_normal=1 water_normal=1 concrete=1 fallback=1")
     quit(0)
