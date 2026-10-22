@@ -357,7 +357,8 @@ func _visible_intervals(a: Vector3, b: Vector3, width: float, crossings: Array,
         var nearest := local_a + direction * t
         if nearest.distance_to(point) > 1.0:
             continue
-        var half_gap_m := maxf(4.0, width * 0.75)
+        var road_width_m := float(crossing.get("road_width_m", 0.0))
+        var half_gap_m := maxf(width * 0.75, road_width_m * 0.5 + 1.25) if road_width_m > 0.0 else maxf(4.0, width * 0.75)
         var radius_t := minf(0.49, half_gap_m / length)
         hidden.append(Vector2(maxf(0.0, t - radius_t), minf(1.0, t + radius_t)))
     if hidden.is_empty():
