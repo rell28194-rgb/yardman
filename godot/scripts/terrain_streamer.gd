@@ -3,7 +3,6 @@ class_name JamaicaTerrainStreamer
 
 const CoastGeometryScript = preload("res://scripts/coast_geometry.gd")
 const CoastlineScript = preload("res://scripts/coastline.gd")
-const MeshGeometryGuard = preload("res://scripts/mesh_geometry_guard.gd")
 var resolution := 65
 var spacing := 64.0
 var coast_root := "res://data/coast"
