@@ -149,19 +149,19 @@ func _rebuild() -> void:
 
 func _append_plan(surface: SurfaceTool, plan: Dictionary) -> void:
     var channel: Vector2 = plan.channel_dir
-    var side := Vector2(-channel.y, channel.x)
+    var side: Vector2 = Vector2(-channel.y, channel.x)
     for mouth: Dictionary in plan.mouths:
         var center_world: Vector3 = mouth.center
-        var center_local := _roads.coordinates.world_to_local(center_world.x, center_world.z, center_world.y)
-        var height := float(plan.headwall_height_m)
-        var wall_width := float(plan.headwall_width_m)
+        var center_local: Vector3 = _roads.coordinates.world_to_local(center_world.x, center_world.z, center_world.y)
+        var height: float = float(plan.headwall_height_m)
+        var wall_width: float = float(plan.headwall_width_m)
         _append_box(surface, center_local, side, channel, wall_width, height, HEADWALL_THICKNESS_M)
         # Wing walls flare away from the road/channel opening. Their plan is
         # deterministic presentation derived from the same channel axis only.
-        var outward := channel * float(mouth.outward_sign)
-        var wing_center_a := center_local + Vector3(side.x, 0.0, side.y) * (wall_width * 0.5 + 0.18) \
+        var outward: Vector2 = channel * float(mouth.outward_sign)
+        var wing_center_a: Vector3 = center_local + Vector3(side.x, 0.0, side.y) * (wall_width * 0.5 + 0.18) \
             + Vector3(outward.x, 0.0, outward.y) * (WING_LENGTH_M * 0.42)
-        var wing_center_b := center_local - Vector3(side.x, 0.0, side.y) * (wall_width * 0.5 + 0.18) \
+        var wing_center_b: Vector3 = center_local - Vector3(side.x, 0.0, side.y) * (wall_width * 0.5 + 0.18) \
             + Vector3(outward.x, 0.0, outward.y) * (WING_LENGTH_M * 0.42)
         _append_box(surface, wing_center_a, side, outward, 0.24, height * 0.72, WING_LENGTH_M)
         _append_box(surface, wing_center_b, side, outward, 0.24, height * 0.72, WING_LENGTH_M)
