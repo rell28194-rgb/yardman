@@ -32,6 +32,8 @@ var _previous_speed := 0.0
 var _last_driving := false
 var _engine_stream_key := "engine"
 var _road_stream_key := "road"
+var _surface_probe_clock := 0.0
+var _surface_hint := "offroad"
 
 func _ready() -> void:
     if not _configured:
@@ -78,10 +80,8 @@ func update_state(delta: float, state: Dictionary) -> void:
     var desired_load := clampf(0.12 + maxf(acceleration, 0.0) / 7.0, 0.0, 1.0)
     if state.has("throttle"):
         desired_load = absf(_finite_value(state.throttle, -1.0, 1.0))
-    var braking := absf(_finite_value(state.get("brake", 0.0), 0.0, 1.0))
-    var surface := str(state.get("surface", "paved" if bool(state.get("on_road", true)) else "offroad"))
-    if surface not in ["paved", "unpaved", "offroad"]:
-        surface = "offroad"
+    var braking := absf(_finite_value(state.get("brake", clampf(-acceleration / 8.5, 0.0, 1.0)), 0.0, 1.0))
+    var surface := _resolve_surface(state, dt)
     _rpm = lerpf(_rpm, desired_rpm, 1.0 - exp(-dt * 6.0))
     _load = lerpf(_load, desired_load, 1.0 - exp(-dt * 7.0))
     _previous_speed = speed
@@ -124,6 +124,46 @@ func update_state(delta: float, state: Dictionary) -> void:
     var ambient_speed := absf(speed) if driving else walk_speed
     _voice(wind, true, -49.0 + clampf(ambient_speed / 42.0, 0.0, 1.0) * 9.0, 0.70 + clampf(ambient_speed / 42.0, 0.0, 1.0) * 0.35)
 
+func _resolve_surface(state: Dictionary, dt: float) -> String:
+    if state.has("surface"):
+        _surface_hint = _valid_surface(str(state.surface))
+        return _surface_hint
+    if bool(state.get("on_road", true)):
+        _surface_hint = "paved"
+        _surface_probe_clock = 0.0
+        return _surface_hint
+    # The legacy main state only tells audio paved-vs-not-paved. Probe the same
+    # compiled road surface index at 5 Hz to separate gravel from true off-road
+    # without adding a per-frame spatial query or modifying road truth.
+    _surface_probe_clock += dt
+    if _surface_probe_clock < 0.20:
+        return _surface_hint
+    _surface_probe_clock = 0.0
+    _surface_hint = "offroad"
+    var root_node: Node = get_parent()
+    if root_node == null:
+        return _surface_hint
+    var roads := root_node.get_node_or_null("JamaicaRoadStreamer")
+    var car := root_node.get_node_or_null("RoadQA") as Node3D
+    if roads == null or car == null or not roads.has_method("local_to_world") or not roads.has_method("road_surface_at"):
+        return _surface_hint
+    var world_value: Variant = roads.call("local_to_world", car.position)
+    if not world_value is PackedFloat64Array:
+        return _surface_hint
+    var world: PackedFloat64Array = world_value
+    if world.size() < 3:
+        return _surface_hint
+    var surface_value: Variant = roads.call("road_surface_at", world[0], world[2])
+    if not surface_value is Dictionary:
+        return _surface_hint
+    var surface_record: Dictionary = surface_value
+    if bool(surface_record.get("found", false)):
+        _surface_hint = _valid_surface(str(surface_record.get("surface", "offroad")))
+    return _surface_hint
+
+static func _valid_surface(value: String) -> String:
+    return value if value in ["paved", "unpaved", "offroad"] else "offroad"
+
 func debug_state() -> Dictionary:
     return {
         "voices": _voices.size(), "cache_build_count": _cache_build_count,
@@ -133,6 +173,7 @@ func debug_state() -> Dictionary:
         "engine_db": engine.volume_db if engine != null else SILENT_DB,
         "road_pitch": road_roll.pitch_scale if road_roll != null else 1.0,
         "engine_stream_key": _engine_stream_key, "road_stream_key": _road_stream_key,
+        "surface_hint": _surface_hint,
         "rpm": _rpm, "load": _load, "volume": volume,
     }
 
@@ -197,6 +238,7 @@ static func optional_audio_contract() -> Dictionary:
         "voice_budget": 4,
         "surface_routing": true,
         "fallback_safe": true,
+        "compiled_surface_probe_hz": 5,
     }
 
 static func _prepare_streams() -> void:
