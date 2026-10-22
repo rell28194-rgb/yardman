@@ -1,11 +1,9 @@
 extends Node
 class_name YardmanBridgeGeometry
 
-# Visual bridge structure for source-tagged bridge road edges. Deck elevation,
-# width, endpoints and stationing come from the compiled road graph/profile.
-# Abutments are emitted only at true graph-edge endpoints. Piers are an inferred
-# presentation/support treatment and are added only where the registered terrain
-# gives a finite clearance; they never alter DEM or hydrology truth.
+# Source bridge geometry uses the compiled road profile for deck position, width,
+# endpoints and stationing. Piers are deterministic inferred presentation only;
+# they require finite registered terrain and never mutate terrain/hydrology data.
 
 const BRIDGE_FLAG := 2
 const DECK_THICKNESS_M := 0.55
@@ -81,7 +79,6 @@ func _concrete_material() -> StandardMaterial3D:
         _concrete = StandardMaterial3D.new()
         _concrete.albedo_color = Color(0.48, 0.49, 0.47)
         _concrete.roughness = 0.94
-        _concrete.metallic = 0.0
     return _concrete
 
 func _rail_material() -> StandardMaterial3D:
@@ -98,15 +95,9 @@ func _basis_for(a: Vector3, b: Vector3) -> Basis:
         return Basis.IDENTITY
     forward = forward.normalized()
     var right := Vector3.UP.cross(forward)
-    if right.length_squared() < 0.000001:
-        right = Vector3.RIGHT
-    else:
-        right = right.normalized()
+    right = Vector3.RIGHT if right.length_squared() < 0.000001 else right.normalized()
     var up := forward.cross(right)
-    if up.length_squared() < 0.000001:
-        up = Vector3.UP
-    else:
-        up = up.normalized()
+    up = Vector3.UP if up.length_squared() < 0.000001 else up.normalized()
     if up.y < 0.0:
         right = -right
         up = -up
@@ -144,7 +135,7 @@ func _bridge_segment_points(segment: Array, tile: Vector2i) -> PackedVector3Arra
     ])
 
 func _edge_length(edge: Dictionary) -> float:
-    var value := float(edge.get("length_m", 0.0) or 0.0)
+    var value := float(edge.get("length_m", 0.0))
     if is_finite(value) and value > 0.0:
         return value
     var path: Array = edge.get("path", [])
@@ -170,12 +161,9 @@ func _build_tile(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
     bridge_root.add_child(collision_body)
     var built := 0
     for segment in segments:
-        if not segment is Array or segment.size() < 18:
-            continue
-        if (int(segment[6]) & BRIDGE_FLAG) == 0:
-            continue
-        if _build_segment(tile, bridge_root, collision_body, segment):
-            built += 1
+        if segment is Array and segment.size() >= 18 and (int(segment[6]) & BRIDGE_FLAG) != 0:
+            if _build_segment(tile, bridge_root, collision_body, segment):
+                built += 1
     if built <= 0:
         bridge_root.queue_free()
         return
@@ -188,8 +176,7 @@ func _build_segment(tile: Vector2i, bridge_root: Node3D, collision_body: StaticB
         return false
     var a := points[0]
     var b := points[1]
-    var delta := b - a
-    var span_length := delta.length()
+    var span_length := a.distance_to(b)
     if not is_finite(span_length) or span_length < 0.25:
         return false
     var width := clampf(float(segment[4]), 2.5, 32.0)
@@ -198,19 +185,17 @@ func _build_segment(tile: Vector2i, bridge_root: Node3D, collision_body: StaticB
     var up := basis.y
     var forward := basis.z
     var center := (a + b) * 0.5
-    var deck_size := Vector3(width + DECK_OVERHANG_M * 2.0, DECK_THICKNESS_M, span_length + 0.08)
-    _add_box(bridge_root, collision_body, "BridgeDeckUnderside", deck_size,
+    _add_box(bridge_root, collision_body, "BridgeDeckUnderside",
+        Vector3(width + DECK_OVERHANG_M * 2.0, DECK_THICKNESS_M, span_length + 0.08),
         Transform3D(basis, center - up * DECK_THICKNESS_M * 0.5), _concrete_material(), false)
     deck_spans_built += 1
-
     var rail_offset := width * 0.5 + RAIL_OUTSET_M
-    var rail_size := Vector3(RAIL_THICKNESS_M, RAIL_HEIGHT_M, span_length + 0.10)
     for side in [-1.0, 1.0]:
-        var rail_center := center + right * rail_offset * side + up * (RAIL_HEIGHT_M * 0.5 + 0.08)
-        _add_box(bridge_root, collision_body, "BridgeRail", rail_size,
-            Transform3D(basis, rail_center), _rail_material(), true)
+        _add_box(bridge_root, collision_body, "BridgeRail",
+            Vector3(RAIL_THICKNESS_M, RAIL_HEIGHT_M, span_length + 0.10),
+            Transform3D(basis, center + right * rail_offset * side + up * (RAIL_HEIGHT_M * 0.5 + 0.08)),
+            _rail_material(), true)
         rails_built += 1
-
     var edge_id := str(segment[7])
     var edge: Dictionary = roads.graph.get_edge(edge_id) if roads != null and roads.graph != null else {}
     var start_station := float(segment[16])
@@ -221,14 +206,12 @@ func _build_segment(tile: Vector2i, bridge_root: Node3D, collision_body: StaticB
     if total_length > 0.0 and absf(end_station - total_length) <= 0.25:
         _add_abutment(bridge_root, collision_body, b, forward, basis, width)
     if total_length > 0.0 and terrain != null:
-        _add_piers(tile, bridge_root, collision_body, a, b, basis, width,
-            start_station, end_station, total_length)
+        _add_piers(tile, bridge_root, collision_body, a, b, basis, width, start_station, end_station, total_length)
     return true
 
 func _add_abutment(parent: Node3D, body: StaticBody3D, endpoint: Vector3,
         outward: Vector3, basis: Basis, width: float) -> void:
-    var up := basis.y
-    var center := endpoint + outward * (ABUTMENT_DEPTH_M * 0.5) - up * (ABUTMENT_HEIGHT_M * 0.5)
+    var center := endpoint + outward * (ABUTMENT_DEPTH_M * 0.5) - basis.y * (ABUTMENT_HEIGHT_M * 0.5)
     _add_box(parent, body, "BridgeAbutment",
         Vector3(width + ABUTMENT_OVERHANG_M * 2.0, ABUTMENT_HEIGHT_M, ABUTMENT_DEPTH_M),
         Transform3D(basis, center), _concrete_material(), true)
@@ -245,31 +228,29 @@ func _add_piers(tile: Vector2i, parent: Node3D, body: StaticBody3D, a: Vector3, 
     var origin_x := float(tile.x) * float(roads.tile_size)
     var origin_z := float(tile.y) * float(roads.tile_size)
     var right := basis.x
-    var up := basis.y
+    var horizontal_forward := Vector3(basis.z.x, 0.0, basis.z.z)
+    horizontal_forward = Vector3.FORWARD if horizontal_forward.length_squared() < 0.000001 else horizontal_forward.normalized()
+    var pier_basis := Basis(right, Vector3.UP, horizontal_forward)
     for station_index in range(first, last + 1):
         var station := float(station_index) * PIER_SPACING_M
         if station <= start_station + 0.05 or station >= end_station - 0.05:
             continue
         var t := clampf((station - start_station) / (end_station - start_station), 0.0, 1.0)
         var deck_point := a.lerp(b, t)
-        var world_x := origin_x + deck_point.x
-        var world_z := origin_z + deck_point.z
-        var ground_y := float(terrain.height_at(world_x, world_z))
+        var ground_y := float(terrain.height_at(origin_x + deck_point.x, origin_z + deck_point.z))
         if not is_finite(ground_y):
             continue
-        var deck_bottom_y := deck_point.y - DECK_THICKNESS_M
-        var clearance := deck_bottom_y - ground_y
+        var clearance := deck_point.y - DECK_THICKNESS_M - ground_y
         if clearance < PIER_MIN_CLEARANCE_M or clearance > PIER_MAX_CLEARANCE_M:
             continue
-        var column_offsets: Array[float] = [0.0]
+        var offsets: Array[float] = [0.0]
         if width >= 7.0:
             var offset := minf(width * 0.24, 2.6)
-            column_offsets = [-offset, offset]
-        for offset in column_offsets:
-            var column_center := deck_point + right * offset
-            column_center.y = ground_y + clearance * 0.5
-            _add_box(parent, body, "BridgePier",
-                Vector3(PIER_COLUMN_M, clearance, PIER_DEPTH_M),
-                Transform3D(Basis(right, up, basis.z), column_center), _concrete_material(), true)
+            offsets = [-offset, offset]
+        for offset in offsets:
+            var center := deck_point + right * offset
+            center.y = ground_y + clearance * 0.5
+            _add_box(parent, body, "BridgePier", Vector3(PIER_COLUMN_M, clearance, PIER_DEPTH_M),
+                Transform3D(pier_basis, center), _concrete_material(), true)
             pier_columns_built += 1
         pier_stations_built += 1
