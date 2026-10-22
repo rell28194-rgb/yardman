@@ -54,9 +54,6 @@ func _try_bind() -> void:
     # translation is supplied by Yardman's accepted combined-sedan fit.
     var source_basis := driver.transform.basis
     var shell_pose := relative_pose(shell, visual)
-    if shell_pose == Transform3D():
-        driver.free()
-        return
     shell.add_child(driver)
     driver.name = "RecoveredSeatedDriver"
     driver.transform = driver_local_pose(shell_pose, source_basis)
@@ -82,7 +79,7 @@ static func relative_pose(node: Node3D, ancestor: Node3D) -> Transform3D:
         if parent is Node3D:
             pose = (parent as Node3D).transform * pose
         parent = parent.get_parent()
-    return pose if parent == ancestor else Transform3D()
+    return pose
 
 static func driver_local_pose(shell_model_pose: Transform3D, source_basis: Basis = Basis.IDENTITY) -> Transform3D:
     return shell_model_pose.affine_inverse() * Transform3D(source_basis, DRIVER_FIT_POSITION_M)
