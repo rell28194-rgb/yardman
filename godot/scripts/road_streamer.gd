@@ -5,6 +5,7 @@ const CoordinatesScript = preload("res://scripts/world_coordinates.gd")
 const GraphScript = preload("res://scripts/road_graph.gd")
 const RoadShader = preload("res://shaders/road_surface.gdshader")
 const References = preload("res://scripts/reference_assets.gd")
+const MeshGeometryGuard = preload("res://scripts/mesh_geometry_guard.gd")
 const SURFACE_CELL_SIZE := 128.0
 signal tile_ready(tile: Vector2i)
 signal tile_removed(tile: Vector2i)
@@ -320,6 +321,11 @@ func _add_surface_mesh(parent: Node3D, vertices: PackedVector3Array, indices: Pa
         normals: PackedVector3Array, uvs: PackedVector2Array, uv2s: PackedVector2Array,
         colors: PackedColorArray, material: Material, label: String) -> void:
     if vertices.is_empty():
+        return
+    var guard_limit := tile_size * 1.75
+    var safety := MeshGeometryGuard.validate(vertices, indices, guard_limit, guard_limit, 250000)
+    if not bool(safety.get("ok", false)):
+        push_error(MeshGeometryGuard.rejection_message("road %s/%s" % [parent.name, label], safety))
         return
     var arrays: Array = []
     arrays.resize(Mesh.ARRAY_MAX)
