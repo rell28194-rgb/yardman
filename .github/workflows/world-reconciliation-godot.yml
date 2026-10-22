@@ -17,6 +17,7 @@ on:
       - 'godot/tests/beta1_street_furniture_runtime_test.gd'
       - 'godot/tests/beta1_vegetation_variant_runtime_test.gd'
       - 'godot/tests/beta1_seated_driver_runtime_test.gd'
+      - 'godot/tests/beta1_ui_audio_runtime_test.gd'
       - 'godot/tests/beta1_rock_outcrop_runtime_test.gd'
       - 'godot/tests/near_field_groundcover_runtime_test.gd'
       - 'godot/tests/near_field_built_environment_runtime_test.gd'
@@ -109,6 +110,14 @@ jobs:
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/beta1-seated-driver.log; then exit 1; fi
           grep -q 'YARDMAN_BETA1_SEATED_DRIVER_RUNTIME_TEST PASS fit=1 hierarchy=1 basis_preserved=1 occupied_only=1 crown_only=1 physics=0 handling=0 fleet=0 collision=0 animation_pending=1 android_pending=1' godot/build/beta1-seated-driver.log
 
+      - name: Prove recovered Beta1 UI click isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/beta1_ui_audio_runtime_test.gd 2>&1 | tee godot/build/beta1-ui-audio.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/beta1-ui-audio.log; then exit 1; fi
+          grep -q 'YARDMAN_BETA1_UI_AUDIO_RUNTIME_TEST PASS shared_player=1 polyphony=1 gamehud=1 nested=1 touch_excluded=1 game_voice_budget=0 input_mutation=0 fallback=1' godot/build/beta1-ui-audio.log
+
       - name: Prove recovered Beta1 steep-slope boulder placement
         shell: bash
         run: |
@@ -193,6 +202,7 @@ jobs:
             godot/build/beta1-street-furniture.log
             godot/build/beta1-vegetation-variants.log
             godot/build/beta1-seated-driver.log
+            godot/build/beta1-ui-audio.log
             godot/build/beta1-rock-outcrops.log
             godot/build/near-field-groundcover.log
             godot/build/near-field-built-environment.log
