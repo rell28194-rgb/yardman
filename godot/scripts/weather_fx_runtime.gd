@@ -30,6 +30,9 @@ func _ready() -> void:
     set_process(true)
 
 func _exit_tree() -> void:
+    var tree := get_tree()
+    if tree != null and tree.node_added.is_connected(_on_node_added):
+        tree.node_added.disconnect(_on_node_added)
     if _rain != null:
         _rain.multimesh = null
         _rain = null
@@ -77,8 +80,6 @@ static func dynamic_intensity(hour: float, stable_region: String) -> float:
         return 0.0
     var wrapped := fposmod(hour, 24.0)
     var seed := float(absi(stable_region.hash()) % 10000) / 10000.0
-    # Low-frequency deterministic pulses provide visual weather continuity.
-    # This is a game-weather signal, not a claim about live meteorology.
     var primary := 0.5 + 0.5 * sin(TAU * (wrapped / 7.5 + seed))
     var secondary := 0.5 + 0.5 * sin(TAU * (wrapped / 3.7 + seed * 0.43 + 0.17))
     var gate := smoothstep(0.72, 0.96, primary)
@@ -205,16 +206,22 @@ func _update_environment(game: Node) -> void:
 
 func _on_node_added(node: Node) -> void:
     if node is MeshInstance3D:
-        call_deferred("_track_mesh_instance", node)
+        # Defer through a WeakRef rather than a typed object argument. Streamed
+        # tiles can be removed before the message queue runs; a direct typed
+        # MeshInstance3D deferred argument then becomes an invalid Object and
+        # errors before the callback can perform its own validity check.
+        call_deferred("_track_mesh_instance", weakref(node))
 
-func _track_mesh_instance(instance: MeshInstance3D) -> void:
-    if not is_instance_valid(instance):
+func _track_mesh_instance(reference) -> void:
+    var instance = reference.get_ref() if reference is WeakRef else reference
+    if instance == null or not is_instance_valid(instance) or not instance is MeshInstance3D:
         return
-    if instance.material_override is ShaderMaterial:
-        _track_material(instance.material_override)
-    if instance.mesh != null:
-        for surface_index in range(instance.mesh.get_surface_count()):
-            var material := instance.mesh.surface_get_material(surface_index)
+    var mesh_instance := instance as MeshInstance3D
+    if mesh_instance.material_override is ShaderMaterial:
+        _track_material(mesh_instance.material_override)
+    if mesh_instance.mesh != null:
+        for surface_index in range(mesh_instance.mesh.get_surface_count()):
+            var material := mesh_instance.mesh.surface_get_material(surface_index)
             if material is ShaderMaterial:
                 _track_material(material)
 
