@@ -71,11 +71,6 @@ static func validate(vertices: PackedVector3Array, indices: PackedInt32Array,
 
     if degenerate_triangles == triangle_count:
         return _reject("all_triangles_degenerate", {"triangles": triangle_count})
-    if triangle_count >= 8 and degenerate_triangles * 4 > triangle_count:
-        return _reject("degenerate_triangle_ratio", {
-            "degenerate": degenerate_triangles,
-            "triangles": triangle_count,
-        })
 
     return {
         "ok": true,
