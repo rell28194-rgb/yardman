@@ -2,9 +2,12 @@
 """Compile Yardman's audited hydrology truth into a mobile runtime contract.
 
 Runtime v2 keeps the DEM-registered endpoint elevations, provenance, stable
-segment identity and evidence-gated road/water crossing semantics. It does not
-turn the inferred channel-depth seed or a morphology sidecar into DEM mutation
-permission. Terrain mutation remains a separate approved-operation contract.
+segment identity and evidence-gated road/water crossing semantics. When the
+compiled road graph is supplied, crossing records also carry the exact compiled
+road width so visible-water clipping matches the real roadway footprint. It does
+not turn the inferred channel-depth seed or a morphology sidecar into DEM
+mutation permission. Terrain mutation remains a separate approved-operation
+contract.
 """
 from __future__ import annotations
 
@@ -75,7 +78,35 @@ def _load_truth(root: Path, segments: list[dict]) -> dict[str, dict]:
     return decisions
 
 
-def _load_crossings(root: Path, segments: list[dict], tolerance_m: float = 0.10) -> tuple[dict[str, list[dict]], Counter]:
+def _load_road_widths(roads_root: Path | None) -> dict[str, float]:
+    if roads_root is None:
+        return {}
+    graph_root = roads_root / "graph"
+    if not graph_root.is_dir():
+        raise ValueError(f"road graph directory missing: {graph_root}")
+    widths: dict[str, float] = {}
+    for path in sorted(graph_root.glob("edges_*.json")):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError(f"invalid road edge shard: {path}")
+        for key, edge in payload.items():
+            if not isinstance(edge, dict):
+                raise ValueError(f"invalid road edge record: {path}:{key}")
+            edge_id = str(edge.get("id", key))
+            width = float(edge.get("width_m", 0.0))
+            if not edge_id or not math.isfinite(width) or width <= 0.0 or width > 80.0:
+                raise ValueError(f"invalid compiled road width: {edge_id}={width}")
+            previous = widths.get(edge_id)
+            if previous is not None and abs(previous - width) > 1e-6:
+                raise ValueError(f"conflicting compiled road widths for {edge_id}: {previous} vs {width}")
+            widths[edge_id] = width
+    if not widths:
+        raise ValueError("compiled road graph contains no edge widths")
+    return widths
+
+
+def _load_crossings(root: Path, segments: list[dict], road_widths: dict[str, float] | None = None,
+                    tolerance_m: float = 0.10) -> tuple[dict[str, list[dict]], Counter]:
     path = root / "crossings.json"
     if not path.is_file():
         raise ValueError("hydrology crossing inventory missing")
@@ -86,6 +117,8 @@ def _load_crossings(root: Path, segments: list[dict], tolerance_m: float = 0.10)
     for records in by_way.values():
         records.sort(key=lambda item: str(item["segment_key"]))
 
+    road_widths = road_widths or {}
+    require_road_widths = bool(road_widths)
     attached: dict[str, list[dict]] = defaultdict(list)
     stats: Counter = Counter()
     for crossing in payload.get("crossings", []):
@@ -102,13 +135,18 @@ def _load_crossings(root: Path, segments: list[dict], tolerance_m: float = 0.10)
         distance, _key, segment = min(ranked, key=lambda item: (item[0], item[1]))
         if distance > tolerance_m:
             raise ValueError(f"crossing/segment reconciliation exceeded {tolerance_m} m: {distance:.6f} {way}")
+        road_edge = str(crossing.get("road_edge", ""))
+        road_width = road_widths.get(road_edge)
+        if require_road_widths and road_width is None:
+            raise ValueError(f"crossing references road edge absent from compiled graph: {road_edge}")
         compact = {
             "x": round(px, 3),
             "z": round(pz, 3),
             "kind": str(crossing.get("kind", "unknown")),
             "status": str(crossing.get("status", "unresolved")),
             "terrain_action": str(crossing.get("terrain_action", "none")),
-            "road_edge": str(crossing.get("road_edge", "")),
+            "road_edge": road_edge,
+            "road_width_m": round(float(road_width), 3) if road_width is not None else 0.0,
             "evidence": list(crossing.get("evidence", [])),
             "source_crossing_evidence": dict(crossing.get("source_crossing_evidence", {})),
         }
@@ -116,15 +154,18 @@ def _load_crossings(root: Path, segments: list[dict], tolerance_m: float = 0.10)
         stats["crossings"] += 1
         stats[f"kind_{compact['kind']}"] += 1
         stats[f"status_{compact['status']}"] += 1
+        if road_width is not None:
+            stats["crossings_with_road_width"] += 1
     for records in attached.values():
         records.sort(key=lambda item: (item["x"], item["z"], item["road_edge"], item["kind"]))
     return dict(attached), stats
 
 
-def compile_runtime_v2(source_root: Path, output_root: Path) -> dict:
+def compile_runtime_v2(source_root: Path, output_root: Path, roads_root: Path | None = None) -> dict:
     manifest, segments = _load_segments(source_root)
     truth = _load_truth(source_root, segments)
-    crossings, crossing_stats = _load_crossings(source_root, segments)
+    road_widths = _load_road_widths(roads_root)
+    crossings, crossing_stats = _load_crossings(source_root, segments, road_widths)
     tile_size = float(manifest["tile_size"])
     if not math.isfinite(tile_size) or tile_size <= 0.0:
         raise ValueError("invalid hydrology tile size")
@@ -196,6 +237,9 @@ def compile_runtime_v2(source_root: Path, output_root: Path) -> dict:
             "intermittent", "tidal", "grade_permille", "channel_seed_depth_m",
             "channel_depth_source", "segment_key", "morphology_status", "morphology_family", "crossings",
         ],
+        "crossing_format": {
+            "road_width_m": "compiled road width in metres; 0 only when roads_root was intentionally omitted",
+        },
         "render_policy": {
             "active_tile_radius": 1,
             "max_active_tiles": 9,
@@ -221,8 +265,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("source_root", type=Path)
     parser.add_argument("output_root", type=Path)
+    parser.add_argument("--roads-root", type=Path, default=None,
+                        help="Optional compiled roads root; when supplied every crossing must resolve an exact road width")
     args = parser.parse_args()
-    result = compile_runtime_v2(args.source_root, args.output_root)
+    result = compile_runtime_v2(args.source_root, args.output_root, args.roads_root)
     print("YARDMAN_HYDROLOGY_RUNTIME_V2_PASS", json.dumps(result["stats"], sort_keys=True),
           "tiles=", len(result["tiles"]))
     return 0
