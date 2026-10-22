@@ -6,6 +6,9 @@ on:
       - codex/accepted-fleet-garage-001
     paths:
       - '.github/workflows/fleet64-release-bridge.yml'
+      - 'godot/project.godot'
+      - 'godot/scripts/input_router.gd'
+      - 'godot/tests/input_router_test.gd'
   workflow_dispatch:
 
 concurrency:
@@ -19,7 +22,7 @@ permissions:
 env:
   GODOT_VERSION: '4.7.2'
   GODOT_CHANNEL: stable
-  SOURCE_COMMIT: '4dae0b0b83d4443bf6bdafd3568bf78fdadb719e'
+  SOURCE_COMMIT: '8cc974f1a8c8cde8e47a6fbefc737a6b10b1faee'
   SOURCE_ARTIFACT_ID: '12336906664'
   SOURCE_APK_SHA256: '3aba9038a31e09f8c1ac1c7e52ea5e5405fd3484ab279e2820a1b2379ff0d18a'
 
