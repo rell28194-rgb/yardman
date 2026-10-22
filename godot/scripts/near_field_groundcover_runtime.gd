@@ -101,6 +101,11 @@ func _regional_dryness(point: Vector2) -> float:
 func _stable_fraction(seed_value: int) -> float:
     return float(posmod(seed_value, 10007)) / 10007.0
 
+static func _relative_pose(source: Transform3D, center: Vector3) -> Transform3D:
+    var pose := source
+    pose.origin -= center
+    return pose
+
 func _records(segments: Array) -> Array[Dictionary]:
     var result: Array[Dictionary] = []
     var seen: Dictionary = {}
@@ -176,6 +181,7 @@ func _build_tile(tile: Vector2i, tile_root: Node3D, segments: Array) -> void:
                     "transform": Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * scale_value), local),
                     "seed": seed_value,
                     "dry": _regional_dryness(point),
+                    "road_clearance_m": offset,
                 })
                 built_here += 1
     if built_here <= 0:
@@ -201,8 +207,14 @@ func _make_cell(parent: Node3D, group: Dictionary) -> void:
     var cell: Vector2i = group.cell
     var center := Vector3((float(cell.x) + 0.5) * CELL_M, 0.0, (float(cell.y) + 0.5) * CELL_M)
     var average_y := 0.0
+    var minimum_clearance := INF
+    var maximum_clearance := 0.0
     for anchor: Dictionary in anchors:
-        average_y += anchor.transform.origin.y
+        var source_pose: Transform3D = anchor.transform
+        average_y += source_pose.origin.y
+        var clearance := float(anchor.get("road_clearance_m", 0.0))
+        minimum_clearance = minf(minimum_clearance, clearance)
+        maximum_clearance = maxf(maximum_clearance, clearance)
     center.y = average_y / float(anchors.size())
     var multi := MultiMesh.new()
     multi.transform_format = MultiMesh.TRANSFORM_3D
@@ -211,8 +223,8 @@ func _make_cell(parent: Node3D, group: Dictionary) -> void:
     multi.instance_count = anchors.size()
     for index in range(anchors.size()):
         var anchor: Dictionary = anchors[index]
-        var pose: Transform3D = anchor.transform
-        pose.origin -= center
+        var source_pose: Transform3D = anchor.transform
+        var pose := _relative_pose(source_pose, center)
         multi.set_instance_transform(index, pose)
         var seed_value := int(anchor.seed)
         multi.set_instance_custom_data(index, Color(
@@ -230,6 +242,8 @@ func _make_cell(parent: Node3D, group: Dictionary) -> void:
     instance.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
     instance.set_meta("near_field_groundcover", true)
     instance.set_meta("source_anchors", anchors.size())
+    instance.set_meta("min_source_road_clearance_m", minimum_clearance)
+    instance.set_meta("max_source_road_clearance_m", maximum_clearance)
     parent.add_child(instance)
 
 func _triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color: Color) -> void:
