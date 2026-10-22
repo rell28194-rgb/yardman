@@ -13,11 +13,11 @@ class FakeGraph:
             "path": [[0.0, 10.0, 0.0], [48.0, 10.0, 0.0]],
         }
 
-class FakeRoads:
+class FakeRoads extends Node:
     var tile_size := 4096.0
     var graph = FakeGraph.new()
 
-class FakeTerrain:
+class FakeTerrain extends Node:
     var calls := 0
     func height_at(_x: float, _z: float) -> float:
         calls += 1
@@ -36,8 +36,6 @@ func _run() -> void:
     helper.terrain = FakeTerrain.new()
     var tile_root := Node3D.new()
     root.add_child(tile_root)
-    # Streamed road segment contract: x0,z0,x1,z1,width,class,flags,edge,index,
-    # profile Y endpoints, polygon/UV metadata, lane metadata, stations.
     var segment := [
         0.0, 0.0, 48.0, 0.0, 8.0, 1, 2, "bridge-edge", 0,
         10.0, 10.0,
@@ -76,8 +74,6 @@ func _run() -> void:
     if collision_body == null:
         _fail("bridge structure collision body missing")
         return
-    # Rails + two abutments + two pier columns. Deck collision remains owned by
-    # road_structure_collision.gd, so it must not be duplicated here.
     if collision_body.get_child_count() != 6:
         _fail("unexpected bridge structure collision shape count: %d" % collision_body.get_child_count())
         return
