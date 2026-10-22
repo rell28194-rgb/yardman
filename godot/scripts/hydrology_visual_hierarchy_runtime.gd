@@ -62,7 +62,7 @@ static func _quad_metrics(a_left: Vector3, a_right: Vector3, b_left: Vector3, b_
     var grade_permille := absf(finish.y - start.y) / maxf(horizontal, 0.001) * 1000.0
     var width_factor := smoothstep(MIN_WIDTH_M, MAX_WIDTH_M, width)
     var grade_factor := smoothstep(GRADE_LOW_PERMILLE, GRADE_HIGH_PERMILLE, grade_permille)
-    var rapid := clampf(grade_factor * mix(1.0, 0.42, width_factor), 0.0, 1.0)
+    var rapid := clampf(grade_factor * lerpf(1.0, 0.42, width_factor), 0.0, 1.0)
     return Color(width_factor, grade_factor, rapid, 1.0)
 
 func _enrich_instance(reference) -> bool:
