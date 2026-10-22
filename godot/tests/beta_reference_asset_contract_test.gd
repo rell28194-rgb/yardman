@@ -4,6 +4,7 @@ const References = preload("res://scripts/reference_assets.gd")
 const BetaRuntime = preload("res://scripts/beta_reference_asset_runtime.gd")
 const TerrainShader = preload("res://shaders/terrain_surface.gdshader")
 const WaterShader = preload("res://shaders/water.gdshader")
+const BuildingShader = preload("res://shaders/building_surface.gdshader")
 
 func _initialize() -> void:
     call_deferred("_run")
@@ -32,6 +33,11 @@ func _run() -> void:
     if not water_code.contains("reference_normal") or not water_code.contains("has_reference_normal"):
         _fail("water shader lacks optional recovered WaterBump contract")
         return
+    var building_code := BuildingShader.code
+    if not building_code.contains("reference_concrete") or not building_code.contains("has_reference_concrete") \
+            or not building_code.contains("COLOR.a > 0.5 && COLOR.a < 0.7"):
+        _fail("building shader lacks deterministic recovered concrete family")
+        return
 
     var contract := BetaRuntime.optional_asset_contract()
     if str(contract.get("terrain_normal", "")) != "beta2_ucaptain_scrub_grass_normal.ktx":
@@ -40,8 +46,11 @@ func _run() -> void:
     if str(contract.get("water_normal", "")) != "beta2_ucaptain_water_bump.ktx":
         _fail("water normal runtime filename drifted")
         return
-    if bool(contract.get("geometry_mutation", true)) or bool(contract.get("collision", true)):
-        _fail("reference quality layer gained geometry/collision authority")
+    if str(contract.get("building_concrete", "")) != "building_concrete.png":
+        _fail("Beta1 concrete runtime filename drifted")
+        return
+    if bool(contract.get("geometry_mutation", true)) or bool(contract.get("collision", true)) or bool(contract.get("extra_draw_calls", true)):
+        _fail("reference quality layer gained geometry/collision/draw-call authority")
         return
     if not bool(contract.get("asset_absent_fallback", false)):
         _fail("asset-absent fallback is not explicit")
@@ -52,6 +61,7 @@ func _run() -> void:
     # private owner build stages them before import.
     References.texture("beta2_ucaptain_scrub_grass_normal.ktx")
     References.texture("beta2_ucaptain_water_bump.ktx")
+    References.texture("building_concrete.png")
 
-    print("YARDMAN_BETA_REFERENCE_ASSET_CONTRACT_TEST PASS aliases=2 ktx=1 terrain_normal=1 water_normal=1 fallback=1")
+    print("YARDMAN_BETA_REFERENCE_ASSET_CONTRACT_TEST PASS aliases=2 ktx=1 terrain_normal=1 water_normal=1 concrete=1 fallback=1")
     quit(0)
