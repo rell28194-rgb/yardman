@@ -16,6 +16,7 @@ on:
       - 'godot/tests/beta_reference_asset_contract_test.gd'
       - 'godot/tests/beta1_street_furniture_runtime_test.gd'
       - 'godot/tests/beta1_vegetation_variant_runtime_test.gd'
+      - 'godot/tests/beta1_rock_outcrop_runtime_test.gd'
       - 'godot/tests/near_field_groundcover_runtime_test.gd'
       - 'godot/tests/near_field_built_environment_runtime_test.gd'
       - 'godot/tests/near_field_road_edge_runtime_test.gd'
@@ -99,6 +100,14 @@ jobs:
           grep -q 'YARDMAN_BETA1_VEGETATION_VARIANT_RUNTIME_TEST PASS' godot/build/beta1-vegetation-variants.log
           grep -q 'anchors_unchanged=1 instances_unchanged=1 draw_calls_unchanged=1 distant_unchanged=1 collision=0' godot/build/beta1-vegetation-variants.log
 
+      - name: Prove recovered Beta1 steep-slope boulder placement
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/beta1_rock_outcrop_runtime_test.gd 2>&1 | tee godot/build/beta1-rock-outcrops.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/beta1-rock-outcrops.log; then exit 1; fi
+          grep -q 'YARDMAN_BETA1_ROCK_OUTCROP_RUNTIME_TEST PASS steep=1 flat_rejected=1 water_rejected=1 bridge_rejected=1 tunnel_rejected=1 tile_bound=1 max_tile=8 max_cell=2 geology=0 collision=0' godot/build/beta1-rock-outcrops.log
+
       - name: Prove near-field groundcover batching
         shell: bash
         run: |
@@ -174,6 +183,7 @@ jobs:
             godot/build/beta-reference-assets.log
             godot/build/beta1-street-furniture.log
             godot/build/beta1-vegetation-variants.log
+            godot/build/beta1-rock-outcrops.log
             godot/build/near-field-groundcover.log
             godot/build/near-field-built-environment.log
             godot/build/near-field-road-edge.log
