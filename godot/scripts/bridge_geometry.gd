@@ -107,19 +107,21 @@ func _add_box(parent: Node3D, collision_body: StaticBody3D, name: String,
         size: Vector3, transform: Transform3D, material: Material, collision: bool) -> void:
     if size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
         return
+    var visual_index := parent.get_child_count()
     var mesh := BoxMesh.new()
     mesh.size = size
     var instance := MeshInstance3D.new()
-    instance.name = name
+    instance.name = "%s_%03d" % [name, visual_index]
     instance.mesh = mesh
     instance.material_override = material
     instance.transform = transform
     parent.add_child(instance)
     if collision and collision_body != null:
+        var collision_index := collision_body.get_child_count()
         var shape := BoxShape3D.new()
         shape.size = size
         var collider := CollisionShape3D.new()
-        collider.name = name + "Collision"
+        collider.name = "%sCollision_%03d" % [name, collision_index]
         collider.shape = shape
         collider.transform = transform
         collision_body.add_child(collider)
