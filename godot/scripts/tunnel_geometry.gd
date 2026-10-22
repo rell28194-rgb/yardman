@@ -2,10 +2,10 @@ extends Node
 class_name YardmanTunnelGeometry
 
 # Jamaica's base terrain is a height surface. A real tunnel therefore needs
-# three separate pieces: a small opening in that surface at each true portal,
-# an independent road deck below the mountain, and an interior shell that hides
-# the terrain underside. Road deck collision is handled by
-# road_structure_collision.gd; this node owns the portal hole and tunnel shell.
+# separate terrain openings, a profiled road deck below the mountain, an
+# interior shell, visible portal structure, and bounded lighting. Road deck
+# collision is handled by road_structure_collision.gd; this node owns the
+# terrain portal hole, shell, portal facade and non-shadowed tunnel lighting.
 
 const STRUCTURE_ROOT := "res://data/roads/structures"
 const PORTAL_ROOT := "res://data/roads/tunnel_portals"
@@ -17,12 +17,24 @@ const COLLISION_DETAIL_M := 4.0
 const TUNNEL_CLEARANCE_M := 5.2
 const WALL_THICKNESS_M := 0.42
 const CEILING_THICKNESS_M := 0.45
+const PORTAL_COLUMN_M := 0.68
+const PORTAL_LINTEL_M := 0.72
+const PORTAL_FRAME_DEPTH_M := 0.90
+const PORTAL_LIGHT_INSET_M := 5.0
+const INTERIOR_LIGHT_SPACING_M := 22.0
+const MAX_INTERIOR_LIGHTS_PER_TILE := 16
+const TUNNEL_LIGHT_RANGE_M := 13.0
+const TUNNEL_LIGHT_ENERGY := 0.52
 
 var terrain: Node
 var portal_tiles_built := 0
+var portal_facades_built := 0
+var portal_lights_built := 0
 var tunnel_segments_built := 0
+var interior_lights_built := 0
 var collision_triangles_removed := 0
 var _tunnel_material: StandardMaterial3D
+var _portal_material: StandardMaterial3D
 
 func _ready() -> void:
     call_deferred("_bind_terrain")
@@ -62,6 +74,7 @@ func _on_terrain_tile_ready(tile: Vector2i) -> void:
         if not local_portals.is_empty():
             _apply_portal_mask(tile_root, local_portals)
             _carve_portal_collision(tile_root, local_portals)
+            _build_portal_facades(tile, tile_root, portals)
             portal_tiles_built += 1
 
 func _prepare_portals(tile: Vector2i, portals: Array) -> Array:
@@ -240,23 +253,100 @@ func _tunnel_material_instance() -> StandardMaterial3D:
         _tunnel_material = StandardMaterial3D.new()
         _tunnel_material.albedo_color = Color(0.20, 0.205, 0.19)
         _tunnel_material.roughness = 0.92
-        _tunnel_material.metallic = 0.0
     return _tunnel_material
 
-func _add_box(body: StaticBody3D, dimensions: Vector3, center: Vector3) -> void:
+func _portal_material_instance() -> StandardMaterial3D:
+    if _portal_material == null:
+        _portal_material = StandardMaterial3D.new()
+        _portal_material.albedo_color = Color(0.44, 0.45, 0.43)
+        _portal_material.roughness = 0.95
+    return _portal_material
+
+func _add_box(body: StaticBody3D, dimensions: Vector3, center: Vector3,
+        material: Material = null, name: String = "TunnelStructure") -> void:
+    if dimensions.x <= 0.0 or dimensions.y <= 0.0 or dimensions.z <= 0.0:
+        return
+    var suffix := body.get_child_count()
     var mesh := BoxMesh.new()
     mesh.size = dimensions
     var instance := MeshInstance3D.new()
+    instance.name = "%sVisual_%03d" % [name, suffix]
     instance.mesh = mesh
-    instance.material_override = _tunnel_material_instance()
+    instance.material_override = material if material != null else _tunnel_material_instance()
     instance.position = center
     body.add_child(instance)
     var shape := BoxShape3D.new()
     shape.size = dimensions
     var collider := CollisionShape3D.new()
+    collider.name = "%sCollision_%03d" % [name, suffix]
     collider.shape = shape
     collider.position = center
     body.add_child(collider)
+
+func _add_tunnel_light(parent: Node3D, position: Vector3, name: String) -> void:
+    var light := OmniLight3D.new()
+    light.name = "%s_%03d" % [name, parent.get_child_count()]
+    light.position = position
+    light.light_color = Color(1.0, 0.84, 0.66)
+    light.light_energy = TUNNEL_LIGHT_ENERGY
+    light.omni_range = TUNNEL_LIGHT_RANGE_M
+    light.shadow_enabled = false
+    parent.add_child(light)
+
+func _portal_basis(position: Vector3, toward: Vector3) -> Basis:
+    var forward := toward - position
+    if forward.length_squared() < 0.0001:
+        return Basis.IDENTITY
+    forward = forward.normalized()
+    var right := Vector3.UP.cross(forward)
+    right = Vector3.RIGHT if right.length_squared() < 0.0001 else right.normalized()
+    var up := forward.cross(right)
+    up = Vector3.UP if up.length_squared() < 0.0001 else up.normalized()
+    if up.y < 0.0:
+        right = -right
+        up = -up
+    return Basis(right, up, forward)
+
+func _build_portal_facades(tile: Vector2i, tile_root: Node3D, portals: Array) -> void:
+    var old := tile_root.get_node_or_null("TunnelPortalFacades")
+    if old != null:
+        tile_root.remove_child(old)
+        old.queue_free()
+    var root_node := Node3D.new()
+    root_node.name = "TunnelPortalFacades"
+    var origin := Vector2(float(tile.x) * float(terrain.tile_size), float(tile.y) * float(terrain.tile_size))
+    for raw in portals:
+        if not raw is Dictionary:
+            continue
+        var p: Array = raw.get("position", [])
+        var q: Array = raw.get("toward", [])
+        if p.size() < 3 or q.size() < 3:
+            continue
+        var position := Vector3(float(p[0]) - origin.x, float(p[1]), float(p[2]) - origin.y)
+        var toward := Vector3(float(q[0]) - origin.x, float(q[1]), float(q[2]) - origin.y)
+        if position.distance_squared_to(toward) < 0.0001:
+            continue
+        var body := StaticBody3D.new()
+        body.name = "TunnelPortal_%03d" % portal_facades_built
+        body.transform = Transform3D(_portal_basis(position, toward), position)
+        body.collision_layer = 1
+        body.collision_mask = 0
+        var clear_width := maxf(4.5, float(raw.get("width_m", 6.0)) + 1.2)
+        var side_x := clear_width * 0.5 + PORTAL_COLUMN_M * 0.5
+        _add_box(body, Vector3(PORTAL_COLUMN_M, TUNNEL_CLEARANCE_M, PORTAL_FRAME_DEPTH_M),
+            Vector3(-side_x, TUNNEL_CLEARANCE_M * 0.5, 0.0), _portal_material_instance(), "PortalColumn")
+        _add_box(body, Vector3(PORTAL_COLUMN_M, TUNNEL_CLEARANCE_M, PORTAL_FRAME_DEPTH_M),
+            Vector3(side_x, TUNNEL_CLEARANCE_M * 0.5, 0.0), _portal_material_instance(), "PortalColumn")
+        _add_box(body, Vector3(clear_width + PORTAL_COLUMN_M * 2.0, PORTAL_LINTEL_M, PORTAL_FRAME_DEPTH_M),
+            Vector3(0.0, TUNNEL_CLEARANCE_M + PORTAL_LINTEL_M * 0.5, 0.0), _portal_material_instance(), "PortalLintel")
+        _add_tunnel_light(body, Vector3(0.0, TUNNEL_CLEARANCE_M - 0.65, PORTAL_LIGHT_INSET_M), "PortalLight")
+        root_node.add_child(body)
+        portal_facades_built += 1
+        portal_lights_built += 1
+    if root_node.get_child_count() > 0:
+        tile_root.add_child(root_node)
+    else:
+        root_node.queue_free()
 
 func _build_tunnel_shell(tile: Vector2i, tile_root: Node3D, tunnels: Array) -> void:
     var old := tile_root.get_node_or_null("TunnelShell")
@@ -267,6 +357,7 @@ func _build_tunnel_shell(tile: Vector2i, tile_root: Node3D, tunnels: Array) -> v
     shell.name = "TunnelShell"
     tile_root.add_child(shell)
     var origin := Vector2(float(tile.x) * float(terrain.tile_size), float(tile.y) * float(terrain.tile_size))
+    var lights_this_tile := 0
     for raw in tunnels:
         if not raw is Dictionary:
             continue
@@ -282,11 +373,12 @@ func _build_tunnel_shell(tile: Vector2i, tile_root: Node3D, tunnels: Array) -> v
             continue
         var forward := delta / length
         var right := Vector3.UP.cross(forward)
-        if right.length_squared() < 0.0001:
-            right = Vector3.RIGHT
-        else:
-            right = right.normalized()
-        var up := forward.cross(right).normalized()
+        right = Vector3.RIGHT if right.length_squared() < 0.0001 else right.normalized()
+        var up := forward.cross(right)
+        up = Vector3.UP if up.length_squared() < 0.0001 else up.normalized()
+        if up.y < 0.0:
+            right = -right
+            up = -up
         var basis := Basis(right, up, forward)
         var body := StaticBody3D.new()
         body.name = "TunnelSegment_%d" % tunnel_segments_built
@@ -301,5 +393,15 @@ func _build_tunnel_shell(tile: Vector2i, tile_root: Node3D, tunnels: Array) -> v
         _add_box(body, Vector3(clear_width + WALL_THICKNESS_M * 2.0,
             CEILING_THICKNESS_M, length + 0.6),
             Vector3(0.0, TUNNEL_CLEARANCE_M + CEILING_THICKNESS_M * 0.5, 0.0))
+        var remaining := MAX_INTERIOR_LIGHTS_PER_TILE - lights_this_tile
+        if remaining > 0:
+            var requested := maxi(1, int(floor(length / INTERIOR_LIGHT_SPACING_M)))
+            var light_count := mini(requested, remaining)
+            var spacing := length / float(light_count + 1)
+            for light_index in range(light_count):
+                var z := -length * 0.5 + spacing * float(light_index + 1)
+                _add_tunnel_light(body, Vector3(0.0, TUNNEL_CLEARANCE_M - 0.55, z), "TunnelLight")
+                lights_this_tile += 1
+                interior_lights_built += 1
         shell.add_child(body)
         tunnel_segments_built += 1
