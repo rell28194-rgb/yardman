@@ -12,6 +12,12 @@ const QUALITY_COUNTS := {
     "Ultra": 300,
     "Custom": 180,
 }
+const WETTABLE_SHADERS := [
+    "res://shaders/terrain_surface.gdshader",
+    "res://shaders/road_surface.gdshader",
+    "res://shaders/beach.gdshader",
+    "res://shaders/building_surface.gdshader",
+]
 
 var _mode := "Dynamic"
 var _intensity := 0.0
@@ -19,13 +25,13 @@ var _rain: MultiMeshInstance3D
 var _rain_material: ShaderMaterial
 var _materials: Dictionary = {}
 var _material_clock := 0.0
-var _button: Button
-var _layer: CanvasLayer
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
     _build_rain_batch()
-    _build_ui()
+    # Weather mode remains programmatically controllable through set_mode(), but
+    # it no longer owns a top-level HUD button. Engineering controls belong in
+    # the game's consolidated menu rather than covering normal gameplay.
     get_tree().node_added.connect(_on_node_added)
     set_process(true)
 
@@ -90,7 +96,6 @@ func set_mode(mode: String) -> void:
     if mode not in MODES:
         return
     _mode = mode
-    _refresh_button()
 
 func get_mode() -> String:
     return _mode
@@ -106,32 +111,9 @@ func debug_state() -> Dictionary:
         "max_drops": MAX_DROPS,
         "visible_drops": visible,
         "tracked_materials": _materials.size(),
+        "standalone_ui": 0,
+        "wettables": WETTABLE_SHADERS.size(),
     }
-
-func _build_ui() -> void:
-    _layer = CanvasLayer.new()
-    _layer.layer = 40
-    add_child(_layer)
-    _button = Button.new()
-    _button.position = Vector2(534, 18)
-    _button.size = Vector2(164, 46)
-    _button.focus_mode = Control.FOCUS_NONE
-    _button.tooltip_text = "Visual weather simulation: Dynamic / Clear / Shower"
-    _button.pressed.connect(_cycle_mode)
-    _layer.add_child(_button)
-    _refresh_button()
-
-func _cycle_mode() -> void:
-    var index := MODES.find(_mode)
-    set_mode(MODES[(index + 1) % MODES.size()])
-
-func _refresh_button() -> void:
-    if _button == null:
-        return
-    match _mode:
-        "Clear": _button.text = "WEATHER · CLEAR"
-        "Shower": _button.text = "WEATHER · RAIN"
-        _: _button.text = "WEATHER · AUTO"
 
 func _build_rain_batch() -> void:
     _rain_material = ShaderMaterial.new()
@@ -206,10 +188,6 @@ func _update_environment(game: Node) -> void:
 
 func _on_node_added(node: Node) -> void:
     if node is MeshInstance3D:
-        # Defer through a WeakRef rather than a typed object argument. Streamed
-        # tiles can be removed before the message queue runs; a direct typed
-        # MeshInstance3D deferred argument then becomes an invalid Object and
-        # errors before the callback can perform its own validity check.
         call_deferred("_track_mesh_instance", weakref(node))
 
 func _track_mesh_instance(reference) -> void:
@@ -229,7 +207,7 @@ func _track_material(material: ShaderMaterial) -> void:
     if material == null or material.shader == null:
         return
     var path := material.shader.resource_path
-    if path not in ["res://shaders/terrain_surface.gdshader", "res://shaders/road_surface.gdshader", "res://shaders/beach.gdshader"]:
+    if path not in WETTABLE_SHADERS:
         return
     _materials[material.get_instance_id()] = weakref(material)
     material.set_shader_parameter("weather_wetness", _intensity)
