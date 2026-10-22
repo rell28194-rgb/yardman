@@ -20,6 +20,7 @@ SurfaceContentBridge="*res://scripts/surface_content_bridge.gd"
 WeatherFX="*res://scripts/weather_fx_runtime.gd"
 WeatherPuddles="*res://scripts/weather_puddle_runtime.gd"
 RemoteFleet="*res://scripts/remote_fleet_runtime.gd"
+DownloadStatus="*res://scripts/download_status_overlay.gd"
 VehicleGarage="*res://scripts/vehicle_selector_runtime.gd"
 
 [display]
