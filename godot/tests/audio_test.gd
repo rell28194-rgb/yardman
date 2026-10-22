@@ -39,6 +39,11 @@ func _run() -> void:
     _check(str(files.get("road_gravel", "")) == "gravel_skid_loop.wav", "Gravel-loop recovery binding drifted")
     _check(str(files.get("road_grass", "")) == "grass_roll_loop.wav", "Grass-loop recovery binding drifted")
     _check(str(files.get("road_skid", "")) == "tire_skid_loop.wav", "Tire-skid recovery binding drifted")
+    _check(str(files.get("footstep_one_shot", "")) == "footsteps.wav" and bool(contract.get("footstep_one_shot", false)), "Footstep one-shot recovery binding drifted")
+    var walking_interval := AudioScript.footstep_interval(2.0)
+    var running_interval := AudioScript.footstep_interval(8.0)
+    _check(walking_interval <= 0.56 and walking_interval >= 0.28 and running_interval <= 0.56 and running_interval >= 0.28, "Footstep cadence escaped bounded timing")
+    _check(running_interval < walking_interval, "Running cadence is not faster than walking cadence")
 
     var state := {"driving": true, "speed_mps": 0.0, "rpm": 900.0, "on_road": true, "surface": "paved", "brake": 0.0,
         "walk_speed": 0.0, "ready": true, "menu_open": false}
