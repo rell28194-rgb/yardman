@@ -272,7 +272,7 @@ func _inject_look(touch) -> void:
     if invert_y:
         look_y = -look_y
     var raw_delta = touch.get("look_delta")
-    var look_delta := raw_delta if raw_delta is Vector2 else Vector2.ZERO
+    var look_delta: Vector2 = raw_delta if raw_delta is Vector2 else Vector2.ZERO
     look_delta += Vector2(look_x, look_y) * LOOK_PIXELS_PER_SECOND * get_physics_process_delta_time() * sensitivity
     touch.set("look_delta", look_delta)
 
@@ -307,7 +307,7 @@ func _garage_step(direction: int) -> void:
     var options = garage.get("_options")
     if not options is OptionButton or options.item_count <= 0:
         return
-    var index := options.selected
+    var index: int = int(options.selected)
     if index < 0:
         index = 0
     else:
@@ -328,7 +328,7 @@ func _sync_garage_block(game: Node) -> void:
         if _garage_forced_block:
             return
         var overlay = hud.get("_overlay")
-        var real_menu_open := bool(hud.get("menu_open")) and overlay is Control and overlay.visible
+        var real_menu_open: bool = bool(hud.get("menu_open")) and overlay is Control and overlay.visible
         if not real_menu_open:
             hud.set("menu_open", true)
             _garage_forced_block = true
