@@ -8,6 +8,7 @@ on:
       - 'godot/scripts/**'
       - 'godot/shaders/**'
       - 'godot/main.tscn'
+      - 'godot/tests/audio_test.gd'
       - 'godot/tests/mesh_geometry_guard_test.gd'
       - 'godot/tests/bridge_geometry_test.gd'
       - 'godot/tests/tunnel_geometry_runtime_test.gd'
@@ -55,6 +56,14 @@ jobs:
           mkdir -p godot/build
           timeout 300 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/world-reconciliation-import.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/world-reconciliation-import.log; then exit 1; fi
+
+      - name: Prove recovered Beta audio routing stays within voice budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/audio_test.gd 2>&1 | tee godot/build/audio-routing.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/audio-routing.log; then exit 1; fi
+          grep -q 'YARDMAN_AUDIO_TEST PASS cached_pcm=1 loop_seams=1 voices=4 rpm_smoothing=1 drive=1 gravel=1 grass=1 skid=1 footsteps=1 menu_silence=1 cache_cleanup=1' godot/build/audio-routing.log
 
       - name: Prove terrain material variation contract
         shell: bash
@@ -150,6 +159,7 @@ jobs:
           name: Yardman-World-Reconciliation-Godot-Evidence
           path: |
             godot/build/world-reconciliation-import.log
+            godot/build/audio-routing.log
             godot/build/terrain-surface-shader.log
             godot/build/beta-reference-assets.log
             godot/build/beta1-street-furniture.log
