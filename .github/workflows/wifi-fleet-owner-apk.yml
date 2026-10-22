@@ -10,6 +10,7 @@ on:
       - 'godot/scripts/reference_assets.gd'
       - 'godot/scripts/fleet_vehicle_model.gd'
       - 'godot/scripts/vehicle_selector_runtime.gd'
+      - 'godot/scripts/system_menu_bridge.gd'
       - 'godot/tests/owner_wifi_fleet_base_test.gd'
       - 'godot/project.godot'
       - 'godot/export_presets.cfg'
@@ -26,6 +27,8 @@ permissions:
 env:
   GODOT_VERSION: '4.7.2'
   GODOT_CHANNEL: stable
+  SOURCE_ARTIFACT_ID: '12336906664'
+  SOURCE_APK_SHA256: '3aba9038a31e09f8c1ac1c7e52ea5e5405fd3484ab279e2820a1b2379ff0d18a'
 
 jobs:
   build-owner-apk:
@@ -35,62 +38,69 @@ jobs:
       - name: Checkout WiFi fleet branch
         uses: actions/checkout@v4
 
-      - name: Restore exact accepted-world data
+      - name: Recover accepted world, 64-car manifest and Crown cache from validated Fleet64 APK
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
-          BASE_ARTIFACT=/tmp/accepted-base.zip
-          BASE_APK=/tmp/Yardman-Map-Crown-Reset-Fixed.apk
           curl --fail --location \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12284873612/zip" \
-            -o "$BASE_ARTIFACT"
-          unzip -p "$BASE_ARTIFACT" Yardman-Map-Crown-Reset.apk > "$BASE_APK"
-          echo '1b32465d4fe09865067ae8f47f0cf4de5daca3d4ea8a7f148d826e7ac305a072  /tmp/Yardman-Map-Crown-Reset-Fixed.apk' | sha256sum -c -
+            "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/${SOURCE_ARTIFACT_ID}/zip" \
+            -o /tmp/fleet64-source.zip
+          unzip -p /tmp/fleet64-source.zip Yardman-Fleet64-Owner.apk > /tmp/Yardman-Fleet64-Owner.apk
+          echo "${SOURCE_APK_SHA256}  /tmp/Yardman-Fleet64-Owner.apk" | sha256sum -c -
           rm -rf godot/data/roads godot/data/terrain godot/data/coast godot/data/buildings godot/data/parishes
-          python - "$BASE_APK" <<'PY'
-          import os, sys, zipfile
-          apk = sys.argv[1]
-          copied = 0
-          groups = {'roads': 0, 'terrain': 0, 'coast': 0, 'buildings': 0, 'parishes': 0}
+          rm -rf godot/assets/user_reference godot/.godot/imported
+          mkdir -p godot/assets/user_reference godot/.godot/imported
+          python - <<'PY'
+          import os, shutil, zipfile
+          apk='/tmp/Yardman-Fleet64-Owner.apk'
+          groups={'roads':0,'terrain':0,'coast':0,'buildings':0,'parishes':0}
+          crown_files=0
+          imported=0
           with zipfile.ZipFile(apk) as zf:
               for info in zf.infolist():
-                  if not info.filename.startswith('assets/data/') or info.is_dir():
+                  if info.is_dir():
                       continue
-                  rel = info.filename[len('assets/'):]
-                  dst = os.path.join('godot', rel)
-                  os.makedirs(os.path.dirname(dst), exist_ok=True)
-                  with zf.open(info) as src, open(dst, 'wb') as out:
-                      out.write(src.read())
-                  copied += 1
-                  parts = rel.split('/')
-                  if len(parts) > 1 and parts[1] in groups:
-                      groups[parts[1]] += 1
-          print('YARDMAN_ACCEPTED_WORLD_RESTORED', copied, groups)
+                  n=info.filename
+                  if n.startswith('assets/data/'):
+                      rel=n[len('assets/'):]
+                      dst=os.path.join('godot',rel)
+                      os.makedirs(os.path.dirname(dst),exist_ok=True)
+                      with zf.open(info) as src, open(dst,'wb') as out:
+                          shutil.copyfileobj(src,out)
+                      parts=rel.split('/')
+                      if len(parts)>1 and parts[1] in groups:
+                          groups[parts[1]]+=1
+                      continue
+                  if n == 'assets/assets/user_reference/manifest.json' or n.startswith('assets/assets/user_reference/toyota_crown_2013'):
+                      rel=n[len('assets/assets/user_reference/'):]
+                      dst=os.path.join('godot/assets/user_reference',rel)
+                      os.makedirs(os.path.dirname(dst),exist_ok=True)
+                      with zf.open(info) as src, open(dst,'wb') as out:
+                          shutil.copyfileobj(src,out)
+                      crown_files+=1
+                      continue
+                  if n.startswith('assets/.godot/imported/'):
+                      rel=n[len('assets/.godot/imported/'):]
+                      dst=os.path.join('godot/.godot/imported',rel)
+                      os.makedirs(os.path.dirname(dst),exist_ok=True)
+                      with zf.open(info) as src, open(dst,'wb') as out:
+                          shutil.copyfileobj(src,out)
+                      imported+=1
+          print('YARDMAN_WIFI_SOURCE_RECOVERY', groups, 'crown_files=',crown_files,'imported=',imported)
           if groups['roads'] < 700 or groups['terrain'] < 2500 or groups['coast'] < 2500 or groups['buildings'] < 700:
-              raise SystemExit('accepted-world payload incomplete: ' + repr(groups))
+              raise SystemExit('accepted world recovery incomplete: '+repr(groups))
+          if crown_files < 1:
+              raise SystemExit('accepted Crown source/remap missing from validated APK')
+          if imported < 650:
+              raise SystemExit('validated import cache recovery incomplete')
           PY
-
-      - name: Restore Crown only and retain 64-car manifest
-        shell: bash
-        run: |
-          set -euxo pipefail
-          PACK=/tmp/Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip
-          curl --fail --location --retry 2 --retry-all-errors \
-            'https://www.dropbox.com/scl/fi/jv54iuqhthvejvuy6zezc/Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip?rlkey=80kgw28rol81hnia2xbikuspe&dl=1' \
-            -o "$PACK"
-          echo '6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b  /tmp/Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip' | sha256sum -c -
-          rm -rf godot/assets/user_reference
-          mkdir -p godot/assets/user_reference
-          unzip -p "$PACK" manifest.json > godot/assets/user_reference/manifest.json
-          unzip -p "$PACK" toyota_crown_2013.glb > godot/assets/user_reference/toyota_crown_2013.glb
           test -s godot/assets/user_reference/manifest.json
-          test -s godot/assets/user_reference/toyota_crown_2013.glb
-          test "$(find godot/assets/user_reference -maxdepth 1 -type f -name '*.glb' | wc -l)" -eq 1
+          test -s godot/.godot/imported/toyota_crown_2013.glb-6ec01e928ae54ac12e5bc0f6ba8bd627.scn
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -114,6 +124,7 @@ jobs:
           chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
           sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
           wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_export_templates.tpz" -O /tmp/templates.tpz
+          rm -rf /tmp/templates && mkdir -p /tmp/templates
           unzip -q /tmp/templates.tpz -d /tmp/templates
           mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_CHANNEL}"
           cp -a /tmp/templates/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_CHANNEL}/"
@@ -151,12 +162,12 @@ jobs:
           timeout 300 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/import.log
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/import.log; then exit 1; fi
 
-      - name: Prove Crown base and post-install fleet path
+      - name: Prove Crown base, resumable fleet contract and consolidated HUD
         shell: bash
         run: |
           set -euo pipefail
           timeout 600 godot --headless --path godot --script tests/owner_wifi_fleet_base_test.gd 2>&1 | tee godot/build/wifi-fleet-base.log
-          grep -q 'YARDMAN_OWNER_WIFI_FLEET_BASE_PASS base=toyota_crown embedded=1 remote_pack_bytes=159594070 runtime_gltf=user:// garage=download-ready' godot/build/wifi-fleet-base.log
+          grep -q 'YARDMAN_OWNER_WIFI_FLEET_BASE_PASS base=toyota_crown embedded=1 remote_pack_bytes=159594070 resumable=4194304 garage=download-ready hud=consolidated' godot/build/wifi-fleet-base.log
 
       - name: Export lightweight owner APK
         shell: bash
@@ -175,30 +186,35 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose --print-certs "$APK" | tee godot/build/apksigner.txt
           python - "$APK" <<'PY'
           import hashlib, os, sys, zipfile
-          apk = sys.argv[1]
-          size = os.path.getsize(apk)
+          apk=sys.argv[1]
+          size=os.path.getsize(apk)
           with zipfile.ZipFile(apk) as zf:
-              names = set(zf.namelist())
-              required = {
+              names=set(zf.namelist())
+              required={
                   'assets/scripts/remote_fleet_runtime.gdc',
                   'assets/scripts/vehicle_selector_runtime.gdc',
                   'assets/scripts/fleet_vehicle_model.gdc',
+                  'assets/scripts/system_menu_bridge.gdc',
                   'assets/data/parishes/manifest.json',
+                  'assets/assets/user_reference/manifest.json',
               }
-              missing = sorted(required - names)
+              missing=sorted(required-names)
               if missing:
-                  raise SystemExit('missing WiFi fleet runtime in APK: ' + repr(missing))
-              embedded_fleet = sorted(n for n in names if 'fleet_audi_r8' in n or 'fleet_bmw_' in n or 'fleet_nissan_' in n)
+                  raise SystemExit('missing WiFi fleet runtime in APK: '+repr(missing))
+              crown=[n for n in names if 'toyota_crown_2013' in n]
+              if not crown:
+                  raise SystemExit('accepted Crown asset/cache missing from exported APK')
+              embedded_fleet=sorted(n for n in names if 'fleet_audi_r8' in n or 'fleet_bmw_' in n or 'fleet_nissan_' in n)
               if embedded_fleet:
-                  raise SystemExit('lightweight APK accidentally embedded fleet assets: ' + repr(embedded_fleet[:20]))
-              abis = sorted({n.split('/')[1] for n in names if n.startswith('lib/') and n.endswith('.so')})
+                  raise SystemExit('lightweight APK accidentally embedded fleet assets: '+repr(embedded_fleet[:20]))
+              abis=sorted({n.split('/')[1] for n in names if n.startswith('lib/') and n.endswith('.so')})
           if size >= 450_000_000:
               raise SystemExit(f'lightweight APK unexpectedly large: {size}')
           if abis != ['arm64-v8a']:
-              raise SystemExit('unexpected ABI set: ' + repr(abis))
-          digest = hashlib.sha256(open(apk, 'rb').read()).hexdigest()
-          print(f'YARDMAN_WIFI_FLEET_APK_PASS bytes={size} sha256={digest} embedded_base=crown remote_fleet=159594070 abis={abis}')
-          open('godot/build/Yardman-Crown-WiFi-Fleet-Owner.apk.sha256', 'w').write(digest + '  Yardman-Crown-WiFi-Fleet-Owner.apk\n')
+              raise SystemExit('unexpected ABI set: '+repr(abis))
+          digest=hashlib.sha256(open(apk,'rb').read()).hexdigest()
+          print(f'YARDMAN_WIFI_FLEET_APK_PASS bytes={size} sha256={digest} embedded_base=crown remote_fleet=159594070 consolidated_hud=true abis={abis}')
+          open('godot/build/Yardman-Crown-WiFi-Fleet-Owner.apk.sha256','w').write(digest+'  Yardman-Crown-WiFi-Fleet-Owner.apk\n')
           PY
 
       - name: Upload lightweight owner APK
