@@ -86,7 +86,7 @@ static func rejection_message(context: String, result: Dictionary) -> String:
     return "Rejected unsafe streamed geometry %s: %s %s" % [
         context,
         str(result.get("reason", "unknown")),
-        JSON.stringify(result.get("details", {})),
+        str(result.get("details", {})),
     ]
 
 static func _finite_vector(value: Vector3) -> bool:
