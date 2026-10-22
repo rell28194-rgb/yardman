@@ -67,15 +67,18 @@ func _run() -> void:
 
     var positive_side := 0
     var negative_side := 0
+    var required_clearance := 6.0 * 0.5 + Groundcover.MIN_ROAD_CLEARANCE_M
+    var minimum_clearance := INF
     for index in range(cell.multimesh.instance_count):
         var local_pose := cell.multimesh.get_instance_transform(index)
         var position := cell.position + local_pose.origin
         var clearance := absf(position.z - 128.0)
-        if clearance < 6.0 * 0.5 + Groundcover.MIN_ROAD_CLEARANCE_M - 0.001:
-            _fail("groundcover anchor entered the road clearance envelope")
+        minimum_clearance = minf(minimum_clearance, clearance)
+        if clearance < required_clearance - 0.001:
+            _fail("road clearance failed index=%d world_z=%.6f local_z=%.6f cell_z=%.6f clearance=%.6f required=%.6f" % [index, position.z, local_pose.origin.z, cell.position.z, clearance, required_clearance])
             return
         if not is_equal_approx(position.y, 5.015):
-            _fail("groundcover did not use registered terrain height")
+            _fail("terrain height failed index=%d world_y=%.6f local_y=%.6f cell_y=%.6f" % [index, position.y, local_pose.origin.y, cell.position.y])
             return
         if position.z > 128.0:
             positive_side += 1
@@ -95,5 +98,5 @@ func _run() -> void:
     helper.free()
     fake_roads.free()
     fake_terrain.free()
-    print("YARDMAN_NEAR_FIELD_GROUNDCOVER_RUNTIME_TEST PASS anchors=38 cells=1 road_clearance=1 terrain=1 multimesh=1 shadows=0 collision=0")
+    print("YARDMAN_NEAR_FIELD_GROUNDCOVER_RUNTIME_TEST PASS anchors=38 cells=1 road_clearance=1 terrain=1 multimesh=1 shadows=0 collision=0 min_clearance=%.3f" % minimum_clearance)
     quit(0)
