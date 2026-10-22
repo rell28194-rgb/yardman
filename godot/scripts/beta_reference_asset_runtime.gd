@@ -7,6 +7,7 @@ const References = preload("res://scripts/reference_assets.gd")
 const TERRAIN_NORMAL_ASSET := "beta2_ucaptain_scrub_grass_normal.ktx"
 const TERRAIN_ALT_ROCK_ASSET := "ground_rock_alternate.png"
 const WATER_NORMAL_ASSET := "beta2_ucaptain_water_bump.ktx"
+const WATER_ALT_FOAM_ASSET := "water_foam_japan.png"
 const BUILDING_CONCRETE_ASSET := "building_concrete.png"
 
 var _terrain
@@ -14,6 +15,7 @@ var _buildings
 var _terrain_normal: Texture2D
 var _terrain_alt_rock: Texture2D
 var _water_normal: Texture2D
+var _water_alt_foam: Texture2D
 var _building_concrete: Texture2D
 var _clock := 0.0
 var _bound := false
@@ -45,10 +47,11 @@ func _try_bind() -> void:
     _terrain_normal = References.texture(TERRAIN_NORMAL_ASSET)
     _terrain_alt_rock = References.texture(TERRAIN_ALT_ROCK_ASSET)
     _water_normal = References.texture(WATER_NORMAL_ASSET)
+    _water_alt_foam = References.texture(WATER_ALT_FOAM_ASSET)
     _building_concrete = References.texture(BUILDING_CONCRETE_ASSET)
     if not _terrain.tile_ready.is_connected(_on_tile_ready):
         _terrain.tile_ready.connect(_on_tile_ready)
-    _apply_ocean_normal()
+    _apply_ocean_detail()
     _apply_building_concrete()
     for raw: Variant in _terrain._loaded.values():
         if raw is Node3D:
@@ -65,7 +68,7 @@ func _on_tile_ready(tile: Vector2i) -> void:
         _apply_terrain_detail(tile_root as Node3D)
     # Coastline/building materials are shared. Reapplying is cheap and covers a
     # renderer created after this runtime first bound.
-    _apply_ocean_normal()
+    _apply_ocean_detail()
     _apply_building_concrete()
 
 func _apply_terrain_detail(tile_root: Node3D) -> void:
@@ -86,8 +89,8 @@ func _apply_terrain_detail(tile_root: Node3D) -> void:
         material.set_shader_parameter("has_reference_rock_alternate", true)
         land.set_meta("beta1_alternate_rock", true)
 
-func _apply_ocean_normal() -> void:
-    if _water_normal == null or _terrain == null or not is_instance_valid(_terrain):
+func _apply_ocean_detail() -> void:
+    if (_water_normal == null and _water_alt_foam == null) or _terrain == null or not is_instance_valid(_terrain):
         return
     var coastline: Variant = _terrain.coastline
     if coastline == null or not is_instance_valid(coastline):
@@ -95,9 +98,14 @@ func _apply_ocean_normal() -> void:
     var material := coastline.water_material as ShaderMaterial
     if material == null:
         return
-    material.set_shader_parameter("reference_normal", _water_normal)
-    material.set_shader_parameter("has_reference_normal", true)
-    coastline.set_meta("beta2_water_normal", true)
+    if _water_normal != null:
+        material.set_shader_parameter("reference_normal", _water_normal)
+        material.set_shader_parameter("has_reference_normal", true)
+        coastline.set_meta("beta2_water_normal", true)
+    if _water_alt_foam != null:
+        material.set_shader_parameter("reference_foam_alternate", _water_alt_foam)
+        material.set_shader_parameter("has_reference_foam_alternate", true)
+        coastline.set_meta("beta1_alternate_foam", true)
 
 func _apply_building_concrete() -> void:
     if _building_concrete == null or _buildings == null or not is_instance_valid(_buildings):
@@ -114,10 +122,12 @@ static func optional_asset_contract() -> Dictionary:
         "terrain_normal": TERRAIN_NORMAL_ASSET,
         "terrain_alt_rock": TERRAIN_ALT_ROCK_ASSET,
         "water_normal": WATER_NORMAL_ASSET,
+        "water_alt_foam": WATER_ALT_FOAM_ASSET,
         "building_concrete": BUILDING_CONCRETE_ASSET,
         "geometry_mutation": false,
         "collision": false,
         "extra_draw_calls": false,
         "alternate_rock_extra_samples": 1,
+        "alternate_foam_extra_samples": 1,
         "asset_absent_fallback": true,
     }
