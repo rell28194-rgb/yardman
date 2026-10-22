@@ -19,7 +19,7 @@ permissions:
 env:
   GODOT_VERSION: '4.7.2'
   GODOT_CHANNEL: stable
-  SOURCE_COMMIT: '8cc974f1a8c8cde8e47a6fbefc737a6b10b1faee'
+  SOURCE_COMMIT: 'd3becbe25d2a6ec73bd767f6a8693448ec8f4448'
   SOURCE_ARTIFACT_ID: '12336906664'
   SOURCE_APK_SHA256: '3aba9038a31e09f8c1ac1c7e52ea5e5405fd3484ab279e2820a1b2379ff0d18a'
 
@@ -117,7 +117,7 @@ jobs:
           run_test tests/owner_fleet_64_test.gd godot/build/strict-owner-fleet-64.log 'YARDMAN_OWNER_FLEET_64_PASS selectors=64 available=64 built=64 failures=0'
           run_test tests/owner_garage_runtime_test.gd godot/build/strict-owner-garage-runtime.log 'YARDMAN_OWNER_GARAGE_RUNTIME_PASS selector=64 default=toyota_crown switch=toyota_crown>audi_r8>toyota_crown'
           run_test tests/input_router_test.gd godot/build/strict-input-router.log 'YARDMAN_INPUT_ROUTER_PASS keyboard=true dualsense=true analog=true garage=true'
-          echo 'YARDMAN_FLEET64_CONTROLLER_STRICT_PASS source=8cc974f1a8c8cde8e47a6fbefc737a6b10b1faee'
+          echo 'YARDMAN_FLEET64_CONTROLLER_STRICT_PASS source=d3becbe25d2a6ec73bd767f6a8693448ec8f4448'
 
       - name: Upload strict validation evidence
         if: always()
