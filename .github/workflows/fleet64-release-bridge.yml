@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - codex/accepted-fleet-garage-001
+      - codex/garage-download-fix-20261021
     paths:
       - '.github/workflows/fleet64-release-bridge.yml'
   workflow_dispatch:
@@ -19,7 +20,7 @@ permissions:
 env:
   GODOT_VERSION: '4.7.2'
   GODOT_CHANNEL: stable
-  SOURCE_COMMIT: 'b10bf9826b83d8ac5ab0c15f28117a7d48a307fb'
+  SOURCE_COMMIT: '6ea0ada8cd679d50cf3c42238ac17a234cc158ba'
   SOURCE_ARTIFACT_ID: '12336906664'
   SOURCE_APK_SHA256: '3aba9038a31e09f8c1ac1c7e52ea5e5405fd3484ab279e2820a1b2379ff0d18a'
 
@@ -28,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - name: Checkout exact validated Fleet64 source commit
+      - name: Checkout exact fixed Fleet64 source commit
         uses: actions/checkout@v4
         with:
           ref: ${{ env.SOURCE_COMMIT }}
@@ -147,7 +148,7 @@ jobs:
           timeout 600 godot --headless --path godot --script tests/owner_fleet_64_test.gd 2>&1 | tee godot/build/owner-fleet-64.log
           grep -q 'YARDMAN_OWNER_FLEET_64_PASS selectors=64 available=64 built=64 failures=0' godot/build/owner-fleet-64.log
           timeout 600 godot --headless --path godot --script tests/owner_garage_runtime_test.gd 2>&1 | tee godot/build/owner-garage-runtime.log
-          grep -q 'YARDMAN_OWNER_GARAGE_RUNTIME_PASS selector=64 default=toyota_crown switch=toyota_crown>audi_r8>toyota_crown' godot/build/owner-garage-runtime.log
+          grep -q 'YARDMAN_OWNER_GARAGE_RUNTIME_PASS selector=64 input=touch+G download_overlay=real_progress switch=toyota_crown>audi_r8>toyota_crown' godot/build/owner-garage-runtime.log
 
       - name: Export signed release APK
         shell: bash
@@ -179,6 +180,8 @@ jobs:
               required={
                   'assets/data/owner_fleet_pack_contract.json',
                   'assets/scripts/vehicle_selector_runtime.gdc',
+                  'assets/scripts/download_status_overlay.gdc',
+                  'assets/scripts/remote_fleet_runtime.gdc',
                   'assets/scripts/vehicle_catalog.gdc',
                   'assets/scripts/fleet_vehicle_model.gdc',
                   'assets/data/parishes/manifest.json',
