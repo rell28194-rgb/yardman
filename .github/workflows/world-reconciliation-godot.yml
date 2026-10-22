@@ -12,6 +12,7 @@ on:
       - 'godot/tests/bridge_geometry_test.gd'
       - 'godot/tests/tunnel_geometry_runtime_test.gd'
       - 'godot/tests/terrain_surface_shader_contract_test.gd'
+      - 'godot/tests/near_field_groundcover_runtime_test.gd'
       - '.github/workflows/world-reconciliation-godot.yml'
   workflow_dispatch:
 
@@ -57,6 +58,14 @@ jobs:
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/terrain-surface-shader.log; then exit 1; fi
           grep -q 'YARDMAN_TERRAIN_SURFACE_SHADER_CONTRACT_TEST PASS warp=1 scale=1 biome=1 pale_rock=1 hd=1 weather=1 tunnel=1' godot/build/terrain-surface-shader.log
 
+      - name: Prove near-field groundcover batching
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/near_field_groundcover_runtime_test.gd 2>&1 | tee godot/build/near-field-groundcover.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/near-field-groundcover.log; then exit 1; fi
+          grep -q 'YARDMAN_NEAR_FIELD_GROUNDCOVER_RUNTIME_TEST PASS anchors=38 cells=1 road_clearance=1 terrain=1 multimesh=1 shadows=0 collision=0' godot/build/near-field-groundcover.log
+
       - name: Prove catastrophic geometry rejection contract
         shell: bash
         run: |
@@ -88,6 +97,7 @@ jobs:
           path: |
             godot/build/world-reconciliation-import.log
             godot/build/terrain-surface-shader.log
+            godot/build/near-field-groundcover.log
             godot/build/mesh-geometry-guard.log
             godot/build/bridge-geometry.log
             godot/build/tunnel-geometry-runtime.log
