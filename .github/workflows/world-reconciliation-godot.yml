@@ -14,6 +14,7 @@ on:
       - 'godot/tests/terrain_surface_shader_contract_test.gd'
       - 'godot/tests/near_field_groundcover_runtime_test.gd'
       - 'godot/tests/vegetation_lod_blend_runtime_test.gd'
+      - 'godot/tests/hydrology_visual_hierarchy_runtime_test.gd'
       - '.github/workflows/world-reconciliation-godot.yml'
   workflow_dispatch:
 
@@ -75,6 +76,14 @@ jobs:
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/vegetation-lod-blend.log; then exit 1; fi
           grep -q 'YARDMAN_VEGETATION_LOD_BLEND_RUNTIME_TEST PASS near=2 distant=2 grass=1 overlap=1 duplicate_safe=1 unrelated=0' godot/build/vegetation-lod-blend.log
 
+      - name: Prove v2 water visual hierarchy
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/hydrology_visual_hierarchy_runtime_test.gd 2>&1 | tee godot/build/hydrology-visual-hierarchy.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/hydrology-visual-hierarchy.log; then exit 1; fi
+          grep -q 'YARDMAN_HYDROLOGY_VISUAL_HIERARCHY_RUNTIME_TEST PASS v2=1 quads=2 geometry_unchanged=1 surfaces=1 stream_fast=1 river_broad=1 legacy_untouched=1' godot/build/hydrology-visual-hierarchy.log
+
       - name: Prove catastrophic geometry rejection contract
         shell: bash
         run: |
@@ -108,6 +117,7 @@ jobs:
             godot/build/terrain-surface-shader.log
             godot/build/near-field-groundcover.log
             godot/build/vegetation-lod-blend.log
+            godot/build/hydrology-visual-hierarchy.log
             godot/build/mesh-geometry-guard.log
             godot/build/bridge-geometry.log
             godot/build/tunnel-geometry-runtime.log
