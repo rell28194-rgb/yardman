@@ -141,6 +141,7 @@ func _rebuild() -> void:
     instance.visibility_range_end_margin = VISIBILITY_FADE_M
     instance.set_meta("culvert_count", plans.size())
     instance.set_meta("source_contract", "approved reconciled v2 culvert crossing + compiled channel segment + exact road_width_m")
+    instance.set_meta("open_aperture", true)
     instance.set_meta("terrain_mutation", false)
     instance.set_meta("water_mutation", false)
     instance.set_meta("road_mutation", false)
@@ -155,7 +156,18 @@ func _append_plan(surface: SurfaceTool, plan: Dictionary) -> void:
         var center_local: Vector3 = _roads.coordinates.world_to_local(center_world.x, center_world.z, center_world.y)
         var height: float = float(plan.headwall_height_m)
         var wall_width: float = float(plan.headwall_width_m)
-        _append_box(surface, center_local, side, channel, wall_width, height, HEADWALL_THICKNESS_M)
+        var opening_width: float = float(plan.opening_width_m)
+        var opening_height: float = float(plan.opening_height_m)
+        var post_width := maxf(0.18, (wall_width - opening_width) * 0.5)
+        var post_offset := opening_width * 0.5 + post_width * 0.5
+        # Two posts and a lintel leave the water opening visibly unobstructed.
+        _append_box(surface, center_local + Vector3(side.x, 0.0, side.y) * post_offset,
+            side, channel, post_width, height, HEADWALL_THICKNESS_M)
+        _append_box(surface, center_local - Vector3(side.x, 0.0, side.y) * post_offset,
+            side, channel, post_width, height, HEADWALL_THICKNESS_M)
+        var lintel_height := maxf(0.20, height - opening_height)
+        var lintel_base := center_local + Vector3.UP * opening_height
+        _append_box(surface, lintel_base, side, channel, wall_width, lintel_height, HEADWALL_THICKNESS_M)
         # Wing walls flare away from the road/channel opening. Their plan is
         # deterministic presentation derived from the same channel axis only.
         var outward: Vector2 = channel * float(mouth.outward_sign)
@@ -231,8 +243,10 @@ static func culvert_plan(crossing: Dictionary, a: Vector3, b: Vector3, water_wid
     if not is_finite(elevation):
         return {}
     var mouth_offset := road_width * 0.5 + ROAD_EDGE_MARGIN_M
-    var wall_width := clampf(water_width + 1.10, 2.0, 12.0)
-    var wall_height := clampf(0.95 + water_width * 0.32, 1.15, 3.2)
+    var opening_width := clampf(water_width * 0.86, 0.70, 8.5)
+    var opening_height := clampf(0.62 + water_width * 0.24, 0.82, 2.25)
+    var wall_width := clampf(maxf(water_width + 1.10, opening_width + 0.70), 2.0, 12.0)
+    var wall_height := clampf(maxf(1.15, opening_height + 0.38), 1.15, 3.2)
     var mouth_a := crossing_point - channel * mouth_offset
     var mouth_b := crossing_point + channel * mouth_offset
     return {
@@ -241,6 +255,8 @@ static func culvert_plan(crossing: Dictionary, a: Vector3, b: Vector3, water_wid
         "water_width_m": water_width,
         "headwall_width_m": wall_width,
         "headwall_height_m": wall_height,
+        "opening_width_m": opening_width,
+        "opening_height_m": opening_height,
         "crossing": crossing_point,
         "source_unchanged": true,
         "mouths": [
@@ -257,6 +273,7 @@ static func runtime_contract() -> Dictionary:
         "max_culverts": MAX_CULVERTS,
         "visibility_m": VISIBILITY_END_M,
         "material_asset": CONCRETE_ASSET,
+        "open_aperture": true,
         "terrain_mutation": false,
         "water_mutation": false,
         "road_mutation": false,
