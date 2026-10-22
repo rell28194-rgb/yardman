@@ -1,0 +1,121 @@
+{
+  "schema": "yardman-beta2-source-probe-v1",
+  "source": "simcity-buildit_1.83.1.15811904-an1.com",
+  "date_utc": "2026-10-22",
+  "scope": "private owner-authorized source recovery metadata only; no source media committed",
+  "outer_archive": {
+    "name": "beta2.7z",
+    "total_split_parts": 232,
+    "logical_bytes": 12127043787,
+    "outer_member_count": 488,
+    "payload_stream_count": 487,
+    "header": {
+      "next_header_offset": 12127043716,
+      "next_header_size": 39,
+      "encoded_header_packed_bytes": 5068,
+      "encoded_header_unpacked_bytes": 54930,
+      "encoded_header_crc32": "5e51542b"
+    },
+    "simcity_window": {
+      "outer_volumes_first": 202,
+      "outer_volumes_last": 207,
+      "outer_volume_bytes": 52428800,
+      "nested_parts": 12,
+      "packed_bytes": 288167324,
+      "unpacked_bytes": 288155701,
+      "first_stream_local_offset_in_volume_202": 4088343,
+      "last_stream_end_local_offset_in_volume_207": 30111667,
+      "compression": "LZMA2",
+      "lzma2_dictionary_bytes": 33554432
+    }
+  },
+  "inner_archive": {
+    "split_parts": 12,
+    "logical_bytes": 288155701,
+    "member_count": 1,
+    "member": "simcity-buildit_1.83.1.15811904-an1.com.apk",
+    "packed_bytes": 288155507,
+    "unpacked_bytes": 297679778,
+    "crc32": "050a6540",
+    "compression": "LZMA2",
+    "lzma2_dictionary_bytes": 67108864,
+    "sha256": "7296dc7b7c20917e8997b8a15da0aeaef44c513ac54096675a5f5ac225741646"
+  },
+  "apk_inventory": {
+    "members": 887,
+    "assets_app_zip_bytes": 292990431,
+    "app_zip_sha256": "c02290fc41d373499679aed06da15988e903db2b7439f37c4c1ae4b0e3ee62ed",
+    "app_zip_split_apks": 85,
+    "base_apk": {
+      "bytes": 143857987,
+      "sha256": "0000bd4aa2762cad1724d56c09251d3e81ae859b1e9d0bd777b5ad0f4bc1af2c",
+      "members": 2731,
+      "asset_entries": 1401
+    },
+    "install_pack_apk": {
+      "bytes": 101909822,
+      "sha256": "3bca6043f0d153a64c0e6e88dbf59e63aad192fd9dd7875736d1a5184746d7ac",
+      "members": 1276,
+      "group_bin_entries": 1271
+    }
+  },
+  "candidate_groups": [
+    {
+      "path": "assets/RCI/BuildingTextures.group.bin",
+      "bytes": 3071143,
+      "sha256": "067787b065712e56c11e22b13e0f44003f3a4a85da3915224087aa43b9ce692f",
+      "intended_evaluation": "shared neutral building material/texture families"
+    },
+    {
+      "path": "assets/RCI/BuildingR7_8_2.group.bin",
+      "bytes": 228864,
+      "sha256": "2acf2deafe10cb14bd8f62d037b55e46b580fec7ed197a235bdc1f1c3d7607af",
+      "intended_evaluation": "generic building geometry/material family"
+    },
+    {
+      "path": "assets/RCI/U73_CostaR_Coffee_Farm_l1.group.bin",
+      "bytes": 244572,
+      "sha256": "00cbee341bd4ef393fdd9429b464fde1a9dc2ec36e0e05297e00033d9cda5e77",
+      "intended_evaluation": "tropical low-rise/agricultural presentation reference"
+    },
+    {
+      "path": "assets/RCI/U54_CT_Botanical_Garden.group.bin",
+      "bytes": 217243,
+      "sha256": "42569d80169b7c831bbf900f695380587d15e8fb859bb60e84a17f74d94a780a",
+      "intended_evaluation": "tropical vegetation/landscape presentation reference"
+    },
+    {
+      "path": "assets/RCI/U57_BF_Outdoor_Plaza.group.bin",
+      "bytes": 224158,
+      "sha256": "9c1666b28f146c31183a9fb7b16e8413f0eb36a531fe592e80328de859505def",
+      "intended_evaluation": "neutral plaza/street-furniture reference"
+    }
+  ],
+  "group_container": {
+    "current_magic_hex": "6ecd4288",
+    "legacy_public_lz4_frame_magic_present": false,
+    "legacy_public_decompressed_magic_present": false,
+    "direct_lz4_frame_decode": "failed: frame type unknown",
+    "direct_lz4_block_decode": "failed on probed groups",
+    "native_runtime": {
+      "library": "libsimcity.so",
+      "bytes": 37500848,
+      "sha256": "d3b92617fda2e75492b1271bc25c63033f53d21f4378ef23bc3b05b3a1b0613b",
+      "observed_strings": [
+        ".group.bin",
+        "N7eamaxis12CompressedFSE"
+      ],
+      "engine": "Marmalade"
+    },
+    "status": "unresolved current-version EA/Maxis CompressedFSE wrapper; no asset promoted until decoded and independently validated"
+  },
+  "promotion_rules": {
+    "allow_direct_runtime_import": false,
+    "require_decoder_validation": true,
+    "require_bounds_scale_material_inspection": true,
+    "require_godot_compatibility_render": true,
+    "require_android_budget_review": true,
+    "require_neutral_or_jamaica-appropriate_family": true,
+    "geographic_authority": false
+  }
+}
