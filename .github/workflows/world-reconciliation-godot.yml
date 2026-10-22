@@ -13,6 +13,7 @@ on:
       - 'godot/tests/tunnel_geometry_runtime_test.gd'
       - 'godot/tests/terrain_surface_shader_contract_test.gd'
       - 'godot/tests/beta_reference_asset_contract_test.gd'
+      - 'godot/tests/beta1_street_furniture_runtime_test.gd'
       - 'godot/tests/near_field_groundcover_runtime_test.gd'
       - 'godot/tests/near_field_built_environment_runtime_test.gd'
       - 'godot/tests/near_field_road_edge_runtime_test.gd'
@@ -70,6 +71,14 @@ jobs:
           timeout 120 godot --headless --path godot --script tests/beta_reference_asset_contract_test.gd 2>&1 | tee godot/build/beta-reference-assets.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/beta-reference-assets.log; then exit 1; fi
           grep -q 'YARDMAN_BETA_REFERENCE_ASSET_CONTRACT_TEST PASS aliases=2 ktx=1 terrain_normal=1 water_normal=1 fallback=1' godot/build/beta-reference-assets.log
+
+      - name: Prove recovered Beta1 street furniture placement
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/beta1_street_furniture_runtime_test.gd 2>&1 | tee godot/build/beta1-street-furniture.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/beta1-street-furniture.log; then exit 1; fi
+          grep -q 'YARDMAN_BETA1_STREET_FURNITURE_RUNTIME_TEST PASS hydrant=1 bin=1 cabinet=1 rear_rejected=1 bridge_rejected=1 tunnel_rejected=1 source_unchanged=1 near_only=1 collision=0 construction=0' godot/build/beta1-street-furniture.log
 
       - name: Prove near-field groundcover batching
         shell: bash
@@ -143,6 +152,7 @@ jobs:
             godot/build/world-reconciliation-import.log
             godot/build/terrain-surface-shader.log
             godot/build/beta-reference-assets.log
+            godot/build/beta1-street-furniture.log
             godot/build/near-field-groundcover.log
             godot/build/near-field-built-environment.log
             godot/build/near-field-road-edge.log
