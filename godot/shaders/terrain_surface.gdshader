@@ -1,16 +1,15 @@
 shader_type spatial;
 render_mode cull_back;
 
-// Original procedural surface. Canonical origins deliberately replace
-// MODEL_MATRIX translation: shifting the renderer never slides the texture.
+// Canonical national coordinates keep material detail fixed while floating-origin
+// rendering moves the scene. The same shared noise field drives macro variation,
+// UV warp and biome tint so near-field quality improves without extra texture maps.
 uniform sampler2D surface_noise : repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_grass : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_dry_grass : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_rock : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool has_reference_ground = false;
 uniform bool has_reference_rock = false;
-// Optional post-install Surface HD materials. These use the same canonical
-// coordinate field and never alter registered terrain geometry or collision.
 uniform sampler2D surface_hd_lush : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D surface_hd_dry : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D surface_hd_soil : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
@@ -35,9 +34,6 @@ void vertex() {
 }
 
 void fragment() {
-    // Only true negative-layer tunnel portals receive a mask. The mountain
-    // remains intact over the tunnel interior; this removes just the opening
-    // where the profiled road deck passes beneath the terrain surface.
     if (tunnel_portal_mask_enabled) {
         vec2 portal_uv = clamp(tile_position / max(terrain_tile_size, 1.0), vec2(0.0), vec2(1.0));
         if (texture(tunnel_portal_mask, portal_uv).r > 0.5) {
@@ -48,33 +44,42 @@ void fragment() {
     vec3 blend = pow(abs(normalize(ground_normal)), vec3(5.0));
     blend /= max(blend.x + blend.y + blend.z, 0.0001);
     vec3 p = ground_position;
-    // Powers of two divide the canonical precision wrap exactly, including
-    // neighbouring tiles on a 16 km boundary.
     vec3 detail = texture(surface_noise, p.yz / 4.0).rgb * blend.x
         + texture(surface_noise, p.xz / 4.0).rgb * blend.y
         + texture(surface_noise, p.xy / 4.0).rgb * blend.z;
     vec3 patch = texture(surface_noise, p.xz / 64.0).rgb;
-    float macro = texture(surface_noise, p.xz / 512.0).r;
+    vec3 macro_patch = texture(surface_noise, p.xz / 512.0).rgb;
+    float macro = macro_patch.r;
     float slope = 1.0 - clamp(ground_normal.y, 0.0, 1.0);
     float highland = smoothstep(350.0, 1650.0, p.y);
     float south = smoothstep(-18000.0, 18000.0, national_position.y);
     float west = 1.0 - smoothstep(-90000.0, 15000.0, national_position.x);
     float regional_dryness = 0.12 + south * 0.30 + west * south * 0.18;
     float dry = clamp(regional_dryness + (patch.g - 0.5) * 0.43 - highland * 0.17, 0.0, 0.8);
-    vec3 wet_grass = vec3(0.24, 0.34, 0.105);
-    vec3 dry_grass = vec3(0.48, 0.40, 0.19);
+    float moisture = clamp(1.0 - dry + highland * 0.16 + (macro_patch.b - 0.5) * 0.12, 0.0, 1.0);
+
+    // Richer wet/highland vegetation and warmer dry-zone soil replace the old
+    // global desaturation pass. This remains a visual biome proxy, not surveyed
+    // land-cover truth; registered terrain heights and coastline are untouched.
+    vec3 lowland_wet = vec3(0.17, 0.37, 0.075);
+    vec3 highland_wet = vec3(0.10, 0.31, 0.16);
+    vec3 wet_grass = mix(lowland_wet, highland_wet, highland);
+    vec3 dry_grass = vec3(0.50, 0.39, 0.17);
     vec3 grass = mix(wet_grass, dry_grass, dry);
-    vec3 soil = mix(vec3(0.30, 0.22, 0.12), vec3(0.53, 0.38, 0.24), patch.b);
-    vec3 rock = mix(vec3(0.34, 0.34, 0.28), vec3(0.61, 0.60, 0.49), detail.r);
+    vec3 soil = mix(vec3(0.31, 0.205, 0.105), vec3(0.57, 0.385, 0.22), patch.b);
+    vec3 rock = mix(vec3(0.32, 0.33, 0.27), vec3(0.66, 0.65, 0.55), detail.r);
+
+    // Break visible 4-6 m material grids without another noise fetch: the
+    // existing 64 m and 512 m fields smoothly warp canonical UVs and vary scale.
+    vec2 uv_warp = (patch.rg - vec2(0.5)) * 5.0 + (macro_patch.gb - vec2(0.5)) * 13.0;
+    float family_scale = mix(0.90, 1.12, macro_patch.b);
+    vec2 material_position = p.xz + uv_warp;
 
     if (has_surface_hd && !overview) {
-        // One planar sample per surface family is substantially cheaper than
-        // full triplanar PBR stacks on Android. The national terrain grid is
-        // smooth enough that this is a better quality/performance trade here.
-        vec2 lush_uv = p.xz / 5.5;
-        vec2 dry_uv = p.xz / 4.5;
-        vec2 soil_uv = p.xz / 4.0;
-        vec2 rock_uv = p.xz / 4.0;
+        vec2 lush_uv = material_position / (5.5 * family_scale);
+        vec2 dry_uv = material_position / (4.5 * mix(0.94, 1.08, patch.r));
+        vec2 soil_uv = material_position / (4.0 * mix(0.90, 1.14, patch.b));
+        vec2 rock_uv = material_position / (4.0 * mix(0.92, 1.10, macro_patch.g));
         vec3 lush_hd = texture(surface_hd_lush, lush_uv).rgb;
         vec3 dry_hd = texture(surface_hd_dry, dry_uv).rgb;
         grass = mix(lush_hd, dry_hd, smoothstep(0.18, 0.72, dry));
@@ -82,29 +87,36 @@ void fragment() {
         rock = texture(surface_hd_rock, rock_uv).rgb;
     } else {
         if (has_reference_ground) {
-            vec3 wet = texture(reference_grass, p.yz / 8.0).rgb * blend.x
-                + texture(reference_grass, p.xz / 8.0).rgb * blend.y
-                + texture(reference_grass, p.xy / 8.0).rgb * blend.z;
-            vec3 dry_texture = texture(reference_dry_grass, p.yz / 8.0).rgb * blend.x
-                + texture(reference_dry_grass, p.xz / 8.0).rgb * blend.y
-                + texture(reference_dry_grass, p.xy / 8.0).rgb * blend.z;
+            vec3 warped = vec3(p.x + uv_warp.x, p.y, p.z + uv_warp.y);
+            vec3 wet = texture(reference_grass, warped.yz / 8.0).rgb * blend.x
+                + texture(reference_grass, warped.xz / 8.0).rgb * blend.y
+                + texture(reference_grass, warped.xy / 8.0).rgb * blend.z;
+            vec3 dry_texture = texture(reference_dry_grass, warped.yz / 8.0).rgb * blend.x
+                + texture(reference_dry_grass, warped.xz / 8.0).rgb * blend.y
+                + texture(reference_dry_grass, warped.xy / 8.0).rgb * blend.z;
             grass = mix(wet, dry_texture, dry);
         }
         if (has_reference_rock) {
-            rock = texture(reference_rock, p.yz / 8.0).rgb * blend.x
-                + texture(reference_rock, p.xz / 8.0).rgb * blend.y
-                + texture(reference_rock, p.xy / 8.0).rgb * blend.z;
-            rock *= 1.12;
+            vec3 warped = vec3(p.x + uv_warp.x, p.y, p.z + uv_warp.y);
+            rock = texture(reference_rock, warped.yz / 8.0).rgb * blend.x
+                + texture(reference_rock, warped.xz / 8.0).rgb * blend.y
+                + texture(reference_rock, warped.xy / 8.0).rgb * blend.z;
+            rock *= 1.10;
         }
     }
 
-    // Keep the recovered/downloaded variation inside a lighting-safe range so
-    // the Android sun pass cannot turn lowland grass fluorescent.
-    grass *= mix(0.78, 1.12, patch.r) * mix(0.88, 1.08, macro);
+    grass *= mix(0.80, 1.12, patch.r) * mix(0.90, 1.08, macro);
     float grass_luma = dot(grass, vec3(0.2126, 0.7152, 0.0722));
-    grass = mix(vec3(grass_luma), grass, 0.82) * 0.88;
-    soil *= mix(0.88, 1.08, patch.b);
+    grass = clamp(mix(vec3(grass_luma), grass, 1.06) * mix(0.92, 1.02, moisture), vec3(0.0), vec3(0.95));
+    // Keep dry districts warmer and wet/highland districts visibly greener.
+    grass *= mix(vec3(0.96, 1.04, 0.94), vec3(1.05, 0.96, 0.86), dry);
+    soil *= mix(0.87, 1.10, patch.b) * mix(vec3(0.93, 0.98, 0.94), vec3(1.08, 0.96, 0.86), dry);
     rock *= mix(0.92, 1.10, detail.r);
+
+    // A restrained pale-rock visual family helps limestone country read apart
+    // from dark wet rock. It is procedural presentation only, not geology data.
+    float pale_rock = smoothstep(0.62, 0.88, macro_patch.g) * smoothstep(0.16, 0.58, slope) * (1.0 - highland * 0.34);
+    rock = mix(rock, rock * vec3(1.16, 1.15, 1.08), pale_rock * 0.46);
 
     float bare = smoothstep(0.66, 0.85, patch.g) * (0.16 + dry * 0.65);
     float rocky = smoothstep(0.22, 0.59, slope) * mix(0.72, 1.0, patch.b);
@@ -114,8 +126,6 @@ void fragment() {
     ALBEDO = color * grain * mix(1.0, 0.73, wetness);
     ROUGHNESS = mix(mix(0.96, 0.87, rocky), 0.38, wetness);
     SPECULAR = mix(0.14, 0.48, wetness);
-    // Keep the existing procedural micro-normal: it costs one small shared
-    // texture instead of six extra normal maps and remains stable while driving.
     if (!overview) {
         vec2 normal_xy = (detail.rg - vec2(0.5)) * (0.16 + rocky * 0.13);
         NORMAL_MAP = vec3(normal_xy + vec2(0.5), 1.0);
