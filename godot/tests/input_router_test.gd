@@ -1,5 +1,6 @@
 extends SceneTree
 
+# This test is also a release-bridge trigger for controller-source changes.
 func _initialize() -> void:
     call_deferred("_run")
 
