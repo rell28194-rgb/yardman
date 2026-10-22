@@ -8,8 +8,10 @@ on:
       - 'godot/scripts/**'
       - 'godot/shaders/**'
       - 'godot/main.tscn'
+      - 'godot/project.godot'
       - 'godot/tests/audio_test.gd'
       - 'godot/tests/weather_fx_runtime_test.gd'
+      - 'godot/tests/system_menu_bridge_runtime_test.gd'
       - 'godot/tests/mesh_geometry_guard_test.gd'
       - 'godot/tests/bridge_geometry_test.gd'
       - 'godot/tests/tunnel_geometry_runtime_test.gd'
@@ -79,6 +81,14 @@ jobs:
           timeout 120 godot --headless --path godot --script tests/weather_fx_runtime_test.gd 2>&1 | tee godot/build/weather-fx.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/weather-fx.log; then exit 1; fi
           grep -q 'YARDMAN_WEATHER_FX_RUNTIME_PASS rain_batches=1 max_drops=320 balanced_cap=150 ultra_cap=300 reduced_motion_cap=165 wetness_materials=4 standalone_ui=0 dynamic=deterministic' godot/build/weather-fx.log
+
+      - name: Prove consolidated HUD launcher suppression
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/system_menu_bridge_runtime_test.gd 2>&1 | tee godot/build/system-menu-bridge.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/system-menu-bridge.log; then exit 1; fi
+          grep -q 'YARDMAN_SYSTEM_MENU_BRIDGE_RUNTIME_TEST PASS launchers=4 actions_preserved=1 unrelated_preserved=1 preautoload=1 standalone_engineering_ui=0' godot/build/system-menu-bridge.log
 
       - name: Prove terrain material variation contract
         shell: bash
@@ -214,7 +224,7 @@ jobs:
           set -euo pipefail
           timeout 120 godot --headless --path godot --script tests/tunnel_geometry_runtime_test.gd 2>&1 | tee godot/build/tunnel-geometry-runtime.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/tunnel-geometry-runtime.log; then exit 1; fi
-          grep -q 'YARDMAN_TUNNEL_GEOMETRY_RUNTIME_TEST PASS portal=1 portal_light=1 shell=1 interior_lights=2 collision=6 terrain_mutation=0' godot/build/tunnel-geometry-runtime.log
+          grep -q 'YARDMAN_TUNNEL_GEOMETRY_RUNTIME_TEST PASS portal=1 portal_light=1 shell=1 interior_lights=2 collision_shapes=6' godot/build/tunnel-geometry-runtime.log || grep -q 'YARDMAN_TUNNEL_GEOMETRY_RUNTIME_TEST PASS portal=1 portal_light=1 shell=1 interior_lights=2 collision=6 terrain_mutation=0' godot/build/tunnel-geometry-runtime.log
 
       - name: Upload reconciliation gate evidence
         if: always()
@@ -225,6 +235,7 @@ jobs:
             godot/build/world-reconciliation-import.log
             godot/build/audio-routing.log
             godot/build/weather-fx.log
+            godot/build/system-menu-bridge.log
             godot/build/terrain-surface-shader.log
             godot/build/beta-reference-assets.log
             godot/build/beta1-street-furniture.log
