@@ -20,7 +20,7 @@ func _run() -> void:
     for player in audio.get_children():
         var stream := player.stream as AudioStreamWAV
         _check(stream != null and stream.format == AudioStreamWAV.FORMAT_16_BITS and not stream.stereo, "Voice PCM format is invalid")
-        var recovered_step := player == audio.footsteps and bool(audio.debug_state().footstep_one_shot)
+        var recovered_step: bool = player == audio.footsteps and bool(audio.debug_state().footstep_one_shot)
         if recovered_step:
             _check(stream.mix_rate == 44100 and stream.loop_mode == AudioStreamWAV.LOOP_DISABLED, "Recovered footstep is not the expected bounded one-shot")
             _check(stream.get_length() > 0.08 and stream.get_length() < 0.25, "Recovered footstep one-shot duration is invalid")
