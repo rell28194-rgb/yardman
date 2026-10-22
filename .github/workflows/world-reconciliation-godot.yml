@@ -6,10 +6,12 @@ on:
       - codex/world-reconciliation-001
     paths:
       - 'godot/scripts/**'
+      - 'godot/shaders/**'
       - 'godot/main.tscn'
       - 'godot/tests/mesh_geometry_guard_test.gd'
       - 'godot/tests/bridge_geometry_test.gd'
       - 'godot/tests/tunnel_geometry_runtime_test.gd'
+      - 'godot/tests/terrain_surface_shader_contract_test.gd'
       - '.github/workflows/world-reconciliation-godot.yml'
   workflow_dispatch:
 
@@ -39,13 +41,21 @@ jobs:
           sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
           godot --version
 
-      - name: Import project and reject GDScript parse errors
+      - name: Import project and reject GDScript or shader parse errors
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p godot/build
           timeout 300 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/world-reconciliation-import.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/world-reconciliation-import.log; then exit 1; fi
+
+      - name: Prove terrain material variation contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/terrain_surface_shader_contract_test.gd 2>&1 | tee godot/build/terrain-surface-shader.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/terrain-surface-shader.log; then exit 1; fi
+          grep -q 'YARDMAN_TERRAIN_SURFACE_SHADER_CONTRACT_TEST PASS warp=1 scale=1 biome=1 pale_rock=1 hd=1 weather=1 tunnel=1' godot/build/terrain-surface-shader.log
 
       - name: Prove catastrophic geometry rejection contract
         shell: bash
@@ -77,6 +87,7 @@ jobs:
           name: Yardman-World-Reconciliation-Godot-Evidence
           path: |
             godot/build/world-reconciliation-import.log
+            godot/build/terrain-surface-shader.log
             godot/build/mesh-geometry-guard.log
             godot/build/bridge-geometry.log
             godot/build/tunnel-geometry-runtime.log
