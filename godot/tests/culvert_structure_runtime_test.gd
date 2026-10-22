@@ -49,8 +49,15 @@ func _run() -> void:
     if absf(float(plan.get("road_width_m", 0.0)) - 8.0) > 0.001:
         _fail("exact reconciled road width was not preserved")
         return
-    if float(plan.get("headwall_width_m", 0.0)) <= 3.0:
+    var wall_width := float(plan.get("headwall_width_m", 0.0))
+    var wall_height := float(plan.get("headwall_height_m", 0.0))
+    var opening_width := float(plan.get("opening_width_m", 0.0))
+    var opening_height := float(plan.get("opening_height_m", 0.0))
+    if wall_width <= 3.0:
         _fail("headwall does not clear compiled channel width")
+        return
+    if opening_width <= 0.65 or opening_width >= wall_width or opening_height <= 0.75 or opening_height >= wall_height:
+        _fail("headwall does not preserve a real open water aperture")
         return
 
     var bridge := crossing.duplicate(true)
@@ -93,6 +100,9 @@ func _run() -> void:
         return
     if str(contract.get("material_asset", "")) != "building_concrete.png":
         _fail("recovered concrete material binding drifted")
+        return
+    if not bool(contract.get("open_aperture", false)):
+        _fail("runtime no longer guarantees an open culvert mouth")
         return
     if bool(contract.get("terrain_mutation", true)) or bool(contract.get("water_mutation", true)) \
             or bool(contract.get("road_mutation", true)) or bool(contract.get("collision", true)) \
