@@ -8,8 +8,10 @@ uniform sampler2D surface_noise : repeat_enable, filter_linear_mipmap_anisotropi
 uniform sampler2D reference_grass : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_dry_grass : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_rock : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_grass_normal : repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool has_reference_ground = false;
 uniform bool has_reference_rock = false;
+uniform bool has_reference_grass_normal = false;
 uniform sampler2D surface_hd_lush : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D surface_hd_dry : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D surface_hd_soil : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
@@ -128,6 +130,14 @@ void fragment() {
     SPECULAR = mix(0.14, 0.48, wetness);
     if (!overview) {
         vec2 normal_xy = (detail.rg - vec2(0.5)) * (0.16 + rocky * 0.13);
+        if (has_reference_grass_normal) {
+            // Direct Beta2 scrub normal is used only as near-field micro relief.
+            // Canonical geometry, slope classification and macro biome blending
+            // remain Yardman's own authoritative systems.
+            vec2 source_normal = texture(reference_grass_normal, material_position / (8.0 * family_scale)).rg - vec2(0.5);
+            float grass_normal_weight = (1.0 - smoothstep(0.20, 0.62, rocky)) * (1.0 - bare * 0.70) * 0.72;
+            normal_xy = mix(normal_xy, source_normal * 0.82, grass_normal_weight);
+        }
         NORMAL_MAP = vec3(normal_xy + vec2(0.5), 1.0);
         NORMAL_MAP_DEPTH = mix(0.24, 0.34, wetness);
     }
