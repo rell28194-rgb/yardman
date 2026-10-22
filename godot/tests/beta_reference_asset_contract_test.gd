@@ -37,6 +37,10 @@ func _run() -> void:
     if not water_code.contains("reference_normal") or not water_code.contains("has_reference_normal"):
         _fail("water shader lacks optional recovered WaterBump contract")
         return
+    if not water_code.contains("reference_foam_alternate") or not water_code.contains("has_reference_foam_alternate") \
+            or not water_code.contains("registered coast, shore-distance field, or sea-level mesh"):
+        _fail("water shader lacks bounded alternate-foam contract")
+        return
     var building_code := BuildingShader.code
     if not building_code.contains("reference_concrete") or not building_code.contains("has_reference_concrete") \
             or not building_code.contains("COLOR.a > 0.5 && COLOR.a < 0.7"):
@@ -56,6 +60,12 @@ func _run() -> void:
     if str(contract.get("water_normal", "")) != "beta2_ucaptain_water_bump.ktx":
         _fail("water normal runtime filename drifted")
         return
+    if str(contract.get("water_alt_foam", "")) != "water_foam_japan.png":
+        _fail("alternate foam runtime filename drifted")
+        return
+    if int(contract.get("alternate_foam_extra_samples", 99)) != 1:
+        _fail("alternate foam exceeded its one-sample shader budget")
+        return
     if str(contract.get("building_concrete", "")) != "building_concrete.png":
         _fail("Beta1 concrete runtime filename drifted")
         return
@@ -69,9 +79,10 @@ func _run() -> void:
     References.texture("beta2_ucaptain_scrub_grass_normal.ktx")
     References.texture("ground_rock_alternate.png")
     References.texture("beta2_ucaptain_water_bump.ktx")
+    References.texture("water_foam_japan.png")
     References.texture("building_concrete.png")
 
     # Preserve the established marker consumed by the reconciliation workflow;
-    # alternate-rock assertions above extend the contract without weakening it.
+    # rock/foam assertions above extend the contract without weakening it.
     print("YARDMAN_BETA_REFERENCE_ASSET_CONTRACT_TEST PASS aliases=2 ktx=1 terrain_normal=1 water_normal=1 concrete=1 fallback=1")
     quit(0)
