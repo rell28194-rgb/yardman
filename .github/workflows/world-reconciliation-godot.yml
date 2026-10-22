@@ -79,7 +79,7 @@ jobs:
           set -euo pipefail
           timeout 120 godot --headless --path godot --script tests/beta_reference_asset_contract_test.gd 2>&1 | tee godot/build/beta-reference-assets.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/beta-reference-assets.log; then exit 1; fi
-          grep -q 'YARDMAN_BETA_REFERENCE_ASSET_CONTRACT_TEST PASS aliases=2 ktx=1 terrain_normal=1 water_normal=1 fallback=1' godot/build/beta-reference-assets.log
+          grep -q 'YARDMAN_BETA_REFERENCE_ASSET_CONTRACT_TEST PASS aliases=2 ktx=1 terrain_normal=1 water_normal=1 concrete=1 fallback=1' godot/build/beta-reference-assets.log
 
       - name: Prove recovered Beta1 street furniture placement
         shell: bash
