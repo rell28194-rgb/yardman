@@ -16,9 +16,11 @@ func _run() -> void:
         Vector3(-4.0, 0.0, -4.0), Vector3(-4.0, 3.0, -4.0),
         Vector3(4.0, 0.0, -4.0), Vector3(4.0, 3.0, -4.0),
     ])
+    # Godot FORWARD is -Z and BACK is +Z. The road is at +Z, so the
+    # road-facing wall must use BACK while the rear wall uses FORWARD.
     var normals := PackedVector3Array([
-        Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD,
         Vector3.BACK, Vector3.BACK, Vector3.BACK, Vector3.BACK,
+        Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD,
     ])
     var source_copy := vertices.duplicate()
     var road := {
