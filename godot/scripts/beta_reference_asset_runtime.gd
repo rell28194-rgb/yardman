@@ -6,10 +6,13 @@ class_name YardmanBetaReferenceAssetRuntime
 const References = preload("res://scripts/reference_assets.gd")
 const TERRAIN_NORMAL_ASSET := "beta2_ucaptain_scrub_grass_normal.ktx"
 const WATER_NORMAL_ASSET := "beta2_ucaptain_water_bump.ktx"
+const BUILDING_CONCRETE_ASSET := "building_concrete.png"
 
 var _terrain
+var _buildings
 var _terrain_normal: Texture2D
 var _water_normal: Texture2D
+var _building_concrete: Texture2D
 var _clock := 0.0
 var _bound := false
 
@@ -34,13 +37,16 @@ func _try_bind() -> void:
     if root == null:
         return
     _terrain = root.get_node_or_null("JamaicaTerrainStreamer")
+    _buildings = root.get_node_or_null("JamaicaBuildingStreamer")
     if _terrain == null or not is_instance_valid(_terrain):
         return
     _terrain_normal = References.texture(TERRAIN_NORMAL_ASSET)
     _water_normal = References.texture(WATER_NORMAL_ASSET)
+    _building_concrete = References.texture(BUILDING_CONCRETE_ASSET)
     if not _terrain.tile_ready.is_connected(_on_tile_ready):
         _terrain.tile_ready.connect(_on_tile_ready)
     _apply_ocean_normal()
+    _apply_building_concrete()
     for raw: Variant in _terrain._loaded.values():
         if raw is Node3D:
             _apply_terrain_normal(raw as Node3D)
@@ -54,9 +60,10 @@ func _on_tile_ready(tile: Vector2i) -> void:
     var tile_root: Variant = _terrain._loaded.get(key)
     if tile_root is Node3D:
         _apply_terrain_normal(tile_root as Node3D)
-    # Coastline material is shared. Reapplying is cheap and covers a renderer
-    # that was created after this runtime first bound.
+    # Coastline/building materials are shared. Reapplying is cheap and covers a
+    # renderer created after this runtime first bound.
     _apply_ocean_normal()
+    _apply_building_concrete()
 
 func _apply_terrain_normal(tile_root: Node3D) -> void:
     if _terrain_normal == null:
@@ -84,11 +91,23 @@ func _apply_ocean_normal() -> void:
     material.set_shader_parameter("has_reference_normal", true)
     coastline.set_meta("beta2_water_normal", true)
 
+func _apply_building_concrete() -> void:
+    if _building_concrete == null or _buildings == null or not is_instance_valid(_buildings):
+        return
+    var material := _buildings.get("_wall_material") as ShaderMaterial
+    if material == null:
+        return
+    material.set_shader_parameter("reference_concrete", _building_concrete)
+    material.set_shader_parameter("has_reference_concrete", true)
+    _buildings.set_meta("beta1_concrete_family", true)
+
 static func optional_asset_contract() -> Dictionary:
     return {
         "terrain_normal": TERRAIN_NORMAL_ASSET,
         "water_normal": WATER_NORMAL_ASSET,
+        "building_concrete": BUILDING_CONCRETE_ASSET,
         "geometry_mutation": false,
         "collision": false,
+        "extra_draw_calls": false,
         "asset_absent_fallback": true,
     }
