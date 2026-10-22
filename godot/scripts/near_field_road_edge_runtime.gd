@@ -80,7 +80,7 @@ func _rebuild(center: Vector2) -> void:
     var colors := PackedColorArray()
     var accepted := 0
     var rejected_crossing := 0
-    var v2 := _hydrology.format_version() == 2
+    var v2: bool = int(_hydrology.format_version()) == 2
     for raw: Variant in records:
         if accepted >= MAX_SEGMENTS:
             break
@@ -178,7 +178,7 @@ func _legacy_water_blocks_record(record: Dictionary) -> bool:
 
 func _v2_crossings_for_segment(a: Vector2, b: Vector2, padding: float) -> Array:
     var result: Array = []
-    if _hydrology == null or not is_instance_valid(_hydrology) or _hydrology.format_version() != 2:
+    if _hydrology == null or not is_instance_valid(_hydrology) or int(_hydrology.format_version()) != 2:
         return result
     var size := float(_hydrology.tile_size)
     if size <= 0.0:
