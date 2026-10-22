@@ -7,9 +7,11 @@ uniform float wave_height = 0.045;
 uniform sampler2D reference_surface : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_foam : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_caustics : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_normal : repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool has_reference_surface = false;
 uniform bool has_reference_foam = false;
 uniform bool has_reference_caustics = false;
+uniform bool has_reference_normal = false;
 varying vec2 ocean_uv;
 varying float shore_fraction;
 
@@ -61,6 +63,16 @@ void fragment() {
     vec2 slope = wind * cos(p1) * 0.038 * f1;
     slope += vec2(-0.326, 0.946) * cos(p2) * 0.025 * f2;
     slope += chop.yz * 0.18 * chop_filter + fine.yz * 0.071 * fine_filter;
+    if (has_reference_normal) {
+        // Recovered Beta2 WaterBump contributes only micro-normal detail. Two
+        // differently moving reads break source tiling while sea level and
+        // registered coast geometry remain completely unchanged.
+        vec2 source_a = texture(reference_normal,
+            ocean_uv * 2.35 + vec2(TIME * 0.0061, -TIME * 0.0040)).rg * 2.0 - 1.0;
+        vec2 source_b = texture(reference_normal,
+            ocean_uv.yx * 3.65 + vec2(-TIME * 0.0035, TIME * 0.0052)).rg * 2.0 - 1.0;
+        slope += (source_a * 0.105 + source_b * 0.070) * shore_fade;
+    }
     slope *= wave_height * 8.5 * shore_fade;
     NORMAL = normalize(mat3(VIEW_MATRIX) * normalize(vec3(-slope.x, 1.0, -slope.y)));
 
