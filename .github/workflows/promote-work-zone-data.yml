@@ -1,3 +1,4 @@
+# Promotion trigger v1: generated data only, no accepted-build promotion.
 name: Yardman Promote Validated Work-Zone Data
 
 on:
