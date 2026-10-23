@@ -9,6 +9,7 @@ const TERRAIN_ALT_ROCK_ASSET := "ground_rock_alternate.png"
 const WATER_NORMAL_ASSET := "beta2_ucaptain_water_bump.ktx"
 const WATER_ALT_FOAM_ASSET := "water_foam_japan.png"
 const BUILDING_CONCRETE_ASSET := "building_concrete.png"
+const BUILDING_STONE_ALT_ASSET := "building_stonewall_04.png"
 const BUILDING_STUCCO_NATURAL_ASSET := "building_stucco_natural.png"
 const BUILDING_STUCCO_RED_ASSET := "building_stucco_red.png"
 const BUILDING_STUCCO_YELLOW_ASSET := "building_stucco_yellow.png"
@@ -20,6 +21,7 @@ var _terrain_alt_rock: Texture2D
 var _water_normal: Texture2D
 var _water_alt_foam: Texture2D
 var _building_concrete: Texture2D
+var _building_stone_alt: Texture2D
 var _building_stucco_natural: Texture2D
 var _building_stucco_red: Texture2D
 var _building_stucco_yellow: Texture2D
@@ -55,6 +57,7 @@ func _try_bind() -> void:
     _water_normal = References.texture(WATER_NORMAL_ASSET)
     _water_alt_foam = References.texture(WATER_ALT_FOAM_ASSET)
     _building_concrete = References.texture(BUILDING_CONCRETE_ASSET)
+    _building_stone_alt = References.texture(BUILDING_STONE_ALT_ASSET)
     _building_stucco_natural = References.texture(BUILDING_STUCCO_NATURAL_ASSET)
     _building_stucco_red = References.texture(BUILDING_STUCCO_RED_ASSET)
     _building_stucco_yellow = References.texture(BUILDING_STUCCO_YELLOW_ASSET)
@@ -119,7 +122,7 @@ func _apply_ocean_detail() -> void:
 func _apply_building_materials() -> void:
     if _buildings == null or not is_instance_valid(_buildings):
         return
-    if _building_concrete == null and _building_stucco_natural == null and _building_stucco_red == null and _building_stucco_yellow == null:
+    if _building_concrete == null and _building_stone_alt == null and _building_stucco_natural == null and _building_stucco_red == null and _building_stucco_yellow == null:
         return
     var material := _buildings.get("_wall_material") as ShaderMaterial
     if material == null:
@@ -128,6 +131,10 @@ func _apply_building_materials() -> void:
         material.set_shader_parameter("reference_concrete", _building_concrete)
         material.set_shader_parameter("has_reference_concrete", true)
         _buildings.set_meta("beta1_concrete_family", true)
+    if _building_stone_alt != null:
+        material.set_shader_parameter("reference_stone_alternate", _building_stone_alt)
+        material.set_shader_parameter("has_reference_stone_alternate", true)
+        _buildings.set_meta("beta1_stone_alternate_detail", true)
     if _building_stucco_natural != null:
         material.set_shader_parameter("reference_stucco_natural", _building_stucco_natural)
         material.set_shader_parameter("has_reference_stucco_natural", true)
@@ -148,6 +155,7 @@ static func optional_asset_contract() -> Dictionary:
         "water_normal": WATER_NORMAL_ASSET,
         "water_alt_foam": WATER_ALT_FOAM_ASSET,
         "building_concrete": BUILDING_CONCRETE_ASSET,
+        "building_stone_alternate": BUILDING_STONE_ALT_ASSET,
         "building_stucco_natural": BUILDING_STUCCO_NATURAL_ASSET,
         "building_stucco_red": BUILDING_STUCCO_RED_ASSET,
         "building_stucco_yellow": BUILDING_STUCCO_YELLOW_ASSET,
@@ -158,5 +166,6 @@ static func optional_asset_contract() -> Dictionary:
         "alternate_rock_extra_samples": 1,
         "alternate_foam_extra_samples": 1,
         "painted_stucco_extra_samples_per_fragment": 1,
+        "stone_alternate_extra_samples_per_fragment": 1,
         "asset_absent_fallback": true,
     }
