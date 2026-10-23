@@ -1,4 +1,4 @@
-[gd_scene load_steps=25 format=3]
+[gd_scene load_steps=26 format=3]
 
 [ext_resource path="res://scripts/main.gd" type="Script" id="1"]
 [ext_resource path="res://scripts/road_structure_collision.gd" type="Script" id="2"]
@@ -24,6 +24,7 @@
 [ext_resource path="res://scripts/beta1_roadside_point_runtime.gd" type="Script" id="22"]
 [ext_resource path="res://scripts/garage_access_runtime.gd" type="Script" id="23"]
 [ext_resource path="res://scripts/beta1_work_zone_brace_runtime.gd" type="Script" id="24"]
+[ext_resource path="res://scripts/beta1_exact_road_surface_audio_runtime.gd" type="Script" id="25"]
 
 [node name="Yardman" type="Node3D"]
 script = ExtResource("1")
@@ -78,6 +79,9 @@ script = ExtResource("21")
 
 [node name="Beta1UIAudio" type="Node" parent="."]
 script = ExtResource("16")
+
+[node name="Beta1ExactRoadSurfaceAudio" type="Node" parent="."]
+script = ExtResource("25")
 
 [node name="CulvertStructures" type="Node3D" parent="."]
 script = ExtResource("17")
