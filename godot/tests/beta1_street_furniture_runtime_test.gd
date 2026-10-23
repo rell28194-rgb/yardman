@@ -63,6 +63,8 @@ func _run() -> void:
     var contract := StreetFurniture.asset_contract()
     var files: Dictionary = contract.get("files", {})
     if str(files.get("bin", "")) != "settlement_waste_bin.glb" \
+            or str(files.get("bin_blue", "")) != "settlement_waste_container_blue.glb" \
+            or str(files.get("bin_yellow", "")) != "settlement_waste_container_yellow.glb" \
             or str(files.get("hydrant", "")) != "settlement_fire_hydrant.glb" \
             or str(files.get("cabinet", "")) != "settlement_metal_cabinet.glb":
         _fail("recovered Beta1 neutral prop filenames drifted")
@@ -75,6 +77,33 @@ func _run() -> void:
         return
     if not bool(contract.get("source_scale_preserved", false)):
         _fail("source metre-scale preservation contract missing")
+        return
+    if bool(contract.get("bin_variant_anchor_mutation", true)) \
+            or bool(contract.get("bin_variant_density_mutation", true)) \
+            or int(contract.get("max_extra_bin_batches", 99)) > 2 \
+            or str(contract.get("asset_absent_fallback", "")) != "bin":
+        _fail("waste-container variants exceeded one-for-one anchor/batch/fallback contract")
+        return
+
+    var variant_counts := {"bin": 0, "bin_blue": 0, "bin_yellow": 0}
+    var all_variants := {"bin": true, "bin_blue": true, "bin_yellow": true}
+    for seed in range(50):
+        var kind := StreetFurniture.select_bin_kind(seed, all_variants)
+        if not variant_counts.has(kind):
+            _fail("waste-container selector emitted an unknown family")
+            return
+        variant_counts[kind] += 1
+    if int(variant_counts.bin) <= int(variant_counts.bin_blue) \
+            or int(variant_counts.bin) <= int(variant_counts.bin_yellow) \
+            or int(variant_counts.bin_blue) <= 0 or int(variant_counts.bin_yellow) <= 0:
+        _fail("waste-container selector lost bounded standard/blue/yellow mix")
+        return
+    for seed in range(20):
+        if StreetFurniture.select_bin_kind(seed, {"bin": true}) != "bin":
+            _fail("asset-absent private variants did not fall back to existing bin")
+            return
+    if StreetFurniture.select_bin_kind(0, {}) != "":
+        _fail("selector invented a bin when no mesh family was available")
         return
 
     # Construction props are intentionally separate from ordinary settlement
