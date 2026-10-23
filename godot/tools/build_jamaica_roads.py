@@ -13,7 +13,7 @@ from typing import Dict, Iterator, List, Sequence, Tuple
 
 from pyproj import Transformer
 from road_graph import build_network, partition_id, read_osm_features, split_segment
-from build_work_zones import compile_work_zones
+from work_zone_compile import compile_work_zones
 
 CRS_SOURCE = "EPSG:4326"
 CRS_TARGET = "EPSG:3448"
@@ -34,12 +34,8 @@ ROAD_WIDTHS = {
     "road": 5.8, "track": 3.0, "raceway": 8.0,
 }
 ROAD_CLASSES = {name: i for i, name in enumerate(ROAD_WIDTHS)}
-# The far LOD deliberately keeps Jamaica's arterial hierarchy rather than
-# reproducing every lane/service road at kilometre-scale viewing distances.
 ROAD_OVERVIEW_CLASSES = ("motorway", "trunk", "primary", "secondary", "tertiary")
 
-# CI coverage sentinels. These parish-capital/administrative-centre anchors are
-# only QA points: a partial-island road extract is not allowed to pass.
 PARISH_COVERAGE_ANCHORS = {
     "Kingston": (17.9714, -76.7936),
     "St. Andrew": (18.0120, -76.7970),
@@ -96,12 +92,7 @@ def road_flags(properties: dict) -> int:
 
 
 def build_road_overview(network: dict, tile_size: float) -> dict:
-    """Compile a cheap arterial road HLOD using the exact registered graph paths.
-
-    The overview owns no collision or navigation. Every centreline piece is split
-    at the same 4096 m world grid as the near renderer so it can stream by sector
-    without forcing neighbouring full road tiles resident.
-    """
+    """Compile a cheap arterial road HLOD using the exact registered graph paths."""
     sectors = defaultdict(list)
     segment_count = 0
     for identifier, edge in sorted(network.get("edges", {}).items()):
@@ -114,8 +105,6 @@ def build_road_overview(network: dict, tile_size: float) -> dict:
         width = float(edge.get("width_m", ROAD_WIDTHS.get(road_class, 6.0)))
         class_id = int(edge.get("class_id", ROAD_CLASSES.get(road_class, 0)))
         flags = int(edge.get("flags", 0))
-        # Tunnels do not draw through the mountain in the distant surface HLOD.
-        # Bridge centreline elevations remain useful and are retained.
         if flags & 4:
             continue
         for a, b in zip(path, path[1:]):
@@ -128,14 +117,13 @@ def build_road_overview(network: dict, tile_size: float) -> dict:
                     round(width, 3), class_id,
                 ])
                 segment_count += 1
-    payload = {
+    return {
         "format": 1,
         "tile_size": tile_size,
         "classes": list(ROAD_OVERVIEW_CLASSES),
         "segments": segment_count,
         "sectors": [[tx, tz, segments] for (tx, tz), segments in sorted(sectors.items())],
     }
-    return payload
 
 
 def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE_SIZE,
@@ -170,7 +158,6 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
     work_zones = compile_work_zones(features, transformer, (origin_e, origin_n), tile_size, height_sampler)
     if require_national_coverage and (overview["segments"] < 1000 or len(overview["sectors"]) < 20):
         raise ValueError("Far-road overview is too small for national arterial coverage")
-    # Build into a sibling staging directory; failed compiles retain old outputs.
     staging = out.with_name(out.name + ".staging")
     if staging.exists():
         shutil.rmtree(staging)
@@ -233,10 +220,6 @@ def main() -> int:
         from build_terrain import TerrainSampler
         sampler = TerrainSampler(args.terrain)
     manifest = compile_dataset(args.input_geojson, args.output_dir, args.tile_size, height_sampler=sampler)
-    # The road build is the canonical full-island data entry point used by the
-    # reset Android workflow. Keep the authoritative admin_level=6 parish
-    # polygons beside the streamed map data whenever the source is the Jamaica
-    # PBF; GeoJSON road fixtures remain unaffected.
     if args.input_geojson.suffix.lower() == ".pbf":
         from build_parishes import compile_parishes
         parish_manifest = compile_parishes(args.input_geojson, args.output_dir.parent / "parishes")
