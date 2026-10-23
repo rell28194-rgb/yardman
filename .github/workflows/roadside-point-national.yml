@@ -32,6 +32,12 @@ jobs:
           set -euxo pipefail
           python -m pip install --disable-pip-version-check --no-cache-dir pyproj osmium
 
+      - name: Prove point compiler source authorization contract
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m unittest Tests/Python/test_roadside_points.py
+
       - name: Acquire current Jamaica OpenStreetMap extract
         shell: bash
         run: |
@@ -74,8 +80,11 @@ jobs:
           assert data['stats']['points'] == sum(int(v) for v in counts.values())
           records = [r for sector in data['sectors'] for r in sector[2]]
           assert len(records) == data['stats']['points']
-          assert all(r['kind'] in {'street_lamp', 'bus_shelter'} for r in records)
+          allowed = {'street_lamp', 'bus_shelter', 'satellite_dish'}
+          assert all(r['kind'] in allowed for r in records)
           assert all(r['kind'] != 'bus_shelter' or r['source_tags'].get('shelter','').lower() in {'yes','true','1'} for r in records)
+          assert all(r['kind'] != 'satellite_dish' or r['source_tags'].get('man_made','').lower() == 'satellite_dish' for r in records)
+          print('YARDMAN_SATELLITE_DISH_SOURCE_COUNT', int(counts.get('satellite_dish', 0)))
           print('YARDMAN_ROADSIDE_POINT_NATIONAL PASS', data['stats'])
           PY
 
