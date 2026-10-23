@@ -2,7 +2,11 @@ extends SceneTree
 
 const Runtime = preload("res://scripts/beta1_roadside_point_runtime.gd")
 const DATA_PATH := "res://data/roads/roadside_points.json"
+const EVIDENCE_PATH := "res://docs/production_evidence/beta1-roadside-assets-001.json"
 const EXPECTED_SOURCE_SHA256 := "16120becbae124393ceec1935d1fd23a3050388f39d9df338ad4e55391f7015b"
+const EXPECTED_LAMP_SHA256 := "c9f9eaab8c74903aab340a1e129756ecd790d6ddf79d496edd09bfa784887761"
+const EXPECTED_SHELTER_SHA256 := "5cfd95da08b3a3e616840e407a7ac932a7b5b340b0e40b135a6a7a8679869a16"
+const EXPECTED_PRIVATE_PACK_SHA256 := "af58d812a62e912b7809aaa4f5501edf5ae8d32778e94ea6cadd691d2b0f7846"
 
 func _initialize() -> void:
     call_deferred("_run")
@@ -86,6 +90,41 @@ func _run() -> void:
         return
     if int(contract.get("max_points_per_tile", 999)) > 32 or float(contract.get("visibility_m", 999.0)) > 200.0:
         _fail("roadside point runtime exceeded bounded near-field budget")
+        return
+
+    if not FileAccess.file_exists(EVIDENCE_PATH):
+        _fail("recovered roadside asset evidence is missing")
+        return
+    var evidence_raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(EVIDENCE_PATH))
+    if not evidence_raw is Dictionary:
+        _fail("recovered roadside asset evidence is invalid JSON")
+        return
+    var evidence: Dictionary = evidence_raw
+    var evidence_assets: Dictionary = evidence.get("assets", {})
+    var lamp_evidence: Dictionary = evidence_assets.get("road_lamp_single_arm.glb", {})
+    var shelter_evidence: Dictionary = evidence_assets.get("road_bus_stop_shelter.glb", {})
+    if str(lamp_evidence.get("sha256", "")) != EXPECTED_LAMP_SHA256 \
+            or int(lamp_evidence.get("triangles", 0)) != 96 \
+            or bool(lamp_evidence.get("rescale_applied", true)):
+        _fail("recovered lamp evidence drifted")
+        return
+    if str(shelter_evidence.get("sha256", "")) != EXPECTED_SHELTER_SHA256 \
+            or int(shelter_evidence.get("triangles", 0)) != 112 \
+            or bool(shelter_evidence.get("rescale_applied", true)):
+        _fail("recovered shelter evidence drifted")
+        return
+    var pack: Dictionary = evidence.get("canonical_private_pack", {})
+    if int(pack.get("members", 0)) != 213 \
+            or str(pack.get("sha256", "")) != EXPECTED_PRIVATE_PACK_SHA256 \
+            or str(pack.get("zip_crc", "")) != "PASS":
+        _fail("canonical private reference-pack evidence drifted")
+        return
+    var point_truth: Dictionary = evidence.get("jamaica_point_truth", {})
+    if int(point_truth.get("points", 0)) != 38 \
+            or int(point_truth.get("street_lamp", 0)) != 19 \
+            or int(point_truth.get("bus_shelter", 0)) != 19 \
+            or bool(point_truth.get("position_inference", true)):
+        _fail("roadside evidence no longer matches Jamaica point truth")
         return
 
     if not FileAccess.file_exists(DATA_PATH):
