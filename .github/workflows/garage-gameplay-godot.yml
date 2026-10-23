@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - codex/world-reconciliation-001
+      - codex/garage-reconcile-20261023
     paths:
       - 'godot/scripts/garage_access_runtime.gd'
       - 'godot/scripts/vehicle_selector_runtime.gd'
