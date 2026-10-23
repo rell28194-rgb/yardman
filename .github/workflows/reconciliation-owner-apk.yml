@@ -270,21 +270,58 @@ jobs:
           grep -q 'YARDMAN_VEHICLE_TEST PASS' godot/build/vehicle-test.log
           grep -q 'reference_model=true' godot/build/vehicle-test.log
 
-      - name: Export reconciliation owner APK
+      - name: Export, align and sign reconciliation owner APK
         shell: bash
         run: |
-          set -euo pipefail
-          cd godot
-          godot --headless --export-debug Android build/Yardman-Reconciliation-Owner.apk 2>&1 | tee build/export.log
-          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' build/export.log; then exit 1; fi
-          test -s build/Yardman-Reconciliation-Owner.apk
+          set -euxo pipefail
+          KEYSTORE="$HOME/.local/share/yardman-signing/debug.keystore"
+          UNSIGNED=godot/build/Yardman-Reconciliation-Owner.unsigned.apk
+          ALIGNED=godot/build/Yardman-Reconciliation-Owner.aligned.apk
+          APK=godot/build/Yardman-Reconciliation-Owner.apk
+
+          test -s "$KEYSTORE"
+          grep -q '^package/signed=true$' godot/export_presets.cfg
+          sed -i 's/^package\/signed=true$/package\/signed=false/' godot/export_presets.cfg
+          grep -q '^package/signed=false$' godot/export_presets.cfg
+
+          godot --headless --path godot --export-debug Android build/Yardman-Reconciliation-Owner.unsigned.apk 2>&1 | tee godot/build/export.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/export.log; then exit 1; fi
+          test -s "$UNSIGNED"
+
+          zip -q -d "$UNSIGNED" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*.DSA' 'META-INF/*.EC' 'META-INF/MANIFEST.MF' || true
+          "$ANDROID_HOME/build-tools/35.0.1/zipalign" -P 16 -f 4 "$UNSIGNED" "$ALIGNED"
+          "$ANDROID_HOME/build-tools/35.0.1/apksigner" sign \
+            --ks "$KEYSTORE" \
+            --ks-key-alias androiddebugkey \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --v4-signing-enabled false \
+            --out "$APK" \
+            "$ALIGNED"
+          test -s "$APK"
 
       - name: Validate signed APK, world, fleet and gameplay runtime
         shell: bash
         run: |
           set -euxo pipefail
           APK=godot/build/Yardman-Reconciliation-Owner.apk
-          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose --print-certs "$APK" | tee godot/build/apksigner.txt
+          KEYSTORE="$HOME/.local/share/yardman-signing/debug.keystore"
+          VERIFY=godot/build/apksigner.txt
+          CERT=godot/build/yardman-signing-cert.der
+
+          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose --print-certs "$APK" | tee "$VERIFY"
+          grep -q 'Verified using v1 scheme (JAR signing): true' "$VERIFY"
+          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' "$VERIFY"
+          keytool -exportcert -keystore "$KEYSTORE" -storepass android -alias androiddebugkey -file "$CERT"
+          EXPECTED_CERT_SHA256="$(sha256sum "$CERT" | awk '{print $1}')"
+          ACTUAL_CERT_SHA256="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$VERIFY" | head -n1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          test -n "$ACTUAL_CERT_SHA256"
+          test "$EXPECTED_CERT_SHA256" = "$ACTUAL_CERT_SHA256"
+          "$ANDROID_HOME/build-tools/35.0.1/zipalign" -c -P 16 -v 4 "$APK"
+
           python - "$APK" <<'PY'
           import hashlib, json, os, sys, zipfile
           apk = sys.argv[1]
