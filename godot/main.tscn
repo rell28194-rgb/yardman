@@ -1,4 +1,4 @@
-[gd_scene load_steps=24 format=3]
+[gd_scene load_steps=25 format=3]
 
 [ext_resource path="res://scripts/main.gd" type="Script" id="1"]
 [ext_resource path="res://scripts/road_structure_collision.gd" type="Script" id="2"]
@@ -23,6 +23,7 @@
 [ext_resource path="res://scripts/beta1_industrial_barrel_runtime.gd" type="Script" id="21"]
 [ext_resource path="res://scripts/beta1_roadside_point_runtime.gd" type="Script" id="22"]
 [ext_resource path="res://scripts/garage_access_runtime.gd" type="Script" id="23"]
+[ext_resource path="res://scripts/beta1_work_zone_brace_runtime.gd" type="Script" id="24"]
 
 [node name="Yardman" type="Node3D"]
 script = ExtResource("1")
@@ -86,6 +87,9 @@ script = ExtResource("18")
 
 [node name="Beta1WorkZones" type="Node" parent="."]
 script = ExtResource("19")
+
+[node name="Beta1WorkZoneBraces" type="Node" parent="."]
+script = ExtResource("24")
 
 [node name="Beta1RoadsidePoints" type="Node" parent="."]
 script = ExtResource("22")
