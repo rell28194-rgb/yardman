@@ -7,6 +7,8 @@ on:
     paths:
       - 'godot/tools/work_zone_compile.py'
       - 'godot/tools/build_work_zone_source_artifact.py'
+      - 'godot/scripts/beta1_work_zone_runtime.gd'
+      - 'godot/tests/beta1_work_zone_national_data_test.gd'
       - '.github/workflows/work-zone-source-artifact.yml'
   workflow_dispatch:
 
@@ -15,11 +17,13 @@ permissions:
 
 env:
   JAMAICA_OSM_URL: 'https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf'
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
 
 jobs:
   build-source-sidecar:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     steps:
       - name: Checkout reconciliation branch
         uses: actions/checkout@v4
@@ -92,6 +96,29 @@ jobs:
           print(f'YARDMAN_NATIONAL_WORK_ZONE_SOURCE_PASS ways={ways} segments={segments} sectors={sectors} sha256={digest}')
           PY
 
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Prove production runtime consumes national sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/data/roads
+          cp godot/build/work_zones.json godot/data/roads/work_zones.json
+          timeout 120 godot --headless --path godot --script tests/beta1_work_zone_national_data_test.gd \
+            2>&1 | tee godot/build/work-zone-national-godot.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/work-zone-national-godot.log; then exit 1; fi
+          grep -q 'YARDMAN_BETA1_WORK_ZONE_NATIONAL_DATA_TEST PASS' godot/build/work-zone-national-godot.log
+          grep -q 'grid=4096 gameplay_authority=0' godot/build/work-zone-national-godot.log
+
       - name: Upload national construction sidecar
         uses: actions/upload-artifact@v4
         with:
@@ -103,6 +130,7 @@ jobs:
             godot/build/jamaica-osm-http-headers.txt
             godot/build/work-zone-source-build.log
             godot/build/work-zone-source-validation.log
+            godot/build/work-zone-national-godot.log
           if-no-files-found: error
           retention-days: 7
           compression-level: 6
