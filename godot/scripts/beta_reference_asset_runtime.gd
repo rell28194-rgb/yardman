@@ -6,6 +6,7 @@ class_name YardmanBetaReferenceAssetRuntime
 const References = preload("res://scripts/reference_assets.gd")
 const TERRAIN_NORMAL_ASSET := "beta2_ucaptain_scrub_grass_normal.ktx"
 const TERRAIN_ALT_ROCK_ASSET := "ground_rock_alternate.png"
+const TERRAIN_SOIL_DETAIL_ASSET := "beta2_survival_woodsground_diffuse.ktx"
 const WATER_NORMAL_ASSET := "beta2_ucaptain_water_bump.ktx"
 const WATER_ALT_FOAM_ASSET := "water_foam_japan.png"
 const BUILDING_CONCRETE_ASSET := "building_concrete.png"
@@ -18,6 +19,7 @@ var _terrain
 var _buildings
 var _terrain_normal: Texture2D
 var _terrain_alt_rock: Texture2D
+var _terrain_soil_detail: Texture2D
 var _water_normal: Texture2D
 var _water_alt_foam: Texture2D
 var _building_concrete: Texture2D
@@ -54,6 +56,7 @@ func _try_bind() -> void:
         return
     _terrain_normal = References.texture(TERRAIN_NORMAL_ASSET)
     _terrain_alt_rock = References.texture(TERRAIN_ALT_ROCK_ASSET)
+    _terrain_soil_detail = References.texture(TERRAIN_SOIL_DETAIL_ASSET)
     _water_normal = References.texture(WATER_NORMAL_ASSET)
     _water_alt_foam = References.texture(WATER_ALT_FOAM_ASSET)
     _building_concrete = References.texture(BUILDING_CONCRETE_ASSET)
@@ -84,7 +87,7 @@ func _on_tile_ready(tile: Vector2i) -> void:
     _apply_building_materials()
 
 func _apply_terrain_detail(tile_root: Node3D) -> void:
-    if _terrain_normal == null and _terrain_alt_rock == null:
+    if _terrain_normal == null and _terrain_alt_rock == null and _terrain_soil_detail == null:
         return
     var land := tile_root.get_node_or_null("RegisteredLand") as MeshInstance3D
     if land == null or land.mesh == null or land.mesh.get_surface_count() == 0:
@@ -100,6 +103,10 @@ func _apply_terrain_detail(tile_root: Node3D) -> void:
         material.set_shader_parameter("reference_rock_alternate", _terrain_alt_rock)
         material.set_shader_parameter("has_reference_rock_alternate", true)
         land.set_meta("beta1_alternate_rock", true)
+    if _terrain_soil_detail != null:
+        material.set_shader_parameter("reference_soil_detail", _terrain_soil_detail)
+        material.set_shader_parameter("has_reference_soil_detail", true)
+        land.set_meta("beta2_survival_soil_detail", true)
 
 func _apply_ocean_detail() -> void:
     if (_water_normal == null and _water_alt_foam == null) or _terrain == null or not is_instance_valid(_terrain):
@@ -152,6 +159,7 @@ static func optional_asset_contract() -> Dictionary:
     return {
         "terrain_normal": TERRAIN_NORMAL_ASSET,
         "terrain_alt_rock": TERRAIN_ALT_ROCK_ASSET,
+        "terrain_soil_detail": TERRAIN_SOIL_DETAIL_ASSET,
         "water_normal": WATER_NORMAL_ASSET,
         "water_alt_foam": WATER_ALT_FOAM_ASSET,
         "building_concrete": BUILDING_CONCRETE_ASSET,
@@ -164,6 +172,7 @@ static func optional_asset_contract() -> Dictionary:
         "extra_draw_calls": false,
         "palette_family_count_mutation": false,
         "alternate_rock_extra_samples": 1,
+        "soil_detail_extra_samples": 1,
         "alternate_foam_extra_samples": 1,
         "painted_stucco_extra_samples_per_fragment": 1,
         "stone_alternate_extra_samples_per_fragment": 1,
