@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource path="res://scripts/main.gd" type="Script" id="1"]
 [ext_resource path="res://scripts/road_structure_collision.gd" type="Script" id="2"]
@@ -19,6 +19,7 @@
 [ext_resource path="res://scripts/culvert_structure_runtime.gd" type="Script" id="17"]
 [ext_resource path="res://scripts/ford_surface_runtime.gd" type="Script" id="18"]
 [ext_resource path="res://scripts/beta1_work_zone_runtime.gd" type="Script" id="19"]
+[ext_resource path="res://scripts/near_field_driveway_runtime.gd" type="Script" id="20"]
 
 [node name="Yardman" type="Node3D"]
 script = ExtResource("1")
@@ -43,6 +44,9 @@ script = ExtResource("8")
 
 [node name="NearFieldBuiltEnvironment" type="Node" parent="."]
 script = ExtResource("9")
+
+[node name="NearFieldDriveways" type="Node3D" parent="."]
+script = ExtResource("20")
 
 [node name="NearFieldRoadEdge" type="Node3D" parent="."]
 script = ExtResource("10")
