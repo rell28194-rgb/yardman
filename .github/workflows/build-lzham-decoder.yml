@@ -27,6 +27,9 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          # The upstream codec predates modern GCC's stricter fixed-width
+          # integer macro includes. Patch only the ephemeral checkout.
+          sed -i '4i#include <cstdint>' lzham/lzhamdecomp/lzham_huffman_codes.cpp
           cmake -S lzham -B build \
             -DBUILD_X64=ON \
             -DBUILD_SHARED_LIBS=OFF \
