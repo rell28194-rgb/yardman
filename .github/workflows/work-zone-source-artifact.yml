@@ -107,12 +107,20 @@ jobs:
           sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
           godot --version
 
-      - name: Prove production runtime consumes national sidecar
+      - name: Import project with staged national sidecar
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p godot/data/roads
           cp godot/build/work_zones.json godot/data/roads/work_zones.json
+          timeout 300 godot --headless --path godot --editor --quit \
+            2>&1 | tee godot/build/work-zone-project-import.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/work-zone-project-import.log; then exit 1; fi
+
+      - name: Prove production runtime consumes national sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
           timeout 120 godot --headless --path godot --script tests/beta1_work_zone_national_data_test.gd \
             2>&1 | tee godot/build/work-zone-national-godot.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/work-zone-national-godot.log; then exit 1; fi
@@ -130,6 +138,7 @@ jobs:
             godot/build/jamaica-osm-http-headers.txt
             godot/build/work-zone-source-build.log
             godot/build/work-zone-source-validation.log
+            godot/build/work-zone-project-import.log
             godot/build/work-zone-national-godot.log
           if-no-files-found: error
           retention-days: 7
