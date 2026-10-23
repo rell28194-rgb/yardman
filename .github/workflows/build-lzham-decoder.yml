@@ -27,9 +27,10 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          # The upstream codec predates modern GCC's stricter fixed-width
-          # integer macro includes. Patch only the ephemeral checkout.
-          sed -i '4i#include <cstdint>' lzham/lzhamdecomp/lzham_huffman_codes.cpp
+          # The upstream codec predates modern GCC's fixed-width macro include
+          # requirements. Force the standard header into every ephemeral C++
+          # translation unit instead of modifying/vendoring upstream sources.
+          export CXXFLAGS='-include cstdint'
           cmake -S lzham -B build \
             -DBUILD_X64=ON \
             -DBUILD_SHARED_LIBS=OFF \
