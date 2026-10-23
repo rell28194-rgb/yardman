@@ -22,9 +22,11 @@ func _run() -> void:
         Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD,
     ])
     var source_copy := vertices.duplicate()
+    # Road edge clearance is 5 m: driveway-eligible, but still below the 5.5 m
+    # boundary-wall/fence inference threshold.
     var road := {
-        "a": Vector2(-20.0, 10.0),
-        "b": Vector2(20.0, 10.0),
+        "a": Vector2(-20.0, 8.0),
+        "b": Vector2(20.0, 8.0),
         "width_m": 6.0,
         "flags": 0,
     }
@@ -68,6 +70,16 @@ func _run() -> void:
     if not Driveways.plan_driveway(front, front_road, Vector2.ZERO, 13).is_empty():
         _fail("driveway density gate stopped being deterministic")
         return
+    var distant_boundary_road := {
+        "a": Vector2(-20.0, 8.6),
+        "b": Vector2(20.0, 8.6),
+        "width_m": 6.0,
+        "flags": 0,
+    }
+    var distant_front_road := BuiltEnvironment._nearest_road(Vector2(0.0, 0.0), [distant_boundary_road])
+    if not Driveways.plan_driveway(front, distant_front_road, Vector2.ZERO, 12).is_empty():
+        _fail("driveway crossed into the frontage wall/fence clearance band")
+        return
     if front != driveway_source or front_road != driveway_road:
         _fail("driveway planner mutated source building/road records")
         return
@@ -76,6 +88,10 @@ func _run() -> void:
             or int(driveway_contract.get("max_driveways_per_cell", 999)) > 16 \
             or float(driveway_contract.get("visibility_m", 999.0)) > 150.0:
         _fail("driveway asset/budget contract drifted")
+        return
+    if float(driveway_contract.get("max_clearance_m", 99.0)) >= float(driveway_contract.get("frontage_boundary_threshold_m", 0.0)) \
+            or not bool(driveway_contract.get("shared_frontage_seed", false)):
+        _fail("driveway/frontage coordination contract drifted")
         return
     if bool(driveway_contract.get("collision", true)) \
             or bool(driveway_contract.get("terrain_mutation", true)) \
