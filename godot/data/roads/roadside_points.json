@@ -1,0 +1,83 @@
+{
+  "attribution": "© OpenStreetMap contributors — https://www.openstreetmap.org/copyright (ODbL)",
+  "collision": false,
+  "crs": "EPSG:3448",
+  "format": 1,
+  "geographic_authority": true,
+  "inferred_spacing": false,
+  "kinds": {
+    "bus_shelter": "highway=bus_stop AND shelter=yes/true/1",
+    "street_lamp": "highway=street_lamp"
+  },
+  "navigation": false,
+  "origin": {
+    "easting": 771862.3076757698,
+    "lat": 17.9714,
+    "lon": -76.7936,
+    "northing": 646846.7138758468
+  },
+  "routing": false,
+  "sectors": [
+    [-35,-7,[
+      {"elevation_source":"runtime-terrain-grounded","id":"n5166498719","kind":"street_lamp","position":[-141404.215,0.0,-27058.505],"source_tags":{"highway":"street_lamp"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n5166498720","kind":"street_lamp","position":[-141395.454,0.0,-27086.687],"source_tags":{"highway":"street_lamp"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n5166500728","kind":"street_lamp","position":[-141069.061,0.0,-27262.196],"source_tags":{"highway":"street_lamp"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n5166500729","kind":"street_lamp","position":[-141043.608,0.0,-27260.935],"source_tags":{"highway":"street_lamp"}}
+    ]],
+    [-23,-15,[
+      {"elevation_source":"runtime-terrain-grounded","id":"n12875547935","kind":"street_lamp","position":[-90309.035,0.0,-57996.453],"source_tags":{"highway":"street_lamp"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n12875547936","kind":"street_lamp","position":[-90316.648,0.0,-57987.89],"source_tags":{"highway":"street_lamp"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n12875547937","kind":"street_lamp","position":[-90304.677,0.0,-57977.089],"source_tags":{"highway":"street_lamp"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n12875547938","kind":"street_lamp","position":[-90297.221,0.0,-57986.25],"source_tags":{"highway":"street_lamp"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n12875547950","kind":"street_lamp","position":[-90446.308,0.0,-57598.313],"source_tags":{"highway":"street_lamp"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n12875547951","kind":"street_lamp","position":[-90446.099,0.0,-57549.287],"source_tags":{"highway":"street_lamp"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n12875547952","kind":"street_lamp","position":[-90442.779,0.0,-57499.055],"source_tags":{"highway":"street_lamp"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n12875547953","kind":"street_lamp","position":[-90444.669,0.0,-57448.067],"source_tags":{"highway":"street_lamp"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n12875547954","kind":"street_lamp","position":[-90483.384,0.0,-57445.834],"source_tags":{"highway":"street_lamp"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n12875547955","kind":"street_lamp","position":[-90447.255,0.0,-57650.463],"source_tags":{"highway":"street_lamp"}}
+    ]],
+    [-18,-3,[{"elevation_source":"runtime-terrain-grounded","id":"n3766243551","kind":"bus_shelter","position":[-70567.595,0.0,-11375.564],"source_tags":{"highway":"bus_stop","public_transport":"platform","shelter":"yes"}}]],
+    [-15,-1,[{"elevation_source":"runtime-terrain-grounded","id":"n3767706148","kind":"bus_shelter","position":[-59980.926,0.0,-119.91],"source_tags":{"highway":"bus_stop","public_transport":"platform","shelter":"yes"}}]],
+    [-14,0,[
+      {"elevation_source":"runtime-terrain-grounded","id":"n3767889718","kind":"bus_shelter","position":[-56712.073,0.0,558.634],"source_tags":{"highway":"bus_stop","public_transport":"platform","shelter":"yes"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n3767889719","kind":"bus_shelter","position":[-56129.554,0.0,356.461],"source_tags":{"highway":"bus_stop","public_transport":"platform","shelter":"yes"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n3767937648","kind":"bus_shelter","position":[-55347.715,0.0,243.344],"source_tags":{"highway":"bus_stop","public_transport":"platform","shelter":"yes"}}
+    ]],
+    [-13,-1,[{"elevation_source":"runtime-terrain-grounded","id":"n3769011837","kind":"bus_shelter","position":[-49407.55,0.0,-347.944],"source_tags":{"highway":"bus_stop","public_transport":"platform","shelter":"yes"}}]],
+    [-12,0,[{"elevation_source":"runtime-terrain-grounded","id":"n3769827790","kind":"bus_shelter","position":[-46140.959,0.0,1529.704],"source_tags":{"highway":"bus_stop","public_transport":"platform","shelter":"yes"}}]],
+    [-11,0,[{"elevation_source":"runtime-terrain-grounded","id":"n3773960383","kind":"bus_shelter","position":[-42465.068,0.0,3235.841],"source_tags":{"highway":"bus_stop","public_transport":"platform","shelter":"yes"}}]],
+    [-10,-13,[
+      {"elevation_source":"runtime-terrain-grounded","id":"n5154198511","kind":"street_lamp","position":[-40170.016,0.0,-50006.289],"source_tags":{"highway":"street_lamp"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n5167761716","kind":"street_lamp","position":[-38839.412,0.0,-49198.151],"source_tags":{"highway":"street_lamp"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n9576098355","kind":"street_lamp","position":[-38777.335,0.0,-49997.853],"source_tags":{"highway":"street_lamp"}}
+    ]],
+    [-10,0,[
+      {"elevation_source":"runtime-terrain-grounded","id":"n3774035858","kind":"bus_shelter","position":[-39852.774,0.0,3912.259],"source_tags":{"highway":"bus_stop","public_transport":"platform","shelter":"yes"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n3774068552","kind":"bus_shelter","position":[-39175.444,0.0,4041.09],"source_tags":{"highway":"bus_stop","public_transport":"platform","shelter":"yes"}}
+    ]],
+    [-10,1,[{"elevation_source":"runtime-terrain-grounded","id":"n3774247825","kind":"bus_shelter","position":[-38356.62,0.0,7139.109],"source_tags":{"highway":"bus_stop","public_transport":"platform","shelter":"yes"}}]],
+    [-3,-1,[{"elevation_source":"runtime-terrain-grounded","id":"n9101796920","kind":"bus_shelter","position":[-8698.757,0.0,-1235.026],"source_tags":{"bus":"yes","highway":"bus_stop","lit":"no","public_transport":"platform","shelter":"yes"}}]],
+    [-3,0,[{"elevation_source":"runtime-terrain-grounded","id":"n3778835904","kind":"bus_shelter","position":[-10053.936,0.0,1420.53],"source_tags":{"bus":"yes","highway":"bus_stop","public_transport":"platform","shelter":"yes"}}]],
+    [-1,-2,[{"elevation_source":"runtime-terrain-grounded","id":"n3774245575","kind":"bus_shelter","position":[-414.383,0.0,-4435.723],"source_tags":{"bus":"yes","highway":"bus_stop","public_transport":"platform","shelter":"yes"}}]],
+    [-1,-1,[
+      {"elevation_source":"runtime-terrain-grounded","id":"n4985640837","kind":"street_lamp","position":[-1320.18,0.0,-3025.769],"source_tags":{"highway":"street_lamp"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n4985640838","kind":"street_lamp","position":[-1489.998,0.0,-3106.024],"source_tags":{"highway":"street_lamp"}}
+    ]],
+    [0,-3,[{"elevation_source":"runtime-terrain-grounded","id":"n4691162591","kind":"bus_shelter","position":[60.762,0.0,-8920.559],"source_tags":{"bus":"yes","highway":"bus_stop","public_transport":"platform","shelter":"yes"}}]],
+    [0,-1,[
+      {"elevation_source":"runtime-terrain-grounded","id":"n3452124981","kind":"bus_shelter","position":[58.521,0.0,-76.966],"source_tags":{"bus":"yes","highway":"bus_stop","name":"83 Bus Stop","public_transport":"stop_position","shelter":"yes"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n3596914958","kind":"bus_shelter","position":[545.66,0.0,-2420.539],"source_tags":{"bus":"yes","highway":"bus_stop","name":"Crossroads Bus Stop","public_transport":"platform","shelter":"yes"}},
+      {"elevation_source":"runtime-terrain-grounded","id":"n3784143957","kind":"bus_shelter","position":[2677.985,0.0,-2934.321],"source_tags":{"bus":"yes","highway":"bus_stop","public_transport":"platform","shelter":"yes"}}
+    ]],
+    [7,0,[{"elevation_source":"runtime-terrain-grounded","id":"n4135631069","kind":"bus_shelter","position":[30511.69,0.0,1944.065],"source_tags":{"highway":"bus_stop","name":"Georgia bus stop","public_transport":"platform","shelter":"yes"}}]]
+  ],
+  "source": "OpenStreetMap / Geofabrik Jamaica extract",
+  "source_contract": "explicit OSM point tags only",
+  "source_sha256": "16120becbae124393ceec1935d1fd23a3050388f39d9df338ad4e55391f7015b",
+  "stats": {
+    "by_kind": {"bus_shelter": 19, "street_lamp": 19},
+    "points": 38,
+    "tiles": 18
+  },
+  "tile_size": 4096.0
+}
