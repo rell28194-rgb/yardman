@@ -9,10 +9,12 @@ uniform sampler2D reference_grass : source_color, repeat_enable, filter_linear_m
 uniform sampler2D reference_dry_grass : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_rock : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_rock_alternate : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_soil_detail : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_grass_normal : repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool has_reference_ground = false;
 uniform bool has_reference_rock = false;
 uniform bool has_reference_rock_alternate = false;
+uniform bool has_reference_soil_detail = false;
 uniform bool has_reference_grass_normal = false;
 uniform sampler2D surface_hd_lush : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D surface_hd_dry : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
@@ -116,6 +118,19 @@ void fragment() {
             }
             rock *= 1.10;
         }
+    }
+
+    if (has_reference_soil_detail && !overview) {
+        // Direct survival-island woodsground source is restricted to the soil
+        // family. It contributes one top-projected sample only; the existing
+        // bare-soil mask still decides where it can become visible, so it gains
+        // no terrain, biome, land-cover or placement authority.
+        vec3 recovered_soil = texture(reference_soil_detail,
+            material_position / (9.0 * family_scale)).rgb;
+        float recovered_luma = dot(recovered_soil, vec3(0.2126, 0.7152, 0.0722));
+        recovered_soil *= mix(0.88, 1.08, recovered_luma);
+        recovered_soil *= mix(vec3(0.94, 1.00, 0.94), vec3(1.06, 0.96, 0.86), dry * 0.35);
+        soil = mix(soil, recovered_soil, 0.58);
     }
 
     grass *= mix(0.80, 1.12, patch.r) * mix(0.90, 1.08, macro);
