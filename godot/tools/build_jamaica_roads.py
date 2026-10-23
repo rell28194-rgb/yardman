@@ -13,6 +13,7 @@ from typing import Dict, Iterator, List, Sequence, Tuple
 
 from pyproj import Transformer
 from road_graph import build_network, partition_id, read_osm_features, split_segment
+from work_zone_compile import compile_work_zones
 
 CRS_SOURCE = "EPSG:4326"
 CRS_TARGET = "EPSG:3448"
@@ -166,6 +167,7 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
         if missing:
             raise ValueError("Missing parish coverage: " + ", ".join(missing))
     overview = build_road_overview(network, tile_size)
+    work_zones = compile_work_zones(features, transformer, (origin_e, origin_n), tile_size, height_sampler)
     if require_national_coverage and (overview["segments"] < 1000 or len(overview["sectors"]) < 20):
         raise ValueError("Far-road overview is too small for national arterial coverage")
     # Build into a sibling staging directory; failed compiles retain old outputs.
@@ -187,6 +189,7 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
             (staging / "graph" / f"{kind}_{partition}.json").write_text(
                 json.dumps(values, separators=(",", ":")), encoding="utf-8")
     (staging / "overview.json").write_text(json.dumps(overview, separators=(",", ":")), encoding="utf-8")
+    (staging / "work_zones.json").write_text(json.dumps(work_zones, separators=(",", ":")), encoding="utf-8")
     manifest = {
         "format": 3, "source": "OpenStreetMap / Geofabrik Jamaica extract",
         "source_sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
@@ -205,6 +208,11 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
         "overview": {"format": 1, "file": "overview.json", "classes": list(ROAD_OVERVIEW_CLASSES),
                      "segments": overview["segments"], "sectors": len(overview["sectors"]),
                      "purpose": "render-only streamed arterial HLOD; no collision or navigation"},
+        "work_zones": {"format": 1, "file": "work_zones.json",
+                       "source_ways": work_zones["stats"]["source_ways"],
+                       "segments": work_zones["stats"]["tile_pieces"],
+                       "tiles": work_zones["stats"]["tiles"],
+                       "purpose": "OSM highway=construction presentation evidence; no routing or collision"},
         "elevation_source": "DEM" if height_sampler else "unmeasured-flat",
         "tiles": tile_entries, "stats": stats,
         "parish_anchors": {name: {**network["anchor_roads"].get(name, {}), "lat": PARISH_COVERAGE_ANCHORS[name][0],
@@ -236,6 +244,8 @@ def main() -> int:
     print(json.dumps(manifest["stats"], indent=2, sort_keys=True))
     print("Far-road overview: %s segments / %s sectors" %
           (manifest["overview"]["segments"], manifest["overview"]["sectors"]))
+    print("Construction work zones: %s source ways / %s streamed pieces / %s tiles" %
+          (manifest["work_zones"]["source_ways"], manifest["work_zones"]["segments"], manifest["work_zones"]["tiles"]))
     print(f"Bounds (m): {manifest['bounds']}")
     print(f"Wrote {len(manifest['tiles'])} road tiles and persistent topology to {args.output_dir}")
     return 0
