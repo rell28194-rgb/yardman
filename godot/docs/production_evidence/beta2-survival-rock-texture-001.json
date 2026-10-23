@@ -1,0 +1,64 @@
+{
+  "checkpoint": "beta2-survival-rock-texture-001",
+  "date_utc": "2026-10-23",
+  "source_library": "Beta2",
+  "outer_members": [
+    "beta2/com.game.survivalisland.ocean.fightforsurvive_1.52.7z.001",
+    "beta2/com.game.survivalisland.ocean.fightforsurvive_1.52.7z.002",
+    "beta2/com.game.survivalisland.ocean.fightforsurvive_1.52.7z.003"
+  ],
+  "outer_member_sha256": [
+    "c1147d848208ca32f82b2a42b386230239a097a21b17fc4f08f9d322b035ec04",
+    "4589a87f5c97cded2cbcb825b9b890d66fbe5a27bed511b9877bc76d576de853",
+    "e13b23ce088e67a54156c077fca2603e2b3d90a1ad0f9434edf4aa378d3a3ca9"
+  ],
+  "xapk": {
+    "name": "com.game.survivalisland.ocean.fightforsurvive_1.52.xapk",
+    "bytes": 105927844,
+    "sha256": "0ba5db3b7551a4d0b3a3c1da6e74f672af4a9ed09c2ec10bfd3232f8b678a7a2"
+  },
+  "base_apk": {
+    "name": "com.game.survivalisland.ocean.fightforsurvive.apk",
+    "bytes": 83169689,
+    "sha256": "26dff6078ec7a5fbb8faddf153a0f92b5ad6dcbca48e09caeb609d1e5081f7f1",
+    "unity_bundle": "assets/bin/Data/data.unity3d"
+  },
+  "unity_source": {
+    "unity_version": "2022.3.62f2",
+    "serialized_file": "sharedassets3.assets",
+    "resource_file": "sharedassets3.assets.resS",
+    "texture_name": "rocks_diffuse",
+    "texture_path_id": 453,
+    "width": 512,
+    "height": 512,
+    "mip_count": 10,
+    "texture_format_id": 51,
+    "interpreted_format": "ASTC_RGB_8x8",
+    "stream_offset": 12220704,
+    "stream_size": 87424,
+    "raw_astc_sha256": "e1802e42727abb5d6931474974b23cea0d7d00c958faed98d9d1d23dc679ade9"
+  },
+  "recovery": {
+    "filename": "beta2_survival_rocks_diffuse.ktx",
+    "bytes": 87528,
+    "sha256": "829c11ca895f35b959e2296256b46f0d05227fd28d5cbd80a37b8ff836d746c6",
+    "container": "KTX 1.1",
+    "compressed_internal_format": "COMPRESSED_RGBA_ASTC_8x8_KHR",
+    "source_bytes_reencoded": false,
+    "mip_chain_byte_count_exact": true
+  },
+  "yardman_binding": {
+    "semantic_fallback": "ground_rock_alternate.png",
+    "optional_upgrade": "beta2_survival_rocks_diffuse.ktx",
+    "existing_shader_slot": "reference_rock_alternate",
+    "extra_shader_samples": 0,
+    "extra_draw_calls": 0,
+    "geometry_mutation": false,
+    "terrain_mutation": false,
+    "geology_authority": false,
+    "placement_authority": false,
+    "asset_absent_fallback": true
+  },
+  "private_checkpoint": "Yardman-Beta2-Survival-Rock-Texture-001.zip",
+  "android_device_acceptance": "open"
+}
