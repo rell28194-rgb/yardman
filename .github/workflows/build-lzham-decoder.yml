@@ -89,14 +89,14 @@ jobs:
                   return 4;
               }
               stream.next_in = source.data();
-              stream.avail_in = static_cast<lzham_z_uint>(source.size());
+              stream.avail_in = static_cast<decltype(stream.avail_in)>(source.size());
 
               std::vector<unsigned char> chunk(1024 * 1024);
               unsigned long long total = 0;
               int result = LZHAM_Z_OK;
               for (;;) {
                   stream.next_out = chunk.data();
-                  stream.avail_out = static_cast<lzham_z_uint>(chunk.size());
+                  stream.avail_out = static_cast<decltype(stream.avail_out)>(chunk.size());
                   const int flush = stream.avail_in ? LZHAM_Z_NO_FLUSH : LZHAM_Z_FINISH;
                   result = lzham_z_inflate(&stream, flush);
                   const size_t produced = chunk.size() - stream.avail_out;
