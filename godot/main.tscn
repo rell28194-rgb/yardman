@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource path="res://scripts/main.gd" type="Script" id="1"]
 [ext_resource path="res://scripts/road_structure_collision.gd" type="Script" id="2"]
@@ -20,6 +20,7 @@
 [ext_resource path="res://scripts/ford_surface_runtime.gd" type="Script" id="18"]
 [ext_resource path="res://scripts/beta1_work_zone_runtime.gd" type="Script" id="19"]
 [ext_resource path="res://scripts/near_field_driveway_runtime.gd" type="Script" id="20"]
+[ext_resource path="res://scripts/beta1_industrial_barrel_runtime.gd" type="Script" id="21"]
 
 [node name="Yardman" type="Node3D"]
 script = ExtResource("1")
@@ -65,6 +66,9 @@ script = ExtResource("14")
 
 [node name="Beta1RockOutcrops" type="Node" parent="."]
 script = ExtResource("15")
+
+[node name="Beta1IndustrialBarrels" type="Node" parent="."]
+script = ExtResource("21")
 
 [node name="Beta1UIAudio" type="Node" parent="."]
 script = ExtResource("16")
