@@ -14,6 +14,9 @@ class IdentityTransformer:
 
 
 class RoadsidePointCompilerTests(unittest.TestCase):
+    def setUp(self):
+        self.transformer = IdentityTransformer()
+
     def _point(self, identifier, lon, lat, **properties):
         return {
             "type": "Feature",
@@ -43,7 +46,7 @@ class RoadsidePointCompilerTests(unittest.TestCase):
                 "geometry": {"type": "LineString", "coordinates": [[-76.79, 17.97], [-76.78, 17.97]]},
             },
         ]
-        result = compile_points(features, tile_size=4096.0)
+        result = compile_points(features, tile_size=4096.0, transformer=self.transformer)
         self.assertTrue(result["geographic_authority"])
         self.assertFalse(result["routing"])
         self.assertFalse(result["navigation"])
@@ -64,7 +67,7 @@ class RoadsidePointCompilerTests(unittest.TestCase):
 
     def test_duplicate_source_identity_is_not_double_placed(self):
         feature = self._point("n100", -76.7936, 17.9714, highway="street_lamp")
-        result = compile_points([feature, dict(feature)], tile_size=4096.0)
+        result = compile_points([feature, dict(feature)], tile_size=4096.0, transformer=self.transformer)
         self.assertEqual(result["stats"]["points"], 1)
         records = [record for sector in result["sectors"] for record in sector[2]]
         self.assertEqual(len(records), 1)
@@ -77,7 +80,7 @@ class RoadsidePointCompilerTests(unittest.TestCase):
             "properties": {"tags": {"highway": "bus_stop", "shelter": "1", "bus": "yes"}},
             "geometry": {"type": "Point", "coordinates": [-76.7936, 17.9714]},
         }
-        result = compile_points([feature], tile_size=4096.0)
+        result = compile_points([feature], tile_size=4096.0, transformer=self.transformer)
         self.assertEqual(result["stats"]["points"], 1)
         record = result["sectors"][0][2][0]
         self.assertEqual(record["kind"], "bus_shelter")
@@ -85,7 +88,11 @@ class RoadsidePointCompilerTests(unittest.TestCase):
 
     def test_height_sampler_is_recorded_without_geometry_inference(self):
         feature = self._point("n300", -76.7936, 17.9714, highway="street_lamp")
-        result = compile_points([feature], tile_size=4096.0, height_sampler=lambda _x, _z: 123.456)
+        result = compile_points(
+            [feature], tile_size=4096.0,
+            height_sampler=lambda _x, _z: 123.456,
+            transformer=self.transformer,
+        )
         record = result["sectors"][0][2][0]
         self.assertAlmostEqual(record["position"][1], 123.456)
         self.assertEqual(record["elevation_source"], "DEM")
@@ -93,9 +100,9 @@ class RoadsidePointCompilerTests(unittest.TestCase):
 
     def test_invalid_tile_size_fails_closed(self):
         with self.assertRaises(ValueError):
-            compile_points([], tile_size=0.0)
+            compile_points([], tile_size=0.0, transformer=self.transformer)
         with self.assertRaises(ValueError):
-            compile_points([], tile_size=float("nan"))
+            compile_points([], tile_size=float("nan"), transformer=self.transformer)
 
 
 if __name__ == "__main__":
