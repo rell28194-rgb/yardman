@@ -23,7 +23,7 @@ var _state := "idle"
 var _message := "Jamaica running water is optional."
 var _last_progress_emit_msec := 0
 var _update_accumulator := 0.0
-var _renderer: YardmanHydrologyRenderer
+var _renderer
 var _bound_game: Node
 
 var _layer: CanvasLayer
