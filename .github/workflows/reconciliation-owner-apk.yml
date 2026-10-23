@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - codex/world-reconciliation-001
+      - codex/garage-reconcile-20261023
     paths:
       - '.github/workflows/reconciliation-owner-apk.yml'
   workflow_dispatch:
