@@ -5,7 +5,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "godot" / "tools"))
 
-from build_work_zones import compile_work_zones
+from work_zone_compile import compile_work_zones
 
 
 class IdentityTransformer:
@@ -44,13 +44,16 @@ class WorkZoneCompilerTests(unittest.TestCase):
         result = compile_work_zones(features, IdentityTransformer(), (0.0, 0.0), 100.0)
         self.assertFalse(result["drivable"])
         self.assertFalse(result["navigation"])
+        self.assertFalse(result["routing"])
+        self.assertFalse(result["collision"])
         self.assertTrue(result["geographic_authority"])
         self.assertEqual(result["stats"]["source_ways"], 1)
         self.assertEqual(result["stats"]["source_segments"], 1)
-        self.assertEqual(result["stats"]["segments"], 1)
-        self.assertEqual(result["stats"]["sectors"], 1)
+        self.assertEqual(result["stats"]["tile_pieces"], 1)
+        self.assertEqual(result["stats"]["tiles"], 1)
         record = result["sectors"][0][2][0]
         self.assertEqual(record["source_way"], "w100")
+        self.assertEqual(record["construction"], "primary")
         self.assertEqual(record["construction_class"], "primary")
         self.assertEqual(record["surface"], "asphalt")
         self.assertEqual(record["access"], "no")
@@ -71,11 +74,30 @@ class WorkZoneCompilerTests(unittest.TestCase):
         result = compile_work_zones([feature], IdentityTransformer(), (0.0, 0.0), 100.0)
         self.assertEqual(result["stats"]["source_ways"], 1)
         self.assertEqual(result["stats"]["source_segments"], 1)
-        self.assertEqual(result["stats"]["segments"], 2)
-        self.assertEqual(result["stats"]["sectors"], 2)
+        self.assertEqual(result["stats"]["tile_pieces"], 2)
+        self.assertEqual(result["stats"]["tiles"], 2)
         records = [sector[2][0] for sector in result["sectors"]]
         self.assertTrue(all(record["source_way"] == "w300" for record in records))
         self.assertTrue(all(record["construction_class"] == "service" for record in records))
+        self.assertTrue(all(record["width_m"] == 3.5 for record in records))
+
+    def test_multiline_counts_one_source_way_but_each_line_family(self):
+        feature = {
+            "type": "Feature",
+            "id": "w400",
+            "properties": {"highway": "construction", "construction": "secondary"},
+            "geometry": {
+                "type": "MultiLineString",
+                "coordinates": [
+                    [[0.0, 0.0], [10.0, 0.0]],
+                    [[20.0, 0.0], [30.0, 0.0]],
+                ],
+            },
+        }
+        result = compile_work_zones([feature], IdentityTransformer(), (0.0, 0.0), 100.0)
+        self.assertEqual(result["stats"]["source_ways"], 1)
+        self.assertEqual(result["stats"]["source_segments"], 2)
+        self.assertEqual(result["stats"]["by_construction_type"]["secondary"], 2)
 
     def test_invalid_tile_size_fails_closed(self):
         with self.assertRaises(ValueError):
