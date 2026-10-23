@@ -14,6 +14,7 @@ from typing import Dict, Iterator, List, Sequence, Tuple
 from pyproj import Transformer
 from road_graph import build_network, partition_id, read_osm_features, split_segment
 from work_zone_compile import compile_work_zones
+from roadside_point_compile import compile_file as compile_roadside_points_file
 
 CRS_SOURCE = "EPSG:4326"
 CRS_TARGET = "EPSG:3448"
@@ -162,6 +163,12 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
     if staging.exists():
         shutil.rmtree(staging)
     (staging / "graph").mkdir(parents=True)
+    # Roadside point truth is intentionally compiled from the original source
+    # again. The road graph's PBF reader only retains ways; this independent
+    # point pass preserves explicit street-lamp and shelter-authorized bus-stop
+    # nodes without broadening routing or collision authority.
+    roadside_points = compile_roadside_points_file(
+        input_path, staging / "roadside_points.json", tile_size, height_sampler)
     tile_entries = []
     for (tx, tz), segments in sorted(network["tiles"].items()):
         filename = f"tile_{tx}_{tz}.json"
@@ -200,6 +207,11 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
                        "segments": work_zones["stats"]["segments"],
                        "tiles": work_zones["stats"]["sectors"],
                        "purpose": "OSM highway=construction presentation evidence; no routing or collision"},
+        "roadside_points": {"format": 1, "file": "roadside_points.json",
+                            "points": roadside_points["stats"]["points"],
+                            "tiles": roadside_points["stats"]["tiles"],
+                            "by_kind": roadside_points["stats"]["by_kind"],
+                            "purpose": "explicit OSM street lamps and shelter-authorized bus stops; presentation only"},
         "elevation_source": "DEM" if height_sampler else "unmeasured-flat",
         "tiles": tile_entries, "stats": stats,
         "parish_anchors": {name: {**network["anchor_roads"].get(name, {}), "lat": PARISH_COVERAGE_ANCHORS[name][0],
@@ -229,6 +241,9 @@ def main() -> int:
           (manifest["overview"]["segments"], manifest["overview"]["sectors"]))
     print("Construction work zones: %s source ways / %s streamed pieces / %s tiles" %
           (manifest["work_zones"]["source_ways"], manifest["work_zones"]["segments"], manifest["work_zones"]["tiles"]))
+    print("Roadside point truth: %s points / %s tiles / %s" %
+          (manifest["roadside_points"]["points"], manifest["roadside_points"]["tiles"],
+           manifest["roadside_points"]["by_kind"]))
     print(f"Bounds (m): {manifest['bounds']}")
     print(f"Wrote {len(manifest['tiles'])} road tiles and persistent topology to {args.output_dir}")
     return 0
