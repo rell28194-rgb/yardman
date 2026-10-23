@@ -9,6 +9,8 @@ on:
       - 'godot/shaders/**'
       - 'godot/main.tscn'
       - 'godot/project.godot'
+      - 'godot/data/roads/work_zones.json'
+      - 'godot/data/roads/roadside_points.json'
       - 'godot/tests/audio_test.gd'
       - 'godot/tests/weather_fx_runtime_test.gd'
       - 'godot/tests/weather_fx_hierarchy_test.gd'
@@ -25,8 +27,13 @@ on:
       - 'godot/tests/beta1_seated_driver_runtime_test.gd'
       - 'godot/tests/beta1_ui_audio_runtime_test.gd'
       - 'godot/tests/beta1_rock_outcrop_runtime_test.gd'
+      - 'godot/tests/beta1_work_zone_runtime_test.gd'
+      - 'godot/tests/beta1_work_zone_national_data_test.gd'
+      - 'godot/tests/beta1_industrial_barrel_runtime_test.gd'
+      - 'godot/tests/beta1_roadside_point_runtime_test.gd'
       - 'godot/tests/near_field_groundcover_runtime_test.gd'
       - 'godot/tests/near_field_built_environment_runtime_test.gd'
+      - 'godot/tests/near_field_driveway_runtime_test.gd'
       - 'godot/tests/near_field_road_edge_runtime_test.gd'
       - 'godot/tests/vegetation_lod_blend_runtime_test.gd'
       - 'godot/tests/hydrology_visual_hierarchy_runtime_test.gd'
@@ -156,6 +163,40 @@ jobs:
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/beta1-rock-outcrops.log; then exit 1; fi
           grep -q 'YARDMAN_BETA1_ROCK_OUTCROP_RUNTIME_TEST PASS steep=1 flat_rejected=1 water_rejected=1 bridge_rejected=1 tunnel_rejected=1 tile_bound=1 max_tile=8 max_cell=2 geology=0 collision=0' godot/build/beta1-rock-outcrops.log
 
+      - name: Prove source-backed Beta1 work-zone placement
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/beta1_work_zone_runtime_test.gd 2>&1 | tee godot/build/beta1-work-zones.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/beta1-work-zones.log; then exit 1; fi
+          grep -q 'YARDMAN_BETA1_WORK_ZONE_RUNTIME_TEST PASS' godot/build/beta1-work-zones.log
+          grep -q 'source_unchanged=1 access_gated=1 drivable=0 navigation=0 collision=0 terrain_mutation=0' godot/build/beta1-work-zones.log
+
+      - name: Prove national highway=construction sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/beta1_work_zone_national_data_test.gd 2>&1 | tee godot/build/beta1-work-zone-national.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/beta1-work-zone-national.log; then exit 1; fi
+          grep -q 'YARDMAN_BETA1_WORK_ZONE_NATIONAL_DATA_TEST PASS' godot/build/beta1-work-zone-national.log
+          grep -q 'grid=4096 gameplay_authority=0' godot/build/beta1-work-zone-national.log
+
+      - name: Prove source-gated Beta1 industrial barrel placement
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/beta1_industrial_barrel_runtime_test.gd 2>&1 | tee godot/build/beta1-industrial-barrels.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/beta1-industrial-barrels.log; then exit 1; fi
+          grep -q 'YARDMAN_BETA1_INDUSTRIAL_BARREL_RUNTIME_TEST PASS industrial=1 warehouse=1 residential=0 commercial=0 parts=0 pavement_clear=1 bridge=0 tunnel=0 source_unchanged=1 near_only=1 collision=0 shadows=0' godot/build/beta1-industrial-barrels.log
+
+      - name: Prove exact-source Beta1 roadside points
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/beta1_roadside_point_runtime_test.gd 2>&1 | tee godot/build/beta1-roadside-points.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/beta1-roadside-points.log; then exit 1; fi
+          grep -q 'YARDMAN_BETA1_ROADSIDE_POINT_RUNTIME_TEST PASS lamp=1 shelter=1 unsheltered_rejected=1 fake_lamp_rejected=1 source_unchanged=1 exact_position=1 orientation_only=1 near_only=1 collision=0 national_points=38 lamps=19 shelters=19 tiles=18' godot/build/beta1-roadside-points.log
+
       - name: Prove reconciled culvert structure geometry
         shell: bash
         run: |
@@ -187,6 +228,14 @@ jobs:
           timeout 120 godot --headless --path godot --script tests/near_field_built_environment_runtime_test.gd 2>&1 | tee godot/build/near-field-built-environment.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/near-field-built-environment.log; then exit 1; fi
           grep -q 'YARDMAN_NEAR_FIELD_BUILT_ENVIRONMENT_TEST PASS front=1 rear_rejected=1 groups=3 source_unchanged=1 near_only=1 collision=0' godot/build/near-field-built-environment.log
+
+      - name: Prove near-field driveway inference
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/near_field_driveway_runtime_test.gd 2>&1 | tee godot/build/near-field-driveways.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/near-field-driveways.log; then exit 1; fi
+          grep -q 'YARDMAN_NEAR_FIELD_DRIVEWAY_RUNTIME_TEST PASS paved=1 unpaved_rejected=1 bridge_rejected=1 tunnel_rejected=1 clearance_gated=1 rear_rejected=1 density_gated=1 source_unchanged=1 near_only=1 collision=0 terrain_mutation=0 navigation=0' godot/build/near-field-driveways.log
 
       - name: Prove near-field road edge reconciliation
         shell: bash
@@ -253,10 +302,15 @@ jobs:
             godot/build/beta1-seated-driver.log
             godot/build/beta1-ui-audio.log
             godot/build/beta1-rock-outcrops.log
+            godot/build/beta1-work-zones.log
+            godot/build/beta1-work-zone-national.log
+            godot/build/beta1-industrial-barrels.log
+            godot/build/beta1-roadside-points.log
             godot/build/culvert-structures.log
             godot/build/ford-surfaces.log
             godot/build/near-field-groundcover.log
             godot/build/near-field-built-environment.log
+            godot/build/near-field-driveways.log
             godot/build/near-field-road-edge.log
             godot/build/vegetation-lod-blend.log
             godot/build/hydrology-visual-hierarchy.log
