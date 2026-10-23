@@ -91,8 +91,27 @@ jobs:
           rm -rf godot/assets/user_reference godot/.godot/imported
           mkdir -p godot/assets/user_reference godot/.godot/imported
           python - "$FLEET_ARTIFACT" "$FLEET_APK" <<'PY'
-          import os, sys, zipfile
+          import json, os, sys, zipfile
           artifact, apk_path = sys.argv[1:]
+
+          def hero_scene(vehicle_id):
+              if vehicle_id == 'toyota_crown':
+                  return 'toyota_crown_2013.glb'
+              if vehicle_id == 'toyota_chaser_v':
+                  return 'road_car.glb'
+              if vehicle_id.startswith('carx_') and vehicle_id not in ('carx_ae86_a', 'carx_ae86_b'):
+                  return vehicle_id + '.glb'
+              return 'fleet_' + vehicle_id + '.glb'
+
+          with open('godot/data/owner_fleet_pack_contract.json', encoding='utf-8') as handle:
+              contract = json.load(handle)
+          vehicle_ids = list(contract.get('available_vehicle_ids', []))
+          if int(contract.get('available_vehicle_count', 0)) != 64 or len(vehicle_ids) != 64 or len(set(vehicle_ids)) != 64:
+              raise SystemExit('authoritative fleet contract is not exactly 64 unique vehicles')
+          expected_sources = {vehicle_id: hero_scene(vehicle_id) for vehicle_id in vehicle_ids}
+          if len(set(expected_sources.values())) != 64:
+              raise SystemExit('authoritative fleet hero-scene mapping is not one-to-one')
+
           with zipfile.ZipFile(artifact) as outer:
               apks = [n for n in outer.namelist() if n.endswith('.apk')]
               if len(apks) != 1:
@@ -103,10 +122,11 @@ jobs:
                       if not chunk:
                           break
                       out.write(chunk)
+
           user_reference = 0
           imported = 0
-          vehicle_scenes = 0
           with zipfile.ZipFile(apk_path) as apk:
+              names = set(apk.namelist())
               for info in apk.infolist():
                   if info.is_dir():
                       continue
@@ -122,17 +142,36 @@ jobs:
                       user_reference += 1
                   else:
                       imported += 1
-                      base = os.path.basename(rel)
-                      if base.endswith('.scn') and (base.startswith('fleet_') or base.startswith('carx_') or base.startswith('toyota_crown_2013')):
-                          vehicle_scenes += 1
-          print('YARDMAN_FLEET64_COMPILED_RECOVERY', 'user_reference='+str(user_reference), 'imported='+str(imported), 'vehicle_scenes='+str(vehicle_scenes))
-          if user_reference < 700 or imported < 400 or vehicle_scenes < 64:
+
+              imported_scenes = [n for n in names if n.startswith('assets/.godot/imported/') and n.endswith('.scn')]
+              missing_imports = []
+              missing_scenes = []
+              resolved = {}
+              for vehicle_id, source in expected_sources.items():
+                  import_path = 'assets/assets/user_reference/' + source + '.import'
+                  if import_path not in names:
+                      missing_imports.append((vehicle_id, import_path))
+                  prefix = source + '-'
+                  matches = sorted(n for n in imported_scenes if os.path.basename(n).startswith(prefix))
+                  if not matches:
+                      missing_scenes.append((vehicle_id, source))
+                  else:
+                      resolved[vehicle_id] = matches
+
+          if missing_imports:
+              raise SystemExit('Fleet64 source import metadata missing: ' + repr(missing_imports))
+          if missing_scenes:
+              raise SystemExit('Fleet64 compiled hero scenes missing: ' + repr(missing_scenes))
+          if len(resolved) != 64:
+              raise SystemExit('Fleet64 resolved hero-scene count is not 64: ' + str(len(resolved)))
+          print('YARDMAN_FLEET64_COMPILED_RECOVERY', 'user_reference='+str(user_reference), 'imported='+str(imported), 'vehicle_scenes='+str(len(resolved)), 'chaser_scene='+expected_sources['toyota_chaser_v'])
+          if user_reference < 700 or imported < 400:
               raise SystemExit('retained Fleet64 compiled payload incomplete')
           PY
           test -s godot/assets/user_reference/manifest.json
           test -s godot/assets/user_reference/fleet_audi_r8.glb.import
           test -s godot/assets/user_reference/toyota_crown_2013.glb.import
-          test "$(find godot/.godot/imported -type f \( -name 'fleet_*.scn' -o -name 'carx_*.scn' -o -name 'toyota_crown_2013*.scn' \) | wc -l)" -ge 64
+          test -s godot/assets/user_reference/road_car.glb.import
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -249,6 +288,16 @@ jobs:
           python - "$APK" <<'PY'
           import hashlib, json, os, sys, zipfile
           apk = sys.argv[1]
+
+          def hero_scene(vehicle_id):
+              if vehicle_id == 'toyota_crown':
+                  return 'toyota_crown_2013.glb'
+              if vehicle_id == 'toyota_chaser_v':
+                  return 'road_car.glb'
+              if vehicle_id.startswith('carx_') and vehicle_id not in ('carx_ae86_a', 'carx_ae86_b'):
+                  return vehicle_id + '.glb'
+              return 'fleet_' + vehicle_id + '.glb'
+
           with zipfile.ZipFile(apk) as zf:
               names = set(zf.namelist())
               required = {
@@ -265,18 +314,30 @@ jobs:
               if missing:
                   raise SystemExit('missing gameplay runtime in APK: ' + repr(missing))
               contract = json.loads(zf.read('assets/data/owner_fleet_pack_contract.json'))
-              if int(contract.get('available_vehicle_count', 0)) != 64:
-                  raise SystemExit('fleet contract is not 64 vehicles')
+              vehicle_ids = list(contract.get('available_vehicle_ids', []))
+              if int(contract.get('available_vehicle_count', 0)) != 64 or len(vehicle_ids) != 64 or len(set(vehicle_ids)) != 64:
+                  raise SystemExit('fleet contract is not exactly 64 unique vehicles')
+              expected_sources = {vehicle_id: hero_scene(vehicle_id) for vehicle_id in vehicle_ids}
+              if len(set(expected_sources.values())) != 64:
+                  raise SystemExit('fleet hero-scene mapping is not one-to-one')
+              imported_scenes = [n for n in names if n.startswith('assets/.godot/imported/') and n.endswith('.scn')]
+              missing_vehicle_scenes = []
+              for vehicle_id, source in expected_sources.items():
+                  prefix = source + '-'
+                  if not any(os.path.basename(n).startswith(prefix) for n in imported_scenes):
+                      missing_vehicle_scenes.append((vehicle_id, source))
+              if missing_vehicle_scenes:
+                  raise SystemExit('compiled Fleet64 hero scenes missing from APK: ' + repr(missing_vehicle_scenes))
+              vehicle_scenes = len(expected_sources)
               road_tiles = sum(1 for n in names if n.startswith('assets/data/roads/tile_') and n.endswith('.json'))
               coast_files = sum(1 for n in names if n.startswith('assets/data/coast/') and n != 'assets/data/coast/manifest.json')
               building_tiles = sum(1 for n in names if n.startswith('assets/data/buildings/buildings_') and n.endswith('.ymb'))
-              vehicle_scenes = sum(1 for n in names if n.startswith('assets/.godot/imported/') and n.endswith('.scn') and os.path.basename(n).startswith(('fleet_', 'carx_', 'toyota_crown_2013')))
               abis = sorted({n.split('/')[1] for n in names if n.startswith('lib/') and n.endswith('.so')})
           digest = hashlib.sha256(open(apk,'rb').read()).hexdigest()
           size = os.path.getsize(apk)
           if road_tiles < 700 or coast_files < 2500 or building_tiles < 700:
               raise SystemExit(f'accepted world incomplete roads={road_tiles} coast_files={coast_files} buildings={building_tiles}')
-          if vehicle_scenes < 64:
+          if vehicle_scenes != 64:
               raise SystemExit(f'compiled vehicle scene families incomplete: {vehicle_scenes}')
           if abis != ['arm64-v8a']:
               raise SystemExit('unexpected ABI set: ' + repr(abis))
