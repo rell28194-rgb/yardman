@@ -12,6 +12,7 @@ on:
       - 'godot/main.tscn'
       - 'godot/project.godot'
       - 'godot/tests/garage_access_runtime_test.gd'
+      - 'godot/tests/remote_fleet_resume_regression_test.gd'
       - 'godot/tests/system_menu_bridge_runtime_test.gd'
       - '.github/workflows/garage-gameplay-godot.yml'
   workflow_dispatch:
@@ -58,6 +59,14 @@ jobs:
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/garage-access.log; then exit 1; fi
           grep -q 'YARDMAN_GARAGE_ACCESS_RUNTIME_PASS startup=1 open=1 close=1 toggle=1 controller_independent=1 keyboard_g=1 duplicate=0 hud_launcher=0' godot/build/garage-access.log
 
+      - name: Prove resumable fleet download recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/remote_fleet_resume_regression_test.gd 2>&1 | tee godot/build/fleet-resume.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/fleet-resume.log; then exit 1; fi
+          grep -q 'YARDMAN_REMOTE_FLEET_RESUME_REGRESSION_PASS legacy_220kb_reset=1 aligned_4mb_resume=1 ignored_range_rejected=1 invalid_content_range_rejected=1 retry_budget=5 committed_progress_preserved=1' godot/build/fleet-resume.log
+
       - name: Preserve consolidated HUD/menu behavior
         shell: bash
         run: |
@@ -74,6 +83,7 @@ jobs:
           path: |
             godot/build/garage-import.log
             godot/build/garage-access.log
+            godot/build/fleet-resume.log
             godot/build/system-menu-bridge.log
           if-no-files-found: ignore
           retention-days: 3
