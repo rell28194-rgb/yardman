@@ -1,0 +1,130 @@
+name: Yardman Promote Validated Work-Zone Data
+
+on:
+  push:
+    branches:
+      - codex/world-reconciliation-001
+    paths:
+      - '.github/workflows/promote-work-zone-data.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  JAMAICA_OSM_URL: 'https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf'
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+
+concurrency:
+  group: yardman-work-zone-data-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout reconciliation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build current Jamaica construction sidecar
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --disable-pip-version-check --no-cache-dir osmium pyproj
+          mkdir -p /tmp/yardman-source godot/build godot/data/roads
+          curl --fail --location --retry 3 --retry-all-errors \
+            "$JAMAICA_OSM_URL" -o /tmp/yardman-source/jamaica-latest.osm.pbf
+          python godot/tools/build_work_zone_source_artifact.py \
+            /tmp/yardman-source/jamaica-latest.osm.pbf \
+            godot/data/roads/work_zones.json \
+            --source-url "$JAMAICA_OSM_URL" \
+            | tee godot/build/work-zone-promotion-build.log
+          python - <<'PY'
+          import json, pathlib
+          p = pathlib.Path('godot/data/roads/work_zones.json')
+          d = json.loads(p.read_text())
+          s = d.get('stats', {})
+          assert d.get('drivable') is False and d.get('navigation') is False
+          assert d.get('routing') is False and d.get('collision') is False
+          assert d.get('source_contract') == 'OpenStreetMap highway=construction only'
+          assert int(s.get('source_ways', 0)) > 0
+          assert int(s.get('segments', 0)) > 0
+          assert int(s.get('sectors', 0)) > 0
+          print('promotion source contract:', s)
+          PY
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Validate generated sidecar in production runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 300 godot --headless --path godot --editor --quit \
+            2>&1 | tee godot/build/work-zone-promotion-import.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/work-zone-promotion-import.log; then exit 1; fi
+          timeout 120 godot --headless --path godot --script tests/beta1_work_zone_national_data_test.gd \
+            2>&1 | tee godot/build/work-zone-promotion-runtime.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/work-zone-promotion-runtime.log; then exit 1; fi
+          grep -q 'YARDMAN_BETA1_WORK_ZONE_NATIONAL_DATA_TEST PASS' godot/build/work-zone-promotion-runtime.log
+          grep -q 'grid=4096 gameplay_authority=0' godot/build/work-zone-promotion-runtime.log
+
+      - name: Commit validated sidecar without overwriting concurrent work
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'yardman-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git add godot/data/roads/work_zones.json
+          if git diff --cached --quiet; then
+            echo 'Validated work-zone snapshot already committed.'
+            exit 0
+          fi
+          git commit -m 'data: stage sourced Jamaica construction work zones'
+          for attempt in 1 2 3; do
+            git fetch origin "$GITHUB_REF_NAME"
+            git rebase "origin/$GITHUB_REF_NAME"
+            timeout 300 godot --headless --path godot --editor --quit >/tmp/work-zone-rebase-import.log 2>&1
+            if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' /tmp/work-zone-rebase-import.log; then
+              cat /tmp/work-zone-rebase-import.log
+              exit 1
+            fi
+            timeout 120 godot --headless --path godot --script tests/beta1_work_zone_national_data_test.gd \
+              >/tmp/work-zone-rebase-runtime.log 2>&1
+            grep -q 'YARDMAN_BETA1_WORK_ZONE_NATIONAL_DATA_TEST PASS' /tmp/work-zone-rebase-runtime.log
+            if git push origin "HEAD:$GITHUB_REF_NAME"; then
+              exit 0
+            fi
+            echo "Concurrent branch advance during push attempt $attempt; rebasing again."
+          done
+          echo 'Could not fast-forward promotion after three concurrent advances.' >&2
+          exit 1
+
+      - name: Upload promotion evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Work-Zone-Data-Promotion-Evidence
+          path: |
+            godot/build/work-zone-promotion-build.log
+            godot/build/work-zone-promotion-import.log
+            godot/build/work-zone-promotion-runtime.log
+          if-no-files-found: ignore
+          retention-days: 3
