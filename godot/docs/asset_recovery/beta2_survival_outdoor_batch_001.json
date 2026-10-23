@@ -1,0 +1,76 @@
+{
+  "format_version": 1,
+  "checkpoint": "beta2-survival-outdoor-batch-001",
+  "source": "com.game.survivalisland.ocean.fightforsurvive_1.52",
+  "outer_beta2": {
+    "source_archive": "beta2.7z.001..232",
+    "required_volumes": [200, 201, 202],
+    "source_stream_start": 10473684640,
+    "source_stream_end": 10542277143,
+    "packed_bytes": 68592503,
+    "note": "Exact ranges were derived from the decoded 7z directory using only outer volumes 001 and 232 before materializing the three required source volumes."
+  },
+  "inner_archive": {
+    "split_members": 3,
+    "logical_bytes": 68589424,
+    "xapk": "com.game.survivalisland.ocean.fightforsurvive_1.52.xapk",
+    "xapk_bytes": 105927844,
+    "xapk_sha256": "0ba5db3b7551a4d0b3a3c1da6e74f672af4a9ed09c2ec10bfd3232f8b678a7a2"
+  },
+  "unity": {
+    "bundle": "assets/bin/Data/data.unity3d",
+    "bundle_bytes": 41287757,
+    "unity_version": "2022.3.62f2",
+    "unityfs_unpacked_bytes": 73449640,
+    "unityfs_nodes": 33,
+    "main_shared_objects": 2122,
+    "named_textures_total": 650,
+    "named_meshes_total": 125,
+    "useful_name_examples": [
+      "rocks_diffuse",
+      "woodsground_diffuse",
+      "Grass_blades",
+      "Rock_atlas",
+      "Bush",
+      "Branches",
+      "Cliff",
+      "Waterfall_mesh",
+      "water_foam",
+      "Waterbump",
+      "foliageRustle1",
+      "StepGrass1",
+      "StepGravel1",
+      "StepStone1"
+    ]
+  },
+  "woodsground_diffuse": {
+    "serialized_file": "sharedassets3.assets",
+    "path_id": 404,
+    "width": 512,
+    "height": 512,
+    "mip_count": 10,
+    "unity_texture_format": 51,
+    "format_interpretation": "ASTC 8x8 RGBA",
+    "stream_resource": "sharedassets3.assets.resS",
+    "stream_offset": 10508848,
+    "payload_bytes": 87424,
+    "payload_sha256": "fc43066aea697c3dbb615b378eade28df1932f398753e3e1377cb8bc506df1b9",
+    "private_asset": "beta2_survival_woodsground_diffuse.ktx",
+    "private_asset_bytes": 87528,
+    "private_asset_sha256": "498b61384c0aa94ba92ec8259b14efd4f524ffd831d1c6e29c970b7ac53af3a6",
+    "runtime_role": "optional near-field bare-soil visual detail",
+    "shader_samples": 1,
+    "geometry_authority": false,
+    "land_cover_authority": false,
+    "collision_authority": false,
+    "extra_draw_calls": false
+  },
+  "acceptance": {
+    "source_extraction": "verified",
+    "payload_size_matches_astc8x8_mip_chain": true,
+    "public_asset_absent_fallback_required": true,
+    "private_render_comparison_pending": true,
+    "android_device_performance_pending": true,
+    "national_visual_acceptance_pending": true
+  }
+}
