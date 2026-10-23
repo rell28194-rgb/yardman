@@ -61,11 +61,10 @@ func _process(delta: float) -> void:
     _refresh_download_indicator()
 
 func _on_node_added(node: Node) -> void:
-    if node is Button:
-        call_deferred("_hide_launcher_weak", weakref(node))
-
-func _hide_launcher_weak(reference: WeakRef) -> void:
-    var node: Variant = reference.get_ref()
+    # SystemMenuBridge autoloads before the optional-content and garage runtimes.
+    # Suppress their legacy launchers synchronously as each Button enters the
+    # SceneTree so CONTENT/RIVERS/SURFACES/GARAGE can never render for a frame.
+    # The periodic sweep remains as a defensive repair path for replaced UI.
     if node is Button and suppress_legacy_launcher(node as Button):
         _suppressed_launchers += 1
 
