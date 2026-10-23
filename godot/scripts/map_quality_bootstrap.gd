@@ -2,12 +2,14 @@ extends Node
 
 const RoadOverviewScript = preload("res://scripts/road_overview.gd")
 const BuildingOverviewScript = preload("res://scripts/building_overview.gd")
+const RoadStreamerScript = preload("res://scripts/road_streamer.gd")
+const BuildingStreamerScript = preload("res://scripts/building_streamer.gd")
 
 # One-shot map-first presentation bootstrap. This branch is deliberately about
 # the Jamaica world itself; it does not add AI, jobs, traffic or placeholder
 # vehicle systems.
 var _applied := false
-var _buildings: JamaicaBuildingStreamer
+var _buildings
 var _road_overview
 var _building_overview
 
@@ -43,14 +45,14 @@ func _process(_delta: float) -> void:
         sun.shadow_bias = minf(sun.shadow_bias, 0.035)
 
     var roads_value = scene.get("roads")
-    if roads_value is JamaicaRoadStreamer and roads_value.get_node_or_null("FarRoadOverview") == null:
+    if _script_matches(roads_value, RoadStreamerScript) and roads_value.get_node_or_null("FarRoadOverview") == null:
         _road_overview = RoadOverviewScript.new()
         _road_overview.name = "FarRoadOverview"
         _road_overview.configure(roads_value)
         roads_value.add_child(_road_overview)
 
     var buildings_value = scene.get("buildings")
-    if buildings_value is JamaicaBuildingStreamer:
+    if _script_matches(buildings_value, BuildingStreamerScript):
         _buildings = buildings_value
         _buildings.quality = "Quality"
         _buildings.draw_distance = 1400.0
@@ -68,6 +70,9 @@ func _process(_delta: float) -> void:
 
     _applied = true
     set_process(false)
+
+func _script_matches(value: Variant, expected_script: Script) -> bool:
+    return value is Node and (value as Node).get_script() == expected_script
 
 func _on_building_cell_ready(cell: Vector2i, _building_count: int) -> void:
     if _buildings == null:
