@@ -43,6 +43,25 @@ func _run() -> void:
         suppressed += 1
         owner.free()
 
+    # The node-added path must perform suppression synchronously. A deferred
+    # hide can still flash CONTENT/RIVERS/SURFACES/GARAGE for one rendered frame
+    # because those optional autoloads build their launchers after this bridge.
+    var live_bridge := Bridge.new()
+    var first_frame_fixture := _make_launcher("EnvironmentContent", "CONTENT")
+    var first_frame_button: Button = first_frame_fixture.button
+    if not first_frame_button.visible:
+        _fail("first-frame fixture did not begin visible")
+        return
+    live_bridge._on_node_added(first_frame_button)
+    if first_frame_button.visible or first_frame_button.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+        _fail("node-added launcher suppression is deferred instead of immediate")
+        return
+    if int(live_bridge.debug_state().suppressed_launchers) != 1:
+        _fail("synchronous launcher suppression was not counted")
+        return
+    first_frame_fixture.owner.free()
+    live_bridge.free()
+
     # Download and action buttons inside those same runtimes must remain usable;
     # only the old top-level launcher captions are suppressed.
     var content_fixture := _make_launcher("EnvironmentContent", "DOWNLOAD BIOME HD")
@@ -108,5 +127,5 @@ func _run() -> void:
         _fail("consolidated runtime family count drifted")
         return
 
-    print("YARDMAN_SYSTEM_MENU_BRIDGE_RUNTIME_TEST PASS launchers=4 actions_preserved=1 unrelated_preserved=1 preautoload=1 standalone_engineering_ui=0 download_sources=4 passive_indicator=1 subpercent=1")
+    print("YARDMAN_SYSTEM_MENU_BRIDGE_RUNTIME_TEST PASS launchers=4 synchronous=1 actions_preserved=1 unrelated_preserved=1 preautoload=1 standalone_engineering_ui=0 download_sources=4 passive_indicator=1 subpercent=1")
     quit(0)
