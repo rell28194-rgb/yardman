@@ -51,6 +51,10 @@ func _run() -> void:
             or not building_code.contains("COLOR.a > 0.5 && COLOR.a < 0.7"):
         _fail("building shader lacks deterministic recovered concrete family")
         return
+    if not building_code.contains("reference_stone_alternate") or not building_code.contains("has_reference_stone_alternate") \
+            or not building_code.contains("One alternate sample only on stone-family wall fragments"):
+        _fail("building shader lacks bounded alternate-stone contract")
+        return
     if not building_code.contains("reference_stucco_natural") or not building_code.contains("has_reference_stucco_natural") \
             or not building_code.contains("painted_stucco_micro"):
         _fail("building shader lacks bounded natural-stucco microdetail")
@@ -81,6 +85,12 @@ func _run() -> void:
         return
     if str(contract.get("building_concrete", "")) != "building_concrete.png":
         _fail("Beta1 concrete runtime filename drifted")
+        return
+    if str(contract.get("building_stone_alternate", "")) != "building_stonewall_04.png":
+        _fail("Beta1 alternate-stone runtime filename drifted")
+        return
+    if int(contract.get("stone_alternate_extra_samples_per_fragment", 99)) != 1:
+        _fail("alternate stone exceeded its one-sample stone-family budget")
         return
     if str(contract.get("building_stucco_natural", "")) != "building_stucco_natural.png":
         _fail("Beta1 natural-stucco runtime filename drifted")
@@ -149,6 +159,7 @@ func _run() -> void:
     References.texture("beta2_ucaptain_water_bump.ktx")
     References.texture("water_foam_japan.png")
     References.texture("building_concrete.png")
+    References.texture("building_stonewall_04.png")
     References.texture("building_stucco_natural.png")
     References.texture("building_stucco_red.png")
     References.texture("building_stucco_yellow.png")
