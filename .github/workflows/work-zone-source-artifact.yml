@@ -1,0 +1,108 @@
+name: Yardman Jamaica Work-Zone Source Artifact
+
+on:
+  push:
+    branches:
+      - codex/world-reconciliation-001
+    paths:
+      - 'godot/tools/work_zone_compile.py'
+      - 'godot/tools/build_work_zone_source_artifact.py'
+      - '.github/workflows/work-zone-source-artifact.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  JAMAICA_OSM_URL: 'https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf'
+
+jobs:
+  build-source-sidecar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout reconciliation branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install OSM compiler dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --disable-pip-version-check --no-cache-dir osmium pyproj
+
+      - name: Download current Jamaica OSM extract
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/yardman-source godot/build
+          curl --fail --location --retry 3 --retry-all-errors \
+            "$JAMAICA_OSM_URL" -o /tmp/yardman-source/jamaica-latest.osm.pbf
+          test "$(stat -c%s /tmp/yardman-source/jamaica-latest.osm.pbf)" -gt 1000000
+          sha256sum /tmp/yardman-source/jamaica-latest.osm.pbf | tee godot/build/jamaica-osm-pbf.sha256
+          curl --fail --silent --show-error --head --location "$JAMAICA_OSM_URL" \
+            | tr -d '\r' | tee godot/build/jamaica-osm-http-headers.txt
+
+      - name: Compile source-backed construction sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          python godot/tools/build_work_zone_source_artifact.py \
+            /tmp/yardman-source/jamaica-latest.osm.pbf \
+            godot/build/work_zones.json \
+            --source-url "$JAMAICA_OSM_URL" \
+            | tee godot/build/work-zone-source-build.log
+          test -s godot/build/work_zones.json
+
+      - name: Validate national work-zone source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee godot/build/work-zone-source-validation.log
+          import hashlib, json, pathlib
+          path = pathlib.Path('godot/build/work_zones.json')
+          data = json.loads(path.read_text())
+          stats = data.get('stats', {})
+          ways = int(stats.get('source_ways', 0))
+          segments = int(stats.get('segments', 0))
+          sectors = int(stats.get('sectors', 0))
+          if data.get('format') != 1:
+              raise SystemExit('work-zone format drifted')
+          if data.get('drivable') is not False or data.get('navigation') is not False:
+              raise SystemExit('work-zone sidecar became drivable/navigable')
+          if data.get('routing') is not False or data.get('collision') is not False:
+              raise SystemExit('work-zone sidecar gained routing/collision')
+          if data.get('source_contract') != 'OpenStreetMap highway=construction only':
+              raise SystemExit('source contract drifted')
+          if ways < 1 or segments < 1 or sectors < 1:
+              raise SystemExit(f'current Jamaica OSM has no usable construction evidence: {stats!r}')
+          records = [record for sector in data.get('sectors', []) for record in sector[2]]
+          if len(records) != segments:
+              raise SystemExit(f'segment count mismatch records={len(records)} stats={segments}')
+          if any(float(r.get('width_m', 0.0)) <= 0.0 for r in records):
+              raise SystemExit('non-positive work-zone width')
+          if any(not r.get('source_way') for r in records):
+              raise SystemExit('work-zone record lost source identity')
+          digest = hashlib.sha256(path.read_bytes()).hexdigest()
+          pathlib.Path('godot/build/work_zones.json.sha256').write_text(digest + '  work_zones.json\n')
+          print(f'YARDMAN_NATIONAL_WORK_ZONE_SOURCE_PASS ways={ways} segments={segments} sectors={sectors} sha256={digest}')
+          PY
+
+      - name: Upload national construction sidecar
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Jamaica-Work-Zones-OSM
+          path: |
+            godot/build/work_zones.json
+            godot/build/work_zones.json.sha256
+            godot/build/jamaica-osm-pbf.sha256
+            godot/build/jamaica-osm-http-headers.txt
+            godot/build/work-zone-source-build.log
+            godot/build/work-zone-source-validation.log
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
