@@ -6,6 +6,8 @@ const BuiltEnvironment = preload("res://scripts/near_field_built_environment_run
 
 const PROP_FILES := {
     "bin": "settlement_waste_bin.glb",
+    "bin_blue": "settlement_waste_container_blue.glb",
+    "bin_yellow": "settlement_waste_container_yellow.glb",
     "hydrant": "settlement_fire_hydrant.glb",
     "cabinet": "settlement_metal_cabinet.glb",
 }
@@ -184,6 +186,11 @@ func _decorate_cell(cell: Vector2i, force: bool) -> void:
     var building_count := int(entry.get("count", 0))
     var plans: Array[Dictionary] = []
     var occupied: Dictionary = {}
+    var bin_availability := {
+        "bin": _meshes.has("bin"),
+        "bin_blue": _meshes.has("bin_blue"),
+        "bin_yellow": _meshes.has("bin_yellow"),
+    }
     for offset in range(0, vertices.size(), 4):
         if plans.size() >= MAX_PROPS_PER_CELL:
             break
@@ -198,7 +205,11 @@ func _decorate_cell(cell: Vector2i, force: bool) -> void:
         var road := BuiltEnvironment._nearest_road(world_mid, candidates.values())
         var seed := ("%d:%d:%d" % [cell.x, cell.y, offset]).hash() & 0x7fffffff
         var plan := plan_prop(edge, road, cell_origin, seed, building_count)
-        if plan.is_empty() or not _meshes.has(str(plan.get("kind", ""))):
+        if plan.is_empty():
+            continue
+        if str(plan.get("kind", "")) == "bin":
+            plan["kind"] = select_bin_kind(seed, bin_availability)
+        if str(plan.get("kind", "")).is_empty() or not _meshes.has(str(plan.get("kind", ""))):
             continue
         if not _ground_plan(plan):
             continue
@@ -228,6 +239,7 @@ func _attach_plans(cell_root: Node3D, plans: Array[Dictionary]) -> void:
     root.set_meta("collision", false)
     root.set_meta("construction_props", false)
     root.set_meta("prop_count", plans.size())
+    root.set_meta("bin_variant_anchor_mutation", false)
     for kind: String in PROP_FILES:
         if not _meshes.has(kind):
             continue
@@ -244,17 +256,38 @@ func _attach_plans(cell_root: Node3D, plans: Array[Dictionary]) -> void:
         for index in range(entries.size()):
             multi.set_instance_transform(index, entries[index].transform)
         var instance := MultiMeshInstance3D.new()
-        instance.name = "Beta1_%s" % kind.capitalize()
+        var suffix := kind.replace("_", " ").capitalize().replace(" ", "")
+        instance.name = "Beta1_%s" % suffix
         instance.multimesh = multi
         instance.visibility_range_end = VISIBILITY_END_M
         instance.visibility_range_end_margin = VISIBILITY_FADE_M
         instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
         instance.set_meta("reference_asset", str(PROP_FILES[kind]))
+        instance.set_meta("source_anchor_mutation", false)
         root.add_child(instance)
     if root.get_child_count() > 0:
         cell_root.add_child(root)
     else:
         root.free()
+
+static func select_bin_kind(seed: int, available: Dictionary) -> String:
+    var has_standard := bool(available.get("bin", false))
+    var has_blue := bool(available.get("bin_blue", false))
+    var has_yellow := bool(available.get("bin_yellow", false))
+    if not has_standard and not has_blue and not has_yellow:
+        return ""
+    var bucket := posmod(seed, 10)
+    if bucket <= 1 and has_blue:
+        return "bin_blue"
+    if bucket <= 3 and has_yellow:
+        return "bin_yellow"
+    if has_standard:
+        return "bin"
+    if has_blue:
+        return "bin_blue"
+    if has_yellow:
+        return "bin_yellow"
+    return ""
 
 static func plan_prop(edge: Dictionary, road: Dictionary, cell_origin: Vector2, seed: int, building_count: int) -> Dictionary:
     if edge.is_empty() or road.is_empty():
@@ -317,4 +350,8 @@ static func asset_contract() -> Dictionary:
         "collision": false,
         "construction_props": false,
         "source_scale_preserved": true,
+        "bin_variant_anchor_mutation": false,
+        "bin_variant_density_mutation": false,
+        "max_extra_bin_batches": 2,
+        "asset_absent_fallback": "bin",
     }
