@@ -7,6 +7,7 @@ on:
     paths:
       - 'godot/scripts/beta1_roadside_point_runtime.gd'
       - 'godot/tests/beta1_roadside_point_runtime_test.gd'
+      - 'godot/data/roads/roadside_points.json'
       - 'godot/main.tscn'
       - '.github/workflows/roadside-point-godot.yml'
   workflow_dispatch:
@@ -45,13 +46,13 @@ jobs:
           timeout 300 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/roadside-point-import.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/roadside-point-import.log; then exit 1; fi
 
-      - name: Prove explicit roadside point runtime contract
+      - name: Prove explicit roadside point runtime and national sidecar contract
         shell: bash
         run: |
           set -euo pipefail
           timeout 120 godot --headless --path godot --script tests/beta1_roadside_point_runtime_test.gd 2>&1 | tee godot/build/roadside-point-runtime.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/roadside-point-runtime.log; then exit 1; fi
-          grep -q 'YARDMAN_BETA1_ROADSIDE_POINT_RUNTIME_TEST PASS lamp=1 shelter=1 unsheltered_rejected=1 fake_lamp_rejected=1 source_unchanged=1 exact_position=1 orientation_only=1 near_only=1 collision=0' godot/build/roadside-point-runtime.log
+          grep -q 'YARDMAN_BETA1_ROADSIDE_POINT_RUNTIME_TEST PASS lamp=1 shelter=1 unsheltered_rejected=1 fake_lamp_rejected=1 source_unchanged=1 exact_position=1 orientation_only=1 near_only=1 collision=0 national_points=38 lamps=19 shelters=19 tiles=18' godot/build/roadside-point-runtime.log
 
       - name: Upload roadside point evidence
         if: always()
