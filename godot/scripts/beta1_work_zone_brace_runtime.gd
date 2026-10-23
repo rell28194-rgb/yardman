@@ -157,10 +157,19 @@ static func apply_mesh_substitution(multi: MultiMesh, replacement: Mesh) -> bool
         return false
     var instance_count := multi.instance_count
     var visible_count := multi.visible_instance_count
+    # Godot can rebuild a MultiMesh's renderer-side instance buffer when its
+    # mesh resource changes. Snapshot the authoritative placement transforms on
+    # CPU and restore the same values after the swap so presentation variation
+    # cannot move or collapse source-backed work-zone anchors.
+    var poses: Array[Transform3D] = []
+    poses.resize(instance_count)
+    for index in range(instance_count):
+        poses[index] = multi.get_instance_transform(index)
     multi.mesh = replacement
-    # Explicitly preserve placement/density state. The existing transforms are
-    # never rewritten by this variant layer.
-    multi.instance_count = instance_count
+    if multi.instance_count != instance_count:
+        multi.instance_count = instance_count
+    for index in range(instance_count):
+        multi.set_instance_transform(index, poses[index])
     multi.visible_instance_count = visible_count
     return multi.instance_count == instance_count and multi.visible_instance_count == visible_count
 
