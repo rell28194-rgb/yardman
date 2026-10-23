@@ -8,8 +8,12 @@ uniform sampler2D reference_plaster : source_color, repeat_enable, filter_linear
 uniform sampler2D reference_brick : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_concrete : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_timber : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_timber_01 : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_timber_03 : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_timber_04 : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_stone : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_stone_alternate : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_stone_alternate_02 : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_roof : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_tiles : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_stucco_natural : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
@@ -19,8 +23,12 @@ uniform bool has_reference_plaster = false;
 uniform bool has_reference_brick = false;
 uniform bool has_reference_concrete = false;
 uniform bool has_reference_timber = false;
+uniform bool has_reference_timber_01 = false;
+uniform bool has_reference_timber_03 = false;
+uniform bool has_reference_timber_04 = false;
 uniform bool has_reference_stone = false;
 uniform bool has_reference_stone_alternate = false;
+uniform bool has_reference_stone_alternate_02 = false;
 uniform bool has_reference_roof = false;
 uniform bool has_reference_tiles = false;
 uniform bool has_reference_stucco_natural = false;
@@ -89,21 +97,34 @@ void fragment() {
             ROUGHNESS = 0.94;
         }
         if (COLOR.a > 0.7 && COLOR.a < 0.9 && has_reference_stone) {
-            vec3 primary_stone = texture(reference_stone, UV / 3.5).rgb * 1.4;
-            surface = primary_stone;
-            if (has_reference_stone_alternate) {
-                // One alternate sample only on stone-family wall fragments.
-                // Large deterministic UV blocks reduce obvious texture repetition
-                // without adding a seventh building family, material or draw call.
-                vec3 alternate_stone = texture(reference_stone_alternate, UV / 4.2).rgb * 1.34;
-                float stone_variant = smoothstep(0.42, 0.68,
-                    grain(floor(vec2(UV.x / 12.0, UV.y / 5.5)) + vec2(41.0, 17.0)));
-                surface = mix(primary_stone, alternate_stone, stone_variant * 0.82);
+            // One alternate sample only on stone-family wall fragments. The
+            // selector chooses exactly one source family before sampling it;
+            // this increases variation without stacking stone texture reads.
+            float stone_selector = grain(floor(vec2(UV.x / 12.0, UV.y / 5.5)) + vec2(41.0, 17.0));
+            if (stone_selector > 0.68 && has_reference_stone_alternate_02) {
+                surface = texture(reference_stone_alternate_02, UV / 3.9).rgb * 1.36;
+            } else if (stone_selector > 0.34 && has_reference_stone_alternate) {
+                surface = texture(reference_stone_alternate, UV / 4.2).rgb * 1.34;
+            } else {
+                surface = texture(reference_stone, UV / 3.5).rgb * 1.4;
             }
             ROUGHNESS = 0.93;
         }
         if (COLOR.a > 0.9 && has_reference_timber) {
-            surface = texture(reference_timber, UV / 2.8).rgb * 1.2;
+            // Existing timber geometry and palette id stay authoritative. One
+            // deterministic family is selected per broad UV block, so each
+            // fragment samples one timber source rather than blending four.
+            float timber_selector = grain(floor(vec2(UV.x / 11.0, UV.y / 5.0)) + vec2(13.0, 73.0));
+            if (timber_selector > 0.75 && has_reference_timber_04) {
+                surface = texture(reference_timber_04, UV / 2.9).rgb * 1.18;
+            } else if (timber_selector > 0.50 && has_reference_timber_03) {
+                surface = texture(reference_timber_03, UV / 2.85).rgb * 1.20;
+            } else if (timber_selector > 0.25 && has_reference_timber_01) {
+                surface = texture(reference_timber_01, UV / 3.0).rgb * 1.16;
+            } else {
+                surface = texture(reference_timber, UV / 2.8).rgb * 1.2;
+            }
+            ROUGHNESS = 0.90;
         }
 
         vec2 module = fract(vec2(UV.x / 3.2, -UV.y / 3.15));
@@ -122,7 +143,7 @@ void fragment() {
 
         vec3 glass = vec3(0.13, 0.22, 0.25);
         surface = mix(surface, glass, window);
-        ROUGHNESS = mix(0.88, 0.30, window);
+        ROUGHNESS = mix(ROUGHNESS, 0.30, window);
         float sill = window_x * step(0.64, module.y) * step(module.y, 0.67) * (1.0 - replaced);
         surface = mix(surface, vec3(0.68, 0.65, 0.58), sill);
 
