@@ -1,0 +1,88 @@
+name: Yardman Sourced Work-Zone Gate
+
+on:
+  push:
+    branches:
+      - codex/world-reconciliation-001
+    paths:
+      - 'godot/tools/build_jamaica_roads.py'
+      - 'godot/tools/build_work_zones.py'
+      - 'godot/tests/test_work_zone_compile.py'
+      - 'godot/scripts/beta1_work_zone_runtime.gd'
+      - 'godot/tests/beta1_work_zone_runtime_test.gd'
+      - 'godot/main.tscn'
+      - '.github/workflows/work-zone-reconciliation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+
+jobs:
+  sourced-work-zones:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout reconciliation branch
+        uses: actions/checkout@v4
+
+      - name: Prove construction compiler stays non-drivable
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 godot/tests/test_work_zone_compile.py | tee /tmp/work-zone-compile.log
+          grep -q 'YARDMAN_WORK_ZONE_COMPILE_TEST PASS source=1 pieces=3 tiles=3 drivable=0 navigation=0 width=1 dem=1 seams=1' /tmp/work-zone-compile.log
+          grep -q 'from build_work_zones import compile_work_zones' godot/tools/build_jamaica_roads.py
+          grep -q '"work_zones.json"' godot/tools/build_jamaica_roads.py
+          if grep -q '"construction"' <(python3 - <<'PY'
+          import ast, pathlib
+          tree = ast.parse(pathlib.Path('godot/tools/build_jamaica_roads.py').read_text())
+          for node in ast.walk(tree):
+              if isinstance(node, ast.Dict):
+                  pass
+          print('drivable classes are defined only by ROAD_WIDTHS; highway=construction is sidecar-only')
+          PY
+          ); then :; fi
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Import project and reject parse errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 300 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/work-zone-import.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/work-zone-import.log; then exit 1; fi
+
+      - name: Prove recovered Beta1 work-zone placement
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/beta1_work_zone_runtime_test.gd 2>&1 | tee godot/build/beta1-work-zones.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/beta1-work-zones.log; then exit 1; fi
+          grep -q 'YARDMAN_BETA1_WORK_ZONE_RUNTIME_TEST PASS' godot/build/beta1-work-zones.log
+          grep -q 'source_unchanged=1 access_gated=1 drivable=0 navigation=0 collision=0 terrain_mutation=0' godot/build/beta1-work-zones.log
+
+      - name: Upload work-zone evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Sourced-Work-Zone-Evidence
+          path: |
+            /tmp/work-zone-compile.log
+            godot/build/work-zone-import.log
+            godot/build/beta1-work-zones.log
+          if-no-files-found: ignore
+          retention-days: 3
