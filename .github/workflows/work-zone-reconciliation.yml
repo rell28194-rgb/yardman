@@ -6,7 +6,7 @@ on:
       - codex/world-reconciliation-001
     paths:
       - 'godot/tools/build_jamaica_roads.py'
-      - 'godot/tools/build_work_zones.py'
+      - 'godot/tools/work_zone_compile.py'
       - 'godot/tests/test_work_zone_compile.py'
       - 'godot/scripts/beta1_work_zone_runtime.gd'
       - 'godot/tests/beta1_work_zone_runtime_test.gd'
@@ -35,17 +35,10 @@ jobs:
           set -euo pipefail
           python3 godot/tests/test_work_zone_compile.py | tee /tmp/work-zone-compile.log
           grep -q 'YARDMAN_WORK_ZONE_COMPILE_TEST PASS source=1 pieces=3 tiles=3 drivable=0 navigation=0 width=1 dem=1 seams=1' /tmp/work-zone-compile.log
-          grep -q 'from build_work_zones import compile_work_zones' godot/tools/build_jamaica_roads.py
+          grep -q 'from work_zone_compile import compile_work_zones' godot/tools/build_jamaica_roads.py
           grep -q '"work_zones.json"' godot/tools/build_jamaica_roads.py
-          if grep -q '"construction"' <(python3 - <<'PY'
-          import ast, pathlib
-          tree = ast.parse(pathlib.Path('godot/tools/build_jamaica_roads.py').read_text())
-          for node in ast.walk(tree):
-              if isinstance(node, ast.Dict):
-                  pass
-          print('drivable classes are defined only by ROAD_WIDTHS; highway=construction is sidecar-only')
-          PY
-          ); then :; fi
+          grep -q '"drivable": False' godot/tools/work_zone_compile.py
+          grep -q '"navigation": False' godot/tools/work_zone_compile.py
 
       - name: Install Godot 4.7.2
         shell: bash
