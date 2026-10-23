@@ -188,6 +188,12 @@ func _build_tile(tile: Vector2i, tile_root: Node3D) -> void:
         instance.visibility_range_end_margin = VISIBILITY_FADE_M
         instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
         instance.set_meta("reference_asset", str(PROP_FILES[kind]))
+        # Preserve the authoritative CPU placement contract for optional visual
+        # variants. Headless/dummy renderers do not reliably round-trip MultiMesh
+        # transforms, so downstream presentation layers must never infer source
+        # anchors by reading renderer-owned instance buffers back.
+        instance.set_meta("source_poses", poses.duplicate(true))
+        instance.set_meta("source_pose_count", poses.size())
         root.add_child(instance)
     if root.get_child_count() > 0:
         tile_root.add_child(root)
@@ -252,6 +258,7 @@ static func asset_contract() -> Dictionary:
         "max_props_per_tile": MAX_PROPS_PER_TILE,
         "visibility_m": VISIBILITY_END_M,
         "source_scale_preserved": true,
+        "cpu_pose_metadata": true,
         "drivable": false,
         "navigation": false,
         "collision": false,
