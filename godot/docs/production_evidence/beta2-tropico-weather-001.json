@@ -1,0 +1,36 @@
+{
+  "checkpoint": "beta2-tropico-weather-001",
+  "date_utc": "2026-10-23",
+  "source_library": "Beta2",
+  "source_outer_archive": "beta2.7z.*",
+  "outer_member": "beta2/Tropico-v1-4-2RC1-fix.7z.001",
+  "outer_member_uncompressed_bytes": 18445481,
+  "outer_member_sha256": "0e4e837a5301b5aae1c869874e3c1667a2f75ad854c61bdb6b0ea6b6e078f186",
+  "apk": {
+    "name": "Tropico-v1-4-2RC1-fix.apk",
+    "bytes": 52423687,
+    "sha256": "b9a936b0934615ffeadaea92c43bb2a43be61bcbfa1b14aa718eb3f7d93203e8",
+    "zip_members": 875
+  },
+  "source_particle_records": {
+    "RainNear.par.xml": {"max_live": 1000, "lifetime_s": [1.0, 2.0], "velocity": [20.0, 30.0]},
+    "RainMiddle.par.xml": {"max_live": 1500, "lifetime_s": [2.0, 2.0], "velocity": [20.0, 30.0]},
+    "RainFar.par.xml": {"max_live": 2500, "lifetime_s": [1.5, 1.5], "velocity": [30.0, 30.0]},
+    "RainMist.par.xml": {"max_live": 200, "lifetime_s": [3.0, 4.0], "size": [20.0, 50.0]},
+    "MistAfterRain.par.xml": {"max_live": 1000, "lifetime_s": [3.0, 6.0], "size": [15.0, 20.0]}
+  },
+  "yardman_adaptation": {
+    "implementation": "source-referenced behavior reimplemented in Godot; raw foreign rain textures are not required",
+    "rain_draw_batches": 1,
+    "mist_draw_batches": 1,
+    "max_rain_instances": 620,
+    "max_mist_instances": 28,
+    "tier_relationship": "near/middle/far 20/30/50, interleaved in one MultiMesh",
+    "post_rain_mist": true,
+    "registered_world_geometry_unchanged": true,
+    "terrain_mutation": false,
+    "collision": false,
+    "android_device_acceptance": "open"
+  },
+  "private_source_policy": "Source APK and extracted source XML remain private recovery material; public repository stores only hashes, numeric behavior evidence, tests, and the Yardman reimplementation."
+}
