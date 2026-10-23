@@ -29,9 +29,14 @@ class RoadsidePointCompilerTests(unittest.TestCase):
         self.assertEqual(classify_point({"highway": "street_lamp"}), "street_lamp")
         self.assertEqual(classify_point({"highway": "bus_stop", "shelter": "yes"}), "bus_shelter")
         self.assertEqual(classify_point({"highway": "bus_stop", "shelter": "TRUE"}), "bus_shelter")
+        self.assertEqual(classify_point({"man_made": "satellite_dish"}), "satellite_dish")
+        self.assertEqual(classify_point({"man_made": "SATELLITE_DISH"}), "satellite_dish")
         self.assertIsNone(classify_point({"highway": "bus_stop"}))
         self.assertIsNone(classify_point({"highway": "bus_stop", "shelter": "no"}))
         self.assertIsNone(classify_point({"highway": "traffic_signals"}))
+        self.assertIsNone(classify_point({"man_made": "mast"}))
+        self.assertIsNone(classify_point({"man_made": "tower"}))
+        self.assertIsNone(classify_point({"man_made": "antenna"}))
 
     def test_only_source_authorized_points_are_compiled(self):
         features = [
@@ -39,10 +44,16 @@ class RoadsidePointCompilerTests(unittest.TestCase):
             self._point("n2", -76.7935, 17.9714, highway="bus_stop", shelter="yes", name="Test Stop"),
             self._point("n3", -76.7934, 17.9714, highway="bus_stop", shelter="no"),
             self._point("n4", -76.7933, 17.9714, highway="traffic_signals"),
+            self._point("n5", -76.7932, 17.9714, man_made="satellite_dish",
+                        direction="210", operator="Test Comms",
+                        **{"communication:medium": "satellite"}),
+            self._point("n6", -76.7931, 17.9714, man_made="mast"),
+            self._point("n7", -76.7930, 17.9714, man_made="tower"),
+            self._point("n8", -76.7929, 17.9714, man_made="antenna"),
             {
                 "type": "Feature",
-                "id": "w5",
-                "properties": {"highway": "street_lamp"},
+                "id": "w9",
+                "properties": {"man_made": "satellite_dish"},
                 "geometry": {"type": "LineString", "coordinates": [[-76.79, 17.97], [-76.78, 17.97]]},
             },
         ]
@@ -52,17 +63,25 @@ class RoadsidePointCompilerTests(unittest.TestCase):
         self.assertFalse(result["navigation"])
         self.assertFalse(result["collision"])
         self.assertFalse(result["inferred_spacing"])
-        self.assertEqual(result["stats"]["points"], 2)
-        self.assertEqual(result["stats"]["by_kind"], {"bus_shelter": 1, "street_lamp": 1})
+        self.assertEqual(result["stats"]["points"], 3)
+        self.assertEqual(result["stats"]["by_kind"], {
+            "bus_shelter": 1, "satellite_dish": 1, "street_lamp": 1,
+        })
         records = [record for sector in result["sectors"] for record in sector[2]]
-        self.assertEqual({record["id"] for record in records}, {"n1", "n2"})
+        self.assertEqual({record["id"] for record in records}, {"n1", "n2", "n5"})
         lamp = next(record for record in records if record["id"] == "n1")
         stop = next(record for record in records if record["id"] == "n2")
+        dish = next(record for record in records if record["id"] == "n5")
         self.assertEqual(lamp["kind"], "street_lamp")
         self.assertEqual(lamp["source_tags"]["lamp_mount"], "bent_mast")
         self.assertEqual(stop["kind"], "bus_shelter")
         self.assertEqual(stop["source_tags"]["shelter"], "yes")
         self.assertEqual(stop["source_tags"]["name"], "Test Stop")
+        self.assertEqual(dish["kind"], "satellite_dish")
+        self.assertEqual(dish["source_tags"]["man_made"], "satellite_dish")
+        self.assertEqual(dish["source_tags"]["communication:medium"], "satellite")
+        self.assertEqual(dish["source_tags"]["direction"], "210")
+        self.assertEqual(dish["source_tags"]["operator"], "Test Comms")
         self.assertEqual(lamp["elevation_source"], "runtime-terrain-grounded")
 
     def test_duplicate_source_identity_is_not_double_placed(self):
