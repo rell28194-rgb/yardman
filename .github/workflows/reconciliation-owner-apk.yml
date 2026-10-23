@@ -122,7 +122,7 @@ jobs:
                   else:
                       imported += 1
                       base = os.path.basename(rel)
-                      if base.endswith('.scn') and (base.startswith('fleet_') or base.startswith('toyota_crown_2013')):
+                      if base.endswith('.scn') and (base.startswith('fleet_') or base.startswith('carx_') or base.startswith('toyota_crown_2013')):
                           vehicle_scenes += 1
           print('YARDMAN_FLEET64_COMPILED_RECOVERY', 'user_reference='+str(user_reference), 'imported='+str(imported), 'vehicle_scenes='+str(vehicle_scenes))
           if user_reference < 700 or imported < 400 or vehicle_scenes < 64:
@@ -131,7 +131,7 @@ jobs:
           test -s godot/assets/user_reference/manifest.json
           test -s godot/assets/user_reference/fleet_audi_r8.glb.import
           test -s godot/assets/user_reference/toyota_crown_2013.glb.import
-          test "$(find godot/.godot/imported -type f -name 'fleet_*.scn' | wc -l)" -ge 63
+          test "$(find godot/.godot/imported -type f \( -name 'fleet_*.scn' -o -name 'carx_*.scn' -o -name 'toyota_crown_2013*.scn' \) | wc -l)" -ge 64
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -269,19 +269,19 @@ jobs:
               road_tiles = sum(1 for n in names if n.startswith('assets/data/roads/tile_') and n.endswith('.json'))
               coast_files = sum(1 for n in names if n.startswith('assets/data/coast/') and n != 'assets/data/coast/manifest.json')
               building_tiles = sum(1 for n in names if n.startswith('assets/data/buildings/buildings_') and n.endswith('.ymb'))
-              fleet_scenes = sum(1 for n in names if n.startswith('assets/.godot/imported/fleet_') and n.endswith('.scn'))
+              vehicle_scenes = sum(1 for n in names if n.startswith('assets/.godot/imported/') and n.endswith('.scn') and os.path.basename(n).startswith(('fleet_', 'carx_', 'toyota_crown_2013')))
               abis = sorted({n.split('/')[1] for n in names if n.startswith('lib/') and n.endswith('.so')})
           digest = hashlib.sha256(open(apk,'rb').read()).hexdigest()
           size = os.path.getsize(apk)
           if road_tiles < 700 or coast_files < 2500 or building_tiles < 700:
               raise SystemExit(f'accepted world incomplete roads={road_tiles} coast_files={coast_files} buildings={building_tiles}')
-          if fleet_scenes < 63:
-              raise SystemExit(f'compiled fleet incomplete: {fleet_scenes}')
+          if vehicle_scenes < 64:
+              raise SystemExit(f'compiled vehicle scene families incomplete: {vehicle_scenes}')
           if abis != ['arm64-v8a']:
               raise SystemExit('unexpected ABI set: ' + repr(abis))
           if size < 50_000_000:
               raise SystemExit(f'APK unexpectedly small: {size}')
-          print(f'YARDMAN_RECONCILIATION_OWNER_APK_PASS bytes={size} sha256={digest} roads={road_tiles} coast_files={coast_files} buildings={building_tiles} fleet=64 fleet_scenes={fleet_scenes} abis={abis}')
+          print(f'YARDMAN_RECONCILIATION_OWNER_APK_PASS bytes={size} sha256={digest} roads={road_tiles} coast_files={coast_files} buildings={building_tiles} fleet=64 vehicle_scenes={vehicle_scenes} abis={abis}')
           open('godot/build/Yardman-Reconciliation-Owner.apk.sha256','w').write(digest + '  Yardman-Reconciliation-Owner.apk\n')
           PY
 
