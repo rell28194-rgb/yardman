@@ -1,0 +1,168 @@
+name: Build LZHAM recovery decoder
+
+on:
+  push:
+    branches:
+      - codex/world-reconciliation-001
+    paths:
+      - '.github/workflows/build-lzham-decoder.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-decoder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout public LZHAM codec
+        uses: actions/checkout@v4
+        with:
+          repository: richgel999/lzham_codec
+          ref: d379b1f9121e2197881c61cfc4713c78848bdfe7
+          path: lzham
+
+      - name: Build LZHAM libraries
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake -S lzham -B build \
+            -DBUILD_X64=ON \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target lzhamdll -j2
+
+      - name: Build bounded streaming decoder
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cat > decoder.cpp <<'CPP'
+          #include "lzham.h"
+          #include <cstdio>
+          #include <cstdlib>
+          #include <cstring>
+          #include <fstream>
+          #include <iostream>
+          #include <iterator>
+          #include <vector>
+
+          int main(int argc, char** argv) {
+              if (argc < 3 || argc > 5) {
+                  std::cerr << "usage: lzham_decode INPUT OUTPUT [window_bits=21] [max_output_mib=512]\n";
+                  return 2;
+              }
+              const int window_bits = argc >= 4 ? std::atoi(argv[3]) : 21;
+              const unsigned long long max_output =
+                  (argc >= 5 ? std::strtoull(argv[4], nullptr, 10) : 512ULL) * 1024ULL * 1024ULL;
+              if (window_bits < 15 || window_bits > 29 || max_output == 0) {
+                  std::cerr << "invalid bounds\n";
+                  return 2;
+              }
+
+              std::ifstream input(argv[1], std::ios::binary);
+              if (!input) {
+                  std::cerr << "cannot open input\n";
+                  return 3;
+              }
+              std::vector<unsigned char> source((std::istreambuf_iterator<char>(input)),
+                                                std::istreambuf_iterator<char>());
+              if (source.empty() || source.size() > 0xFFFFFFFFULL) {
+                  std::cerr << "input empty or too large for one streaming feed\n";
+                  return 3;
+              }
+              std::ofstream output(argv[2], std::ios::binary | std::ios::trunc);
+              if (!output) {
+                  std::cerr << "cannot open output\n";
+                  return 3;
+              }
+
+              lzham_z_stream stream;
+              std::memset(&stream, 0, sizeof(stream));
+              int status = lzham_z_inflateInit2(&stream, window_bits);
+              if (status != LZHAM_Z_OK) {
+                  std::cerr << "inflateInit2 failed: " << status << "\n";
+                  return 4;
+              }
+              stream.next_in = source.data();
+              stream.avail_in = static_cast<lzham_z_uint>(source.size());
+
+              std::vector<unsigned char> chunk(1024 * 1024);
+              unsigned long long total = 0;
+              int result = LZHAM_Z_OK;
+              for (;;) {
+                  stream.next_out = chunk.data();
+                  stream.avail_out = static_cast<lzham_z_uint>(chunk.size());
+                  const int flush = stream.avail_in ? LZHAM_Z_NO_FLUSH : LZHAM_Z_FINISH;
+                  result = lzham_z_inflate(&stream, flush);
+                  const size_t produced = chunk.size() - stream.avail_out;
+                  if (produced) {
+                      total += produced;
+                      if (total > max_output) {
+                          std::cerr << "output cap exceeded\n";
+                          lzham_z_inflateEnd(&stream);
+                          return 5;
+                      }
+                      output.write(reinterpret_cast<const char*>(chunk.data()), produced);
+                      if (!output) {
+                          std::cerr << "output write failed\n";
+                          lzham_z_inflateEnd(&stream);
+                          return 5;
+                      }
+                  }
+                  if (result == LZHAM_Z_STREAM_END)
+                      break;
+                  if (result != LZHAM_Z_OK && result != LZHAM_Z_BUF_ERROR) {
+                      std::cerr << "inflate failed: " << result
+                                << " consumed=" << stream.total_in
+                                << " produced=" << stream.total_out << "\n";
+                      lzham_z_inflateEnd(&stream);
+                      return 6;
+                  }
+                  if (!stream.avail_in && !produced && result == LZHAM_Z_BUF_ERROR) {
+                      std::cerr << "decoder made no progress at end of input\n";
+                      lzham_z_inflateEnd(&stream);
+                      return 6;
+                  }
+              }
+              const unsigned long long consumed = stream.total_in;
+              const unsigned long long reported = stream.total_out;
+              const unsigned long adler = stream.adler;
+              lzham_z_inflateEnd(&stream);
+              output.close();
+              std::cout << "LZHAM_DECODE PASS input=" << consumed
+                        << " output=" << reported
+                        << " window_bits=" << window_bits
+                        << " adler=" << std::hex << adler << std::dec << "\n";
+              return 0;
+          }
+          CPP
+
+          g++ -std=c++11 -O2 -DNDEBUG \
+            -Ilzham/include -Ilzham/lzhamdecomp -Ilzham/lzhamcomp \
+            decoder.cpp \
+            -Lbuild/lzhamdll -Lbuild/lzhamcomp -Lbuild/lzhamdecomp \
+            -Wl,--start-group -llzhamdll -llzhamcomp -llzhamdecomp -Wl,--end-group \
+            -lpthread -o lzham_decode
+          ./lzham_decode 2>&1 | grep -q 'usage: lzham_decode'
+
+      - name: Record source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo 'upstream=richgel999/lzham_codec'
+            echo 'commit=d379b1f9121e2197881c61cfc4713c78848bdfe7'
+            echo 'purpose=owner-private recovery decoder; no game media included'
+            sha256sum lzham_decode
+          } > lzham_decoder_provenance.txt
+
+      - name: Upload decoder helper
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-LZHAM-Recovery-Decoder
+          path: |
+            lzham_decode
+            lzham/LICENSE
+            lzham_decoder_provenance.txt
+          retention-days: 3
