@@ -22,7 +22,11 @@ func _run() -> void:
     if str(upgrades.get("ground_rock.png", "")) != "beta2_ucaptain_mountain_terrain_albedo.ktx":
         _fail("Beta2 mountain terrain semantic upgrade missing")
         return
-    if not References._valid_name("beta2_ucaptain_water_bump.ktx", PackedStringArray(["ktx"])):
+    if str(upgrades.get("ground_rock_alternate.png", "")) != "beta2_survival_rocks_diffuse.ktx":
+        _fail("Beta2 survival-island alternate-rock semantic upgrade missing")
+        return
+    if not References._valid_name("beta2_ucaptain_water_bump.ktx", PackedStringArray(["ktx"])) \
+            or not References._valid_name("beta2_survival_rocks_diffuse.ktx", PackedStringArray(["ktx"])):
         _fail("KTX source texture contract rejected")
         return
 
@@ -104,7 +108,6 @@ func _run() -> void:
         _fail("driver contract makes unsupported animation/device/fallback claims")
         return
 
-    # Identity is a legitimate BodyShell pose and must remain bindable.
     var ancestor := Node3D.new()
     var identity_shell := Node3D.new()
     ancestor.add_child(identity_shell)
@@ -114,9 +117,6 @@ func _run() -> void:
         return
     ancestor.free()
 
-    # Reconstruct the measured root-space fit through a nontrivial shell pose.
-    # This proves that parenting under BodyShell preserves the accepted sedan fit
-    # while allowing the driver to follow existing body pitch/roll presentation.
     var shell_pose := Transform3D(Basis(Vector3.UP, 0.31), Vector3(0.14, 0.06, -0.08))
     var local_pose := DriverRuntime.driver_local_pose(shell_pose, Basis.IDENTITY)
     var rebuilt := shell_pose * local_pose
@@ -126,6 +126,7 @@ func _run() -> void:
 
     References.texture("beta2_ucaptain_scrub_grass_normal.ktx")
     References.texture("ground_rock_alternate.png")
+    References.texture("beta2_survival_rocks_diffuse.ktx")
     References.texture("beta2_ucaptain_water_bump.ktx")
     References.texture("water_foam_japan.png")
     References.texture("building_concrete.png")
