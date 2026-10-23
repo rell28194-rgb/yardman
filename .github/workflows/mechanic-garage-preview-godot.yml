@@ -1,0 +1,65 @@
+name: Yardman Beta1 Mechanic Garage Preview Godot Gate
+
+on:
+  push:
+    branches:
+      - codex/world-reconciliation-001
+    paths:
+      - 'godot/scripts/beta1_mechanic_garage_preview_runtime.gd'
+      - 'godot/tests/beta1_mechanic_garage_preview_runtime_test.gd'
+      - 'godot/main.tscn'
+      - '.github/workflows/mechanic-garage-preview-godot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+
+jobs:
+  mechanic-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout reconciliation branch
+        uses: actions/checkout@v4
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Import project and reject parse errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 300 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/mechanic-garage-preview-import.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/mechanic-garage-preview-import.log; then exit 1; fi
+
+      - name: Prove lazy one-shot garage preview contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/beta1_mechanic_garage_preview_runtime_test.gd 2>&1 | tee godot/build/mechanic-garage-preview.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/mechanic-garage-preview.log; then exit 1; fi
+          grep -q 'YARDMAN_BETA1_MECHANIC_GARAGE_PREVIEW_TEST PASS assets=3 lazy=1 one_shot=1 viewport=384x216 world_placement=0 continuous=0 physics=0 collision=0 navigation=0 fallback=1' godot/build/mechanic-garage-preview.log
+
+      - name: Upload garage-preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Beta1-Mechanic-Garage-Preview-Evidence
+          path: |
+            godot/build/mechanic-garage-preview-import.log
+            godot/build/mechanic-garage-preview.log
+          if-no-files-found: ignore
+          retention-days: 3
