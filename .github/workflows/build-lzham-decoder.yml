@@ -148,7 +148,8 @@ jobs:
             -Lbuild/lzhamdll -Lbuild/lzhamcomp -Lbuild/lzhamdecomp \
             -Wl,--start-group -llzhamdll -llzhamcomp -llzhamdecomp -Wl,--end-group \
             -lpthread -o lzham_decode
-          ./lzham_decode 2>&1 | grep -q 'usage: lzham_decode'
+          usage="$(./lzham_decode 2>&1 || true)"
+          grep -q 'usage: lzham_decode' <<<"$usage"
 
       - name: Record source identity
         shell: bash
