@@ -11,6 +11,7 @@ uniform sampler2D reference_timber : source_color, repeat_enable, filter_linear_
 uniform sampler2D reference_stone : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_roof : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_tiles : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_stucco_natural : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_stucco_red : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_stucco_yellow : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool has_reference_plaster = false;
@@ -20,6 +21,7 @@ uniform bool has_reference_timber = false;
 uniform bool has_reference_stone = false;
 uniform bool has_reference_roof = false;
 uniform bool has_reference_tiles = false;
+uniform bool has_reference_stucco_natural = false;
 uniform bool has_reference_stucco_red = false;
 uniform bool has_reference_stucco_yellow = false;
 varying float view_distance;
@@ -58,17 +60,25 @@ void fragment() {
         if (has_reference_plaster) {
             surface *= texture(reference_plaster, UV / 3.6).rgb * 1.85;
         }
-        // The two low-alpha palette families previously shared the same generic
-        // plaster. Recovered neutral stucco textures give them stable painted
-        // wall identities without changing the six-family hash assignment.
+        // The source's neutral stucco is a restrained microdetail layer for the
+        // two painted-stucco families. It adds one sample only on those families;
+        // the existing palette id still owns which buildings receive the paint.
+        float painted_stucco_micro = 1.0;
+        if (COLOR.a < 0.3 && has_reference_stucco_natural) {
+            vec3 natural_stucco = texture(reference_stucco_natural, UV / 3.8).rgb;
+            float natural_luma = dot(natural_stucco, vec3(0.2126, 0.7152, 0.0722));
+            painted_stucco_micro = mix(0.88, 1.12, clamp(natural_luma, 0.0, 1.0));
+        }
+        // Recovered neutral stucco textures give the low-alpha palette entries
+        // stable painted wall identities without changing six-family assignment.
         if (COLOR.a < 0.1 && has_reference_stucco_red) {
             surface = texture(reference_stucco_red, UV / 3.4).rgb * 1.12
-                * mix(vec3(0.94), COLOR.rgb * 1.18, 0.10);
+                * mix(vec3(0.94), COLOR.rgb * 1.18, 0.10) * painted_stucco_micro;
             ROUGHNESS = 0.91;
         }
         if (COLOR.a > 0.1 && COLOR.a < 0.3 && has_reference_stucco_yellow) {
             surface = texture(reference_stucco_yellow, UV / 3.5).rgb * 1.10
-                * mix(vec3(0.95), COLOR.rgb * 1.15, 0.10);
+                * mix(vec3(0.95), COLOR.rgb * 1.15, 0.10) * painted_stucco_micro;
             ROUGHNESS = 0.91;
         }
         if (COLOR.a > 0.3 && COLOR.a < 0.5 && has_reference_brick) {
