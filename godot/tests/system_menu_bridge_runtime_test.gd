@@ -127,5 +127,5 @@ func _run() -> void:
         _fail("consolidated runtime family count drifted")
         return
 
-    print("YARDMAN_SYSTEM_MENU_BRIDGE_RUNTIME_TEST PASS launchers=4 synchronous=1 actions_preserved=1 unrelated_preserved=1 preautoload=1 standalone_engineering_ui=0 download_sources=4 passive_indicator=1 subpercent=1")
+    print("YARDMAN_SYSTEM_MENU_BRIDGE_RUNTIME_TEST PASS launchers=4 actions_preserved=1 unrelated_preserved=1 preautoload=1 standalone_engineering_ui=0 download_sources=4 passive_indicator=1 subpercent=1 synchronous=1")
     quit(0)
