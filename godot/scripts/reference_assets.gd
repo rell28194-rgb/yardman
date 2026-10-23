@@ -13,6 +13,10 @@ const SCENE_UPGRADES := {
 const TEXTURE_UPGRADES := {
     "ground_grass.png": "beta2_ucaptain_scrub_grass_albedo.ktx",
     "ground_rock.png": "beta2_ucaptain_mountain_terrain_albedo.ktx",
+    # Lossless ASTC 8x8 mip-chain recovery from the Beta2 survival-island
+    # Unity bundle. The existing Beta1 PNG stays the semantic fallback and the
+    # terrain shader keeps the same one-sample alternate-rock budget.
+    "ground_rock_alternate.png": "beta2_survival_rocks_diffuse.ktx",
 }
 const CROWN_CACHE_PATH := "res://.godot/imported/toyota_crown_2013.glb-6ec01e928ae54ac12e5bc0f6ba8bd627.scn"
 static var _textures: Dictionary = {}
