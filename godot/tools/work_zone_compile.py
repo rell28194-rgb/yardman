@@ -10,7 +10,19 @@ import hashlib
 import math
 from collections import Counter, defaultdict
 
-from road_graph import split_segment
+from road_graph import road_dimensions, split_segment
+
+CONSTRUCTION_WIDTHS = {
+    "motorway": 8.4, "motorway_link": 4.6,
+    "trunk": 8.0, "trunk_link": 4.3,
+    "primary": 7.2, "primary_link": 4.0,
+    "secondary": 6.8, "secondary_link": 3.8,
+    "tertiary": 6.4, "tertiary_link": 3.6,
+    "unclassified": 5.8, "residential": 5.5,
+    "living_street": 4.5, "service": 3.5,
+    "road": 5.8, "track": 3.0, "raceway": 8.0,
+}
+DEFAULT_WIDTH_M = 5.8
 
 
 def _feature_tags(feature: dict) -> dict:
@@ -42,8 +54,9 @@ def compile_work_zones(features, transformer, origin, tile_size: float, height_s
 
     Input features are the same unfiltered OSM/GeoJSON highway features consumed
     by the drivable compiler. Only ``highway=construction`` is accepted. Each
-    output segment preserves the source way ID, construction subtype and exact
-    transformed endpoints. DEM elevation is sampled when available.
+    output segment preserves source identity, construction subtype, width/surface
+    evidence and exact transformed endpoints. DEM elevation is sampled when
+    available. The payload is explicitly non-drivable and non-navigable.
     """
     if not math.isfinite(tile_size) or tile_size <= 0.0:
         raise ValueError("tile_size must be finite and positive")
@@ -60,6 +73,13 @@ def compile_work_zones(features, transformer, origin, tile_size: float, height_s
         source_id = _source_id(feature, lines, tags)
         subtype = str(tags.get("construction", "unknown") or "unknown").lower()
         access = str(tags.get("access", "") or "").lower()
+        surface = str(tags.get("surface", "unknown") or "unknown").lower()
+        dimension_class = subtype if subtype in CONSTRUCTION_WIDTHS else "road"
+        dimension_tags = dict(tags)
+        dimension_tags["highway"] = dimension_class
+        width, lanes, width_source = road_dimensions(
+            dimension_tags, CONSTRUCTION_WIDTHS.get(dimension_class, DEFAULT_WIDTH_M))
+        accepted_feature = False
         for line_index, line in enumerate(lines):
             if len(line) < 2:
                 continue
@@ -72,7 +92,7 @@ def compile_work_zones(features, transformer, origin, tile_size: float, height_s
                 if not all(math.isfinite(value) for value in (x, y, z)):
                     raise ValueError(f"Non-finite construction coordinate in {source_id}")
                 points.append((x, y, z))
-            accepted_way = False
+            accepted_line = False
             for segment_index, (a, b) in enumerate(zip(points, points[1:])):
                 if math.dist(a, b) < 0.25:
                     continue
@@ -85,7 +105,12 @@ def compile_work_zones(features, transformer, origin, tile_size: float, height_s
                         "id": f"{source_id}:{line_index}:{segment_index}",
                         "source_way": source_id,
                         "construction": subtype,
+                        "construction_class": subtype,
                         "access": access,
+                        "surface": surface,
+                        "width_m": round(float(width), 3),
+                        "lanes": int(lanes),
+                        "width_source": str(width_source),
                         "a": [round(float(v), 3) for v in p],
                         "b": [round(float(v), 3) for v in q],
                         "length_m": round(length, 3),
@@ -93,10 +118,12 @@ def compile_work_zones(features, transformer, origin, tile_size: float, height_s
                     }
                     tiles[(tx, tz)].append(record)
                     tile_pieces += 1
-                    accepted_way = True
-            if accepted_way:
-                source_ways += 1
+                    accepted_line = True
+                    accepted_feature = True
+            if accepted_line:
                 by_type[subtype] += 1
+        if accepted_feature:
+            source_ways += 1
     sectors = []
     for (tx, tz), records in sorted(tiles.items()):
         records.sort(key=lambda record: (record["source_way"], record["id"], record["a"], record["b"]))
@@ -105,8 +132,13 @@ def compile_work_zones(features, transformer, origin, tile_size: float, height_s
         "format": 1,
         "tile_size": tile_size,
         "source": "OSM highway=construction; render-only, non-drivable",
+        "source_contract": "OpenStreetMap highway=construction only",
+        "drivable": False,
+        "navigation": False,
         "routing": False,
         "collision": False,
+        "geographic_authority": True,
+        "presentation_use": "temporary work-zone props only",
         "sectors": sectors,
         "stats": {
             "source_ways": source_ways,
