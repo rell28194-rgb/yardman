@@ -7,6 +7,8 @@ on:
     paths:
       - 'godot/scripts/garage_access_runtime.gd'
       - 'godot/scripts/vehicle_selector_runtime.gd'
+      - 'godot/scripts/vehicle_controller.gd'
+      - 'godot/scripts/vehicle_model.gd'
       - 'godot/scripts/system_menu_bridge.gd'
       - 'godot/scripts/remote_fleet_runtime.gd'
       - 'godot/main.tscn'
@@ -14,6 +16,8 @@ on:
       - 'godot/tests/garage_access_runtime_test.gd'
       - 'godot/tests/remote_fleet_resume_regression_test.gd'
       - 'godot/tests/system_menu_bridge_runtime_test.gd'
+      - 'godot/tests/vehicle_handling_contract_test.gd'
+      - 'godot/tests/vehicle_test.gd'
       - '.github/workflows/garage-gameplay-godot.yml'
   workflow_dispatch:
 
@@ -27,7 +31,7 @@ env:
 jobs:
   garage-access:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -67,6 +71,24 @@ jobs:
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/fleet-resume.log; then exit 1; fi
           grep -q 'YARDMAN_REMOTE_FLEET_RESUME_REGRESSION_PASS legacy_220kb_reset=1 aligned_4mb_resume=1 ignored_range_rejected=1 invalid_content_range_rejected=1 retry_budget=5 committed_progress_preserved=1' godot/build/fleet-resume.log
 
+      - name: Prove Crown steering response contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/vehicle_handling_contract_test.gd 2>&1 | tee godot/build/vehicle-handling-contract.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/vehicle-handling-contract.log; then exit 1; fi
+          grep -q 'YARDMAN_VEHICLE_HANDLING_CONTRACT_PASS' godot/build/vehicle-handling-contract.log
+          grep -q 'controlled_slip=1' godot/build/vehicle-handling-contract.log
+
+      - name: Preserve full Crown vehicle behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 180 godot --headless --path godot --script tests/vehicle_test.gd 2>&1 | tee godot/build/vehicle-test.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/vehicle-test.log; then exit 1; fi
+          grep -q 'YARDMAN_VEHICLE_TEST PASS' godot/build/vehicle-test.log
+          grep -q 'stage3=1 braking=1 reverse=1 steering=1 grass=1 freeze=1' godot/build/vehicle-test.log
+
       - name: Preserve consolidated HUD/menu behavior
         shell: bash
         run: |
@@ -84,6 +106,8 @@ jobs:
             godot/build/garage-import.log
             godot/build/garage-access.log
             godot/build/fleet-resume.log
+            godot/build/vehicle-handling-contract.log
+            godot/build/vehicle-test.log
             godot/build/system-menu-bridge.log
           if-no-files-found: ignore
           retention-days: 3
