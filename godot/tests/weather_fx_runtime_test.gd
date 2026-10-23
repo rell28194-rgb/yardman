@@ -29,8 +29,9 @@ func _run() -> void:
     root.add_child(runtime)
     await process_frame
     var state: Dictionary = runtime.debug_state()
-    if int(state.rain_batches) != 1 or int(state.max_drops) != 320:
-        await _fail("rain batch ceiling changed", runtime)
+    if int(state.rain_batches) != 1 or int(state.mist_batches) != 1 or int(state.weather_batches) != 2 \
+            or int(state.max_drops) != 620 or int(state.max_mist) != 28:
+        await _fail("weather batch/instance ceiling changed", runtime)
         return
     if int(state.get("standalone_ui", -1)) != 0 or int(state.get("wettables", 0)) != 4:
         await _fail("weather regained standalone HUD controls or lost wettable families", runtime)
@@ -40,14 +41,20 @@ func _run() -> void:
         await _fail("weather engineering controls are still injected into gameplay HUD", runtime)
         return
     var rain = runtime.get("_rain") as MultiMeshInstance3D
-    if rain == null or rain.multimesh == null or rain.multimesh.instance_count != 320:
+    var mist = runtime.get("_mist") as MultiMeshInstance3D
+    if rain == null or rain.multimesh == null or rain.multimesh.instance_count != 620:
         await _fail("rain MultiMesh allocation contract failed", runtime)
         return
-    if rain.multimesh.mesh == null or rain.multimesh.mesh.get_surface_count() != 1:
-        await _fail("rain should remain one mesh surface / one batch", runtime)
+    if mist == null or mist.multimesh == null or mist.multimesh.instance_count != 28:
+        await _fail("mist MultiMesh allocation contract failed", runtime)
         return
-    if rain.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
-        await _fail("rain shadows must stay disabled", runtime)
+    if rain.multimesh.mesh == null or rain.multimesh.mesh.get_surface_count() != 1 \
+            or mist.multimesh.mesh == null or mist.multimesh.mesh.get_surface_count() != 1:
+        await _fail("weather batches must each remain one mesh surface", runtime)
+        return
+    if rain.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF \
+            or mist.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+        await _fail("weather shadows must stay disabled", runtime)
         return
 
     runtime.set_mode("Clear")
@@ -66,17 +73,29 @@ func _run() -> void:
     var camera := Camera3D.new()
     root.add_child(camera)
     runtime.set("_intensity", 0.78)
+    runtime.set("_after_rain", 0.78)
     runtime.call("_update_rain", camera, "Balanced", false)
-    if rain.multimesh.visible_instance_count <= 0 or rain.multimesh.visible_instance_count > 150:
+    runtime.call("_update_mist", camera, "Balanced", false)
+    if rain.multimesh.visible_instance_count <= 0 or rain.multimesh.visible_instance_count > 260:
         await _fail("Balanced rain visibility cap failed", runtime)
         return
+    if mist.multimesh.visible_instance_count <= 0 or mist.multimesh.visible_instance_count > 10:
+        await _fail("Balanced mist visibility cap failed", runtime)
+        return
     runtime.call("_update_rain", camera, "Ultra", false)
-    if rain.multimesh.visible_instance_count > 300:
+    if rain.multimesh.visible_instance_count > 560:
         await _fail("Ultra rain visibility cap failed", runtime)
         return
     runtime.call("_update_rain", camera, "Ultra", true)
-    if rain.multimesh.visible_instance_count > 165:
+    if rain.multimesh.visible_instance_count > 308:
         await _fail("Reduced Motion rain cap failed", runtime)
+        return
+
+    runtime.set("_intensity", 0.0)
+    runtime.set("_after_rain", 0.70)
+    runtime.call("_update_mist", camera, "Balanced", false)
+    if mist.multimesh.visible_instance_count <= 0:
+        await _fail("post-rain mist did not survive rain shutdown", runtime)
         return
 
     var terrain := ShaderMaterial.new()
@@ -103,7 +122,7 @@ func _run() -> void:
         await _fail("building wetness shader contract is incomplete", runtime)
         return
 
-    print("YARDMAN_WEATHER_FX_RUNTIME_PASS rain_batches=1 max_drops=320 balanced_cap=150 ultra_cap=300 reduced_motion_cap=165 wetness_materials=4 standalone_ui=0 dynamic=deterministic")
+    print("YARDMAN_WEATHER_FX_RUNTIME_PASS rain_batches=1 mist_batches=1 max_drops=620 max_mist=28 balanced_cap=260 ultra_cap=560 reduced_motion_cap=308 wetness_materials=4 standalone_ui=0 dynamic=deterministic post_rain=1")
 
     terrain.shader = null
     road.shader = null
