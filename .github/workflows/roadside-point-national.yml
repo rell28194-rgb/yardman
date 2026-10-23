@@ -1,0 +1,90 @@
+name: Yardman National Roadside Point Truth
+
+on:
+  push:
+    branches:
+      - codex/world-reconciliation-001
+    paths:
+      - 'godot/tools/roadside_point_compile.py'
+      - 'Tests/Python/test_roadside_points.py'
+      - '.github/workflows/roadside-point-national.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile-roadside-points:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout reconciliation branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install national point compiler dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --disable-pip-version-check --no-cache-dir pyproj osmium
+
+      - name: Acquire current Jamaica OpenStreetMap extract
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p godot/build/roadside-points
+          curl -fL --retry 4 --retry-delay 3 \
+            https://download.geofabrik.de/central-america/jamaica-latest.osm.pbf \
+            -o godot/build/roadside-points/jamaica-latest.osm.pbf
+          test -s godot/build/roadside-points/jamaica-latest.osm.pbf
+          sha256sum godot/build/roadside-points/jamaica-latest.osm.pbf \
+            | tee godot/build/roadside-points/source.sha256
+
+      - name: Compile explicit roadside point truth
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python godot/tools/roadside_point_compile.py \
+            godot/build/roadside-points/jamaica-latest.osm.pbf \
+            godot/build/roadside-points/roadside_points.json
+
+      - name: Validate authority and national source contract
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('godot/build/roadside-points/roadside_points.json')
+          data = json.loads(p.read_text(encoding='utf-8'))
+          assert data['format'] == 1
+          assert data['crs'] == 'EPSG:3448'
+          assert data['geographic_authority'] is True
+          assert data['routing'] is False
+          assert data['navigation'] is False
+          assert data['collision'] is False
+          assert data['inferred_spacing'] is False
+          assert data['source'] == 'OpenStreetMap / Geofabrik Jamaica extract'
+          counts = data['stats']['by_kind']
+          assert int(counts.get('street_lamp', 0)) > 0, counts
+          assert data['stats']['points'] == sum(int(v) for v in counts.values())
+          records = [r for sector in data['sectors'] for r in sector[2]]
+          assert len(records) == data['stats']['points']
+          assert all(r['kind'] in {'street_lamp', 'bus_shelter'} for r in records)
+          assert all(r['kind'] != 'bus_shelter' or r['source_tags'].get('shelter','').lower() in {'yes','true','1'} for r in records)
+          print('YARDMAN_ROADSIDE_POINT_NATIONAL PASS', data['stats'])
+          PY
+
+      - name: Upload national roadside truth evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-National-Roadside-Point-Truth
+          path: |
+            godot/build/roadside-points/roadside_points.json
+            godot/build/roadside-points/source.sha256
+          if-no-files-found: error
+          retention-days: 7
