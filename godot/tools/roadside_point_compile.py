@@ -14,8 +14,6 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Iterable
 
-from pyproj import Transformer
-
 CRS_SOURCE = "EPSG:4326"
 CRS_TARGET = "EPSG:3448"
 ORIGIN_LAT = 17.9714
@@ -91,11 +89,19 @@ def read_features(path: Path) -> list[dict]:
     return features
 
 
+def _default_transformer():
+    # Keep pyproj out of pure compiler-contract tests. Production national builds
+    # already depend on pyproj and resolve the real EPSG:3448 transform here.
+    from pyproj import Transformer
+    return Transformer.from_crs(CRS_SOURCE, CRS_TARGET, always_xy=True)
+
+
 def compile_points(features: Iterable[dict], tile_size: float = DEFAULT_TILE_SIZE,
-                   height_sampler=None) -> dict:
+                   height_sampler=None, transformer=None) -> dict:
     if not math.isfinite(tile_size) or tile_size <= 0.0:
         raise ValueError("tile_size must be finite and positive")
-    transformer = Transformer.from_crs(CRS_SOURCE, CRS_TARGET, always_xy=True)
+    if transformer is None:
+        transformer = _default_transformer()
     origin_e, origin_n = transformer.transform(ORIGIN_LON, ORIGIN_LAT)
     sectors: dict[tuple[int, int], list[dict]] = defaultdict(list)
     counts: Counter[str] = Counter()
@@ -177,8 +183,8 @@ def compile_points(features: Iterable[dict], tile_size: float = DEFAULT_TILE_SIZ
 
 
 def compile_file(input_path: Path, output_path: Path, tile_size: float = DEFAULT_TILE_SIZE,
-                 height_sampler=None) -> dict:
-    payload = compile_points(read_features(input_path), tile_size, height_sampler)
+                 height_sampler=None, transformer=None) -> dict:
+    payload = compile_points(read_features(input_path), tile_size, height_sampler, transformer)
     payload["source"] = "OpenStreetMap / Geofabrik Jamaica extract"
     payload["source_sha256"] = hashlib.sha256(input_path.read_bytes()).hexdigest()
     payload["attribution"] = "© OpenStreetMap contributors — https://www.openstreetmap.org/copyright (ODbL)"
