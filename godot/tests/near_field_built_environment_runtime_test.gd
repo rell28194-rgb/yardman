@@ -1,6 +1,7 @@
 extends SceneTree
 
 const BuiltEnvironment = preload("res://scripts/near_field_built_environment_runtime.gd")
+const Driveways = preload("res://scripts/near_field_driveway_runtime.gd")
 
 func _initialize() -> void:
     call_deferred("_run")
@@ -16,8 +17,6 @@ func _run() -> void:
         Vector3(-4.0, 0.0, -4.0), Vector3(-4.0, 3.0, -4.0),
         Vector3(4.0, 0.0, -4.0), Vector3(4.0, 3.0, -4.0),
     ])
-    # Godot FORWARD is -Z and BACK is +Z. The road is at +Z, so the
-    # road-facing wall must use BACK while the rear wall uses FORWARD.
     var normals := PackedVector3Array([
         Vector3.BACK, Vector3.BACK, Vector3.BACK, Vector3.BACK,
         Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD,
@@ -38,6 +37,50 @@ func _run() -> void:
     var front_plan := BuiltEnvironment._plan_front_edge(front, front_road, Vector2.ZERO, 10)
     if front_plan.is_empty():
         _fail("road-facing wall produced no near-field detail")
+        return
+
+    var driveway_source := front.duplicate(true)
+    var driveway_road := front_road.duplicate(true)
+    var driveway := Driveways.plan_driveway(front, front_road, Vector2.ZERO, 12)
+    if driveway.is_empty():
+        _fail("eligible paved road-facing building did not produce a driveway")
+        return
+    var corners: Array = driveway.get("corners", [])
+    if corners.size() != 4 or float(driveway.get("width_m", 0.0)) < 2.4 \
+            or float(driveway.get("length_m", 0.0)) < 1.8:
+        _fail("driveway geometry contract is invalid")
+        return
+    var bridge_road := front_road.duplicate(true)
+    bridge_road["flags"] = 2
+    if not Driveways.plan_driveway(front, bridge_road, Vector2.ZERO, 12).is_empty():
+        _fail("bridge frontage received an inferred driveway")
+        return
+    var tunnel_road := front_road.duplicate(true)
+    tunnel_road["flags"] = 4
+    if not Driveways.plan_driveway(front, tunnel_road, Vector2.ZERO, 12).is_empty():
+        _fail("tunnel frontage received an inferred driveway")
+        return
+    var unpaved_road := front_road.duplicate(true)
+    unpaved_road["flags"] = 8
+    if not Driveways.plan_driveway(front, unpaved_road, Vector2.ZERO, 12).is_empty():
+        _fail("unpaved frontage received a fake asphalt driveway")
+        return
+    if not Driveways.plan_driveway(front, front_road, Vector2.ZERO, 13).is_empty():
+        _fail("driveway density gate stopped being deterministic")
+        return
+    if front != driveway_source or front_road != driveway_road:
+        _fail("driveway planner mutated source building/road records")
+        return
+    var driveway_contract := Driveways.contract()
+    if str(driveway_contract.get("surface_asset", "")) != "road_asphalt_detail.png" \
+            or int(driveway_contract.get("max_driveways_per_cell", 999)) > 16 \
+            or float(driveway_contract.get("visibility_m", 999.0)) > 150.0:
+        _fail("driveway asset/budget contract drifted")
+        return
+    if bool(driveway_contract.get("collision", true)) \
+            or bool(driveway_contract.get("terrain_mutation", true)) \
+            or bool(driveway_contract.get("navigation", true)):
+        _fail("driveway presentation gained gameplay/terrain authority")
         return
 
     var rear := BuiltEnvironment._edge_from_wall(vertices, normals, 4)
