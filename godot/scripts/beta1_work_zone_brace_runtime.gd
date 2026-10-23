@@ -60,12 +60,17 @@ func _try_apply(instance: MultiMeshInstance3D) -> void:
         return
     if not eligible_target(instance):
         return
+    var source_poses: Variant = instance.get_meta("source_poses", null)
+    if not valid_source_poses(source_poses, instance.multimesh.instance_count):
+        # Fail closed rather than reading renderer-owned MultiMesh transforms.
+        # The work-zone runtime now retains authoritative CPU poses explicitly.
+        return
     _processed[identity] = true
     var tile := tile_from_ancestors(instance)
     if tile == INVALID_TILE or not uses_brace_for_tile(tile):
         instance.set_meta("beta1_work_zone_closure_variant", "barrier")
         return
-    if not apply_mesh_substitution(instance.multimesh, _brace_mesh):
+    if not apply_mesh_substitution(instance.multimesh, _brace_mesh, source_poses as Array):
         return
     instance.set_meta("beta1_work_zone_closure_variant", "timber_brace")
     instance.set_meta("reference_asset", BRACE_FILE)
@@ -152,24 +157,27 @@ static func uses_brace_for_tile(tile: Vector2i) -> bool:
     var mixed := (tile.x * 73856093) ^ (tile.y * 19349663)
     return posmod(mixed, VARIANT_MODULUS) == 0
 
-static func apply_mesh_substitution(multi: MultiMesh, replacement: Mesh) -> bool:
-    if multi == null or replacement == null or multi.instance_count <= 0:
+static func valid_source_poses(raw: Variant, expected_count: int) -> bool:
+    if not raw is Array or expected_count <= 0 or raw.size() != expected_count:
+        return false
+    for pose: Variant in raw:
+        if not pose is Transform3D:
+            return false
+        var transform := pose as Transform3D
+        if not transform.origin.is_finite() or not transform.basis.is_finite():
+            return false
+    return true
+
+static func apply_mesh_substitution(multi: MultiMesh, replacement: Mesh, source_poses: Array) -> bool:
+    if multi == null or replacement == null or not valid_source_poses(source_poses, multi.instance_count):
         return false
     var instance_count := multi.instance_count
     var visible_count := multi.visible_instance_count
-    # Godot can rebuild a MultiMesh's renderer-side instance buffer when its
-    # mesh resource changes. Snapshot the authoritative placement transforms on
-    # CPU and restore the same values after the swap so presentation variation
-    # cannot move or collapse source-backed work-zone anchors.
-    var poses: Array[Transform3D] = []
-    poses.resize(instance_count)
-    for index in range(instance_count):
-        poses[index] = multi.get_instance_transform(index)
     multi.mesh = replacement
     if multi.instance_count != instance_count:
         multi.instance_count = instance_count
     for index in range(instance_count):
-        multi.set_instance_transform(index, poses[index])
+        multi.set_instance_transform(index, source_poses[index] as Transform3D)
     multi.visible_instance_count = visible_count
     return multi.instance_count == instance_count and multi.visible_instance_count == visible_count
 
@@ -179,6 +187,8 @@ static func asset_contract() -> Dictionary:
         "source_role": "recovered Beta1 Level-8 timber brace frame",
         "placement_source": SOURCE_CONTRACT,
         "variant_modulus": VARIANT_MODULUS,
+        "cpu_pose_authority": true,
+        "renderer_pose_readback": false,
         "anchor_mutation": false,
         "instance_count_mutation": false,
         "extra_prop_nodes": false,
