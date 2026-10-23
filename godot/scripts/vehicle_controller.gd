@@ -10,6 +10,10 @@ const WHEELBASE_M := 2.56
 const FRONT_ELECTRIC_CUTOFF_MPS := 52.0
 const DOWNFORCE_COEFFICIENT := 0.0032
 const MAX_DOWNFORCE_ACCEL := 28.0
+const STEERING_LOW_SPEED_DEG := 34.0
+const STEERING_HIGH_SPEED_DEG := 6.5
+const STEERING_FULL_REDUCTION_MPS := 72.0
+const STEERING_INPUT_EXPONENT := 1.45
 
 var body: CharacterBody3D
 var speed_mps := 0.0
@@ -27,6 +31,7 @@ var front_electric_assist := 0.0
 var compound_boost := 0.0
 var downforce_accel := 0.0
 var _steer := 0.0
+var _yaw_rate_state := 0.0
 var _ground_basis := Basis.IDENTITY
 var _last_acceleration := 0.0
 var _last_yaw_rate := 0.0
@@ -82,6 +87,46 @@ func performance_state() -> Dictionary:
         "front_electric_assist": front_electric_assist,
         "compound_boost": compound_boost,
         "downforce_accel": downforce_accel,
+    }
+
+static func shaped_steering_input(turn: float) -> float:
+    var value := clampf(turn, -1.0, 1.0)
+    if absf(value) < 0.001:
+        return 0.0
+    # More resolution around centre for touch sticks without reducing full lock.
+    return signf(value) * pow(absf(value), STEERING_INPUT_EXPONENT)
+
+static func steering_limit_for_speed(speed_abs: float) -> float:
+    var speed := clampf(absf(speed_abs), 0.0, MAX_FORWARD_MPS)
+    var reduction := smoothstep(0.0, STEERING_FULL_REDUCTION_MPS, speed)
+    return deg_to_rad(lerpf(STEERING_LOW_SPEED_DEG, STEERING_HIGH_SPEED_DEG, reduction))
+
+static func steering_response_rate(speed_abs: float, returning: bool) -> float:
+    var speed_fraction := clampf(absf(speed_abs) / STEERING_FULL_REDUCTION_MPS, 0.0, 1.0)
+    if returning:
+        # Centre return stays decisive so a released touch input cannot leave
+        # residual lock, while high-speed return remains smooth rather than snapping.
+        return lerpf(10.5, 7.0, speed_fraction)
+    return lerpf(8.0, 3.0, speed_fraction)
+
+static func yaw_response_rate(speed_abs: float) -> float:
+    return lerpf(11.0, 5.0, clampf(absf(speed_abs) / STEERING_FULL_REDUCTION_MPS, 0.0, 1.0))
+
+static func lateral_grip_response(speed_abs: float, road: bool, parking_brake: bool) -> float:
+    var response := 3.4
+    if road:
+        response = 9.0 + smoothstep(0.0, 55.0, absf(speed_abs)) * 3.5
+    if parking_brake:
+        response *= 0.22
+    return response
+
+func handling_state() -> Dictionary:
+    return {
+        "steer_input": _steer,
+        "steering_angle": steering_angle,
+        "yaw_rate": _yaw_rate_state,
+        "speed_sensitive": true,
+        "controlled_lateral_slip": true,
     }
 
 func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
@@ -146,25 +191,42 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
         speed_mps = move_toward(speed_mps, 0.0, rolling_drag * dt)
     if absf(speed_mps) < 0.055 and absf(throttle) < 0.02:
         speed_mps = 0.0
-    _steer = move_toward(_steer, turn, dt * 7.0)
-    var steering_limit := lerpf(deg_to_rad(34.0), deg_to_rad(7.5), clampf(absf(speed_mps) / MAX_FORWARD_MPS, 0.0, 1.0))
-    steering_angle = -_steer * steering_limit
-    var yaw_rate := speed_mps * tan(steering_angle) / wheelbase_m
+
+    # Touch steering now has fine centre resolution, progressively slower rack
+    # response and substantially less lock as speed rises. Released input gets
+    # a separate centre-return rate so the wheel cannot remain partially locked.
+    var shaped_turn := shaped_steering_input(turn)
+    var returning := absf(shaped_turn) < 0.015
+    var steer_rate := steering_response_rate(speed_abs, returning)
+    _steer = move_toward(_steer, shaped_turn, dt * steer_rate)
+    steering_angle = -_steer * steering_limit_for_speed(absf(speed_mps))
+
+    var target_yaw_rate := speed_mps * tan(steering_angle) / wheelbase_m
     # Active aero turns speed into usable tyre load. At Vmax this adds roughly
     # 2.85 g of vertical load and lifts the lateral grip ceiling accordingly.
     var grip := (11.5 + downforce_accel * 0.65) if on_road else 4.8
     if handbrake:
         grip *= 0.62
     var yaw_limit := minf(1.28, grip / maxf(absf(speed_mps), 1.0))
-    yaw_rate = clampf(yaw_rate, -yaw_limit, yaw_limit) if traction else 0.0
-    body.rotate_y(yaw_rate * dt)
-    _last_yaw_rate = yaw_rate
+    target_yaw_rate = clampf(target_yaw_rate, -yaw_limit, yaw_limit) if traction else 0.0
+    _yaw_rate_state = lerpf(_yaw_rate_state, target_yaw_rate,
+        1.0 - exp(-yaw_response_rate(speed_abs) * dt)) if traction else move_toward(_yaw_rate_state, 0.0, dt * 8.0)
+    body.rotate_y(_yaw_rate_state * dt)
+    _last_yaw_rate = _yaw_rate_state
+
+    # Preserve a controlled amount of lateral velocity instead of snapping the
+    # velocity vector to the new heading every frame. Normal tyre grip quickly
+    # catches the slip; the handbrake deliberately releases lateral authority.
     var forward := -body.global_transform.basis.z
-    var desired_horizontal := Vector2(forward.x, forward.z).normalized() * speed_mps
+    var forward_2d := Vector2(forward.x, forward.z).normalized()
+    var right_2d := Vector2(-forward_2d.y, forward_2d.x)
     var horizontal := Vector2(body.velocity.x, body.velocity.z)
-    var response := ((19.0 + minf(downforce_accel * 0.16, 4.0)) if on_road else 7.0) * (0.38 if handbrake else 1.0)
-    if traction:
-        horizontal = horizontal.lerp(desired_horizontal, 1.0 - exp(-response * dt))
+    var longitudinal := horizontal.dot(forward_2d)
+    var lateral := horizontal.dot(right_2d)
+    var longitudinal_response := (18.0 + minf(downforce_accel * 0.14, 3.5)) if on_road else 6.5
+    longitudinal = lerpf(longitudinal, speed_mps, 1.0 - exp(-longitudinal_response * dt)) if traction else longitudinal
+    lateral *= exp(-lateral_grip_response(speed_abs, on_road, handbrake) * dt) if traction else 1.0
+    horizontal = forward_2d * longitudinal + right_2d * lateral
     body.velocity.x = horizontal.x
     body.velocity.z = horizontal.y
     body.velocity.y = -(2.0 + downforce_accel) if traction else body.velocity.y - (23.0 + downforce_accel * 0.35) * dt
@@ -222,6 +284,7 @@ func gear_label() -> String:
 func reset_motion() -> void:
     speed_mps = 0.0
     _steer = 0.0
+    _yaw_rate_state = 0.0
     steering_angle = 0.0
     brake_input = 0.0
     handbrake = false
