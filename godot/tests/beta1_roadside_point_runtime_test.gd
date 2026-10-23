@@ -1,6 +1,8 @@
 extends SceneTree
 
 const Runtime = preload("res://scripts/beta1_roadside_point_runtime.gd")
+const DATA_PATH := "res://data/roads/roadside_points.json"
+const EXPECTED_SOURCE_SHA256 := "16120becbae124393ceec1935d1fd23a3050388f39d9df338ad4e55391f7015b"
 
 func _initialize() -> void:
     call_deferred("_run")
@@ -86,5 +88,52 @@ func _run() -> void:
         _fail("roadside point runtime exceeded bounded near-field budget")
         return
 
-    print("YARDMAN_BETA1_ROADSIDE_POINT_RUNTIME_TEST PASS lamp=1 shelter=1 unsheltered_rejected=1 fake_lamp_rejected=1 source_unchanged=1 exact_position=1 orientation_only=1 near_only=1 collision=0")
+    if not FileAccess.file_exists(DATA_PATH):
+        _fail("committed national roadside point sidecar is missing")
+        return
+    var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(DATA_PATH))
+    if not parsed is Dictionary:
+        _fail("committed national roadside point sidecar is invalid JSON")
+        return
+    var data: Dictionary = parsed
+    if int(data.get("format", 0)) != 1 or str(data.get("crs", "")) != "EPSG:3448" \
+            or str(data.get("source_sha256", "")) != EXPECTED_SOURCE_SHA256:
+        _fail("committed national roadside point provenance drifted")
+        return
+    if not bool(data.get("geographic_authority", false)) \
+            or bool(data.get("routing", true)) or bool(data.get("navigation", true)) \
+            or bool(data.get("collision", true)) or bool(data.get("inferred_spacing", true)):
+        _fail("committed national roadside point authority flags drifted")
+        return
+    var stats: Dictionary = data.get("stats", {})
+    var by_kind: Dictionary = stats.get("by_kind", {})
+    if int(stats.get("points", 0)) != 38 or int(stats.get("tiles", 0)) != 18 \
+            or int(by_kind.get("street_lamp", 0)) != 19 or int(by_kind.get("bus_shelter", 0)) != 19:
+        _fail("committed national roadside point counts drifted")
+        return
+    var record_count := 0
+    var ids: Dictionary = {}
+    for sector_raw: Variant in data.get("sectors", []):
+        if not sector_raw is Array or sector_raw.size() != 3 or not sector_raw[2] is Array:
+            _fail("committed roadside point sector shape is invalid")
+            return
+        for record_raw: Variant in sector_raw[2]:
+            if not record_raw is Dictionary:
+                _fail("committed roadside point record is invalid")
+                return
+            var record: Dictionary = record_raw
+            if Runtime.point_plan(record).is_empty():
+                _fail("committed roadside point failed runtime authority validation")
+                return
+            var source_id := str(record.get("id", ""))
+            if source_id.is_empty() or ids.has(source_id):
+                _fail("committed roadside point identity is empty or duplicated")
+                return
+            ids[source_id] = true
+            record_count += 1
+    if record_count != 38:
+        _fail("committed roadside point sector count does not match stats")
+        return
+
+    print("YARDMAN_BETA1_ROADSIDE_POINT_RUNTIME_TEST PASS lamp=1 shelter=1 unsheltered_rejected=1 fake_lamp_rejected=1 source_unchanged=1 exact_position=1 orientation_only=1 near_only=1 collision=0 national_points=38 lamps=19 shelters=19 tiles=18")
     quit(0)
