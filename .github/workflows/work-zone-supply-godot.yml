@@ -1,0 +1,65 @@
+name: Yardman Beta1 Work-Zone Supply Godot Gate
+
+on:
+  push:
+    branches:
+      - codex/world-reconciliation-001
+    paths:
+      - 'godot/scripts/beta1_work_zone_supply_runtime.gd'
+      - 'godot/tests/beta1_work_zone_supply_runtime_test.gd'
+      - 'godot/main.tscn'
+      - '.github/workflows/work-zone-supply-godot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+
+jobs:
+  work-zone-supply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout reconciliation branch
+        uses: actions/checkout@v4
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Import project and reject parse errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 300 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/work-zone-supply-import.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/work-zone-supply-import.log; then exit 1; fi
+
+      - name: Prove source-backed sparse supply-crate placement
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/beta1_work_zone_supply_runtime_test.gd 2>&1 | tee godot/build/work-zone-supply.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/work-zone-supply.log; then exit 1; fi
+          grep -q 'YARDMAN_BETA1_WORK_ZONE_SUPPLY_RUNTIME_TEST PASS source_gate=1 exact_hash=1 sparse=1 max_per_tile=1 source_coords=0 anchor_mutation=0 collision=0 navigation=0 terrain_mutation=0 fallback=1' godot/build/work-zone-supply.log
+
+      - name: Upload work-zone supply evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Beta1-Work-Zone-Supply-Evidence
+          path: |
+            godot/build/work-zone-supply-import.log
+            godot/build/work-zone-supply.log
+          if-no-files-found: ignore
+          retention-days: 3
