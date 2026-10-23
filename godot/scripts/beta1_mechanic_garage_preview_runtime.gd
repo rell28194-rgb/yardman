@@ -13,8 +13,10 @@ const ASSETS := [
     {"file": "garage_tire_changer.glb", "position": Vector3(-1.35, 0.08, 0.10), "yaw": -0.18},
     {"file": "garage_tire_balancer.glb", "position": Vector3(1.30, 0.08, 0.10), "yaw": 0.20},
     {"file": "garage_grinder.glb", "position": Vector3(0.0, 0.92, -1.45), "yaw": -0.35},
+    {"file": "garage_polisher.glb", "position": Vector3(-0.42, 0.92, -1.42), "yaw": 0.22},
+    {"file": "garage_screw_extractor.glb", "position": Vector3(0.46, 0.93, -1.46), "yaw": -0.12},
 ]
-const MAX_RECOVERED_PROPS := 3
+const MAX_RECOVERED_PROPS := 5
 const POLL_INTERVAL_S := 0.15
 
 var _garage: Node
@@ -209,7 +211,13 @@ static func _flat_material(color: Color, roughness: float) -> StandardMaterial3D
 
 static func preview_contract() -> Dictionary:
     return {
-        "files": ["garage_tire_changer.glb", "garage_tire_balancer.glb", "garage_grinder.glb"],
+        "files": [
+            "garage_tire_changer.glb",
+            "garage_tire_balancer.glb",
+            "garage_grinder.glb",
+            "garage_polisher.glb",
+            "garage_screw_extractor.glb",
+        ],
         "viewport": PREVIEW_SIZE,
         "max_recovered_props": MAX_RECOVERED_PROPS,
         "lazy_build": true,
