@@ -13,7 +13,10 @@ const VISIBILITY_END_M := 135.0
 const VISIBILITY_FADE_M := 20.0
 const ROAD_SEARCH_M := 30.0
 const MIN_CLEARANCE_M := 2.6
-const MAX_CLEARANCE_M := 15.0
+# The built-environment layer starts inferring frontage walls/fences at 5.5 m.
+# Until that layer has an explicit source-safe entrance gap, driveways fail
+# closed below its threshold rather than visually cutting through a boundary.
+const MAX_CLEARANCE_M := 5.4
 const MAX_DRIVEWAYS_PER_CELL := 12
 const SURFACE_LIFT_M := 0.035
 
@@ -130,7 +133,9 @@ func _decorate_cell(cell: Vector2i, force: bool) -> void:
         var world_mid := cell_origin + Vector2(edge.mid.x, edge.mid.z)
         var candidates: Dictionary = _roads._nearby_surface_segments(world_mid.x, world_mid.y, ROAD_SEARCH_M)
         var road := BuiltEnvironment._nearest_road(world_mid, candidates.values())
-        var seed := ("driveway:%d:%d:%d" % [cell.x, cell.y, offset]).hash() & 0x7fffffff
+        # Share the exact frontage seed used by NearFieldBuiltEnvironment so
+        # inferred details cannot drift independently for the same wall edge.
+        var seed := ("%d:%d:%d" % [cell.x, cell.y, offset]).hash() & 0x7fffffff
         var plan := plan_driveway(edge, road, cell_origin, seed)
         if plan.is_empty():
             continue
@@ -298,6 +303,9 @@ static func contract() -> Dictionary:
         "surface_asset": "road_asphalt_detail.png",
         "max_driveways_per_cell": MAX_DRIVEWAYS_PER_CELL,
         "visibility_m": VISIBILITY_END_M,
+        "max_clearance_m": MAX_CLEARANCE_M,
+        "frontage_boundary_threshold_m": 5.5,
+        "shared_frontage_seed": true,
         "bridge_rejected": true,
         "tunnel_rejected": true,
         "unpaved_rejected": true,
