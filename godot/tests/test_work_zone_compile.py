@@ -7,7 +7,7 @@ import sys
 TOOLS = pathlib.Path(__file__).resolve().parents[1] / "tools"
 sys.path.insert(0, str(TOOLS))
 
-from build_work_zones import compile_work_zones
+from work_zone_compile import compile_work_zones
 
 
 class IdentityTransformer:
@@ -25,7 +25,10 @@ def main() -> int:
         {
             "type": "Feature",
             "id": "w100",
-            "properties": {"highway": "construction", "construction": "primary", "access": "no", "lanes": "2"},
+            "properties": {
+                "highway": "construction", "construction": "primary",
+                "access": "no", "lanes": "2", "surface": "asphalt",
+            },
             "geometry": {"type": "LineString", "coordinates": [[10.0, 10.0], [70.0, 10.0]]},
         },
         {
@@ -38,21 +41,23 @@ def main() -> int:
     payload = compile_work_zones(features, IdentityTransformer(), (0.0, 0.0), 32.0, HeightSampler())
     assert payload["format"] == 1
     assert payload["drivable"] is False and payload["navigation"] is False
+    assert payload["routing"] is False and payload["collision"] is False
     assert payload["geographic_authority"] is True
     assert payload["stats"]["source_ways"] == 1
     assert payload["stats"]["source_segments"] == 1
     assert payload["stats"]["segments"] == 3
     assert payload["stats"]["sectors"] == 3
+    assert payload["stats"]["tile_pieces"] == 3
+    assert payload["stats"]["tiles"] == 3
     records = [record for sector in payload["sectors"] for record in sector[2]]
     assert len(records) == 3
     assert {record["source_way"] for record in records} == {"w100"}
     assert {record["construction_class"] for record in records} == {"primary"}
     assert {record["access"] for record in records} == {"no"}
-    assert all(record["width_m"] > 0.0 for record in records)
+    assert {record["surface"] for record in records} == {"asphalt"}
+    assert all(record["width_m"] == 6.4 for record in records)
     assert all(record["a"][1] != 0.0 and record["b"][1] != 0.0 for record in records)
-    # Ordinary drivable roads must never leak into the work-zone sidecar.
     assert all(record["source_way"] != "w200" for record in records)
-    # Shared tile-boundary points remain exact so prop placement cannot crack.
     ordered = sorted(records, key=lambda record: record["a"][0])
     assert ordered[0]["b"] == ordered[1]["a"]
     assert ordered[1]["b"] == ordered[2]["a"]
