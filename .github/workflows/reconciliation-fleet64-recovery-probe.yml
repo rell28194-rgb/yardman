@@ -24,6 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          echo 'YARDMAN_FLEET64_RECOVERY_PROBE_START'
           curl --fail --location \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
@@ -31,7 +32,7 @@ jobs:
             "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12336906664/zip" \
             -o /tmp/fleet64-artifact.zip
           python - <<'PY'
-          import collections, hashlib, os, zipfile
+          import collections, os, zipfile
           outer='/tmp/fleet64-artifact.zip'
           with zipfile.ZipFile(outer) as zf:
               apks=[n for n in zf.namelist() if n.endswith('.apk')]
@@ -50,7 +51,7 @@ jobs:
               for n in names:
                   if 'user_reference' in n: groups['user_reference'] += 1
                   if n.startswith('assets/.godot/imported/') and ('fleet_' in n or 'toyota_crown' in n): groups['imported_vehicle'] += 1
-                  if n.endswith('.glb') or n.endswith('.gltf'): groups['source_model'] += 1
+                  if n.endswith(('.glb','.gltf')): groups['source_model'] += 1
                   if 'owner_fleet_pack_contract' in n: groups['contract'] += 1
                   if n.endswith('.remap') and ('fleet_' in n or 'toyota_crown' in n): groups['vehicle_remap'] += 1
               print('RECOVERY_GROUPS', dict(groups))
