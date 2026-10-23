@@ -295,7 +295,7 @@ jobs:
             --ks-key-alias androiddebugkey \
             --ks-pass pass:android \
             --key-pass pass:android \
-            --v1-signing-enabled true \
+            --v1-signing-enabled false \
             --v2-signing-enabled true \
             --v3-signing-enabled true \
             --v4-signing-enabled false \
@@ -310,11 +310,17 @@ jobs:
           APK=godot/build/Yardman-Reconciliation-Owner.apk
           KEYSTORE="$HOME/.local/share/yardman-signing/debug.keystore"
           VERIFY=godot/build/apksigner.txt
+          BADGING=godot/build/aapt-badging.txt
           CERT=godot/build/yardman-signing-cert.der
 
           "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose --print-certs "$APK" | tee "$VERIFY"
-          grep -q 'Verified using v1 scheme (JAR signing): true' "$VERIFY"
+          "$ANDROID_HOME/build-tools/35.0.1/aapt" dump badging "$APK" | tee "$BADGING"
+          MIN_SDK="$(sed -n "s/^sdkVersion:'\([0-9][0-9]*\)'.*/\1/p" "$BADGING" | head -n1)"
+          test -n "$MIN_SDK"
+          test "$MIN_SDK" -ge 24
+          grep -q 'Verified using v1 scheme (JAR signing): false' "$VERIFY"
           grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' "$VERIFY"
+          grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true' "$VERIFY"
           keytool -exportcert -keystore "$KEYSTORE" -storepass android -alias androiddebugkey -file "$CERT"
           EXPECTED_CERT_SHA256="$(sha256sum "$CERT" | awk '{print $1}')"
           ACTUAL_CERT_SHA256="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$VERIFY" | head -n1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
@@ -410,5 +416,6 @@ jobs:
             godot/build/vehicle-test.log
             godot/build/export.log
             godot/build/apksigner.txt
+            godot/build/aapt-badging.txt
           if-no-files-found: ignore
           retention-days: 3
