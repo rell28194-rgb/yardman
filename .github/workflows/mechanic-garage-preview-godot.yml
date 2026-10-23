@@ -51,7 +51,7 @@ jobs:
           set -euo pipefail
           timeout 120 godot --headless --path godot --script tests/beta1_mechanic_garage_preview_runtime_test.gd 2>&1 | tee godot/build/mechanic-garage-preview.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/mechanic-garage-preview.log; then exit 1; fi
-          grep -q 'YARDMAN_BETA1_MECHANIC_GARAGE_PREVIEW_TEST PASS assets=3 lazy=1 one_shot=1 viewport=384x216 world_placement=0 continuous=0 physics=0 collision=0 navigation=0 fallback=1' godot/build/mechanic-garage-preview.log
+          grep -q 'YARDMAN_BETA1_MECHANIC_GARAGE_PREVIEW_TEST PASS assets=5 lazy=1 one_shot=1 viewport=384x216 world_placement=0 continuous=0 physics=0 collision=0 navigation=0 fallback=1' godot/build/mechanic-garage-preview.log
 
       - name: Upload garage-preview evidence
         if: always()
