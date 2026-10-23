@@ -1,4 +1,4 @@
-# Promotion trigger v1: generated data only, no accepted-build promotion.
+# Promotion trigger v2: generated data only, no accepted-build promotion.
 name: Yardman Promote Validated Work-Zone Data
 
 on:
@@ -93,7 +93,10 @@ jobs:
           set -euo pipefail
           git config user.name 'yardman-ci'
           git config user.email 'actions@users.noreply.github.com'
-          git add godot/data/roads/work_zones.json
+          # Road data is intentionally ignored in normal development. This one
+          # small, provenance-rich source sidecar is explicitly promoted after
+          # the source + Godot runtime gates above.
+          git add -f godot/data/roads/work_zones.json
           if git diff --cached --quiet; then
             echo 'Validated work-zone snapshot already committed.'
             exit 0
