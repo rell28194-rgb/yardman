@@ -1,0 +1,65 @@
+name: Yardman Roadside Point Godot Gate
+
+on:
+  push:
+    branches:
+      - codex/world-reconciliation-001
+    paths:
+      - 'godot/scripts/beta1_roadside_point_runtime.gd'
+      - 'godot/tests/beta1_roadside_point_runtime_test.gd'
+      - 'godot/main.tscn'
+      - '.github/workflows/roadside-point-godot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+
+jobs:
+  roadside-point-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout reconciliation branch
+        uses: actions/checkout@v4
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Import project and reject parse errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 300 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/roadside-point-import.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/roadside-point-import.log; then exit 1; fi
+
+      - name: Prove explicit roadside point runtime contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/beta1_roadside_point_runtime_test.gd 2>&1 | tee godot/build/roadside-point-runtime.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/roadside-point-runtime.log; then exit 1; fi
+          grep -q 'YARDMAN_BETA1_ROADSIDE_POINT_RUNTIME_TEST PASS lamp=1 shelter=1 unsheltered_rejected=1 fake_lamp_rejected=1 source_unchanged=1 exact_position=1 orientation_only=1 near_only=1 collision=0' godot/build/roadside-point-runtime.log
+
+      - name: Upload roadside point evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Roadside-Point-Godot-Evidence
+          path: |
+            godot/build/roadside-point-import.log
+            godot/build/roadside-point-runtime.log
+          if-no-files-found: ignore
+          retention-days: 3
