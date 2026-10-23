@@ -1,0 +1,59 @@
+{
+  "format": 1,
+  "checkpoint": "beta1-roadside-assets-001",
+  "engine": "Godot 4.7.2 Compatibility",
+  "private_media_committed": false,
+  "canonical_private_pack": {
+    "name": "Yardman-Personal-Reference-Assets-001.zip",
+    "members": 213,
+    "sha256": "af58d812a62e912b7809aaa4f5501edf5ae8d32778e94ea6cadd691d2b0f7846",
+    "zip_crc": "PASS",
+    "source_superset": "Yardman-Personal-Reference-Assets-008.zip + validated roadside candidate"
+  },
+  "assets": {
+    "road_lamp_single_arm.glb": {
+      "sha256": "c9f9eaab8c74903aab340a1e129756ecd790d6ddf79d496edd09bfa784887761",
+      "dimensions_m": [2.644680976867676, 8.810724690556526, 0.4007568359375],
+      "vertices": 140,
+      "triangles": 96,
+      "rescale_applied": false,
+      "godot_4_7_2_compatibility": "PASS",
+      "placement_authority": "explicit Jamaica OSM highway=street_lamp nodes only; no inferred spacing"
+    },
+    "road_bus_stop_shelter.glb": {
+      "sha256": "5cfd95da08b3a3e616840e407a7ac932a7b5b340b0e40b135a6a7a8679869a16",
+      "dimensions_m": [5.266059875488281, 2.588513970375061, 1.9957504272460938],
+      "vertices": 224,
+      "triangles": 112,
+      "rescale_applied": false,
+      "godot_4_7_2_compatibility": "PASS",
+      "placement_authority": "explicit Jamaica OSM highway=bus_stop nodes only when shelter=yes/true/1"
+    }
+  },
+  "jamaica_point_truth": {
+    "path": "res://data/roads/roadside_points.json",
+    "source_sha256": "16120becbae124393ceec1935d1fd23a3050388f39d9df338ad4e55391f7015b",
+    "points": 38,
+    "tiles": 18,
+    "street_lamp": 19,
+    "bus_shelter": 19,
+    "position_inference": false,
+    "routing": false,
+    "navigation": false,
+    "collision": false
+  },
+  "runtime": {
+    "script": "res://scripts/beta1_roadside_point_runtime.gd",
+    "max_points_per_tile": 32,
+    "visibility_end_m": 190.0,
+    "orientation_only_inference": true,
+    "source_scale_preserved": true,
+    "terrain_mutation": false,
+    "asset_absent_fallback": true
+  },
+  "open_acceptance": [
+    "private-pack Godot import with both recovered meshes staged",
+    "national in-game visual inspection",
+    "Android device performance and presentation acceptance"
+  ]
+}
