@@ -28,7 +28,7 @@ func _run() -> void:
     multi.mesh = BoxMesh.new()
     multi.instance_count = 3
     multi.visible_instance_count = 2
-    var poses := [
+    var poses: Array[Transform3D] = [
         Transform3D(Basis.IDENTITY, Vector3(1.0, 0.0, 2.0)),
         Transform3D(Basis.IDENTITY.rotated(Vector3.UP, 0.4), Vector3(5.0, 0.0, 7.0)),
         Transform3D(Basis.IDENTITY.rotated(Vector3.UP, -0.7), Vector3(-3.0, 0.0, 4.0)),
@@ -39,6 +39,8 @@ func _run() -> void:
     var instance := MultiMeshInstance3D.new()
     instance.name = BraceRuntime.TARGET_NODE
     instance.multimesh = multi
+    instance.set_meta("source_poses", poses.duplicate(true))
+    instance.set_meta("source_pose_count", poses.size())
     work_zones.add_child(instance)
 
     if not BraceRuntime.eligible_target(instance):
@@ -46,6 +48,12 @@ func _run() -> void:
         return
     if BraceRuntime.tile_from_ancestors(instance) != Vector2i(3, -2):
         _fail("road-tile ancestry did not resolve exactly")
+        return
+    if not BraceRuntime.valid_source_poses(instance.get_meta("source_poses"), multi.instance_count):
+        _fail("CPU source-pose contract was rejected")
+        return
+    if BraceRuntime.valid_source_poses([], multi.instance_count) or BraceRuntime.valid_source_poses([Transform3D.IDENTITY], multi.instance_count):
+        _fail("invalid/mismatched CPU pose set was accepted")
         return
 
     var accepted := 0
@@ -65,22 +73,31 @@ func _run() -> void:
         _fail("bounded brace variation no longer preserves barrier majority")
         return
 
+    var source_copy: Array = (instance.get_meta("source_poses") as Array).duplicate(true)
     var replacement := BoxMesh.new()
     replacement.size = Vector3(9.5, 4.0, 3.0)
-    if not BraceRuntime.apply_mesh_substitution(multi, replacement):
+    if not BraceRuntime.apply_mesh_substitution(multi, replacement, source_copy):
         _fail("mesh substitution failed")
         return
-    if multi.instance_count != 3 or multi.visible_instance_count != 2:
-        _fail("mesh substitution changed instance density/visibility budget")
+    if multi.instance_count != 3 or multi.visible_instance_count != 2 or multi.mesh != replacement:
+        _fail("mesh substitution changed density/visibility or missed replacement")
+        return
+    # Headless/dummy rendering does not reliably round-trip MultiMesh transforms.
+    # Placement authority is therefore the immutable CPU pose array retained by
+    # the source work-zone runtime, not renderer-side readback.
+    var retained: Array = instance.get_meta("source_poses") as Array
+    if retained.size() != poses.size():
+        _fail("CPU source-pose metadata changed size")
         return
     for index in range(poses.size()):
-        if not multi.get_instance_transform(index).is_equal_approx(poses[index]):
-            _fail("mesh substitution changed source placement transform")
+        if not (retained[index] as Transform3D).is_equal_approx(poses[index]):
+            _fail("CPU source-pose metadata was mutated")
             return
 
     var wrong_name := MultiMeshInstance3D.new()
     wrong_name.name = "WorkZone_Cone"
     wrong_name.multimesh = multi
+    wrong_name.set_meta("source_poses", poses.duplicate(true))
     work_zones.add_child(wrong_name)
     if BraceRuntime.eligible_target(wrong_name):
         _fail("non-barrier work-zone mesh became eligible")
@@ -98,6 +115,9 @@ func _run() -> void:
         return
     if int(contract.get("variant_modulus", 0)) != 4:
         _fail("brace density contract drifted")
+        return
+    if not bool(contract.get("cpu_pose_authority", false)) or bool(contract.get("renderer_pose_readback", true)):
+        _fail("CPU pose authority contract missing")
         return
     for forbidden in ["anchor_mutation", "instance_count_mutation", "extra_prop_nodes", "extra_draw_calls", "collision", "navigation", "terrain_mutation", "building_replacement"]:
         if bool(contract.get(forbidden, true)):
