@@ -13,7 +13,7 @@ from typing import Dict, Iterator, List, Sequence, Tuple
 
 from pyproj import Transformer
 from road_graph import build_network, partition_id, read_osm_features, split_segment
-from work_zone_compile import compile_work_zones
+from build_work_zones import compile_work_zones
 
 CRS_SOURCE = "EPSG:4326"
 CRS_TARGET = "EPSG:3448"
@@ -210,8 +210,8 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
                      "purpose": "render-only streamed arterial HLOD; no collision or navigation"},
         "work_zones": {"format": 1, "file": "work_zones.json",
                        "source_ways": work_zones["stats"]["source_ways"],
-                       "segments": work_zones["stats"]["tile_pieces"],
-                       "tiles": work_zones["stats"]["tiles"],
+                       "segments": work_zones["stats"]["segments"],
+                       "tiles": work_zones["stats"]["sectors"],
                        "purpose": "OSM highway=construction presentation evidence; no routing or collision"},
         "elevation_source": "DEM" if height_sampler else "unmeasured-flat",
         "tiles": tile_entries, "stats": stats,
