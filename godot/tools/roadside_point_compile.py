@@ -45,6 +45,9 @@ def classify_point(tags: dict) -> str | None:
         return "street_lamp"
     if highway == "bus_stop" and str(tags.get("shelter", "") or "").strip().lower() in YES:
         return "bus_shelter"
+    man_made = str(tags.get("man_made", "") or "").strip().lower()
+    if man_made == "satellite_dish":
+        return "satellite_dish"
     return None
 
 
@@ -90,8 +93,6 @@ def read_features(path: Path) -> list[dict]:
 
 
 def _default_transformer():
-    # Keep pyproj out of pure compiler-contract tests. Production national builds
-    # already depend on pyproj and resolve the real EPSG:3448 transform here.
     from pyproj import Transformer
     return Transformer.from_crs(CRS_SOURCE, CRS_TARGET, always_xy=True)
 
@@ -146,7 +147,8 @@ def compile_points(features: Iterable[dict], tile_size: float = DEFAULT_TILE_SIZ
             "source_tags": {
                 key: str(tags[key]) for key in (
                     "highway", "shelter", "public_transport", "bus", "lit",
-                    "lamp_mount", "support", "name"
+                    "lamp_mount", "support", "man_made", "communication:medium",
+                    "direction", "operator", "name"
                 ) if key in tags
             },
         }
@@ -172,6 +174,7 @@ def compile_points(features: Iterable[dict], tile_size: float = DEFAULT_TILE_SIZ
         "kinds": {
             "street_lamp": "highway=street_lamp",
             "bus_shelter": "highway=bus_stop AND shelter=yes/true/1",
+            "satellite_dish": "man_made=satellite_dish",
         },
         "sectors": output_sectors,
         "stats": {
