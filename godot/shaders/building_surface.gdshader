@@ -9,6 +9,7 @@ uniform sampler2D reference_brick : source_color, repeat_enable, filter_linear_m
 uniform sampler2D reference_concrete : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_timber : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_stone : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D reference_stone_alternate : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_roof : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_tiles : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D reference_stucco_natural : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
@@ -19,6 +20,7 @@ uniform bool has_reference_brick = false;
 uniform bool has_reference_concrete = false;
 uniform bool has_reference_timber = false;
 uniform bool has_reference_stone = false;
+uniform bool has_reference_stone_alternate = false;
 uniform bool has_reference_roof = false;
 uniform bool has_reference_tiles = false;
 uniform bool has_reference_stucco_natural = false;
@@ -60,17 +62,14 @@ void fragment() {
         if (has_reference_plaster) {
             surface *= texture(reference_plaster, UV / 3.6).rgb * 1.85;
         }
-        // The source's neutral stucco is a restrained microdetail layer for the
-        // two painted-stucco families. It adds one sample only on those families;
-        // the existing palette id still owns which buildings receive the paint.
+        // Natural stucco is restrained microdetail for the two painted families.
+        // It adds one sample only there; the existing palette id still owns paint.
         float painted_stucco_micro = 1.0;
         if (COLOR.a < 0.3 && has_reference_stucco_natural) {
             vec3 natural_stucco = texture(reference_stucco_natural, UV / 3.8).rgb;
             float natural_luma = dot(natural_stucco, vec3(0.2126, 0.7152, 0.0722));
             painted_stucco_micro = mix(0.88, 1.12, clamp(natural_luma, 0.0, 1.0));
         }
-        // Recovered neutral stucco textures give the low-alpha palette entries
-        // stable painted wall identities without changing six-family assignment.
         if (COLOR.a < 0.1 && has_reference_stucco_red) {
             surface = texture(reference_stucco_red, UV / 3.4).rgb * 1.12
                 * mix(vec3(0.94), COLOR.rgb * 1.18, 0.10) * painted_stucco_micro;
@@ -90,7 +89,18 @@ void fragment() {
             ROUGHNESS = 0.94;
         }
         if (COLOR.a > 0.7 && COLOR.a < 0.9 && has_reference_stone) {
-            surface = texture(reference_stone, UV / 3.5).rgb * 1.4;
+            vec3 primary_stone = texture(reference_stone, UV / 3.5).rgb * 1.4;
+            surface = primary_stone;
+            if (has_reference_stone_alternate) {
+                // One alternate sample only on stone-family wall fragments.
+                // Large deterministic UV blocks reduce obvious texture repetition
+                // without adding a seventh building family, material or draw call.
+                vec3 alternate_stone = texture(reference_stone_alternate, UV / 4.2).rgb * 1.34;
+                float stone_variant = smoothstep(0.42, 0.68,
+                    grain(floor(vec2(UV.x / 12.0, UV.y / 5.5)) + vec2(41.0, 17.0)));
+                surface = mix(primary_stone, alternate_stone, stone_variant * 0.82);
+            }
+            ROUGHNESS = 0.93;
         }
         if (COLOR.a > 0.9 && has_reference_timber) {
             surface = texture(reference_timber, UV / 2.8).rgb * 1.2;
@@ -122,8 +132,7 @@ void fragment() {
     }
 
     // Weather uses the same shared building material rather than adding wet
-    // overlays or extra draw calls. Roofs darken more strongly; glass retains
-    // its already-low roughness while masonry/timber gain a restrained wet sheen.
+    // overlays or extra draw calls.
     float wetness = clamp(weather_wetness, 0.0, 1.0);
     float wet_darkening = roof_surface ? 0.72 : 0.82;
     surface *= mix(1.0, wet_darkening, wetness);
