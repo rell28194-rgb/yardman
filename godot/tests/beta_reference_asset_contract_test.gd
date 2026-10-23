@@ -51,6 +51,10 @@ func _run() -> void:
             or not building_code.contains("COLOR.a > 0.5 && COLOR.a < 0.7"):
         _fail("building shader lacks deterministic recovered concrete family")
         return
+    if not building_code.contains("reference_stucco_red") or not building_code.contains("has_reference_stucco_red") \
+            or not building_code.contains("reference_stucco_yellow") or not building_code.contains("has_reference_stucco_yellow"):
+        _fail("building shader lacks recovered painted-stucco families")
+        return
 
     var contract := BetaRuntime.optional_asset_contract()
     if str(contract.get("terrain_normal", "")) != "beta2_ucaptain_scrub_grass_normal.ktx":
@@ -73,6 +77,14 @@ func _run() -> void:
         return
     if str(contract.get("building_concrete", "")) != "building_concrete.png":
         _fail("Beta1 concrete runtime filename drifted")
+        return
+    if str(contract.get("building_stucco_red", "")) != "building_stucco_red.png" \
+            or str(contract.get("building_stucco_yellow", "")) != "building_stucco_yellow.png":
+        _fail("Beta1 painted-stucco runtime filenames drifted")
+        return
+    if int(contract.get("painted_stucco_extra_samples_per_fragment", 99)) != 0 \
+            or bool(contract.get("palette_family_count_mutation", true)):
+        _fail("painted stucco escaped the existing building palette/material budget")
         return
     if bool(contract.get("geometry_mutation", true)) or bool(contract.get("collision", true)) or bool(contract.get("extra_draw_calls", true)):
         _fail("reference quality layer gained geometry/collision/draw-call authority")
@@ -130,6 +142,8 @@ func _run() -> void:
     References.texture("beta2_ucaptain_water_bump.ktx")
     References.texture("water_foam_japan.png")
     References.texture("building_concrete.png")
+    References.texture("building_stucco_red.png")
+    References.texture("building_stucco_yellow.png")
     References.scene("road_driver_seated.glb")
 
     # Preserve the established marker consumed by the reconciliation workflow;
