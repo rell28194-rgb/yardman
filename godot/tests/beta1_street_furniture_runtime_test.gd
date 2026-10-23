@@ -1,6 +1,7 @@
 extends SceneTree
 
 const StreetFurniture = preload("res://scripts/beta1_street_furniture_runtime.gd")
+const WorkZones = preload("res://scripts/beta1_work_zone_runtime.gd")
 
 func _initialize() -> void:
     call_deferred("_run")
@@ -74,6 +75,46 @@ func _run() -> void:
         return
     if not bool(contract.get("source_scale_preserved", false)):
         _fail("source metre-scale preservation contract missing")
+        return
+
+    # Construction props are intentionally separate from ordinary settlement
+    # furniture. They activate only against the non-drivable OSM construction
+    # sidecar and retain the existing street-furniture gate marker below.
+    var work_record := {
+        "a": [0.0, 0.0, 0.0],
+        "b": [32.0, 0.0, 0.0],
+        "width_m": 6.4,
+        "access": "no",
+        "construction_class": "primary",
+    }
+    var work_copy := work_record.duplicate(true)
+    var work_plan := WorkZones.placement_plan(work_record)
+    var work_cones := 0
+    var work_barriers := 0
+    for item: Dictionary in work_plan:
+        if str(item.get("kind", "")) == "cone":
+            work_cones += 1
+        elif str(item.get("kind", "")) == "barrier":
+            work_barriers += 1
+    if work_cones < 2 or work_cones > WorkZones.MAX_CONES_PER_SEGMENT or work_barriers != 2:
+        _fail("mapped closed work zone did not produce bounded cones plus endpoint barriers")
+        return
+    var work_contract := WorkZones.asset_contract()
+    var work_files: Dictionary = work_contract.get("files", {})
+    if str(work_files.get("cone", "")) != "road_repair_cone.glb" \
+            or str(work_files.get("barrier", "")) != "road_concrete_barrier.glb" \
+            or str(work_files.get("fence", "")) != "road_portable_fence.glb":
+        _fail("recovered Beta1 construction prop filenames drifted")
+        return
+    if str(work_contract.get("source_tag", "")) != "highway=construction" \
+            or bool(work_contract.get("drivable", true)) \
+            or bool(work_contract.get("navigation", true)) \
+            or bool(work_contract.get("collision", true)) \
+            or bool(work_contract.get("terrain_mutation", true)):
+        _fail("work-zone props lost source/non-drivable isolation contract")
+        return
+    if work_record != work_copy:
+        _fail("work-zone planner mutated source construction record")
         return
 
     print("YARDMAN_BETA1_STREET_FURNITURE_RUNTIME_TEST PASS hydrant=1 bin=1 cabinet=1 rear_rejected=1 bridge_rejected=1 tunnel_rejected=1 source_unchanged=1 near_only=1 collision=0 construction=0")
