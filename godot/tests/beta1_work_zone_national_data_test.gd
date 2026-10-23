@@ -43,6 +43,7 @@ func _run() -> void:
     var record_count := 0
     var plan_count := 0
     var closure_records := 0
+    var short_fragments_rejected := 0
     for raw_sector: Variant in payload.get("sectors", []):
         if not raw_sector is Array or raw_sector.size() != 3 or not raw_sector[2] is Array:
             runtime.free()
@@ -61,11 +62,28 @@ func _run() -> void:
                 return
             source_ways[source_way] = true
             record_count += 1
+
+            var a3: Array = record.get("a", [])
+            var b3: Array = record.get("b", [])
+            if a3.size() < 3 or b3.size() < 3:
+                runtime.free()
+                _fail("national record lost centreline endpoints")
+                return
+            var a := Vector2(float(a3[0]), float(a3[2]))
+            var b := Vector2(float(b3[0]), float(b3[2]))
+            var horizontal_length := a.distance_to(b)
             var plans := WorkZones.placement_plan(record)
             if plans.is_empty():
-                runtime.free()
-                _fail("usable national construction segment produced no bounded placement")
-                return
+                # Tile splitting can leave a tiny exact boundary fragment. The
+                # production runtime intentionally rejects <2 m pieces rather
+                # than clustering props at a seam. Keep that safety behavior.
+                if horizontal_length >= 2.0:
+                    runtime.free()
+                    _fail("usable >=2m national construction segment produced no bounded placement")
+                    return
+                short_fragments_rejected += 1
+                continue
+
             plan_count += plans.size()
             if str(record.get("access", "")).to_lower() in ["no", "private"]:
                 closure_records += 1
@@ -86,6 +104,10 @@ func _run() -> void:
         runtime.free()
         _fail("runtime/source counts diverged")
         return
+    if plan_count <= 0:
+        runtime.free()
+        _fail("national source produced no runtime placements")
+        return
     var snapshot: Dictionary = payload.get("source_snapshot", {})
     if str(snapshot.get("pbf_sha256", "")).length() != 64 \
             or int(snapshot.get("pbf_bytes", 0)) < 1000000:
@@ -93,5 +115,5 @@ func _run() -> void:
         _fail("national source snapshot provenance missing")
         return
     runtime.free()
-    print("YARDMAN_BETA1_WORK_ZONE_NATIONAL_DATA_TEST PASS ways=%d segments=%d sectors=%d plans=%d closures=%d grid=4096 gameplay_authority=0" % [source_ways.size(), record_count, int(stats.get("sectors", 0)), plan_count, closure_records])
+    print("YARDMAN_BETA1_WORK_ZONE_NATIONAL_DATA_TEST PASS ways=%d segments=%d sectors=%d plans=%d closures=%d short_rejected=%d grid=4096 gameplay_authority=0" % [source_ways.size(), record_count, int(stats.get("sectors", 0)), plan_count, closure_records, short_fragments_rejected])
     quit(0)
