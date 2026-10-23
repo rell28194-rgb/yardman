@@ -55,6 +55,18 @@ func _run() -> void:
             or not building_code.contains("One alternate sample only on stone-family wall fragments"):
         _fail("building shader lacks bounded alternate-stone contract")
         return
+    if not building_code.contains("reference_stone_alternate_02") or not building_code.contains("has_reference_stone_alternate_02") \
+            or not building_code.contains("selector chooses exactly one source family before sampling it"):
+        _fail("building shader lacks second recovered stone family or one-source selector")
+        return
+    for token: String in ["reference_timber_01", "reference_timber_03", "reference_timber_04",
+            "has_reference_timber_01", "has_reference_timber_03", "has_reference_timber_04", "timber_selector"]:
+        if not building_code.contains(token):
+            _fail("building shader lacks recovered timber selector token: " + token)
+            return
+    if not building_code.contains("fragment samples one timber source rather than blending four"):
+        _fail("timber one-source sample contract missing")
+        return
     if not building_code.contains("reference_stucco_natural") or not building_code.contains("has_reference_stucco_natural") \
             or not building_code.contains("painted_stucco_micro"):
         _fail("building shader lacks bounded natural-stucco microdetail")
@@ -86,11 +98,21 @@ func _run() -> void:
     if str(contract.get("building_concrete", "")) != "building_concrete.png":
         _fail("Beta1 concrete runtime filename drifted")
         return
-    if str(contract.get("building_stone_alternate", "")) != "building_stonewall_04.png":
-        _fail("Beta1 alternate-stone runtime filename drifted")
+    if str(contract.get("building_stone_alternate", "")) != "building_stonewall_04.png" \
+            or str(contract.get("building_stone_alternate_02", "")) != "building_stonewall_02.png":
+        _fail("Beta1 stone runtime filenames drifted")
         return
-    if int(contract.get("stone_alternate_extra_samples_per_fragment", 99)) != 1:
-        _fail("alternate stone exceeded its one-sample stone-family budget")
+    if int(contract.get("stone_alternate_extra_samples_per_fragment", 99)) != 1 \
+            or int(contract.get("stone_family_max_samples_per_fragment", 99)) != 1:
+        _fail("stone variants escaped the one-source-per-fragment budget")
+        return
+    if str(contract.get("building_timber_01", "")) != "building_timber_01.png" \
+            or str(contract.get("building_timber_03", "")) != "building_timber_03.png" \
+            or str(contract.get("building_timber_04", "")) != "building_timber_04.png":
+        _fail("Beta1 timber runtime filenames drifted")
+        return
+    if int(contract.get("timber_family_max_samples_per_fragment", 99)) != 1:
+        _fail("timber variants escaped the one-source-per-fragment budget")
         return
     if str(contract.get("building_stucco_natural", "")) != "building_stucco_natural.png":
         _fail("Beta1 natural-stucco runtime filename drifted")
@@ -160,6 +182,10 @@ func _run() -> void:
     References.texture("water_foam_japan.png")
     References.texture("building_concrete.png")
     References.texture("building_stonewall_04.png")
+    References.texture("building_stonewall_02.png")
+    References.texture("building_timber_01.png")
+    References.texture("building_timber_03.png")
+    References.texture("building_timber_04.png")
     References.texture("building_stucco_natural.png")
     References.texture("building_stucco_red.png")
     References.texture("building_stucco_yellow.png")
