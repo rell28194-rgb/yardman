@@ -12,14 +12,20 @@ func _fail(message: String) -> void:
 func _run() -> void:
     var contract := Preview.preview_contract()
     var files: Array = contract.get("files", [])
-    if files != ["garage_tire_changer.glb", "garage_tire_balancer.glb", "garage_grinder.glb"]:
+    if files != [
+        "garage_tire_changer.glb",
+        "garage_tire_balancer.glb",
+        "garage_grinder.glb",
+        "garage_polisher.glb",
+        "garage_screw_extractor.glb",
+    ]:
         _fail("default recovered Mechanic family drifted")
         return
     var viewport: Vector2i = contract.get("viewport", Vector2i.ZERO)
     if viewport.x <= 0 or viewport.y <= 0 or viewport.x > 384 or viewport.y > 216:
         _fail("preview viewport exceeded bounded Android budget")
         return
-    if int(contract.get("max_recovered_props", 99)) != 3:
+    if int(contract.get("max_recovered_props", 99)) != 5:
         _fail("preview prop budget drifted")
         return
     if str(contract.get("render_mode", "")) != "one-shot-on-garage-open" \
@@ -48,5 +54,5 @@ func _run() -> void:
     runtime.queue_free()
     await process_frame
 
-    print("YARDMAN_BETA1_MECHANIC_GARAGE_PREVIEW_TEST PASS assets=3 lazy=1 one_shot=1 viewport=384x216 world_placement=0 continuous=0 physics=0 collision=0 navigation=0 fallback=1")
+    print("YARDMAN_BETA1_MECHANIC_GARAGE_PREVIEW_TEST PASS assets=5 lazy=1 one_shot=1 viewport=384x216 world_placement=0 continuous=0 physics=0 collision=0 navigation=0 fallback=1")
     quit(0)
