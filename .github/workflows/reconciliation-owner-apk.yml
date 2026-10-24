@@ -1,6 +1,6 @@
 name: Yardman Reconciliation Owner APK
 
-# Validation revision: bridge-camber-pack-v1
+# Validation revision: exact-packaged-fleet64-recovery-v2
 on:
   push:
     branches:
@@ -56,14 +56,17 @@ jobs:
                   if not info.filename.startswith('assets/data/') or info.is_dir():
                       continue
                   rel = info.filename[len('assets/'):]
+                  parts = rel.split('/')
+                  # Restore only immutable accepted-world payloads. Never let an
+                  # older base APK overwrite current Fleet64/runtime contracts.
+                  if len(parts) < 3 or parts[1] not in groups:
+                      continue
                   dst = os.path.join('godot', rel)
                   os.makedirs(os.path.dirname(dst), exist_ok=True)
                   with zf.open(info) as src, open(dst, 'wb') as out:
                       out.write(src.read())
                   copied += 1
-                  parts = rel.split('/')
-                  if len(parts) > 1 and parts[1] in groups:
-                      groups[parts[1]] += 1
+                  groups[parts[1]] += 1
           print('YARDMAN_RECONCILIATION_WORLD_RESTORED', copied, groups)
           if groups['roads'] < 700 or groups['terrain'] < 2500 or groups['coast'] < 2500 or groups['buildings'] < 700:
               raise SystemExit('accepted-world payload incomplete: ' + repr(groups))
@@ -73,6 +76,7 @@ jobs:
           test -s godot/data/coast/manifest.json
           test -s godot/data/buildings/manifest.json
           test -s godot/data/parishes/manifest.json
+          test -s godot/data/owner_fleet_pack_contract.json
 
       - name: Reconcile accepted bridge decks above hydrology
         shell: bash
@@ -117,64 +121,36 @@ jobs:
           PY
           grep -q 'YARDMAN_ACCEPTED_BRIDGE_DECK_PACKAGE_PASS' godot/build/bridge-deck-package-contract.log
 
-      - name: Recover authoritative private Fleet64 compiled resources
+      - name: Recover exact Fleet64 from validated owner APK
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
-          FLEET_ARTIFACT=/tmp/fleet64-owner-artifact.zip
-          FLEET_APK=/tmp/Yardman-Fleet64-Owner.apk
+          FLEET_ARTIFACT=/tmp/fleet64-validated-owner-artifact.zip
+          FLEET_APK=/tmp/Yardman-Reconciliation-Fleet64-Seed.apk
           curl --fail --location --retry 3 --retry-all-errors \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12336906664/zip" \
+            "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12546911844/zip" \
             -o "$FLEET_ARTIFACT"
+          unzip -p "$FLEET_ARTIFACT" Yardman-Reconciliation-Owner.apk > "$FLEET_APK"
+          echo '9e60eac14954047f021cf8fc6f70e4fd53ad5a86739d5fdc6ed8426799207ce2  /tmp/Yardman-Reconciliation-Fleet64-Seed.apk' | sha256sum -c -
           rm -rf godot/assets/user_reference godot/.godot/imported godot/assets/owner_fleet_runtime
-          mkdir -p godot/assets/user_reference godot/.godot/imported
-          python - "$FLEET_ARTIFACT" "$FLEET_APK" <<'PY'
-          import os, sys, zipfile
-          artifact, apk_path = sys.argv[1:]
-          with zipfile.ZipFile(artifact) as outer:
-              apks = [n for n in outer.namelist() if n.endswith('.apk')]
-              if len(apks) != 1:
-                  raise SystemExit('expected exactly one retained Fleet64 APK: ' + repr(apks))
-              with outer.open(apks[0]) as src, open(apk_path, 'wb') as out:
-                  while True:
-                      chunk = src.read(1024 * 1024)
-                      if not chunk:
-                          break
-                      out.write(chunk)
-          user_reference = 0
-          imported = 0
-          cached_vehicle_scenes = 0
-          with zipfile.ZipFile(apk_path) as apk:
-              for info in apk.infolist():
-                  if info.is_dir():
-                      continue
-                  name = info.filename
-                  if not (name.startswith('assets/assets/user_reference/') or name.startswith('assets/.godot/imported/')):
-                      continue
-                  rel = name[len('assets/'):]
-                  dst = os.path.join('godot', rel)
-                  os.makedirs(os.path.dirname(dst), exist_ok=True)
-                  with apk.open(info) as src, open(dst, 'wb') as out:
-                      out.write(src.read())
-                  if rel.startswith('assets/user_reference/'):
-                      user_reference += 1
-                  else:
-                      imported += 1
-                      base = os.path.basename(rel)
-                      if base.endswith('.scn') and (base.startswith('fleet_') or base.startswith('carx_') or base.startswith('toyota_crown_2013')):
-                          cached_vehicle_scenes += 1
-          print('YARDMAN_FLEET64_COMPILED_RECOVERY', 'user_reference='+str(user_reference), 'imported='+str(imported), 'cached_vehicle_scenes='+str(cached_vehicle_scenes))
-          if user_reference < 700 or imported < 400:
-              raise SystemExit('retained Fleet64 compiled payload incomplete')
-          PY
+          mkdir -p godot/build
+          python godot/tools/recover_owner_fleet_from_apk.py \
+            "$FLEET_APK" godot \
+            --expected-apk-sha256 9e60eac14954047f021cf8fc6f70e4fd53ad5a86739d5fdc6ed8426799207ce2 \
+            2>&1 | tee godot/build/fleet64-apk-recovery.log
+          grep -q 'YARDMAN_FLEET64_APK_RECOVERY_PASS' godot/build/fleet64-apk-recovery.log
           test -s godot/assets/user_reference/manifest.json
-          test -s godot/assets/user_reference/fleet_audi_r8.glb.import
-          test -s godot/assets/user_reference/toyota_crown_2013.glb.import
+          test -s godot/assets/owner_fleet_runtime/toyota_crown_2013.glb.scn
+          test -s godot/assets/owner_fleet_runtime/road_car.glb.scn
+          test -s godot/data/owner_fleet_runtime_manifest.json
+          test "$(find godot/assets/owner_fleet_runtime -maxdepth 1 -type f -name '*.scn' | wc -l)" -eq 64
+          test "$(sha256sum godot/assets/owner_fleet_runtime/*.scn | awk '{print $1}' | sort -u | wc -l)" -eq 64
+          test "$(sha256sum godot/assets/owner_fleet_runtime/toyota_crown_2013.glb.scn | awk '{print $1}')" != "$(sha256sum godot/assets/owner_fleet_runtime/road_car.glb.scn | awk '{print $1}')"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -238,22 +214,62 @@ jobs:
           timeout 420 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/import.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/import.log; then exit 1; fi
 
-      - name: Prove 64 dedicated vehicles build
+      - name: Prove 64 dedicated packaged vehicles build
         shell: bash
         run: |
           set -euo pipefail
           timeout 600 godot --headless --path godot --script tests/owner_fleet_64_test.gd 2>&1 | tee godot/build/owner-fleet-64.log
-          grep -q 'YARDMAN_OWNER_FLEET_64_PASS selectors=64 available=64 built=64 failures=0' godot/build/owner-fleet-64.log
+          grep -q 'YARDMAN_OWNER_FLEET_64_PASS selectors=64 available=64 built=64 packaged=64 failures=0 exact_identity=1' godot/build/owner-fleet-64.log
 
-      - name: Generate exact Fleet64 export manifest
+      - name: Validate exact recovered Fleet64 export manifest
         shell: bash
         run: |
           set -euo pipefail
-          timeout 180 godot --headless --path godot --script tools/export_owner_fleet_runtime_manifest.gd 2>&1 | tee godot/build/owner-fleet-export-manifest.log
-          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/owner-fleet-export-manifest.log; then exit 1; fi
-          grep -Eq 'YARDMAN_OWNER_FLEET_EXPORT_MANIFEST_PASS vehicles=64 compiled=64 packaged=64 dependencies_preserved=64 textured_source=[1-9][0-9]* textured_packaged=[1-9][0-9]*' godot/build/owner-fleet-export-manifest.log
-          test -s godot/data/owner_fleet_runtime_manifest.json
-          test "$(find godot/assets/owner_fleet_runtime -maxdepth 1 -type f -name '*.scn' | wc -l)" -eq 64
+          python - <<'PY' 2>&1 | tee godot/build/owner-fleet-export-manifest.log
+          import json
+          from pathlib import Path
+          root = Path('godot')
+          contract = json.loads((root / 'data/owner_fleet_pack_contract.json').read_text())
+          runtime = json.loads((root / 'data/owner_fleet_runtime_manifest.json').read_text())
+          expected = [str(v) for v in contract.get('available_vehicle_ids', [])]
+          actual = [str(v) for v in runtime.get('vehicle_ids', [])]
+          vehicles = runtime.get('vehicles', [])
+          if int(contract.get('available_vehicle_count', 0)) != 64 or len(expected) != 64:
+              raise SystemExit('current owner Fleet64 contract is not exactly 64')
+          if int(runtime.get('vehicle_count', 0)) != 64 or len(actual) != 64 or len(vehicles) != 64:
+              raise SystemExit('recovered runtime manifest is not exactly 64')
+          if actual != expected:
+              raise SystemExit('recovered runtime ids differ from current owner contract')
+          seen_ids, seen_heroes, seen_paths = set(), set(), set()
+          for row in vehicles:
+              vehicle_id = str(row.get('vehicle_id', ''))
+              hero = str(row.get('hero', ''))
+              compiled = str(row.get('compiled_resource', ''))
+              source_compiled = str(row.get('source_compiled_resource', ''))
+              if vehicle_id in seen_ids or hero in seen_heroes or compiled in seen_paths:
+                  raise SystemExit('duplicate recovered Fleet64 identity/path')
+              if vehicle_id not in expected:
+                  raise SystemExit('unknown recovered vehicle id: ' + vehicle_id)
+              want = 'res://assets/owner_fleet_runtime/' + hero + '.scn'
+              if compiled != want:
+                  raise SystemExit('compiled path drift: ' + vehicle_id)
+              path = root / 'assets/owner_fleet_runtime' / (hero + '.scn')
+              if not path.is_file() or path.stat().st_size < 1024:
+                  raise SystemExit('missing packaged scene: ' + vehicle_id)
+              if not source_compiled.startswith('res://.godot/imported/'):
+                  raise SystemExit('source provenance drift: ' + vehicle_id)
+              if int(row.get('surface_count', 0)) <= 0:
+                  raise SystemExit('surface evidence missing: ' + vehicle_id)
+              seen_ids.add(vehicle_id); seen_heroes.add(hero); seen_paths.add(compiled)
+          crown = next(row for row in vehicles if row['vehicle_id'] == 'toyota_crown')
+          chaser = next(row for row in vehicles if row['vehicle_id'] == 'toyota_chaser_v')
+          if crown['hero'] != 'toyota_crown_2013.glb' or chaser['hero'] != 'road_car.glb':
+              raise SystemExit('Crown/Chaser hero identity drift')
+          if (root / 'assets/owner_fleet_runtime/toyota_crown_2013.glb.scn').read_bytes() == (root / 'assets/owner_fleet_runtime/road_car.glb.scn').read_bytes():
+              raise SystemExit('Crown and Chaser packaged scenes are identical')
+          print('YARDMAN_OWNER_FLEET_EXPORT_MANIFEST_PASS vehicles=64 compiled=64 packaged=64 recovered_exact=64')
+          PY
+          grep -q 'YARDMAN_OWNER_FLEET_EXPORT_MANIFEST_PASS vehicles=64 compiled=64 packaged=64 recovered_exact=64' godot/build/owner-fleet-export-manifest.log
 
       - name: Prove owner garage and runtime vehicle switching
         shell: bash
@@ -280,7 +296,7 @@ jobs:
           timeout 120 godot --headless --path godot --script tests/remote_fleet_resume_regression_test.gd 2>&1 | tee godot/build/fleet-resume.log
           grep -q 'YARDMAN_REMOTE_FLEET_RESUME_REGRESSION_PASS' godot/build/fleet-resume.log
 
-      - name: Prove current Crown handling with actual reference model
+      - name: Prove current Crown handling with actual packaged reference model
         shell: bash
         env:
           YARDMAN_REQUIRE_REFERENCE: '1'
@@ -330,6 +346,7 @@ jobs:
             godot/build/bridge-deck-reconciliation.log
             godot/build/road-structure-validation.log
             godot/build/bridge-deck-package-contract.log
+            godot/build/fleet64-apk-recovery.log
             godot/build/import.log
             godot/build/owner-fleet-64.log
             godot/build/owner-fleet-export-manifest.log
