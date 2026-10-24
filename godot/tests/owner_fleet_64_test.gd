@@ -25,6 +25,7 @@ func _run() -> void:
     _check(Catalog.hero_scene("toyota_chaser") == "road_car.glb", "Chaser hero identity drifted")
     var manifest := References.manifest()
     var available := 0
+    var packaged := 0
     var built := 0
     for raw_id in ids:
         var vehicle_id := str(raw_id)
@@ -35,8 +36,12 @@ func _run() -> void:
             if raw_record is Dictionary and str(raw_record.get("path", "")) == hero:
                 matches += 1
         _check(matches == 1, "%s hero %s manifest matches=%d" % [vehicle_id, hero, matches])
-        if not ResourceLoader.exists(References.ROOT + hero):
-            _check(false, "%s hero %s is not import-resolvable" % [vehicle_id, hero])
+        var packaged_path := References.packaged_scene_path(hero)
+        var has_packaged_scene := not packaged_path.is_empty() and ResourceLoader.exists(packaged_path)
+        if has_packaged_scene:
+            packaged += 1
+        if not References.exact_scene_exists(hero):
+            _check(false, "%s hero %s has no exact source or packaged scene" % [vehicle_id, hero])
             continue
         available += 1
         var model := FleetModel.new()
@@ -51,5 +56,6 @@ func _run() -> void:
         _check(pivots.size() == 2, "%s front pivots=%d" % [vehicle_id, pivots.size()])
         model.free()
         built += 1
-    print("YARDMAN_OWNER_FLEET_64_PASS selectors=%d available=%d built=%d failures=%d exact_identity=1" % [ids.size(), available, built, failures])
+    _check(packaged == 64, "expected all 64 export-visible packaged scenes, got %d" % packaged)
+    print("YARDMAN_OWNER_FLEET_64_PASS selectors=%d available=%d built=%d packaged=%d failures=%d exact_identity=1" % [ids.size(), available, built, packaged, failures])
     quit(0 if failures == 0 else 1)
