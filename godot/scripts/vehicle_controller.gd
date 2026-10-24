@@ -12,10 +12,11 @@ const WHEELBASE_M := 2.56
 const FRONT_ELECTRIC_CUTOFF_MPS := 52.0
 const DOWNFORCE_COEFFICIENT := 0.0032
 const MAX_DOWNFORCE_ACCEL := 28.0
-const STEERING_LOW_SPEED_DEG := 34.0
-const STEERING_HIGH_SPEED_DEG := 6.5
+const STEERING_LOW_SPEED_DEG := 38.0
+const STEERING_HIGH_SPEED_DEG := 7.0
 const STEERING_FULL_REDUCTION_MPS := 72.0
-const STEERING_INPUT_EXPONENT := 1.45
+const STEERING_INPUT_EXPONENT := 1.08
+const ROAD_LATERAL_ACCEL := 13.5
 
 var body: CharacterBody3D
 var speed_mps := 0.0
@@ -84,7 +85,6 @@ func _fit_reference_collision() -> void:
         var collision := node as CollisionShape3D
         if collision == null or not collision.shape is BoxShape3D:
             continue
-        # Keep the shape local to this vehicle instead of mutating shared scene resources.
         var shape := collision.shape.duplicate() as BoxShape3D
         shape.size = Vector3(bounds.size.x * 0.97, maxf(bounds.end.y, 1.0), bounds.size.z * 0.97)
         collision.shape = shape
@@ -93,8 +93,6 @@ func _fit_reference_collision() -> void:
         break
 
 func _boost_components(speed_abs: float) -> Dictionary:
-    # Stage 3 compound boost: the supercharger fills the low/mid-range while
-    # the twins take over as airflow rises. Twin front motors fill launch torque.
     var fraction := clampf(speed_abs / MAX_FORWARD_MPS, 0.0, 1.0)
     var supercharger := 4.8 * (1.0 - smoothstep(22.0, 58.0, speed_abs))
     var twin_turbos := 6.5 * smoothstep(6.0, 28.0, speed_abs) * (1.0 - 0.48 * fraction)
@@ -114,7 +112,9 @@ static func shaped_steering_input(turn: float) -> float:
     var value := clampf(turn, -1.0, 1.0)
     if absf(value) < 0.001:
         return 0.0
-    # More resolution around centre for touch sticks without reducing full lock.
+    # TouchControls already removes and rescales its deadzone. Keep only a very
+    # light response curve here so a normal thumb displacement still commands a
+    # useful steering angle instead of being damped twice.
     return signf(value) * pow(absf(value), STEERING_INPUT_EXPONENT)
 
 static func steering_limit_for_speed(speed_abs: float) -> float:
@@ -125,21 +125,22 @@ static func steering_limit_for_speed(speed_abs: float) -> float:
 static func steering_response_rate(speed_abs: float, returning: bool) -> float:
     var speed_fraction := clampf(absf(speed_abs) / STEERING_FULL_REDUCTION_MPS, 0.0, 1.0)
     if returning:
-        # Centre return stays decisive so a released touch input cannot leave
-        # residual lock, while high-speed return remains smooth rather than snapping.
-        return lerpf(10.5, 7.0, speed_fraction)
-    return lerpf(8.0, 3.0, speed_fraction)
+        return lerpf(12.0, 7.5, speed_fraction)
+    return lerpf(10.5, 3.8, speed_fraction)
 
 static func yaw_response_rate(speed_abs: float) -> float:
-    return lerpf(11.0, 5.0, clampf(absf(speed_abs) / STEERING_FULL_REDUCTION_MPS, 0.0, 1.0))
+    return lerpf(12.0, 5.0, clampf(absf(speed_abs) / STEERING_FULL_REDUCTION_MPS, 0.0, 1.0))
 
 static func lateral_grip_response(speed_abs: float, road: bool, parking_brake: bool) -> float:
     var response := 3.4
     if road:
-        response = 9.0 + smoothstep(0.0, 55.0, absf(speed_abs)) * 3.5
+        response = 10.5 + smoothstep(0.0, 55.0, absf(speed_abs)) * 4.0
     if parking_brake:
         response *= 0.22
     return response
+
+static func minimum_turn_radius(wheelbase: float = 2.85) -> float:
+    return maxf(wheelbase, 0.1) / tan(deg_to_rad(STEERING_LOW_SPEED_DEG))
 
 func handling_state() -> Dictionary:
     return {
@@ -151,8 +152,6 @@ func handling_state() -> Dictionary:
     }
 
 func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
-    # A parked car outside collision residency must not fall or change pose.
-    # Its canonical double-precision position belongs to the world state.
     if body == null or not ready or delta <= 0.0:
         return
     var dt := minf(delta, 0.1)
@@ -173,7 +172,6 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
         braking = maxf(braking, 0.85)
     var traction := body.is_on_floor()
     if braking > 0.01:
-        # Carbon-ceramic service braking, regen and aero load all contribute.
         var brake_deceleration := ((20.0 + downforce_accel * 0.30) if on_road else 8.5) * braking
         if not traction:
             brake_deceleration *= 0.1
@@ -201,8 +199,6 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
     else:
         front_electric_assist = move_toward(front_electric_assist, 0.0, 18.0 * dt)
         compound_boost = move_toward(compound_boost, 0.0, 15.0 * dt)
-    # The Stage 3 car has enough power to pull against real aero load at the
-    # 378 km/h limiter; this term represents rolling + body drag, not downforce.
     var rolling_drag := 0.12 + absf(speed_mps) * absf(speed_mps) * 0.00045
     if not on_road:
         rolling_drag += 0.62 + absf(speed_mps) * absf(speed_mps) * 0.0035
@@ -213,9 +209,6 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
     if absf(speed_mps) < 0.055 and absf(throttle) < 0.02:
         speed_mps = 0.0
 
-    # Touch steering now has fine centre resolution, progressively slower rack
-    # response and substantially less lock as speed rises. Released input gets
-    # a separate centre-return rate so the wheel cannot remain partially locked.
     var shaped_turn := shaped_steering_input(turn)
     var returning := absf(shaped_turn) < 0.015
     var steer_rate := steering_response_rate(speed_abs, returning)
@@ -223,21 +216,16 @@ func step(delta: float, throttle: float, turn: float, ready: bool) -> void:
     steering_angle = -_steer * steering_limit_for_speed(absf(speed_mps))
 
     var target_yaw_rate := speed_mps * tan(steering_angle) / wheelbase_m
-    # Active aero turns speed into usable tyre load. At Vmax this adds roughly
-    # 2.85 g of vertical load and lifts the lateral grip ceiling accordingly.
-    var grip := (11.5 + downforce_accel * 0.65) if on_road else 4.8
+    var grip := (ROAD_LATERAL_ACCEL + downforce_accel * 0.65) if on_road else 4.8
     if handbrake:
         grip *= 0.62
-    var yaw_limit := minf(1.28, grip / maxf(absf(speed_mps), 1.0))
+    var yaw_limit := minf(1.35, grip / maxf(absf(speed_mps), 1.0))
     target_yaw_rate = clampf(target_yaw_rate, -yaw_limit, yaw_limit) if traction else 0.0
     _yaw_rate_state = lerpf(_yaw_rate_state, target_yaw_rate,
         1.0 - exp(-yaw_response_rate(speed_abs) * dt)) if traction else move_toward(_yaw_rate_state, 0.0, dt * 8.0)
     body.rotate_y(_yaw_rate_state * dt)
     _last_yaw_rate = _yaw_rate_state
 
-    # Preserve a controlled amount of lateral velocity instead of snapping the
-    # velocity vector to the new heading every frame. Normal tyre grip quickly
-    # catches the slip; the handbrake deliberately releases lateral authority.
     var forward := -body.global_transform.basis.z
     var forward_2d := Vector2(forward.x, forward.z).normalized()
     var right_2d := Vector2(-forward_2d.y, forward_2d.x)
