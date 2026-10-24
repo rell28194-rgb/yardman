@@ -2,7 +2,6 @@ extends SceneTree
 
 const Catalog = preload("res://scripts/vehicle_catalog.gd")
 const References = preload("res://scripts/reference_assets.gd")
-const AcceptedModel = preload("res://scripts/vehicle_model.gd")
 const FleetModel = preload("res://scripts/fleet_vehicle_model.gd")
 
 var failures := 0
@@ -22,6 +21,8 @@ func _run() -> void:
     _check(not ids.has("port_royal_992"), "992 must stay excluded")
     _check(not ids.has("corvette_c7"), "Corvette remains held")
     _check(not ids.has("delorean_dmc12"), "DeLorean remains held")
+    _check(Catalog.hero_scene(Catalog.DEFAULT_ID) == "toyota_crown_2013.glb", "default Crown hero identity drifted")
+    _check(Catalog.hero_scene("toyota_chaser") == "road_car.glb", "Chaser hero identity drifted")
     var manifest := References.manifest()
     var available := 0
     var built := 0
@@ -38,23 +39,17 @@ func _run() -> void:
             _check(false, "%s hero %s is not import-resolvable" % [vehicle_id, hero])
             continue
         available += 1
-        if vehicle_id == Catalog.DEFAULT_ID:
-            var model := AcceptedModel.new()
-            model.call("build")
-            _check(bool(model.get("is_reference_model")), "Crown accepted reference model did not bind")
-            _check(not bool(model.get_meta("yardman_hero_asset_missing_or_invalid", false)), "Crown hero marked invalid")
-            model.free()
-        else:
-            var model := FleetModel.new()
-            model.call("build", hero)
-            _check(not bool(model.get_meta("yardman_hero_asset_missing_or_invalid", false)), "%s failed exact hero load" % vehicle_id)
-            _check(bool(model.get_meta("yardman_dedicated_vehicle_mesh", false)), "%s did not mark dedicated geometry" % vehicle_id)
-            _check(bool(model.get("is_reference_model")), "%s is not reference-backed" % vehicle_id)
-            var wheels: Array = model.get("wheels")
-            var pivots: Array = model.get("front_pivots")
-            _check(wheels.size() == 4, "%s wheel spins=%d" % [vehicle_id, wheels.size()])
-            _check(pivots.size() == 2, "%s front pivots=%d" % [vehicle_id, pivots.size()])
-            model.free()
+        var model := FleetModel.new()
+        model.call("build", hero)
+        _check(not bool(model.get_meta("yardman_hero_asset_missing_or_invalid", false)), "%s failed exact hero load" % vehicle_id)
+        _check(bool(model.get_meta("yardman_dedicated_vehicle_mesh", false)), "%s did not mark dedicated geometry" % vehicle_id)
+        _check(str(model.get_meta("yardman_requested_hero_scene", "")) == hero, "%s loaded a different hero identity" % vehicle_id)
+        _check(bool(model.get("is_reference_model")), "%s is not reference-backed" % vehicle_id)
+        var wheels: Array = model.get("wheels")
+        var pivots: Array = model.get("front_pivots")
+        _check(wheels.size() == 4, "%s wheel spins=%d" % [vehicle_id, wheels.size()])
+        _check(pivots.size() == 2, "%s front pivots=%d" % [vehicle_id, pivots.size()])
+        model.free()
         built += 1
-    print("YARDMAN_OWNER_FLEET_64_PASS selectors=%d available=%d built=%d failures=%d" % [ids.size(), available, built, failures])
+    print("YARDMAN_OWNER_FLEET_64_PASS selectors=%d available=%d built=%d failures=%d exact_identity=1" % [ids.size(), available, built, failures])
     quit(0 if failures == 0 else 1)
