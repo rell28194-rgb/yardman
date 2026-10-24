@@ -1,7 +1,9 @@
 extends RefCounted
 class_name YardmanVehicleController
 
-const ModelScript = preload("res://scripts/vehicle_model.gd")
+const Catalog = preload("res://scripts/vehicle_catalog.gd")
+const FleetModel = preload("res://scripts/fleet_vehicle_model.gd")
+const FallbackModel = preload("res://scripts/vehicle_model.gd")
 const PROFILE_CROWN_STAGE3 := "crown_stage3_compound_hybrid"
 const MAX_FORWARD_MPS := 105.0
 const MAX_REVERSE_MPS := 12.0
@@ -43,15 +45,34 @@ func configure(vehicle: CharacterBody3D) -> void:
     body.floor_max_angle = deg_to_rad(52.0)
     body.floor_stop_on_slope = true
     body.floor_constant_speed = true
-    # Replace the old blockout here so every caller receives the same model.
     var old_visual := body.get_node_or_null("VisualRig")
     if old_visual != null:
         body.remove_child(old_visual)
         old_visual.queue_free()
-    visual = ModelScript.new()
+
+    # The production default is the exact Crown hero. Never route it through the
+    # legacy road-car alias / procedural sedan path. Lightweight builds without
+    # owner media may still use an explicitly unbranded fallback so traversal is
+    # possible, but that fallback is marked invalid and must never be presented
+    # as the Crown by garage/runtime validation.
+    var hero := Catalog.hero_scene(Catalog.DEFAULT_ID)
+    var candidate := FleetModel.new() as Node3D
+    candidate.call("build", hero)
+    var exact_crown := not bool(candidate.get_meta("yardman_hero_asset_missing_or_invalid", false)) \
+        and bool(candidate.get_meta("yardman_dedicated_vehicle_mesh", false)) \
+        and str(candidate.get_meta("yardman_requested_hero_scene", "")) == hero
+    if exact_crown:
+        visual = candidate
+        body.set_meta("yardman_vehicle_identity_valid", true)
+        body.set_meta("yardman_vehicle_identity", Catalog.DEFAULT_ID)
+    else:
+        candidate.free()
+        visual = FallbackModel.new()
+        visual.call("build")
+        body.set_meta("yardman_vehicle_identity_valid", false)
+        body.set_meta("yardman_vehicle_identity", "fallback_unbranded")
     visual.name = "VisualRig"
     body.add_child(visual)
-    visual.call("build")
     wheelbase_m = clampf(float(visual.get("wheelbase_m")), 1.8, 4.5)
     if bool(visual.get("is_reference_model")):
         _fit_reference_collision()
