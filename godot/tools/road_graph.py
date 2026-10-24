@@ -10,6 +10,9 @@ import math
 from collections import Counter, defaultdict
 
 
+BRIDGE_FLAG = 2
+
+
 def partition_id(identifier: str) -> str:
     return hashlib.sha1(identifier.encode()).hexdigest()[:2]
 
@@ -261,6 +264,42 @@ def _speed(tags):
         return None
 
 
+def bridge_deck_profile(points):
+    """Return a continuous inferred bridge deck without moving shared endpoints.
+
+    OSM bridge geometry establishes grade separation but normally does not carry
+    surveyed deck elevations. The raw DEM is terrain, so sampling every bridge
+    vertex from it can pull a road down into the river or drainage channel it is
+    explicitly tagged to cross. Keep both endpoint elevations exact for seamless
+    connection to approach roads, interpolate the span between them, and add a
+    small deterministic camber that provides positive mid-span separation. Raw
+    DEM samples may raise the envelope but can never drag the deck below it.
+    """
+    points = list(points)
+    if len(points) < 3:
+        return points
+    stations = [0.0]
+    for a, b in zip(points, points[1:]):
+        stations.append(stations[-1] + math.hypot(b[0] - a[0], b[2] - a[2]))
+    total = stations[-1]
+    if total < 0.25 or not math.isfinite(total):
+        return points
+    start_y = float(points[0][1])
+    end_y = float(points[-1][1])
+    camber_m = min(1.5, max(0.35, total * 0.015))
+    profiled = []
+    for index, point in enumerate(points):
+        if index == 0 or index == len(points) - 1:
+            y = float(point[1])
+        else:
+            t = stations[index] / total
+            grade_y = start_y + (end_y - start_y) * t
+            inferred_y = grade_y + math.sin(math.pi * t) * camber_m
+            y = max(float(point[1]), inferred_y)
+        profiled.append((float(point[0]), round(y, 6), float(point[2])))
+    return profiled
+
+
 def build_network(features, transformer, origin, tile_size, widths, classes,
                   flag_function, anchors, height_sampler=None):
     ways = []
@@ -313,6 +352,8 @@ def build_network(features, transformer, origin, tile_size, widths, classes,
         highway = tags["highway"]
         width, lanes, width_source = road_dimensions(tags, widths[highway])
         flags = flag_function(tags)
+        if flags & BRIDGE_FLAG:
+            points = bridge_deck_profile(points)
         paint = marking_style(tags, width, lanes, flags)
         # Compute joins/stationing once on the complete source way. A graph
         # junction split or a tile unload cannot alter a shared cross-section.
@@ -334,9 +375,11 @@ def build_network(features, transformer, origin, tile_size, widths, classes,
                     "lanes": lanes, "width_source": width_source, "markings_inferred": paint,
                     "surface": tags.get("surface", "unknown"), "direction": _direction(tags),
                     "speed_limit_mps": _speed(tags), "speed_tag": tags.get("maxspeed"),
-                    "bridge": bool(flags & 2), "tunnel": bool(flags & 4),
+                    "bridge": bool(flags & BRIDGE_FLAG), "tunnel": bool(flags & 4),
                     "layer": tags.get("layer", "0"), "flags": flags,
-                    "elevation_source": "DEM" if height_sampler else "unmeasured-flat"}
+                    "bridge_profile_inferred": bool(flags & BRIDGE_FLAG),
+                    "elevation_source": ("DEM endpoints + inferred bridge deck" if height_sampler and flags & BRIDGE_FLAG
+                                         else "DEM" if height_sampler else "unmeasured-flat")}
             edge["tiles"] = []
             edges[eid] = edge
             for index in (first, last):
@@ -355,7 +398,13 @@ def build_network(features, transformer, origin, tile_size, widths, classes,
                 continuations += max(0, len(center_pieces) - 1)
                 for tile, polygon in joined_ribbon_tiles(sections, first + segment_index, tile_size):
                     # First seven fields remain compatible with the old renderer.
-                    surfaces = height_sampler.conform_polygon(polygon) if hasattr(height_sampler, "conform_polygon") else [polygon]
+                    # Bridge ribbons already carry the canonical inferred deck
+                    # profile. Re-conforming them to terrain here would undo the
+                    # grade separation and visually push asphalt into waterways.
+                    if hasattr(height_sampler, "conform_polygon") and not (flags & BRIDGE_FLAG):
+                        surfaces = height_sampler.conform_polygon(polygon)
+                    else:
+                        surfaces = [polygon]
                     for surface in surfaces:
                         uv = [[p[3], p[4]] for p in surface]
                         tiles[tile].append([a[0], a[2], b[0], b[2], width, classes[highway], flags,
