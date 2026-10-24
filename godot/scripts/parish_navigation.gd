@@ -51,10 +51,25 @@ func _bind_runtime() -> void:
     _map_button.custom_minimum_size = Vector2(58.0, 44.0)
     _map_button.pressed.connect(func() -> void: set_map_open(not map_open))
     add_child(_map_button)
+    if _hud.has_signal("menu_toggled"):
+        var menu_cb := Callable(self, "_on_hud_menu_toggled")
+        if not _hud.is_connected("menu_toggled", menu_cb):
+            _hud.connect("menu_toggled", menu_cb)
     get_viewport().size_changed.connect(_relayout)
     _relayout()
     _bound = true
+    _on_hud_menu_toggled(bool(_hud.get("menu_open")))
     queue_redraw()
+
+func _on_hud_menu_toggled(open: bool) -> void:
+    if _map_button == null:
+        return
+    # The parish map is a peer launcher to the HUD drawer, not part of it. It
+    # must disappear while the drawer is open so it cannot cover the drawer's
+    # close control or receive touches through the modal overlay.
+    _map_button.visible = not open or map_open
+    _map_button.disabled = open and not map_open
+    _map_button.mouse_filter = Control.MOUSE_FILTER_IGNORE if open and not map_open else Control.MOUSE_FILTER_STOP
 
 func _load_manifest() -> bool:
     if not FileAccess.file_exists(MANIFEST_PATH):
@@ -179,6 +194,9 @@ func set_map_open(value: bool) -> void:
         if _touch.has_method("clear_input"):
             _touch.call("clear_input")
         mouse_filter = Control.MOUSE_FILTER_STOP
+        _map_button.visible = true
+        _map_button.disabled = false
+        _map_button.mouse_filter = Control.MOUSE_FILTER_STOP
         _map_button.text = "×"
         _map_button.tooltip_text = "Close parish map · M / Escape"
     else:
@@ -186,6 +204,9 @@ func set_map_open(value: bool) -> void:
         _hud.set_process_unhandled_key_input(true)
         _touch.set("input_enabled", true)
         mouse_filter = Control.MOUSE_FILTER_IGNORE
+        _map_button.visible = true
+        _map_button.disabled = false
+        _map_button.mouse_filter = Control.MOUSE_FILTER_STOP
         _map_button.text = "MAP"
         _map_button.tooltip_text = "Parish map · M"
     queue_redraw()
