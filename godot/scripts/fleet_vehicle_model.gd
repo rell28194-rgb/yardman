@@ -75,6 +75,15 @@ func _load_exact_private_scene(filename: String) -> PackedScene:
     var expected_sha := str(matched.get("sha256", "")).to_lower()
     if expected_sha.length() != 64:
         return null
+
+    # The owner APK cannot export res://.godot/imported directly because Godot
+    # excludes dot-prefixed project folders. The export manifest generator saves
+    # each validated imported vehicle as a bundled PackedScene under an ordinary
+    # project path. Prefer that signed, export-visible scene whenever present.
+    var packaged := References.packaged_scene_path(filename)
+    if not packaged.is_empty() and ResourceLoader.exists(packaged):
+        return ResourceLoader.load(packaged) as PackedScene
+
     var path := References.exact_asset_path(filename)
     if path.is_empty():
         return null
@@ -93,8 +102,8 @@ func _load_exact_private_scene(filename: String) -> PackedScene:
     if not ResourceLoader.exists(path):
         return null
     # Development/private preflight has the source bytes, so enforce the pack
-    # manifest byte-for-byte. Android exports can retain only the imported
-    # resource/remap; their source pack is hash-gated before export.
+    # manifest byte-for-byte. Android exports use the packaged scene above;
+    # source imports remain the authority used to generate that signed scene.
     if not OS.has_feature("template") and FileAccess.file_exists(path):
         if FileAccess.get_sha256(path).to_lower() != expected_sha:
             return null
