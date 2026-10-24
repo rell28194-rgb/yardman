@@ -5,6 +5,8 @@ signal state_changed(state: String, message: String)
 signal progress_changed(downloaded_bytes: int, total_bytes: int)
 signal installed
 
+const Catalog = preload("res://scripts/vehicle_catalog.gd")
+const PACK_ID := "yardman-fleet64-v1"
 const DEFAULT_PACK_URL := "https://www.dropbox.com/scl/fi/jv54iuqhthvejvuy6zezc/Yardman-Owner-Recovery-Private-Fleet-64-2026-10-19.zip?rlkey=80kgw28rol81hnia2xbikuspe&dl=1"
 const PACK_URL_SETTING := "yardman/content/fleet64_url"
 const PACK_SHA256 := "6b1130bcd9a6ab554c3134710b348050d1a03e40c6c3f16136fefbeda5c5e75b"
@@ -48,11 +50,13 @@ func _ready() -> void:
     set_process(true)
     _clean_stale_chunk()
     if is_installed():
-        _set_state("installed", "64-vehicle pack installed.")
+        _set_state("installed", "64-vehicle pack installed and verified.")
     else:
         var partial := _normalized_partial_bytes()
         if partial > 0:
             _set_state("idle", "Vehicle pack paused at %s. Tap download to resume." % _format_bytes(partial))
+        elif FileAccess.file_exists(MARKER_PATH):
+            _set_state("idle", "Vehicle install is incomplete. Tap download to repair the fleet.")
         else:
             _set_state("idle", "Vehicle pack ready to download over Wi-Fi.")
 
@@ -80,16 +84,79 @@ func get_downloaded_bytes() -> int:
     return _normalized_partial_bytes()
 
 func is_installed() -> bool:
-    if not FileAccess.file_exists(MARKER_PATH) or not FileAccess.file_exists(MANIFEST_PATH):
+    if not FileAccess.file_exists(MARKER_PATH):
         return false
     var marker = JSON.parse_string(FileAccess.get_file_as_string(MARKER_PATH))
+    if not marker_matches_pack(marker):
+        return false
+    return _installed_payload_valid()
+
+static func marker_matches_pack(marker: Variant) -> bool:
     if not marker is Dictionary:
         return false
-    return str(marker.get("pack_sha256", "")).to_lower() == PACK_SHA256 and int(marker.get("pack_bytes", 0)) == PACK_BYTES
+    var marker_dict: Dictionary = marker
+    var marker_pack_id := str(marker_dict.get("pack_id", ""))
+    if not marker_pack_id.is_empty() and marker_pack_id != PACK_ID:
+        return false
+    return str(marker_dict.get("pack_sha256", "")).to_lower() == PACK_SHA256 \
+        and int(marker_dict.get("pack_bytes", 0)) == PACK_BYTES
+
+static func required_vehicle_entries() -> Array[String]:
+    var result: Array[String] = []
+    for vehicle_id: String in Catalog.production_ids():
+        var filename := Catalog.hero_scene(vehicle_id)
+        if filename.is_empty() or result.has(filename):
+            continue
+        result.append(filename)
+    result.sort()
+    return result
+
+static func manifest_inventory_ok(manifest: Variant, available_sizes: Dictionary) -> bool:
+    if not manifest is Dictionary:
+        return false
+    var manifest_dict: Dictionary = manifest
+    if int(manifest_dict.get("format_version", 0)) != 1:
+        return false
+    var required := required_vehicle_entries()
+    if required.size() != 64:
+        return false
+    var matched: Dictionary = {}
+    for raw_record: Variant in manifest_dict.get("files", []):
+        if not raw_record is Dictionary:
+            continue
+        var record: Dictionary = raw_record
+        var path := str(record.get("path", ""))
+        if not required.has(path):
+            continue
+        if matched.has(path):
+            return false
+        var digest := str(record.get("sha256", "")).to_lower()
+        var bytes := int(record.get("bytes", -1))
+        if digest.length() != 64 or bytes <= 0:
+            return false
+        if not available_sizes.has(path) or int(available_sizes[path]) != bytes:
+            return false
+        matched[path] = true
+    return matched.size() == required.size()
+
+func _installed_payload_valid() -> bool:
+    if not FileAccess.file_exists(MANIFEST_PATH):
+        return false
+    var manifest = JSON.parse_string(FileAccess.get_file_as_string(MANIFEST_PATH))
+    var available_sizes: Dictionary = {}
+    for filename: String in required_vehicle_entries():
+        var path := ROOT + filename
+        if not FileAccess.file_exists(path):
+            return false
+        var bytes := _file_size(path)
+        if bytes <= 0:
+            return false
+        available_sizes[filename] = bytes
+    return manifest_inventory_ok(manifest, available_sizes)
 
 func start_download() -> bool:
     if is_installed():
-        _set_state("installed", "64-vehicle pack already installed.")
+        _set_state("installed", "64-vehicle pack already installed and verified.")
         installed.emit()
         return true
     if _state in ["downloading", "verifying", "installing"]:
@@ -234,21 +301,22 @@ func _verify_and_install() -> void:
     if not _extract_archive():
         _set_state("error", "Vehicle pack could not be installed. Verified archive was kept for retry.")
         return
-    if not FileAccess.file_exists(MANIFEST_PATH):
-        _set_state("error", "Vehicle pack manifest is missing after install. Verified archive was kept.")
+    if not _installed_payload_valid():
+        _set_state("error", "Vehicle install is incomplete or damaged. Verified archive was kept; tap retry to repair it.")
         return
     var marker_file := FileAccess.open(MARKER_PATH, FileAccess.WRITE)
     if marker_file == null:
         _set_state("error", "Could not save vehicle installation state. Verified archive was kept.")
         return
     marker_file.store_string(JSON.stringify({
+        "pack_id": PACK_ID,
         "pack_sha256": PACK_SHA256,
         "pack_bytes": PACK_BYTES,
         "installed_at_unix": int(Time.get_unix_time_from_system())
     }))
     marker_file.close()
     _remove_file(ARCHIVE_PATH)
-    _set_state("installed", "64-vehicle pack installed.")
+    _set_state("installed", "64-vehicle pack installed and verified.")
     progress_changed.emit(PACK_BYTES, PACK_BYTES)
     installed.emit()
 
