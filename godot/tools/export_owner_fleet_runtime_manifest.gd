@@ -4,7 +4,12 @@ const Catalog = preload("res://scripts/vehicle_catalog.gd")
 const References = preload("res://scripts/reference_assets.gd")
 const OUTPUT_PATH := "res://data/owner_fleet_runtime_manifest.json"
 const EXPECTED_COUNT := 64
-const SAVE_FLAGS := ResourceSaver.FLAG_BUNDLE_RESOURCES | ResourceSaver.FLAG_COMPRESS | ResourceSaver.FLAG_OMIT_EDITOR_PROPERTIES
+# Do not bundle external textures into the re-saved PackedScene. The recovered
+# imported scenes already reference export-visible user_reference textures; the
+# bundle flag rewrites those references and can produce valid geometry with
+# broken material resources. Re-saving to a normal res:// path is enough to make
+# the scene exportable while preserving its ordinary external dependencies.
+const SAVE_FLAGS := ResourceSaver.FLAG_COMPRESS | ResourceSaver.FLAG_OMIT_EDITOR_PROPERTIES
 
 func _initialize() -> void:
     call_deferred("_run")
@@ -12,6 +17,23 @@ func _initialize() -> void:
 func _fail(message: String) -> void:
     push_error("OWNER_FLEET_EXPORT_MANIFEST: " + message)
     quit(1)
+
+func _surface_stats(node: Node) -> Dictionary:
+    var surfaces := 0
+    var textured := 0
+    if node is MeshInstance3D:
+        var instance := node as MeshInstance3D
+        if instance.mesh != null:
+            for surface_index in range(instance.mesh.get_surface_count()):
+                surfaces += 1
+                var material := instance.get_active_material(surface_index) as StandardMaterial3D
+                if material != null and material.albedo_texture != null:
+                    textured += 1
+    for child in node.get_children():
+        var child_stats := _surface_stats(child)
+        surfaces += int(child_stats.get("surfaces", 0))
+        textured += int(child_stats.get("textured", 0))
+    return {"surfaces": surfaces, "textured": textured}
 
 func _run() -> void:
     var ids: Array[String] = Catalog.production_ids()
@@ -26,6 +48,9 @@ func _run() -> void:
     var unique: Dictionary = {}
     var vehicles: Array[Dictionary] = []
     var packaged_count := 0
+    var dependency_checks := 0
+    var source_textured_total := 0
+    var packaged_textured_total := 0
     for vehicle_id: String in ids:
         if unique.has(vehicle_id):
             _fail("duplicate production vehicle id: " + vehicle_id)
@@ -62,29 +87,51 @@ func _run() -> void:
         if imported == null:
             _fail("compiled resource is not a PackedScene for %s: %s" % [vehicle_id, imported_path])
             return
+        var source_instance = imported.instantiate()
+        if not source_instance is Node3D:
+            if source_instance != null:
+                source_instance.free()
+            _fail("compiled source does not instantiate as Node3D for %s: %s" % [vehicle_id, imported_path])
+            return
+        var source_stats := _surface_stats(source_instance)
+        source_instance.free()
+
         var packaged_path := References.packaged_scene_path(hero)
         if packaged_path.is_empty():
             _fail("invalid export-visible scene path for %s: %s" % [vehicle_id, hero])
             return
         var save_error := ResourceSaver.save(imported, packaged_path, SAVE_FLAGS)
         if save_error != OK:
-            _fail("cannot bundle export-visible scene for %s: %s error=%d" % [vehicle_id, packaged_path, save_error])
+            _fail("cannot save export-visible scene for %s: %s error=%d" % [vehicle_id, packaged_path, save_error])
             return
         if not FileAccess.file_exists(packaged_path):
-            _fail("bundled scene was not written for %s: %s" % [vehicle_id, packaged_path])
+            _fail("export-visible scene was not written for %s: %s" % [vehicle_id, packaged_path])
             return
 
         var reloaded := ResourceLoader.load(packaged_path, "", ResourceLoader.CACHE_MODE_REPLACE) as PackedScene
         if reloaded == null:
-            _fail("bundled scene cannot reload for %s: %s" % [vehicle_id, packaged_path])
+            _fail("export-visible scene cannot reload for %s: %s" % [vehicle_id, packaged_path])
             return
         var instance = reloaded.instantiate()
         if not instance is Node3D:
             if instance != null:
                 instance.free()
-            _fail("bundled scene does not instantiate as Node3D for %s: %s" % [vehicle_id, packaged_path])
+            _fail("export-visible scene does not instantiate as Node3D for %s: %s" % [vehicle_id, packaged_path])
             return
+        var packaged_stats := _surface_stats(instance)
         instance.free()
+        if int(packaged_stats.get("surfaces", -1)) != int(source_stats.get("surfaces", -2)):
+            _fail("surface count changed while packaging %s: source=%d packaged=%d" % [
+                vehicle_id, int(source_stats.get("surfaces", 0)), int(packaged_stats.get("surfaces", 0))])
+            return
+        if int(packaged_stats.get("textured", -1)) != int(source_stats.get("textured", -2)):
+            _fail("texture bindings changed while packaging %s: source=%d packaged=%d" % [
+                vehicle_id, int(source_stats.get("textured", 0)), int(packaged_stats.get("textured", 0))])
+            return
+
+        source_textured_total += int(source_stats.get("textured", 0))
+        packaged_textured_total += int(packaged_stats.get("textured", 0))
+        dependency_checks += 1
         packaged_count += 1
 
         vehicles.append({
@@ -94,6 +141,8 @@ func _run() -> void:
             "source_path": source_path,
             "source_compiled_resource": imported_path,
             "compiled_resource": packaged_path,
+            "surface_count": int(packaged_stats.get("surfaces", 0)),
+            "textured_surface_count": int(packaged_stats.get("textured", 0)),
         })
 
     var payload := {
@@ -101,7 +150,7 @@ func _run() -> void:
         "vehicle_count": vehicles.size(),
         "vehicle_ids": ids,
         "vehicles": vehicles,
-        "authority": "vehicle_catalog + private import sidecars + bundled export-visible PackedScenes",
+        "authority": "vehicle_catalog + private import sidecars + export-visible PackedScenes with preserved external dependencies",
         "cross_model_fallback_allowed": false,
     }
     var absolute := ProjectSettings.globalize_path(OUTPUT_PATH)
@@ -112,5 +161,6 @@ func _run() -> void:
         return
     file.store_string(JSON.stringify(payload, "  "))
     file.close()
-    print("YARDMAN_OWNER_FLEET_EXPORT_MANIFEST_PASS vehicles=%d compiled=%d packaged=%d" % [vehicles.size(), vehicles.size(), packaged_count])
+    print("YARDMAN_OWNER_FLEET_EXPORT_MANIFEST_PASS vehicles=%d compiled=%d packaged=%d dependencies_preserved=%d textured_source=%d textured_packaged=%d" % [
+        vehicles.size(), vehicles.size(), packaged_count, dependency_checks, source_textured_total, packaged_textured_total])
     quit(0)
