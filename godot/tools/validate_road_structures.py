@@ -9,12 +9,28 @@ from collections import defaultdict
 from pathlib import Path
 
 
+BRIDGE_PROFILE = "cambered deck between DEM-registered abutments"
+BRIDGE_MIN_CAMBER_M = 0.35
+
+
 def validate_payloads(manifest: dict, read_json) -> dict:
     structures = manifest.get("structures")
     if not isinstance(structures, dict) or structures.get("format") != 2:
         raise ValueError("National road manifest has no compiled structure registry")
     if read_json("structures.json") != structures:
         raise ValueError("Structure summary differs from the national road manifest")
+    bridge = structures.get("bridge") or {}
+    bridge_edges = int(bridge.get("edges", 0))
+    if bridge_edges <= 0:
+        raise ValueError("National road structure registry contains no bridge edges")
+    if str(bridge.get("profile", "")) != BRIDGE_PROFILE:
+        raise ValueError("Bridge deck profile is not the cambered terrain-independent contract")
+    if float(bridge.get("minimum_camber_m", 0.0)) < BRIDGE_MIN_CAMBER_M - 1e-6:
+        raise ValueError("Bridge deck minimum camber is below the clearance contract")
+    if float(bridge.get("maximum_camber_m", 0.0)) < BRIDGE_MIN_CAMBER_M - 1e-6:
+        raise ValueError("Compiled bridge payload has no positive camber evidence")
+    if not str(bridge.get("camber_rule", "")):
+        raise ValueError("Compiled bridge payload does not record its camber rule")
     tile_size = float(manifest["tile_size"])
     if not math.isfinite(tile_size) or tile_size <= 0:
         raise ValueError("Invalid road tile size")
@@ -88,7 +104,8 @@ def validate_payloads(manifest: dict, read_json) -> dict:
             count += 1
     if count != int(registry["portals"]):
         raise ValueError("Tunnel portal payload count does not match the national registry")
-    return {"bridge_edges": int(structures["bridge"]["edges"]),
+    return {"bridge_edges": bridge_edges,
+            "bridge_max_camber_m": float(bridge["maximum_camber_m"]),
             "profiled_tunnel_edges": int(structures["tunnel"]["profiled_edges"]),
             "tunnel_corridor_tiles": len(structures["tunnel_tiles"]),
             "tunnel_shell_segments": pieces,
