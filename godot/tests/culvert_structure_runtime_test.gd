@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Culverts = preload("res://scripts/culvert_structure_runtime.gd")
+const HydrologyContent = preload("res://scripts/hydrology_content_runtime.gd")
 
 func _initialize() -> void:
     call_deferred("_run")
@@ -10,6 +11,10 @@ func _fail(message: String) -> void:
     quit(1)
 
 func _run() -> void:
+    if HydrologyContent.RENDERER_NODE_NAME != "JamaicaHydrologyRenderer":
+        _fail("optional hydrology producer no longer exposes the scene renderer name consumed by culvert/ford runtimes")
+        return
+
     var crossing := {
         "x": 102.0,
         "z": 205.0,
@@ -197,5 +202,5 @@ func _run() -> void:
         _fail("culvert presentation gained world/physics authority")
         return
 
-    print("YARDMAN_CULVERT_STRUCTURE_RUNTIME_TEST PASS approved=1 mouths=2 road_width_exact=1 channel_clear=1 bridge_rejected=1 ford_rejected=1 unresolved_rejected=1 conflict_rejected=1 off_segment_rejected=1 source_unchanged=1 terrain_mutation=0 water_mutation=0 road_mutation=0 collision=0 shadows=0")
+    print("YARDMAN_CULVERT_STRUCTURE_RUNTIME_TEST PASS approved=1 mouths=2 road_width_exact=1 channel_clear=1 bridge_rejected=1 ford_rejected=1 unresolved_rejected=1 conflict_rejected=1 off_segment_rejected=1 source_unchanged=1 terrain_mutation=0 water_mutation=0 road_mutation=0 collision=0 shadows=0 renderer_contract=1")
     quit(0)
