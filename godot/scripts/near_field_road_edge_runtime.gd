@@ -12,6 +12,8 @@ const VISIBILITY_FADE_M := 22.0
 const REBUILD_DISTANCE_M := 38.0
 const MAX_SEGMENTS := 220
 const CROSSING_MARGIN_M := 5.0
+const LIVE_HYDROLOGY_NODE := "JamaicaRunningWater"
+const LEGACY_HYDROLOGY_NODE := "JamaicaHydrologyRenderer"
 
 var _roads
 var _terrain
@@ -32,6 +34,17 @@ func _process(delta: float) -> void:
     if _roads == null or not is_instance_valid(_roads) or _terrain == null or not is_instance_valid(_terrain):
         _bind_sources()
         return
+    var resolved_hydrology := resolve_hydrology_node(get_parent())
+    if resolved_hydrology != _hydrology:
+        _hydrology = resolved_hydrology
+        _crossing_cache.clear()
+        _last_center = Vector2(INF, INF)
+        if _hydrology == null:
+            _clear_detail()
+            return
+    if _hydrology == null or not is_instance_valid(_hydrology):
+        _clear_detail()
+        return
     var center := _canonical_target()
     if not center.is_finite():
         return
@@ -48,12 +61,21 @@ func _bind_sources() -> void:
         return
     _roads = root.get_node_or_null("JamaicaRoadStreamer")
     _terrain = root.get_node_or_null("JamaicaTerrainStreamer")
-    _hydrology = root.get_node_or_null("JamaicaHydrologyRenderer")
+    _hydrology = resolve_hydrology_node(root)
+    _crossing_cache.clear()
     _last_center = Vector2(INF, INF)
     if _roads != null and _terrain != null:
         var center := _canonical_target()
         if center.is_finite():
             _rebuild(center)
+
+static func resolve_hydrology_node(root_node: Node) -> Node:
+    if root_node == null:
+        return null
+    var live := root_node.get_node_or_null(LIVE_HYDROLOGY_NODE)
+    if live != null:
+        return live
+    return root_node.get_node_or_null(LEGACY_HYDROLOGY_NODE)
 
 func _canonical_target() -> Vector2:
     if _roads == null or not is_instance_valid(_roads) or _roads.target == null or _roads.coordinates == null:
