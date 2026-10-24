@@ -63,6 +63,32 @@ func _run() -> void:
         _fail("near-field Android budget exceeded")
         return
 
+    var hydrology_root := Node.new()
+    root.add_child(hydrology_root)
+    var legacy := Node.new()
+    legacy.name = RoadEdge.LEGACY_HYDROLOGY_NODE
+    hydrology_root.add_child(legacy)
+    if RoadEdge.resolve_hydrology_node(hydrology_root) != legacy:
+        _fail("legacy hydrology renderer fallback is not resolved")
+        return
+    var live := Node.new()
+    live.name = RoadEdge.LIVE_HYDROLOGY_NODE
+    hydrology_root.add_child(live)
+    if RoadEdge.resolve_hydrology_node(hydrology_root) != live:
+        _fail("live hydrology renderer is not preferred")
+        return
+    hydrology_root.remove_child(live)
+    live.free()
+    if RoadEdge.resolve_hydrology_node(hydrology_root) != legacy:
+        _fail("hydrology fallback did not recover after live renderer removal")
+        return
+    hydrology_root.remove_child(legacy)
+    legacy.free()
+    if RoadEdge.resolve_hydrology_node(hydrology_root) != null:
+        _fail("missing hydrology did not fail closed")
+        return
+    hydrology_root.free()
+
     var node := RoadEdge.new()
     root.add_child(node)
     var child := MeshInstance3D.new()
@@ -78,5 +104,5 @@ func _run() -> void:
         return
     node.free()
 
-    print("YARDMAN_NEAR_FIELD_ROAD_EDGE_RUNTIME_TEST PASS shoulders=2 pavement_clear=1 bridge_rejected=1 tunnel_rejected=1 ford_rejected=1 unresolved_rejected=1 source_unchanged=1 near_only=1 collision=0 shadows=0")
+    print("YARDMAN_NEAR_FIELD_ROAD_EDGE_RUNTIME_TEST PASS shoulders=2 pavement_clear=1 bridge_rejected=1 tunnel_rejected=1 ford_rejected=1 unresolved_rejected=1 source_unchanged=1 near_only=1 collision=0 shadows=0 hydrology_live=1 hydrology_legacy=1 fail_closed=1")
     quit(0)
