@@ -128,10 +128,6 @@ jobs:
           if user_reference < 700 or imported < 400:
               raise SystemExit('retained Fleet64 compiled payload incomplete')
           PY
-          # .godot/imported is a cache, not the fleet authority. The retained
-          # artifact currently carries 63 matching cached scene filenames; the
-          # exact 64-vehicle requirement is proven after Godot import below by
-          # resolving every hero from the private manifest and building it.
           test -s godot/assets/user_reference/manifest.json
           test -s godot/assets/user_reference/fleet_audi_r8.glb.import
           test -s godot/assets/user_reference/toyota_crown_2013.glb.import
@@ -205,6 +201,15 @@ jobs:
           timeout 600 godot --headless --path godot --script tests/owner_fleet_64_test.gd 2>&1 | tee godot/build/owner-fleet-64.log
           grep -q 'YARDMAN_OWNER_FLEET_64_PASS selectors=64 available=64 built=64 failures=0' godot/build/owner-fleet-64.log
 
+      - name: Generate exact Fleet64 export manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 180 godot --headless --path godot --script tools/export_owner_fleet_runtime_manifest.gd 2>&1 | tee godot/build/owner-fleet-export-manifest.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/owner-fleet-export-manifest.log; then exit 1; fi
+          grep -q 'YARDMAN_OWNER_FLEET_EXPORT_MANIFEST_PASS vehicles=64 compiled=64' godot/build/owner-fleet-export-manifest.log
+          test -s godot/data/owner_fleet_runtime_manifest.json
+
       - name: Prove owner garage and runtime vehicle switching
         shell: bash
         run: |
@@ -251,52 +256,14 @@ jobs:
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' build/export.log; then exit 1; fi
           test -s build/Yardman-Reconciliation-Owner.apk
 
-      - name: Validate signed APK, world, fleet and gameplay runtime
+      - name: Validate signed APK, exact fleet resources, world and gameplay runtime
         shell: bash
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           APK=godot/build/Yardman-Reconciliation-Owner.apk
           "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose --print-certs "$APK" | tee godot/build/apksigner.txt
-          python - "$APK" <<'PY'
-          import hashlib, json, os, sys, zipfile
-          apk = sys.argv[1]
-          with zipfile.ZipFile(apk) as zf:
-              names = set(zf.namelist())
-              required = {
-                  'assets/data/owner_fleet_pack_contract.json',
-                  'assets/scripts/vehicle_selector_runtime.gdc',
-                  'assets/scripts/vehicle_catalog.gdc',
-                  'assets/scripts/fleet_vehicle_model.gdc',
-                  'assets/scripts/garage_access_runtime.gdc',
-                  'assets/scripts/beta1_mechanic_garage_preview_runtime.gdc',
-                  'assets/scripts/remote_fleet_runtime.gdc',
-                  'assets/scripts/vehicle_controller.gdc',
-                  'assets/data/parishes/manifest.json',
-              }
-              missing = sorted(required - names)
-              if missing:
-                  raise SystemExit('missing gameplay runtime in APK: ' + repr(missing))
-              contract = json.loads(zf.read('assets/data/owner_fleet_pack_contract.json'))
-              if int(contract.get('available_vehicle_count', 0)) != 64:
-                  raise SystemExit('fleet contract is not 64 vehicles')
-              road_tiles = sum(1 for n in names if n.startswith('assets/data/roads/tile_') and n.endswith('.json'))
-              coast_files = sum(1 for n in names if n.startswith('assets/data/coast/') and n != 'assets/data/coast/manifest.json')
-              building_tiles = sum(1 for n in names if n.startswith('assets/data/buildings/buildings_') and n.endswith('.ymb'))
-              vehicle_scenes = sum(1 for n in names if n.startswith('assets/.godot/imported/') and n.endswith('.scn') and os.path.basename(n).startswith(('fleet_', 'carx_', 'toyota_crown_2013')))
-              abis = sorted({n.split('/')[1] for n in names if n.startswith('lib/') and n.endswith('.so')})
-          digest = hashlib.sha256(open(apk,'rb').read()).hexdigest()
-          size = os.path.getsize(apk)
-          if road_tiles < 700 or coast_files < 2500 or building_tiles < 700:
-              raise SystemExit(f'accepted world incomplete roads={road_tiles} coast_files={coast_files} buildings={building_tiles}')
-          if vehicle_scenes < 64:
-              raise SystemExit(f'compiled vehicle scene families incomplete: {vehicle_scenes}')
-          if abis != ['arm64-v8a']:
-              raise SystemExit('unexpected ABI set: ' + repr(abis))
-          if size < 50_000_000:
-              raise SystemExit(f'APK unexpectedly small: {size}')
-          print(f'YARDMAN_RECONCILIATION_OWNER_APK_PASS bytes={size} sha256={digest} roads={road_tiles} coast_files={coast_files} buildings={building_tiles} fleet=64 vehicle_scenes={vehicle_scenes} abis={abis}')
-          open('godot/build/Yardman-Reconciliation-Owner.apk.sha256','w').write(digest + '  Yardman-Reconciliation-Owner.apk\n')
-          PY
+          python godot/tools/validate_owner_apk.py "$APK" godot/build/apk-validation-diagnostics.json 2>&1 | tee godot/build/apk-validation.log
+          grep -q 'YARDMAN_RECONCILIATION_OWNER_APK_PASS' godot/build/apk-validation.log
 
       - name: Upload validated owner APK
         uses: actions/upload-artifact@v4
@@ -317,6 +284,7 @@ jobs:
           path: |
             godot/build/import.log
             godot/build/owner-fleet-64.log
+            godot/build/owner-fleet-export-manifest.log
             godot/build/owner-garage-runtime.log
             godot/build/vehicle-selector-browse.log
             godot/build/mechanic-garage-preview.log
@@ -326,5 +294,7 @@ jobs:
             godot/build/vehicle-test.log
             godot/build/export.log
             godot/build/apksigner.txt
+            godot/build/apk-validation.log
+            godot/build/apk-validation-diagnostics.json
           if-no-files-found: ignore
           retention-days: 3
