@@ -4,6 +4,7 @@ class_name YardmanReferenceAssets
 
 const ROOT := "res://assets/user_reference/"
 const REMOTE_ROOT := "user://yardman/fleet64/"
+const PACKAGED_SCENE_ROOT := "res://assets/owner_fleet_runtime/"
 const SCENE_UPGRADES := {
     "road_car.glb": "toyota_crown_2013.glb",
 }
@@ -25,6 +26,11 @@ static var _scenes: Dictionary = {}
 static func _valid_name(filename: String, extensions: PackedStringArray) -> bool:
     return not filename.is_empty() and not filename.contains("/") and not filename.contains("\\") \
         and not filename.contains("..") and filename.get_extension().to_lower() in extensions
+
+static func packaged_scene_path(filename: String) -> String:
+    if not _valid_name(filename, PackedStringArray(["glb", "gltf"])):
+        return ""
+    return PACKAGED_SCENE_ROOT + filename + ".scn"
 
 static func exact_asset_path(filename: String) -> String:
     if not _valid_name(filename, PackedStringArray(["glb", "gltf", "png", "jpg", "webp", "ktx", "wav", "ogg", "json"])):
@@ -70,9 +76,12 @@ static func scene(filename: String) -> PackedScene:
     if _scenes.has(filename):
         return _scenes[filename] as PackedScene
     var resolved := str(SCENE_UPGRADES.get(filename, filename))
+    var packaged := packaged_scene_path(resolved)
     var path := ROOT + resolved
     var media: PackedScene = null
-    if ResourceLoader.exists(path):
+    if not packaged.is_empty() and ResourceLoader.exists(packaged):
+        media = ResourceLoader.load(packaged) as PackedScene
+    elif ResourceLoader.exists(path):
         media = ResourceLoader.load(path) as PackedScene
     elif resolved == "toyota_crown_2013.glb" and ResourceLoader.exists(CROWN_CACHE_PATH):
         media = ResourceLoader.load(CROWN_CACHE_PATH) as PackedScene
