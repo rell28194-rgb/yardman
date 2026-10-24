@@ -87,7 +87,7 @@ jobs:
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12336906664/zip" \
             -o "$FLEET_ARTIFACT"
-          rm -rf godot/assets/user_reference godot/.godot/imported
+          rm -rf godot/assets/user_reference godot/.godot/imported godot/assets/owner_fleet_runtime
           mkdir -p godot/assets/user_reference godot/.godot/imported
           python - "$FLEET_ARTIFACT" "$FLEET_APK" <<'PY'
           import os, sys, zipfile
@@ -207,8 +207,9 @@ jobs:
           set -euo pipefail
           timeout 180 godot --headless --path godot --script tools/export_owner_fleet_runtime_manifest.gd 2>&1 | tee godot/build/owner-fleet-export-manifest.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/owner-fleet-export-manifest.log; then exit 1; fi
-          grep -q 'YARDMAN_OWNER_FLEET_EXPORT_MANIFEST_PASS vehicles=64 compiled=64' godot/build/owner-fleet-export-manifest.log
+          grep -q 'YARDMAN_OWNER_FLEET_EXPORT_MANIFEST_PASS vehicles=64 compiled=64 packaged=64' godot/build/owner-fleet-export-manifest.log
           test -s godot/data/owner_fleet_runtime_manifest.json
+          test "$(find godot/assets/owner_fleet_runtime -maxdepth 1 -type f -name '*.scn' | wc -l)" -eq 64
 
       - name: Prove owner garage and runtime vehicle switching
         shell: bash
