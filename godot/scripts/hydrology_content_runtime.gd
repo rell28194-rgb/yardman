@@ -17,6 +17,7 @@ const ARCHIVE_PATH := "user://yardman/jamaica-hydrology-v1.zip.part"
 const MANIFEST_PATH := ROOT + "manifest.json"
 const MARKER_PATH := ROOT + "installed.json"
 const UPDATE_INTERVAL := 0.45
+const RENDERER_NODE_NAME := "JamaicaHydrologyRenderer"
 
 var _http: HTTPRequest
 var _state := "idle"
@@ -278,7 +279,7 @@ func _update_renderer() -> void:
         return
     if _renderer == null:
         _renderer = Renderer.new()
-        _renderer.name = "JamaicaRunningWater"
+        _renderer.name = RENDERER_NODE_NAME
         game.add_child(_renderer)
         if not _renderer.configure(ROOT, coordinate_system, terrain):
             _renderer.queue_free()
