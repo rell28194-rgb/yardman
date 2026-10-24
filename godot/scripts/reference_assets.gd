@@ -5,12 +5,10 @@ class_name YardmanReferenceAssets
 const ROOT := "res://assets/user_reference/"
 const REMOTE_ROOT := "user://yardman/fleet64/"
 const PACKAGED_SCENE_ROOT := "res://assets/owner_fleet_runtime/"
-const SCENE_UPGRADES := {
-    "road_car.glb": "toyota_crown_2013.glb",
-}
-# Semantic callers keep stable fallback names while a validated owner-authorized
-# recovery can supply higher-detail source media. Missing private files always
-# fall through to the original public/reference asset.
+# Texture recovery may substitute higher-detail media for the same semantic
+# surface. Vehicle scenes are deliberately excluded from upgrade aliases: every
+# production vehicle must resolve its own exact hero filename so a generic car
+# can never masquerade as another identity.
 const TEXTURE_UPGRADES := {
     "ground_grass.png": "beta2_ucaptain_scrub_grass_albedo.ktx",
     "ground_rock.png": "beta2_ucaptain_mountain_terrain_albedo.ktx",
@@ -48,6 +46,14 @@ static func exact_asset_path(filename: String) -> String:
 static func exact_asset_exists(filename: String) -> bool:
     return not exact_asset_path(filename).is_empty()
 
+static func exact_scene_exists(filename: String) -> bool:
+    if not _valid_name(filename, PackedStringArray(["glb", "gltf"])):
+        return false
+    var packaged := packaged_scene_path(filename)
+    if not packaged.is_empty() and ResourceLoader.exists(packaged):
+        return true
+    return exact_asset_exists(filename)
+
 static func texture(filename: String) -> Texture2D:
     # KTX keeps recovered GPU-compressed source mip chains intact. The upgrade
     # lookup is optional and deterministic; public/asset-absent CI uses fallback.
@@ -75,15 +81,14 @@ static func scene(filename: String) -> PackedScene:
         return null
     if _scenes.has(filename):
         return _scenes[filename] as PackedScene
-    var resolved := str(SCENE_UPGRADES.get(filename, filename))
-    var packaged := packaged_scene_path(resolved)
-    var path := ROOT + resolved
+    var packaged := packaged_scene_path(filename)
+    var path := ROOT + filename
     var media: PackedScene = null
     if not packaged.is_empty() and ResourceLoader.exists(packaged):
         media = ResourceLoader.load(packaged) as PackedScene
     elif ResourceLoader.exists(path):
         media = ResourceLoader.load(path) as PackedScene
-    elif resolved == "toyota_crown_2013.glb" and ResourceLoader.exists(CROWN_CACHE_PATH):
+    elif filename == "toyota_crown_2013.glb" and ResourceLoader.exists(CROWN_CACHE_PATH):
         media = ResourceLoader.load(CROWN_CACHE_PATH) as PackedScene
     if media != null:
         _scenes[filename] = media
