@@ -9,11 +9,16 @@ on:
       - 'godot/scripts/vehicle_selector_runtime.gd'
       - 'godot/scripts/vehicle_controller.gd'
       - 'godot/scripts/vehicle_model.gd'
+      - 'godot/scripts/fleet_vehicle_model.gd'
+      - 'godot/scripts/vehicle_catalog.gd'
+      - 'godot/scripts/beta1_mechanic_garage_preview_runtime.gd'
       - 'godot/scripts/system_menu_bridge.gd'
       - 'godot/scripts/remote_fleet_runtime.gd'
       - 'godot/main.tscn'
       - 'godot/project.godot'
       - 'godot/tests/garage_access_runtime_test.gd'
+      - 'godot/tests/vehicle_selector_browse_test.gd'
+      - 'godot/tests/beta1_mechanic_garage_preview_runtime_test.gd'
       - 'godot/tests/remote_fleet_resume_regression_test.gd'
       - 'godot/tests/system_menu_bridge_runtime_test.gd'
       - 'godot/tests/vehicle_handling_contract_test.gd'
@@ -63,6 +68,22 @@ jobs:
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/garage-access.log; then exit 1; fi
           grep -q 'YARDMAN_GARAGE_ACCESS_RUNTIME_PASS startup=1 open=1 close=1 toggle=1 controller_independent=1 keyboard_g=1 duplicate=0 hud_launcher=0' godot/build/garage-access.log
 
+      - name: Prove touch fleet browsing is selection-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/vehicle_selector_browse_test.gd 2>&1 | tee godot/build/vehicle-selector-browse.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/vehicle-selector-browse.log; then exit 1; fi
+          grep -q 'YARDMAN_VEHICLE_SELECTOR_BROWSE_TEST PASS prev=1 next=1 wrap=1 touch=1 selection_only=1 explicit_apply=1 preview_compatible=1 single_disabled=1' godot/build/vehicle-selector-browse.log
+
+      - name: Prove responsive highlighted-vehicle workshop preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/beta1_mechanic_garage_preview_runtime_test.gd 2>&1 | tee godot/build/mechanic-garage-preview.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/mechanic-garage-preview.log; then exit 1; fi
+          grep -q 'YARDMAN_BETA1_MECHANIC_GARAGE_PREVIEW_TEST PASS assets=5 lazy=1 one_shot=1 viewport=384x216 world_placement=0 continuous=0 physics=0 collision=0 navigation=0 fallback=1 vehicle_preview=1 browse_before_use=1 max_vehicle=1 selection_render=1 responsive_layout=1 no_overlap=1 narrow_fallback=1' godot/build/mechanic-garage-preview.log
+
       - name: Prove resumable fleet download recovery
         shell: bash
         run: |
@@ -105,6 +126,8 @@ jobs:
           path: |
             godot/build/garage-import.log
             godot/build/garage-access.log
+            godot/build/vehicle-selector-browse.log
+            godot/build/mechanic-garage-preview.log
             godot/build/fleet-resume.log
             godot/build/vehicle-handling-contract.log
             godot/build/vehicle-test.log
