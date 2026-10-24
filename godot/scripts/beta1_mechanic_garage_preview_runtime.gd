@@ -3,18 +3,21 @@ class_name YardmanBeta1MechanicGaragePreviewRuntime
 
 # Owner-private recovered Mechanic equipment is useful in the garage UI, not as
 # fabricated Jamaica geography. This runtime creates a tiny isolated SubViewport
-# only when the existing garage panel is opened. The bay is static and renders
-# once per open; it has no physics, navigation or world-streaming authority.
+# only when the existing garage panel is opened. It renders once on open and
+# again only when the highlighted installed vehicle changes.
 const References = preload("res://scripts/reference_assets.gd")
+const Catalog = preload("res://scripts/vehicle_catalog.gd")
+const AcceptedModel = preload("res://scripts/vehicle_model.gd")
+const FleetModel = preload("res://scripts/fleet_vehicle_model.gd")
 const PREVIEW_SIZE := Vector2i(384, 216)
 const PREVIEW_PANEL_SIZE := Vector2(404.0, 256.0)
 const PREVIEW_PANEL_OFFSET := Vector2(-830.0, 72.0)
 const ASSETS := [
-    {"file": "garage_tire_changer.glb", "position": Vector3(-1.35, 0.08, 0.10), "yaw": -0.18},
-    {"file": "garage_tire_balancer.glb", "position": Vector3(1.30, 0.08, 0.10), "yaw": 0.20},
-    {"file": "garage_grinder.glb", "position": Vector3(0.0, 0.92, -1.45), "yaw": -0.35},
-    {"file": "garage_polisher.glb", "position": Vector3(-0.42, 0.92, -1.42), "yaw": 0.22},
-    {"file": "garage_screw_extractor.glb", "position": Vector3(0.46, 0.93, -1.46), "yaw": -0.12},
+    {"file": "garage_tire_changer.glb", "position": Vector3(-2.65, 0.08, 0.15), "yaw": -0.18},
+    {"file": "garage_tire_balancer.glb", "position": Vector3(2.60, 0.08, 0.15), "yaw": 0.20},
+    {"file": "garage_grinder.glb", "position": Vector3(0.0, 0.92, -1.72), "yaw": -0.35},
+    {"file": "garage_polisher.glb", "position": Vector3(-0.48, 0.92, -1.70), "yaw": 0.22},
+    {"file": "garage_screw_extractor.glb", "position": Vector3(0.52, 0.93, -1.72), "yaw": -0.12},
 ]
 const MAX_RECOVERED_PROPS := 5
 const POLL_INTERVAL_S := 0.15
@@ -23,7 +26,12 @@ var _garage: Node
 var _garage_panel: Control
 var _preview_panel: PanelContainer
 var _texture_rect: TextureRect
+var _title_label: Label
 var _viewport: SubViewport
+var _world: Node3D
+var _preview_vehicle_root: Node3D
+var _preview_vehicle_id := ""
+var _vehicle_loaded := false
 var _built := false
 var _asset_count := 0
 var _clock := 0.0
@@ -46,6 +54,9 @@ func _exit_tree() -> void:
         _preview_panel.queue_free()
     _preview_panel = null
     _texture_rect = null
+    _title_label = null
+    _preview_vehicle_root = null
+    _world = null
     _garage = null
     _garage_panel = null
 
@@ -64,12 +75,13 @@ func _sync() -> void:
     var requested_visible := _garage_panel.visible
     if requested_visible and not _built:
         _build_preview()
-    var can_show := requested_visible and _built and _asset_count > 0
+    var vehicle_changed := false
+    if requested_visible and _built:
+        vehicle_changed = _sync_vehicle_preview()
+    var can_show := requested_visible and _built and (_asset_count > 0 or _vehicle_loaded)
     if _preview_panel != null and is_instance_valid(_preview_panel):
         _preview_panel.visible = can_show
-    if can_show and not _was_visible and _viewport != null:
-        # Static preview: one frame on open rather than a permanently running
-        # second 3D renderer on Android.
+    if can_show and (not _was_visible or vehicle_changed) and _viewport != null:
         _viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
     elif not can_show and _viewport != null:
         _viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
@@ -87,8 +99,6 @@ func _build_preview() -> void:
         if packed != null:
             loaded.append({"record": record, "scene": packed})
     _asset_count = loaded.size()
-    if _asset_count == 0:
-        return
 
     _viewport = SubViewport.new()
     _viewport.name = "MechanicGaragePreviewViewport"
@@ -99,10 +109,10 @@ func _build_preview() -> void:
     _viewport.physics_object_picking = false
     add_child(_viewport)
 
-    var world := Node3D.new()
-    world.name = "MechanicPreviewWorld"
-    _viewport.add_child(world)
-    _build_static_bay(world)
+    _world = Node3D.new()
+    _world.name = "MechanicPreviewWorld"
+    _viewport.add_child(_world)
+    _build_static_bay(_world)
     for item: Dictionary in loaded:
         var scene: PackedScene = item.scene
         var record: Dictionary = item.record
@@ -114,29 +124,30 @@ func _build_preview() -> void:
         prop.rotation.y = float(record.yaw)
         prop.set_meta("preview_only", true)
         prop.set_meta("collision_authority", false)
-        world.add_child(prop)
+        _disable_preview_authority(prop)
+        _world.add_child(prop)
 
     var camera := Camera3D.new()
     camera.name = "PreviewCamera"
-    camera.position = Vector3(5.55, 3.65, 6.65)
-    camera.fov = 51.0
+    camera.position = Vector3(5.55, 3.35, 6.85)
+    camera.fov = 50.0
     camera.current = true
-    world.add_child(camera)
-    camera.look_at(Vector3(0.0, 1.05, -0.10), Vector3.UP)
+    _world.add_child(camera)
+    camera.look_at(Vector3(0.0, 0.92, 0.30), Vector3.UP)
 
     var key_light := DirectionalLight3D.new()
     key_light.name = "PreviewKey"
     key_light.rotation_degrees = Vector3(-46.0, -34.0, 0.0)
     key_light.light_energy = 1.10
     key_light.shadow_enabled = false
-    world.add_child(key_light)
+    _world.add_child(key_light)
     var fill := OmniLight3D.new()
     fill.name = "PreviewFill"
     fill.position = Vector3(-2.4, 3.2, 2.8)
     fill.omni_range = 9.0
     fill.light_energy = 1.35
     fill.shadow_enabled = false
-    world.add_child(fill)
+    _world.add_child(fill)
 
     var env := Environment.new()
     env.background_mode = Environment.BG_COLOR
@@ -146,7 +157,7 @@ func _build_preview() -> void:
     env.ambient_light_energy = 0.62
     var world_env := WorldEnvironment.new()
     world_env.environment = env
-    world.add_child(world_env)
+    _world.add_child(world_env)
 
     _preview_panel = PanelContainer.new()
     _preview_panel.name = "MechanicGaragePreview"
@@ -160,11 +171,11 @@ func _build_preview() -> void:
     var column := VBoxContainer.new()
     column.mouse_filter = Control.MOUSE_FILTER_IGNORE
     _preview_panel.add_child(column)
-    var title := Label.new()
-    title.text = "WORKSHOP BAY"
-    title.add_theme_font_size_override("font_size", 15)
-    title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    column.add_child(title)
+    _title_label = Label.new()
+    _title_label.text = "WORKSHOP BAY"
+    _title_label.add_theme_font_size_override("font_size", 15)
+    _title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    column.add_child(_title_label)
     _texture_rect = TextureRect.new()
     _texture_rect.name = "MechanicPreviewImage"
     _texture_rect.custom_minimum_size = Vector2(PREVIEW_SIZE)
@@ -173,6 +184,89 @@ func _build_preview() -> void:
     _texture_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
     _texture_rect.texture = _viewport.get_texture()
     column.add_child(_texture_rect)
+
+    _sync_vehicle_preview()
+
+func _sync_vehicle_preview() -> bool:
+    if _garage == null or _world == null:
+        return false
+    var raw_ids: Variant = _garage.get("_vehicle_ids")
+    var ids: Array = raw_ids if raw_ids is Array else []
+    var raw_options: Variant = _garage.get("_options")
+    var selected := -1
+    if raw_options is OptionButton:
+        selected = (raw_options as OptionButton).selected
+    var fallback := str(_garage.get("_current_id"))
+    var vehicle_id := preview_vehicle_id(ids, selected, fallback)
+    if vehicle_id == _preview_vehicle_id:
+        return false
+    _preview_vehicle_id = vehicle_id
+    _vehicle_loaded = false
+    if _preview_vehicle_root != null and is_instance_valid(_preview_vehicle_root):
+        _preview_vehicle_root.free()
+    _preview_vehicle_root = null
+    if vehicle_id.is_empty() or not Catalog.has(vehicle_id):
+        _update_title(vehicle_id, false)
+        return true
+
+    var model: Node3D
+    if vehicle_id == Catalog.DEFAULT_ID:
+        var crown := AcceptedModel.new()
+        crown.build()
+        if not bool(crown.get("is_reference_model")):
+            crown.free()
+            _update_title(vehicle_id, false)
+            return true
+        model = crown
+    else:
+        var fleet := FleetModel.new()
+        fleet.build(Catalog.hero_scene(vehicle_id))
+        if not bool(fleet.get_meta("yardman_dedicated_vehicle_mesh", false)) \
+                or bool(fleet.get_meta("yardman_hero_asset_missing_or_invalid", false)):
+            fleet.free()
+            _update_title(vehicle_id, false)
+            return true
+        model = fleet
+
+    var bounds: AABB = model.get("geometry_bounds")
+    var holder := Node3D.new()
+    holder.name = "HighlightedVehiclePreview"
+    holder.position = Vector3(0.0, 0.10, 0.55)
+    holder.rotation_degrees.y = -24.0
+    var scale_factor := preview_scale_for(bounds)
+    holder.scale = Vector3.ONE * scale_factor
+    holder.set_meta("preview_only", true)
+    holder.set_meta("vehicle_id", vehicle_id)
+    holder.set_meta("collision_authority", false)
+    holder.process_mode = Node.PROCESS_MODE_DISABLED
+    model.position = Vector3(-bounds.get_center().x, -bounds.position.y, -bounds.get_center().z)
+    _disable_preview_authority(model)
+    holder.add_child(model)
+    _world.add_child(holder)
+    _preview_vehicle_root = holder
+    _vehicle_loaded = true
+    _update_title(vehicle_id, true)
+    return true
+
+func _update_title(vehicle_id: String, available: bool) -> void:
+    if _title_label == null:
+        return
+    if vehicle_id.is_empty():
+        _title_label.text = "WORKSHOP BAY"
+        return
+    var suffix := "" if available else " · PREVIEW UNAVAILABLE"
+    _title_label.text = "WORKSHOP BAY · %s%s" % [Catalog.display_name(vehicle_id), suffix]
+
+func _disable_preview_authority(node: Node) -> void:
+    node.process_mode = Node.PROCESS_MODE_DISABLED
+    if node is CollisionObject3D:
+        var collision := node as CollisionObject3D
+        collision.collision_layer = 0
+        collision.collision_mask = 0
+    if node is CollisionShape3D:
+        (node as CollisionShape3D).disabled = true
+    for child: Node in node.get_children():
+        _disable_preview_authority(child)
 
 func _build_static_bay(world: Node3D) -> void:
     var floor := MeshInstance3D.new()
@@ -198,9 +292,20 @@ func _build_static_bay(world: Node3D) -> void:
     var bench_mesh := BoxMesh.new()
     bench_mesh.size = Vector3(1.45, 0.78, 0.62)
     bench.mesh = bench_mesh
-    bench.position = Vector3(0.0, 0.45, -1.45)
+    bench.position = Vector3(0.0, 0.45, -1.70)
     bench.material_override = _flat_material(Color(0.24, 0.22, 0.19), 0.84)
     world.add_child(bench)
+
+static func preview_vehicle_id(ids: Array, selected_index: int, fallback: String) -> String:
+    if selected_index >= 0 and selected_index < ids.size():
+        return str(ids[selected_index])
+    return fallback
+
+static func preview_scale_for(bounds: AABB) -> float:
+    var extent := maxf(bounds.size.x, bounds.size.z)
+    if not is_finite(extent) or extent <= 0.01:
+        return 1.0
+    return clampf(4.2 / extent, 0.38, 1.0)
 
 static func _flat_material(color: Color, roughness: float) -> StandardMaterial3D:
     var material := StandardMaterial3D.new()
@@ -223,6 +328,11 @@ static func preview_contract() -> Dictionary:
         "lazy_build": true,
         "render_mode": "one-shot-on-garage-open",
         "garage_surface": "/root/VehicleGarage",
+        "vehicle_preview": true,
+        "vehicle_selection_mode": "highlight-before-use",
+        "vehicle_render_trigger": "selection-change",
+        "max_vehicle_models": 1,
+        "fleet_source": "/root/VehicleGarage",
         "jamaica_world_placement": false,
         "continuous_rendering": false,
         "physics": false,
