@@ -14,6 +14,8 @@ var _vehicle_ids: Array[String] = []
 var _button: Button
 var _panel: PanelContainer
 var _options: OptionButton
+var _previous_button: Button
+var _next_button: Button
 var _status: Label
 var _download_button: Button
 var _download_progress: ProgressBar
@@ -102,10 +104,33 @@ func _build_ui() -> void:
     title.add_theme_font_size_override("font_size", 19)
     column.add_child(title)
 
+    var browser := HBoxContainer.new()
+    browser.name = "VehicleBrowser"
+    browser.add_theme_constant_override("separation", 6)
+    column.add_child(browser)
+
+    _previous_button = Button.new()
+    _previous_button.name = "PreviousVehicle"
+    _previous_button.text = "◀ PREV"
+    _previous_button.custom_minimum_size = Vector2(76, 46)
+    _previous_button.focus_mode = Control.FOCUS_NONE
+    _previous_button.pressed.connect(_browse_previous)
+    browser.add_child(_previous_button)
+
     _options = OptionButton.new()
-    _options.custom_minimum_size = Vector2(360, 46)
+    _options.name = "VehicleOptions"
+    _options.custom_minimum_size = Vector2(190, 46)
+    _options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     _options.focus_mode = Control.FOCUS_NONE
-    column.add_child(_options)
+    browser.add_child(_options)
+
+    _next_button = Button.new()
+    _next_button.name = "NextVehicle"
+    _next_button.text = "NEXT ▶"
+    _next_button.custom_minimum_size = Vector2(76, 46)
+    _next_button.focus_mode = Control.FOCUS_NONE
+    _next_button.pressed.connect(_browse_next)
+    browser.add_child(_next_button)
 
     var actions := HBoxContainer.new()
     actions.add_theme_constant_override("separation", 8)
@@ -143,6 +168,7 @@ func _build_ui() -> void:
     _status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     _status.text = "Checking dedicated owner fleet..."
     column.add_child(_status)
+    _update_browse_buttons()
 
 func _bind_remote_fleet() -> void:
     _remote = get_node_or_null("/root/RemoteFleet")
@@ -216,6 +242,7 @@ func _disable(message: String) -> void:
     _button.disabled = true
     _button.text = "GARAGE · UNAVAILABLE"
     _status.text = message
+    _update_browse_buttons()
 
 func _manifest_has_exact_file(filename: String) -> bool:
     var manifest := References.manifest()
@@ -250,9 +277,32 @@ func _populate() -> void:
         _select_id(Catalog.DEFAULT_ID)
     elif not _vehicle_ids.is_empty():
         _options.select(0)
+    _update_browse_buttons()
     var remote_state := str(_remote.call("get_state")) if _remote != null and _remote.has_method("get_state") else ""
     if remote_state not in ["downloading", "verifying", "installing"]:
         _status.text = "Dedicated selectable vehicles: %d / 64" % _vehicle_ids.size()
+
+func _browse_previous() -> void:
+    _browse_selection(-1)
+
+func _browse_next() -> void:
+    _browse_selection(1)
+
+func _browse_selection(step: int) -> void:
+    if _options == null or _vehicle_ids.size() <= 1:
+        return
+    var next_index := wrapped_selection_index(_options.selected, _vehicle_ids.size(), step)
+    if next_index < 0:
+        return
+    _options.select(next_index)
+    _status.text = "Previewing %s · tap USE VEHICLE to apply" % Catalog.display_name(_vehicle_ids[next_index])
+
+func _update_browse_buttons() -> void:
+    var enabled := _vehicle_ids.size() > 1
+    if _previous_button != null:
+        _previous_button.disabled = not enabled
+    if _next_button != null:
+        _next_button.disabled = not enabled
 
 func _apply_selected() -> void:
     if _options.selected < 0 or _options.selected >= _vehicle_ids.size():
@@ -329,6 +379,24 @@ func _select_id(vehicle_id: String) -> void:
     var index := _vehicle_ids.find(vehicle_id)
     if index >= 0:
         _options.select(index)
+
+static func wrapped_selection_index(current_index: int, count: int, step: int) -> int:
+    if count <= 0:
+        return -1
+    var safe_current := current_index if current_index >= 0 and current_index < count else 0
+    if step == 0:
+        return safe_current
+    return posmod(safe_current + step, count)
+
+static func browse_contract() -> Dictionary:
+    return {
+        "touch_buttons": ["PreviousVehicle", "NextVehicle"],
+        "selection_only": true,
+        "apply_action": "USE VEHICLE",
+        "wraparound": true,
+        "minimum_vehicle_count": 2,
+        "preview_poll_compatible": true,
+    }
 
 func _load_saved_id() -> String:
     if not FileAccess.file_exists(SAVE_PATH):
