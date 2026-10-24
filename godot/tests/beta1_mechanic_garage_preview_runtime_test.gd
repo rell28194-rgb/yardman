@@ -42,6 +42,13 @@ func _run() -> void:
             or str(contract.get("fleet_source", "")) != "/root/VehicleGarage":
         _fail("garage browse vehicle-preview contract drifted")
         return
+    if str(contract.get("layout_mode", "")) != "responsive-side-by-side" \
+            or bool(contract.get("overlap_controls", true)) \
+            or str(contract.get("narrow_screen_fallback", "")) != "hide-preview-keep-garage" \
+            or not is_equal_approx(float(contract.get("layout_gap_px", 0.0)), 14.0) \
+            or not is_equal_approx(float(contract.get("min_screen_margin_px", 0.0)), 12.0):
+        _fail("responsive garage layout contract drifted")
+        return
     for forbidden in ["jamaica_world_placement", "physics", "collision", "navigation"]:
         if bool(contract.get(forbidden, true)):
             _fail("preview gained forbidden world authority: " + forbidden)
@@ -72,6 +79,41 @@ func _run() -> void:
         _fail("invalid preview bounds did not use safe unit scale")
         return
 
+    var garage_size := Vector2(410.0, 320.0)
+    var preview_size := Vector2(404.0, 256.0)
+    var wide := Preview.paired_layout(Vector2(1280.0, 720.0), garage_size, preview_size)
+    if not bool(wide.get("paired", false)):
+        _fail("1280-wide screen did not pair garage and preview")
+        return
+    var wide_preview_pos: Vector2 = wide.get("preview_position", Vector2.ZERO)
+    var wide_garage_pos: Vector2 = wide.get("garage_position", Vector2.ZERO)
+    if not wide_preview_pos.is_equal_approx(Vector2(-414.0, -128.0)) \
+            or not wide_garage_pos.is_equal_approx(Vector2(4.0, -160.0)):
+        _fail("wide paired layout is not centered with the required gap")
+        return
+    if Rect2(wide_preview_pos, preview_size).intersects(Rect2(wide_garage_pos, garage_size)):
+        _fail("wide preview overlaps garage controls")
+        return
+
+    var medium := Preview.paired_layout(Vector2(960.0, 540.0), garage_size, preview_size)
+    if not bool(medium.get("paired", false)):
+        _fail("960-wide screen unnecessarily hid the preview")
+        return
+    var medium_preview: Rect2 = Rect2(medium.get("preview_position", Vector2.ZERO), preview_size)
+    var medium_garage: Rect2 = Rect2(medium.get("garage_position", Vector2.ZERO), garage_size)
+    if medium_preview.intersects(medium_garage):
+        _fail("medium preview overlaps garage controls")
+        return
+
+    var narrow := Preview.paired_layout(Vector2(800.0, 480.0), garage_size, preview_size)
+    if bool(narrow.get("paired", true)):
+        _fail("narrow screen did not fall back to garage-only layout")
+        return
+    var narrow_garage: Vector2 = narrow.get("garage_position", Vector2.ZERO)
+    if not narrow_garage.is_equal_approx(Vector2(-205.0, -160.0)):
+        _fail("narrow fallback did not keep garage centered")
+        return
+
     # Public/source-only builds intentionally omit private vehicle/Mechanic media.
     # Without an open garage this runtime must still allocate no second renderer.
     var runtime := Preview.new()
@@ -83,5 +125,5 @@ func _run() -> void:
     runtime.queue_free()
     await process_frame
 
-    print("YARDMAN_BETA1_MECHANIC_GARAGE_PREVIEW_TEST PASS assets=5 lazy=1 one_shot=1 viewport=384x216 world_placement=0 continuous=0 physics=0 collision=0 navigation=0 fallback=1 vehicle_preview=1 browse_before_use=1 max_vehicle=1 selection_render=1")
+    print("YARDMAN_BETA1_MECHANIC_GARAGE_PREVIEW_TEST PASS assets=5 lazy=1 one_shot=1 viewport=384x216 world_placement=0 continuous=0 physics=0 collision=0 navigation=0 fallback=1 vehicle_preview=1 browse_before_use=1 max_vehicle=1 selection_render=1 responsive_layout=1 no_overlap=1 narrow_fallback=1")
     quit(0)
