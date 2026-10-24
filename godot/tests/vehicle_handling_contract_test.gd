@@ -47,7 +47,7 @@ func _run() -> void:
     _check(handbrake_grip < road_grip * 0.30, "handbrake no longer releases lateral grip")
 
     if failures == 0:
-        print("YARDMAN_VEHICLE_HANDLING_CONTRACT_PASS low_lock=%.1f city_lock=%.1f highway_lock=%.1f vmax_lock=%.1f half_input=%.3f turn_radius=%.2f high_apply=%.1f high_return=%.1f" % [low_lock, city_lock, highway_lock, vmax_lock, half_input, crown_turn_radius, high_apply, high_return])
+        print("YARDMAN_VEHICLE_HANDLING_CONTRACT_PASS low_lock=%.1f city_lock=%.1f highway_lock=%.1f vmax_lock=%.1f half_input=%.3f turn_radius=%.2f high_apply=%.1f high_return=%.1f controlled_slip=1" % [low_lock, city_lock, highway_lock, vmax_lock, half_input, crown_turn_radius, high_apply, high_return])
         quit(0)
         return
     print("YARDMAN_VEHICLE_HANDLING_CONTRACT_FAIL count=%d" % failures)
