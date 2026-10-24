@@ -1,6 +1,6 @@
 name: Yardman Reconciliation Owner APK
 
-# Validation revision: hydrology-structures-v1
+# Validation revision: fleet-install-integrity-v1
 on:
   push:
     branches:
