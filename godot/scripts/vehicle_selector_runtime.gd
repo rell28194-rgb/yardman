@@ -3,7 +3,6 @@ class_name YardmanVehicleSelectorRuntime
 
 const Catalog = preload("res://scripts/vehicle_catalog.gd")
 const References = preload("res://scripts/reference_assets.gd")
-const AcceptedModel = preload("res://scripts/vehicle_model.gd")
 const FleetModel = preload("res://scripts/fleet_vehicle_model.gd")
 const SAVE_PATH := "user://yardman/vehicle-selection.json"
 
@@ -263,7 +262,10 @@ func _dedicated_asset_available(vehicle_id: String) -> bool:
     var hero := Catalog.hero_scene(vehicle_id)
     if hero.is_empty() or not _manifest_has_exact_file(hero):
         return false
-    return References.exact_asset_exists(hero)
+    # Exported owner builds contain signed PackedScenes rather than the original
+    # private GLB files. Count either exact packaged media or a verified source /
+    # downloaded asset; never require the source path to exist inside the APK.
+    return References.exact_scene_exists(hero)
 
 func _populate() -> void:
     _vehicle_ids.clear()
@@ -320,21 +322,15 @@ func _apply_vehicle(vehicle_id: String, persist: bool) -> bool:
         _update_labels()
         return true
 
-    var replacement: Node3D
-    if vehicle_id == Catalog.DEFAULT_ID:
-        replacement = AcceptedModel.new()
-        replacement.call("build")
-        if not bool(replacement.get("is_reference_model")):
-            replacement.free()
-            _status.text = "Crown dedicated asset failed validation."
-            return false
-    else:
-        replacement = FleetModel.new()
-        replacement.call("build", Catalog.hero_scene(vehicle_id))
-        if bool(replacement.get_meta("yardman_hero_asset_missing_or_invalid", false)) or not bool(replacement.get_meta("yardman_dedicated_vehicle_mesh", false)):
-            replacement.free()
-            _status.text = "%s failed dedicated-asset validation." % Catalog.display_name(vehicle_id)
-            return false
+    var hero := Catalog.hero_scene(vehicle_id)
+    var replacement := FleetModel.new() as Node3D
+    replacement.call("build", hero)
+    if bool(replacement.get_meta("yardman_hero_asset_missing_or_invalid", false)) \
+        or not bool(replacement.get_meta("yardman_dedicated_vehicle_mesh", false)) \
+        or str(replacement.get_meta("yardman_requested_hero_scene", "")) != hero:
+        replacement.free()
+        _status.text = "%s failed exact dedicated-asset validation." % Catalog.display_name(vehicle_id)
+        return false
 
     _controller.call("reset_motion")
     var old_visual := _controller.get("visual") as Node3D
