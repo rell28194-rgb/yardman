@@ -16,8 +16,11 @@ import math
 import shutil
 from pathlib import Path
 
-BRIDGE_PROFILE_SOURCE = "DEM abutments + terrain-independent bridge deck"
+BRIDGE_PROFILE_SOURCE = "DEM abutments + terrain-independent cambered bridge deck"
 TUNNEL_PROFILE_SOURCE = "DEM portals + terrain-independent negative-layer tunnel axis"
+BRIDGE_MIN_CAMBER_M = 0.35
+BRIDGE_MAX_CAMBER_M = 1.50
+BRIDGE_CAMBER_PER_M = 0.015
 
 
 def parse_args() -> argparse.Namespace:
@@ -61,7 +64,25 @@ def _horizontal_stations(path):
     return stations
 
 
-def _linear_profile(edge: dict):
+def _bridge_camber(total: float) -> float:
+    if not math.isfinite(total) or total <= 0.0:
+        return 0.0
+    return min(BRIDGE_MAX_CAMBER_M, max(BRIDGE_MIN_CAMBER_M, total * BRIDGE_CAMBER_PER_M))
+
+
+def _profile_y(start_y: float, end_y: float, start_station: float, end_station: float,
+               station: float, camber_m: float = 0.0):
+    span = end_station - start_station
+    if abs(span) <= 1e-9:
+        return start_y
+    t = max(0.0, min(1.0, (station - start_station) / span))
+    grade_y = start_y + (end_y - start_y) * t
+    if camber_m > 0.0:
+        grade_y += math.sin(math.pi * t) * camber_m
+    return grade_y
+
+
+def _structure_profile(edge: dict, cambered: bool = False):
     path = edge.get("path") or []
     if len(path) < 2:
         raise ValueError(f"Structure edge {edge.get('id')} has no usable path")
@@ -71,22 +92,20 @@ def _linear_profile(edge: dict):
         raise ValueError(f"Structure edge {edge.get('id')} has zero horizontal length")
     start_y, end_y = float(path[0][1]), float(path[-1][1])
     original = [float(p[1]) for p in path]
+    camber_m = _bridge_camber(total) if cambered else 0.0
     adjusted = []
     maximum_delta = 0.0
     for index, point in enumerate(path):
-        t = stations[index] / total
-        y = start_y + (end_y - start_y) * t
+        y = _profile_y(start_y, end_y, 0.0, total, stations[index], camber_m)
+        # Shared graph endpoints remain exact so approach roads and structure
+        # decks meet without a vertical seam. Camber applies only inside span.
+        if index == 0:
+            y = start_y
+        elif index == len(path) - 1:
+            y = end_y
         maximum_delta = max(maximum_delta, abs(y - original[index]))
         adjusted.append([float(point[0]), round(y, 6), float(point[2])])
-    return adjusted, maximum_delta
-
-
-def _profile_y(start_y: float, end_y: float, start_station: float, end_station: float, station: float):
-    span = end_station - start_station
-    if abs(span) <= 1e-9:
-        return start_y
-    t = max(0.0, min(1.0, (station - start_station) / span))
-    return start_y + (end_y - start_y) * t
+    return adjusted, maximum_delta, camber_m
 
 
 def _clip_axis_to_tile(a, b, tx: int, tz: int, tile_size: float):
@@ -143,8 +162,10 @@ def compile_structures(roads_root: Path) -> dict:
     profiles = {}
     original_endpoints = {}
     kinds = {}
+    camber_by_edge = {}
     bridge_length = tunnel_length = 0.0
     bridge_max_correction = tunnel_max_correction = 0.0
+    bridge_max_camber = 0.0
     bridge_by_class = {}
     tunnel_by_class = {}
     tunnel_total_edges = 0
@@ -160,9 +181,10 @@ def compile_structures(roads_root: Path) -> dict:
             if len(path) < 2:
                 continue
             original_endpoints[edge_id] = (float(path[0][1]), float(path[-1][1]))
-            profile, correction = _linear_profile(edge)
+            profile, correction, _ = _structure_profile(edge, False)
             profiles[edge_id] = profile
             kinds[edge_id] = "tunnel"
+            camber_by_edge[edge_id] = 0.0
             edge["path"] = profile
             edge["elevation_source"] = TUNNEL_PROFILE_SOURCE
             tunnel_length += float(edge.get("length_m", 0.0) or 0.0)
@@ -176,23 +198,28 @@ def compile_structures(roads_root: Path) -> dict:
         if len(path) < 2:
             continue
         original_endpoints[edge_id] = (float(path[0][1]), float(path[-1][1]))
-        profile, correction = _linear_profile(edge)
+        profile, correction, camber_m = _structure_profile(edge, True)
         profiles[edge_id] = profile
         kinds[edge_id] = "bridge"
+        camber_by_edge[edge_id] = camber_m
         edge["path"] = profile
         edge["elevation_source"] = BRIDGE_PROFILE_SOURCE
+        edge["bridge_profile_inferred"] = True
+        edge["bridge_camber_m"] = round(camber_m, 6)
         bridge_length += float(edge.get("length_m", 0.0) or 0.0)
         bridge_max_correction = max(bridge_max_correction, correction)
+        bridge_max_camber = max(bridge_max_camber, camber_m)
         klass = str(edge.get("class", "unknown"))
         bridge_by_class[klass] = bridge_by_class.get(klass, 0) + 1
 
-    if already_profiled:
-        old_bridge = prior_summary.get("bridge") or {}
-        old_tunnel = prior_summary.get("tunnel") or {}
-        if old_bridge.get("maximum_removed_dem_drape_m") is not None:
-            bridge_max_correction = float(old_bridge["maximum_removed_dem_drape_m"])
-        if old_tunnel.get("maximum_removed_dem_drape_m") is not None:
-            tunnel_max_correction = float(old_tunnel["maximum_removed_dem_drape_m"])
+    old_bridge = prior_summary.get("bridge") or {}
+    old_tunnel = prior_summary.get("tunnel") or {}
+    if old_bridge.get("maximum_removed_dem_drape_m") is not None:
+        bridge_max_correction = max(bridge_max_correction, float(old_bridge["maximum_removed_dem_drape_m"]))
+    if old_tunnel.get("maximum_removed_dem_drape_m") is not None:
+        tunnel_max_correction = max(tunnel_max_correction, float(old_tunnel["maximum_removed_dem_drape_m"]))
+    if already_profiled and old_bridge.get("maximum_camber_m") is not None:
+        bridge_max_camber = max(bridge_max_camber, float(old_bridge["maximum_camber_m"]))
 
     changed_partitions = set(owners[eid] for eid in profiles)
     for path in changed_partitions:
@@ -229,8 +256,10 @@ def compile_structures(roads_root: Path) -> dict:
             polygon, uv = segment[11], segment[12]
             if len(polygon) != len(uv):
                 raise ValueError(f"Structure polygon/UV mismatch on {edge_id}")
+            camber_m = float(camber_by_edge.get(edge_id, 0.0))
             for point, texcoord in zip(polygon, uv):
-                point[1] = round(_profile_y(start_y, end_y, start_station, end_station, float(texcoord[0])), 6)
+                point[1] = round(_profile_y(start_y, end_y, start_station, end_station,
+                                            float(texcoord[0]), camber_m), 6)
             segment_index = int(segment[8])
             if 0 <= segment_index < len(profile) - 1:
                 segment[9] = profile[segment_index][1]
@@ -274,7 +303,10 @@ def compile_structures(roads_root: Path) -> dict:
             "surface_records": bridge_surface_records,
             "tiles": len(bridge_tiles),
             "maximum_removed_dem_drape_m": round(bridge_max_correction, 3),
-            "profile": "linear deck between DEM-registered abutments",
+            "maximum_camber_m": round(bridge_max_camber, 3),
+            "minimum_camber_m": BRIDGE_MIN_CAMBER_M,
+            "profile": "cambered deck between DEM-registered abutments",
+            "camber_rule": "sin(pi*t) * clamp(horizontal_length*0.015, 0.35m, 1.50m)",
             "collision": "runtime bridge deck mesh",
             "by_highway_type": dict(sorted(bridge_by_class.items())),
         },
