@@ -1,6 +1,6 @@
 name: Yardman Reconciliation Owner APK
 
-# Validation revision: fleet-install-integrity-v1
+# Validation revision: bridge-camber-pack-v1
 on:
   push:
     branches:
@@ -73,6 +73,49 @@ jobs:
           test -s godot/data/coast/manifest.json
           test -s godot/data/buildings/manifest.json
           test -s godot/data/parishes/manifest.json
+
+      - name: Reconcile accepted bridge decks above hydrology
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          python godot/tools/build_road_structures.py godot/data/roads 2>&1 | tee godot/build/bridge-deck-reconciliation.log
+          grep -q 'YARDMAN_ROAD_STRUCTURES_PASS' godot/build/bridge-deck-reconciliation.log
+          python godot/tools/validate_road_structures.py godot/data/roads 2>&1 | tee godot/build/road-structure-validation.log
+          grep -q 'YARDMAN_ROAD_STRUCTURE_DATA_PASS' godot/build/road-structure-validation.log
+          python - <<'PY' 2>&1 | tee godot/build/bridge-deck-package-contract.log
+          import json
+          from pathlib import Path
+          root = Path('godot/data/roads')
+          manifest = json.loads((root / 'manifest.json').read_text())
+          structures = json.loads((root / 'structures.json').read_text())
+          if manifest.get('structures') != structures:
+              raise SystemExit('manifest/structures registry mismatch')
+          bridge = structures.get('bridge') or {}
+          if int(bridge.get('edges', 0)) <= 0:
+              raise SystemExit('accepted road pack contains no bridge edges')
+          if bridge.get('profile') != 'cambered deck between DEM-registered abutments':
+              raise SystemExit('accepted road pack did not receive cambered bridge profile')
+          if float(bridge.get('minimum_camber_m', 0.0)) < 0.35:
+              raise SystemExit('bridge minimum camber below contract')
+          if float(bridge.get('maximum_camber_m', 0.0)) < 0.35:
+              raise SystemExit('bridge pack has no positive camber evidence')
+          checked = 0
+          for path in sorted((root / 'graph').glob('edges_*.json')):
+              for edge in json.loads(path.read_text()).values():
+                  if not edge.get('bridge'):
+                      continue
+                  checked += 1
+                  if edge.get('elevation_source') != 'DEM abutments + terrain-independent cambered bridge deck':
+                      raise SystemExit('stale bridge elevation source: ' + str(edge.get('id')))
+                  if float(edge.get('bridge_camber_m', 0.0)) < 0.35:
+                      raise SystemExit('bridge camber metadata missing: ' + str(edge.get('id')))
+          if checked != int(bridge['edges']):
+              raise SystemExit('bridge edge count mismatch graph=%d registry=%s' % (checked, bridge['edges']))
+          print('YARDMAN_ACCEPTED_BRIDGE_DECK_PACKAGE_PASS edges=%d max_camber=%.3f' %
+                (checked, float(bridge['maximum_camber_m'])))
+          PY
+          grep -q 'YARDMAN_ACCEPTED_BRIDGE_DECK_PACKAGE_PASS' godot/build/bridge-deck-package-contract.log
 
       - name: Recover authoritative private Fleet64 compiled resources
         shell: bash
@@ -284,6 +327,9 @@ jobs:
         with:
           name: Yardman-Reconciliation-Owner-Evidence
           path: |
+            godot/build/bridge-deck-reconciliation.log
+            godot/build/road-structure-validation.log
+            godot/build/bridge-deck-package-contract.log
             godot/build/import.log
             godot/build/owner-fleet-64.log
             godot/build/owner-fleet-export-manifest.log
