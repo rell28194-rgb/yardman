@@ -104,14 +104,19 @@ class RoadStructureTests(unittest.TestCase):
             bridge_id, _, _ = write_dataset(root)
             summary = compile_structures(root)
             edges = json.loads((root / "graph" / "edges_00.json").read_text())
-            path = edges[bridge_id]["path"]
+            edge = edges[bridge_id]
+            path = edge["path"]
             self.assertEqual(path[0][1], 10.0)
             self.assertEqual(path[-1][1], 14.0)
-            self.assertAlmostEqual(path[1][1], 12.0)
+            self.assertAlmostEqual(path[1][1], 12.35)
+            self.assertEqual(edge["elevation_source"], "DEM abutments + terrain-independent cambered bridge deck")
+            self.assertAlmostEqual(edge["bridge_camber_m"], 0.35)
             self.assertEqual(summary["bridge"]["edges"], 1)
-            self.assertGreater(summary["bridge"]["maximum_removed_dem_drape_m"], 16.0)
+            self.assertEqual(summary["bridge"]["profile"], "cambered deck between DEM-registered abutments")
+            self.assertAlmostEqual(summary["bridge"]["maximum_camber_m"], 0.35)
+            self.assertGreater(summary["bridge"]["maximum_removed_dem_drape_m"], 17.0)
 
-    def test_bridge_render_polygons_follow_same_continuous_profile(self):
+    def test_bridge_render_polygons_follow_same_cambered_profile(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             bridge_id, _, _ = write_dataset(root)
@@ -124,7 +129,7 @@ class RoadStructureTests(unittest.TestCase):
                     if abs(float(uv[0]) - 10.0) < 1e-9:
                         samples.append(float(point[1]))
             self.assertTrue(samples)
-            self.assertTrue(all(abs(y - 12.0) < 1e-6 for y in samples))
+            self.assertTrue(all(abs(y - 12.35) < 1e-6 for y in samples))
 
     def test_negative_layer_tunnel_gets_portal_profile_and_compact_corridor_tile(self):
         with tempfile.TemporaryDirectory() as tmp:
