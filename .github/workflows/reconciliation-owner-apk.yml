@@ -209,6 +209,15 @@ jobs:
           timeout 600 godot --headless --path godot --script tests/owner_garage_runtime_test.gd 2>&1 | tee godot/build/owner-garage-runtime.log
           grep -q 'YARDMAN_OWNER_GARAGE_RUNTIME_PASS selector=64 default=toyota_crown switch=toyota_crown>audi_r8>toyota_crown' godot/build/owner-garage-runtime.log
 
+      - name: Prove touch fleet browsing and responsive workshop preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/vehicle_selector_browse_test.gd 2>&1 | tee godot/build/vehicle-selector-browse.log
+          grep -q 'YARDMAN_VEHICLE_SELECTOR_BROWSE_TEST PASS prev=1 next=1 wrap=1 touch=1 selection_only=1 explicit_apply=1 preview_compatible=1 single_disabled=1' godot/build/vehicle-selector-browse.log
+          timeout 120 godot --headless --path godot --script tests/beta1_mechanic_garage_preview_runtime_test.gd 2>&1 | tee godot/build/mechanic-garage-preview.log
+          grep -q 'YARDMAN_BETA1_MECHANIC_GARAGE_PREVIEW_TEST PASS assets=5 lazy=1 one_shot=1 viewport=384x216 world_placement=0 continuous=0 physics=0 collision=0 navigation=0 fallback=1 vehicle_preview=1 browse_before_use=1 max_vehicle=1 selection_render=1 responsive_layout=1 no_overlap=1 narrow_fallback=1' godot/build/mechanic-garage-preview.log
+
       - name: Prove garage access and resumable fleet recovery
         shell: bash
         run: |
@@ -256,6 +265,7 @@ jobs:
                   'assets/scripts/vehicle_catalog.gdc',
                   'assets/scripts/fleet_vehicle_model.gdc',
                   'assets/scripts/garage_access_runtime.gdc',
+                  'assets/scripts/beta1_mechanic_garage_preview_runtime.gdc',
                   'assets/scripts/remote_fleet_runtime.gdc',
                   'assets/scripts/vehicle_controller.gdc',
                   'assets/data/parishes/manifest.json',
@@ -305,6 +315,8 @@ jobs:
             godot/build/import.log
             godot/build/owner-fleet-64.log
             godot/build/owner-garage-runtime.log
+            godot/build/vehicle-selector-browse.log
+            godot/build/mechanic-garage-preview.log
             godot/build/garage-access.log
             godot/build/fleet-resume.log
             godot/build/vehicle-handling-contract.log
