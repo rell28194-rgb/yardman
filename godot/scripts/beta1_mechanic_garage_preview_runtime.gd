@@ -11,7 +11,9 @@ const AcceptedModel = preload("res://scripts/vehicle_model.gd")
 const FleetModel = preload("res://scripts/fleet_vehicle_model.gd")
 const PREVIEW_SIZE := Vector2i(384, 216)
 const PREVIEW_PANEL_SIZE := Vector2(404.0, 256.0)
-const PREVIEW_PANEL_OFFSET := Vector2(-830.0, 72.0)
+const GARAGE_FALLBACK_SIZE := Vector2(410.0, 320.0)
+const GARAGE_PREVIEW_GAP := 14.0
+const MIN_SCREEN_MARGIN := 12.0
 const ASSETS := [
     {"file": "garage_tire_changer.glb", "position": Vector3(-2.65, 0.08, 0.15), "yaw": -0.18},
     {"file": "garage_tire_balancer.glb", "position": Vector3(2.60, 0.08, 0.15), "yaw": 0.20},
@@ -78,14 +80,41 @@ func _sync() -> void:
     var vehicle_changed := false
     if requested_visible and _built:
         vehicle_changed = _sync_vehicle_preview()
-    var can_show := requested_visible and _built and (_asset_count > 0 or _vehicle_loaded)
-    if _preview_panel != null and is_instance_valid(_preview_panel):
-        _preview_panel.visible = can_show
+    var preview_content_available := _built and (_asset_count > 0 or _vehicle_loaded)
+    var can_show := _apply_layout(requested_visible, preview_content_available)
     if can_show and (not _was_visible or vehicle_changed) and _viewport != null:
         _viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
     elif not can_show and _viewport != null:
         _viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
     _was_visible = can_show
+
+func _apply_layout(garage_visible: bool, preview_available: bool) -> bool:
+    if _garage_panel == null or not is_instance_valid(_garage_panel):
+        return false
+    _garage_panel.set_anchors_preset(Control.PRESET_CENTER)
+    var garage_size := _garage_panel.size
+    if garage_size.x < 100.0 or garage_size.y < 100.0:
+        garage_size = GARAGE_FALLBACK_SIZE
+        _garage_panel.size = garage_size
+    if not garage_visible:
+        _garage_panel.position = -garage_size * 0.5
+        if _preview_panel != null and is_instance_valid(_preview_panel):
+            _preview_panel.visible = false
+        return false
+    if not preview_available or _preview_panel == null or not is_instance_valid(_preview_panel):
+        _garage_panel.position = -garage_size * 0.5
+        if _preview_panel != null and is_instance_valid(_preview_panel):
+            _preview_panel.visible = false
+        return false
+
+    var viewport_size := get_viewport().get_visible_rect().size
+    var layout := paired_layout(viewport_size, garage_size, PREVIEW_PANEL_SIZE)
+    _garage_panel.position = layout.garage_position
+    _preview_panel.set_anchors_preset(Control.PRESET_CENTER)
+    _preview_panel.size = PREVIEW_PANEL_SIZE
+    _preview_panel.position = layout.preview_position
+    _preview_panel.visible = bool(layout.paired)
+    return bool(layout.paired)
 
 func _build_preview() -> void:
     if _built:
@@ -161,9 +190,9 @@ func _build_preview() -> void:
 
     _preview_panel = PanelContainer.new()
     _preview_panel.name = "MechanicGaragePreview"
-    _preview_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-    _preview_panel.position = PREVIEW_PANEL_OFFSET
+    _preview_panel.set_anchors_preset(Control.PRESET_CENTER)
     _preview_panel.size = PREVIEW_PANEL_SIZE
+    _preview_panel.position = -PREVIEW_PANEL_SIZE * 0.5
     _preview_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
     _preview_panel.visible = false
     _garage.add_child(_preview_panel)
@@ -307,6 +336,27 @@ static func preview_scale_for(bounds: AABB) -> float:
         return 1.0
     return clampf(4.2 / extent, 0.38, 1.0)
 
+static func paired_layout(viewport_size: Vector2, garage_size: Vector2,
+        preview_size: Vector2 = PREVIEW_PANEL_SIZE) -> Dictionary:
+    var safe_viewport := Vector2(maxf(viewport_size.x, 0.0), maxf(viewport_size.y, 0.0))
+    var safe_garage := Vector2(maxf(garage_size.x, 0.0), maxf(garage_size.y, 0.0))
+    var safe_preview := Vector2(maxf(preview_size.x, 0.0), maxf(preview_size.y, 0.0))
+    var total_width := safe_preview.x + GARAGE_PREVIEW_GAP + safe_garage.x
+    var can_pair := safe_viewport.x >= total_width + MIN_SCREEN_MARGIN * 2.0 \
+        and safe_viewport.y >= maxf(safe_preview.y, safe_garage.y) + MIN_SCREEN_MARGIN * 2.0
+    if not can_pair:
+        return {
+            "paired": false,
+            "preview_position": Vector2.ZERO,
+            "garage_position": -safe_garage * 0.5,
+        }
+    var start_x := -total_width * 0.5
+    return {
+        "paired": true,
+        "preview_position": Vector2(start_x, -safe_preview.y * 0.5),
+        "garage_position": Vector2(start_x + safe_preview.x + GARAGE_PREVIEW_GAP, -safe_garage.y * 0.5),
+    }
+
 static func _flat_material(color: Color, roughness: float) -> StandardMaterial3D:
     var material := StandardMaterial3D.new()
     material.albedo_color = color
@@ -333,6 +383,11 @@ static func preview_contract() -> Dictionary:
         "vehicle_render_trigger": "selection-change",
         "max_vehicle_models": 1,
         "fleet_source": "/root/VehicleGarage",
+        "layout_mode": "responsive-side-by-side",
+        "overlap_controls": false,
+        "narrow_screen_fallback": "hide-preview-keep-garage",
+        "layout_gap_px": GARAGE_PREVIEW_GAP,
+        "min_screen_margin_px": MIN_SCREEN_MARGIN,
         "jamaica_world_placement": false,
         "continuous_rendering": false,
         "physics": false,
