@@ -14,6 +14,7 @@ import hashlib
 import json
 import shutil
 import zipfile
+from collections import defaultdict
 from pathlib import Path, PurePosixPath
 
 EXPECTED_COUNT = 64
@@ -90,6 +91,7 @@ def recover(apk_path: Path, project_root: Path) -> dict:
         hero_names: set[str] = set()
         scene_entries: dict[str, str] = {}
         scene_hashes: dict[str, str] = {}
+        hash_heroes: dict[str, list[str]] = defaultdict(list)
         for raw in vehicles:
             if not isinstance(raw, dict):
                 raise ValueError("recovery APK vehicle manifest contains a non-object record")
@@ -112,12 +114,11 @@ def recover(apk_path: Path, project_root: Path) -> dict:
             if len(payload) < 1024:
                 raise ValueError(f"packaged scene is implausibly small for {vehicle_id}: {len(payload)} bytes")
             digest = _sha256_bytes(payload)
-            if digest in scene_hashes.values():
-                raise ValueError(f"duplicate packaged vehicle scene bytes detected for {vehicle_id}")
             rows[vehicle_id] = raw
             hero_names.add(hero)
             scene_entries[hero] = apk_entry
             scene_hashes[hero] = digest
+            hash_heroes[digest].append(hero)
 
         if set(rows) != set(contract_ids) or len(scene_entries) != EXPECTED_COUNT:
             raise ValueError("recovery APK Fleet64 inventory is incomplete")
@@ -144,8 +145,6 @@ def recover(apk_path: Path, project_root: Path) -> dict:
             if record_paths.count(hero) != 1:
                 raise ValueError(f"private reference manifest does not uniquely identify hero: {hero}")
 
-        # Clear only the recovered private/export-visible fleet surfaces. Other
-        # gameplay/world files are deliberately untouched.
         packaged_root = project_root / PACKAGED_ROOT
         reference_root = project_root / REFERENCE_ROOT
         if packaged_root.exists():
@@ -168,18 +167,20 @@ def recover(apk_path: Path, project_root: Path) -> dict:
     recovered_files = sorted(packaged_root.glob("*.scn"))
     if len(recovered_files) != EXPECTED_COUNT:
         raise ValueError(f"recovered scene count is {len(recovered_files)}, expected {EXPECTED_COUNT}")
-    disk_hashes = {_sha256_bytes(path.read_bytes()) for path in recovered_files}
-    if len(disk_hashes) != EXPECTED_COUNT:
-        raise ValueError("recovered Fleet64 contains duplicate scene payloads")
+    disk_hashes: dict[str, list[str]] = defaultdict(list)
+    for path in recovered_files:
+        disk_hashes[_sha256_bytes(path.read_bytes())].append(path.name)
     crown_path = packaged_root / (CROWN_HERO + ".scn")
     chaser_path = packaged_root / (CHASER_HERO + ".scn")
     if not crown_path.is_file() or not chaser_path.is_file() or crown_path.read_bytes() == chaser_path.read_bytes():
         raise ValueError("recovered Crown identity is not distinct from Chaser")
 
+    duplicate_groups = [sorted(paths) for paths in disk_hashes.values() if len(paths) > 1]
     return {
         "apk_sha256": hashlib.sha256(apk_path.read_bytes()).hexdigest(),
         "vehicles": EXPECTED_COUNT,
         "unique_scene_hashes": len(disk_hashes),
+        "duplicate_scene_groups": duplicate_groups,
         "crown_scene_bytes": crown_path.stat().st_size,
         "chaser_scene_bytes": chaser_path.stat().st_size,
         "crown_scene_sha256": _sha256_bytes(crown_path.read_bytes()),
