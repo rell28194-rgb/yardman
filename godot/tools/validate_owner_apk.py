@@ -19,9 +19,13 @@ REQUIRED_STATIC = [
     "assets/data/owner_fleet_pack_contract.json",
     "assets/data/owner_fleet_runtime_manifest.json",
     "assets/data/parishes/manifest.json",
+    "assets/data/roads/manifest.json",
+    "assets/data/roads/structures.json",
 ]
 PACKAGED_FLEET_ROOT = "res://assets/owner_fleet_runtime/"
 SOURCE_IMPORT_ROOT = "res://.godot/imported/"
+BRIDGE_PROFILE = "cambered deck between DEM-registered abutments"
+BRIDGE_MIN_CAMBER_M = 0.35
 
 
 def _runtime_matches(names, stem):
@@ -160,6 +164,33 @@ def main():
             failures.append("APK is missing %d packaged Fleet64 resources/remap targets: %s" % (
                 len(missing_compiled), ", ".join(row["vehicle_id"] for row in missing_compiled[:12])))
 
+        road_manifest = {}
+        road_structures = {}
+        if "assets/data/roads/manifest.json" in names:
+            road_manifest = json.loads(zf.read("assets/data/roads/manifest.json"))
+        if "assets/data/roads/structures.json" in names:
+            road_structures = json.loads(zf.read("assets/data/roads/structures.json"))
+        manifest_structures = road_manifest.get("structures") if isinstance(road_manifest, dict) else None
+        diag["road_structure_registry_matches"] = bool(manifest_structures == road_structures and road_structures)
+        bridge = road_structures.get("bridge", {}) if isinstance(road_structures, dict) else {}
+        diag["bridge_profile"] = str(bridge.get("profile", ""))
+        diag["bridge_edges"] = int(bridge.get("edges", 0) or 0)
+        diag["bridge_max_camber_m"] = float(bridge.get("maximum_camber_m", 0.0) or 0.0)
+        diag["bridge_min_camber_m"] = float(bridge.get("minimum_camber_m", 0.0) or 0.0)
+        diag["bridge_camber_rule"] = str(bridge.get("camber_rule", ""))
+        if not diag["road_structure_registry_matches"]:
+            failures.append("APK road manifest and structure registry disagree")
+        if diag["bridge_edges"] <= 0:
+            failures.append("APK road payload contains no compiled bridge edges")
+        if diag["bridge_profile"] != BRIDGE_PROFILE:
+            failures.append("APK bridge payload is not using cambered terrain-independent decks")
+        if diag["bridge_min_camber_m"] < BRIDGE_MIN_CAMBER_M - 1e-6:
+            failures.append("APK bridge minimum camber is below %.2fm" % BRIDGE_MIN_CAMBER_M)
+        if diag["bridge_max_camber_m"] < BRIDGE_MIN_CAMBER_M - 1e-6:
+            failures.append("APK bridge payload has no positive camber evidence")
+        if not diag["bridge_camber_rule"]:
+            failures.append("APK bridge payload does not record its camber rule")
+
         road_tiles = sum(1 for n in names if n.startswith("assets/data/roads/tile_") and n.endswith(".json"))
         coast_files = sum(1 for n in names if n.startswith("assets/data/coast/") and n != "assets/data/coast/manifest.json")
         building_tiles = sum(1 for n in names if n.startswith("assets/data/buildings/buildings_") and n.endswith(".ymb"))
@@ -193,8 +224,9 @@ def main():
         print("YARDMAN_RECONCILIATION_OWNER_APK_FAIL " + " | ".join(failures), file=sys.stderr)
         return 1
 
-    print("YARDMAN_RECONCILIATION_OWNER_APK_PASS bytes=%d sha256=%s roads=%d coast_files=%d buildings=%d fleet=64 compiled_exact=64 abis=%s" % (
-        size, digest, diag["road_tiles"], diag["coast_files"], diag["building_tiles"], diag["abis"]))
+    print("YARDMAN_RECONCILIATION_OWNER_APK_PASS bytes=%d sha256=%s roads=%d coast_files=%d buildings=%d fleet=64 compiled_exact=64 bridges=%d camber=%.2f abis=%s" % (
+        size, digest, diag["road_tiles"], diag["coast_files"], diag["building_tiles"],
+        diag["bridge_edges"], diag["bridge_max_camber_m"], diag["abis"]))
     sha_path = os.path.join(os.path.dirname(apk), os.path.basename(apk) + ".sha256")
     with open(sha_path, "w", encoding="utf-8") as handle:
         handle.write("%s  %s\n" % (digest, os.path.basename(apk)))
