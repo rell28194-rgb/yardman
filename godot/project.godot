@@ -23,6 +23,7 @@ WeatherFX="*res://scripts/weather_fx_runtime_godot47.gd"
 WeatherPuddles="*res://scripts/weather_puddle_runtime.gd"
 RemoteFleet="*res://scripts/remote_fleet_runtime.gd"
 VehicleGarage="*res://scripts/vehicle_selector_runtime.gd"
+VehicleStatusHUD="*res://scripts/vehicle_status_hud_runtime.gd"
 
 [display]
 window/size/viewport_width=1280
