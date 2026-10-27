@@ -5,15 +5,22 @@ on:
     branches:
       - codex/world-reconciliation-001
       - codex/garage-reconcile-20261023
+      - codex/yardman-gameplay-reconcile-20261027
     paths:
       - 'godot/scripts/garage_access_runtime.gd'
       - 'godot/scripts/vehicle_selector_runtime.gd'
       - 'godot/scripts/vehicle_controller.gd'
       - 'godot/scripts/vehicle_model.gd'
+      - 'godot/scripts/player_controller.gd'
+      - 'godot/scripts/touch_controls.gd'
+      - 'godot/scripts/main.gd'
+      - 'godot/scripts/hud.gd'
       - 'godot/scripts/system_menu_bridge.gd'
       - 'godot/scripts/remote_fleet_runtime.gd'
       - 'godot/main.tscn'
       - 'godot/project.godot'
+      - 'godot/tests/controls_hud_test.gd'
+      - 'godot/tests/vehicle_interaction_regression_test.gd'
       - 'godot/tests/garage_access_runtime_test.gd'
       - 'godot/tests/remote_fleet_resume_regression_test.gd'
       - 'godot/tests/system_menu_bridge_runtime_test.gd'
@@ -55,6 +62,22 @@ jobs:
           mkdir -p godot/build
           timeout 300 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/garage-import.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/garage-import.log; then exit 1; fi
+
+      - name: Prove mobile controls and HUD contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/controls_hud_test.gd 2>&1 | tee godot/build/controls-hud.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/controls-hud.log; then exit 1; fi
+          grep -q 'YARDMAN_CONTROLS_HUD_TEST PASS' godot/build/controls-hud.log
+
+      - name: Prove profile-aware entry and safe exit geometry
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/vehicle_interaction_regression_test.gd 2>&1 | tee godot/build/vehicle-interaction.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/vehicle-interaction.log; then exit 1; fi
+          grep -q 'YARDMAN_VEHICLE_INTERACTION_REGRESSION PASS' godot/build/vehicle-interaction.log
 
       - name: Prove garage is reachable before vehicle attach
         shell: bash
@@ -105,6 +128,8 @@ jobs:
           name: Yardman-Garage-Gameplay-Evidence
           path: |
             godot/build/garage-import.log
+            godot/build/controls-hud.log
+            godot/build/vehicle-interaction.log
             godot/build/garage-access.log
             godot/build/fleet-resume.log
             godot/build/vehicle-handling-contract.log
