@@ -5,6 +5,7 @@ on:
     branches:
       - codex/world-reconciliation-001
       - codex/garage-reconcile-20261023
+      - codex/yardman-gameplay-reconcile-20261027
     paths:
       - '.github/workflows/reconciliation-owner-apk.yml'
   workflow_dispatch:
