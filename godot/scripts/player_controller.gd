@@ -133,7 +133,9 @@ func try_exit_vehicle() -> bool:
 func _vehicle_dimensions() -> Vector3:
     if vehicle == null:
         return Vector3(1.85, 1.30, 4.0)
-    var metadata: Dictionary = vehicle.profile_metadata() if vehicle.has_method("profile_metadata") else {}
+    var metadata: Dictionary = {}
+    if vehicle is RefCounted and vehicle.has_method("profile_metadata"):
+        metadata = vehicle.profile_metadata()
     return dimensions_from_profile(metadata)
 
 static func dimensions_from_profile(profile_data: Dictionary) -> Vector3:
