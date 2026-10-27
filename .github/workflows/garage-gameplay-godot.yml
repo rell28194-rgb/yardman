@@ -14,6 +14,7 @@ on:
       - 'godot/scripts/player_controller.gd'
       - 'godot/scripts/touch_controls.gd'
       - 'godot/scripts/main.gd'
+      - 'godot/scripts/main_godot47.gd'
       - 'godot/scripts/hud.gd'
       - 'godot/scripts/vehicle_status_hud_runtime.gd'
       - 'godot/scripts/weather_fx_runtime_godot47.gd'
@@ -21,6 +22,7 @@ on:
       - 'godot/scripts/remote_fleet_runtime.gd'
       - 'godot/main.tscn'
       - 'godot/project.godot'
+      - 'godot/tests/smoke_boot.gd'
       - 'godot/tests/controls_hud_test.gd'
       - 'godot/tests/mobile_on_foot_regression_test.gd'
       - 'godot/tests/vehicle_interaction_regression_test.gd'
@@ -44,7 +46,7 @@ env:
 jobs:
   garage-access:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -67,6 +69,14 @@ jobs:
           mkdir -p godot/build
           timeout 300 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/garage-import.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/garage-import.log; then exit 1; fi
+
+      - name: Boot the real Yardman scene
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 360 godot --headless --path godot --script tests/smoke_boot.gd 2>&1 | tee godot/build/smoke-boot.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/smoke-boot.log; then exit 1; fi
+          grep -q 'YARDMAN_SMOKE_PASS' godot/build/smoke-boot.log
 
       - name: Prove mobile controls and HUD contract
         shell: bash
@@ -157,6 +167,7 @@ jobs:
           name: Yardman-Garage-Gameplay-Evidence
           path: |
             godot/build/garage-import.log
+            godot/build/smoke-boot.log
             godot/build/controls-hud.log
             godot/build/mobile-on-foot.log
             godot/build/vehicle-interaction.log
