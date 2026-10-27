@@ -1,221 +1,225 @@
 extends "res://scripts/main.gd"
 
-# Godot 4.7 has no bool(...) constructor. Keep the owner-build main runtime
-# intact and override only live methods that still used those invalid casts.
+# Godot 4.7 has no bool(...) constructor. Keep the owner-build runtime intact
+# and override only methods that execute those invalid casts.
 
-func set_quality(value: String) -> void:
-    visuals.set_quality(value)
-    touch.set_quality(value)
-    hud.set_quality(value)
-    world.set_quality(value)
-    vehicle.set_quality(value)
-    var profile := visuals.profile()
-    streamer.set_quality(float(profile.view_distance), int(profile.max_tiles), profile.tier)
-    sky.apply_quality(profile.tier)
-    sound_manager.set_quality(profile.tier)
-    sun.shadow_enabled = profile.shadows == true
-    DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
+func set_quality(quality: String, custom: Dictionary = {}) -> void:
+    if not VisualScript.PROFILES.has(quality):
+        quality = "Balanced"
+    visuals.quality = quality
+    visuals.custom = custom.duplicate()
+    var profile: Dictionary = visuals.settings().duplicate()
+    if quality == "Custom":
+        profile.merge(custom, true)
+    roads.load_radius = clampi(int(profile.road_radius), 1, 3)
+    terrain.load_radius = clampi(int(profile.terrain_radius), 1, 2)
+    sun.shadow_enabled = profile.get("shadows", true) == true
+    get_viewport().scaling_3d_scale = clampf(float(profile.get("resolution", 0.75 if quality == "Performance" else 1.0)), 0.5, 1.25)
+    for tile_root in roads._loaded.values():
+        visuals.apply_roadside_quality(tile_root)
+    roads.surface_visibility_distance = 1800.0 if quality == "Performance" else 2600.0
+    buildings.quality = quality
+    if quality == "Custom":
+        buildings.draw_distance = float(profile.get("building_distance", 800.0))
+    _refresh_streamers()
+    if hud != null:
+        hud.select_quality(quality)
 
 func _physics_process(delta: float) -> void:
-    _handle_origin_rebase()
-    var ready := world_ready and _app_active
+    if terrain == null or touch == null:
+        return
+    var active: Node3D = car if player.in_vehicle else player
+    var world: PackedFloat64Array = roads.local_to_world(active.position)
+    var ready := _collision_ready(world[0], world[2])
+    if ready and _settle_spawn:
+        _spawn_ready_frames += 1
+        if _spawn_ready_frames < 2:
+            ready = false
+        elif not _settle_actor_spawn(active):
+            _notify("The saved location is offshore; recovering to a road")
+            goto_parish(current_parish)
+            return
+        else:
+            _settle_spawn = false
+            _spawn_ready_frames = 0
+    elif _settle_spawn:
+        _spawn_ready_frames = 0
+    world_ready = ready
+    if ready and world[1] < -5.0 and _spawn_support(world[0], world[2], world[1]).get("structural", false) != true:
+        goto_parish(current_parish)
+        _notify("Recovered to shore")
+        return
+    if absf(active.position.x) > 6144.0 or absf(active.position.z) > 6144.0:
+        _rebase(world[0], world[2])
+    var blocked: bool = hud.menu_open or touch.layout_editing or not _app_active
+    touch.driving = player.in_vehicle
     var keyboard_forward := Input.get_axis("ui_down", "ui_up")
     var keyboard_turn := Input.get_axis("ui_left", "ui_right")
-    if player.in_vehicle:
-        vehicle.input_forward = touch.throttle + keyboard_forward
-        vehicle.input_steer = touch.steering + keyboard_turn
-        vehicle.input_brake = maxf(touch.brake, 1.0 if Input.is_action_pressed("ui_accept") else 0.0)
-    else:
-        vehicle.input_forward = 0.0
-        vehicle.input_steer = 0.0
-        vehicle.input_brake = 0.0
-    var input_router := get_node_or_null("/root/InputRouter")
-    if input_router != null:
-        input_router.set_touch_active(touch.uses_touch_exclusively())
-        vehicle.input_forward = input_router.throttle_value(vehicle.input_forward)
-        vehicle.input_steer = input_router.steer_value(vehicle.input_steer)
-        vehicle.input_brake = input_router.brake_value(vehicle.input_brake)
-        if input_router.consume_interact_action():
-            toggle_vehicle()
-        if input_router.consume_pause_action():
-            _app_active = not _app_active
-            if not _app_active:
-                vehicle.freeze_motion()
-            else:
-                _show_message("Resume")
-    player.movement = (Vector2(keyboard_turn, -keyboard_forward) + touch.movement_vector()).limit_length(1.0)
+    keyboard_forward += float(int(Input.is_physical_key_pressed(KEY_W)) - int(Input.is_physical_key_pressed(KEY_S)))
+    keyboard_turn += float(int(Input.is_physical_key_pressed(KEY_D)) - int(Input.is_physical_key_pressed(KEY_A)))
+    var throttle := clampf(keyboard_forward + touch.throttle(), -1.0, 1.0) if not blocked else 0.0
+    var turn := clampf(keyboard_turn + touch.steering(), -1.0, 1.0) if not blocked else 0.0
+    var look: Vector2 = touch.consume_look() if not blocked else Vector2.ZERO
+    camera_orbit -= look.x * 0.004
+    camera_pitch = clampf(camera_pitch - look.y * 0.002, -0.75, 0.20)
+    camera_yaw = car.rotation.y + camera_orbit if player.in_vehicle else camera_yaw - look.x * 0.004
+    player.movement = (Vector2(keyboard_turn, -keyboard_forward) + touch.movement_vector()).limit_length(1.0) if not blocked else Vector2.ZERO
     player.camera_yaw = camera_yaw
-    _spawn_check_clock += delta
-    if _spawn_check_clock >= SPAWN_SUPPORT_INTERVAL:
-        _spawn_check_clock = 0.0
-        var active_for_support := player if not player.in_vehicle else vehicle.body
-        _spawn_support = _spawn_support_for(active_for_support.global_position)
-        if not _spawn_support.get("valid", false) \
-                and _spawn_support.get("structural", false) != true \
-                and (_spawn_support.get("offshore", false) or not player.in_vehicle):
-            var safe_position := nav.project_to_road(active_for_support.global_position)
-            if safe_position.distance_to(active_for_support.global_position) >= 6.0:
-                active_for_support.global_position = safe_position
-                if player.in_vehicle:
-                    vehicle.freeze_motion()
-                else:
-                    player.velocity = Vector3.ZERO
-                _show_message(str(_spawn_support.get("message", "Returned to mapped ground."))
-                    + " Returned to the nearest routable road.")
+    player.sprinting = not blocked and (Input.is_physical_key_pressed(KEY_SHIFT) or touch.sprint_held())
     player.reduced_motion = touch.settings.reduced_motion == true
-    player.step(delta, ready)
+    vehicle.brake_input = touch.brake() if not blocked else 0.0
+    vehicle.handbrake = not blocked and (touch.handbrake_held() or Input.is_physical_key_pressed(KEY_SPACE))
+    var car_world: PackedFloat64Array = roads.local_to_world(car.position)
+    var car_ready := _collision_ready(car_world[0], car_world[2])
+    _surface_clock += delta
+    if _surface_clock >= 0.2:
+        _surface_clock = 0.0
+        var surface: Dictionary = roads.road_surface_at(car_world[0], car_world[2])
+        vehicle.on_road = surface.get("found", false) == true and str(surface.get("surface", "")) == "paved"
+    vehicle.step(delta, throttle, turn, not blocked and (ready and car_ready if player.in_vehicle else car_ready))
+    if car_ready:
+        _car_world = roads.local_to_world(car.position)
+    player.step(delta, ready and not blocked)
     _update_camera(delta)
-    tile_budget.set_metrics(fps_monitor.fps(), get_process_delta_time() * 1000.0)
-    var active_pos := player.global_position if not player.in_vehicle else vehicle.body.global_position
-    var speed := vehicle.speed_mps if player.in_vehicle else Vector2(player.velocity.x, player.velocity.z).length()
-    var input_strength := touch.movement_vector().length() if not player.in_vehicle else maxf(absf(vehicle.input_forward), absf(vehicle.input_steer))
-    streamer.set_motion(speed, input_strength)
-    streamer.set_focus(active_pos)
-    building_streamer.set_motion(speed, input_strength)
-    building_streamer.set_focus(active_pos)
-    if world_ready and world.roads != null and player.in_vehicle:
-        var local := vehicle.body.global_position - streamer.world_offset
-        var surface := world.roads.surface_at(Vector2(local.x, local.z))
-        vehicle.on_road = surface.get("found", false) == true
-        vehicle.road_friction = float(surface.get("friction", 1.0))
-    vehicle.step(delta, ready)
-    _update_contract_progress(delta)
-    _publish_optional_content_context(active_pos)
-    visuals.update_environment(day_hour, current_parish)
-    sky.update(day_hour)
-    lights.update(active_pos, camera.global_position, sun_lightness())
-    sound_manager.update(delta, vehicle, current_parish, ready, player.in_vehicle, active_pos)
-    current_parish = lookup.query_local(active_pos, streamer.world_offset, current_parish)
-    hud.set_status({
-        "parish": current_parish,
-        "speed": vehicle.speed_mps,
-        "driving": player.in_vehicle,
-        "ready": world_ready,
-        "can_interact": player.can_exit_vehicle() if player.in_vehicle else player.can_enter_vehicle(),
-        "message": _message if _message_time > 0.0 else "",
-        "heading": lookup.heading_degrees(camera_yaw),
-        "gear": vehicle.gear_label(),
-        "time": day_time_label(),
-    })
-    if _message_time > 0.0:
-        _message_time -= delta
-    if world_ready and active_pos.y < -6.0:
-        active_pos.y = 0.0
-        if player.in_vehicle:
-            vehicle.body.global_position = active_pos
-            vehicle.freeze_motion()
-        else:
-            player.global_position = active_pos
-            player.velocity = Vector3.ZERO
+    _save_clock += delta
+    if ready and _save_clock > 30.0:
+        save_game()
+    _message_time = maxf(0.0, _message_time - delta)
+    if not blocked:
+        day_hour = fmod(day_hour + delta / 120.0, 24.0)
+    visuals.update_daylight(day_hour, environment)
+    var can_interact: bool = player.can_exit_vehicle() if player.in_vehicle else player.can_enter_vehicle()
+    var speed: float = absf(vehicle.speed_mps) * 3.6 if player.in_vehicle else Vector2(player.velocity.x, player.velocity.z).length() * 3.6
+    hud.set_status({"parish": current_parish, "speed_kmh": speed, "driving": player.in_vehicle,
+        "ready": ready, "can_interact": can_interact, "message": _message if _message_time > 0.0 else "",
+        "heading": camera_yaw, "gear": vehicle.gear_label(), "time_hour": day_hour})
+    game_audio.update_state(delta, {"driving": player.in_vehicle, "speed_mps": vehicle.speed_mps,
+        "rpm": vehicle.engine_rpm, "on_road": vehicle.on_road, "walk_speed": speed / 3.6,
+        "ready": ready, "menu_open": blocked, "throttle": throttle})
+    _radar_clock += delta
+    if _radar_clock >= 0.5:
+        _radar_clock = 0.0
+        hud.set_radar_paths(roads.nearby_paths(world[0], world[2]), Vector2(world[0], world[2]), camera_yaw)
 
-func _spawn_support(position: Vector3) -> Dictionary:
-    var local := position - streamer.world_offset
-    var result := world.spawn_support_for(Vector2(local.x, local.z))
-    result["position"] = position
-    if result.get("structural", false) != true:
-        var land := world.land_elevation(Vector2(local.x, local.z))
-        var offshore_depth := land - float(result.get("minimum_ground_y", land))
-        result["offshore"] = offshore_depth > 1.5
-        if not result.get("valid", false) and result["offshore"]:
-            result["message"] = "Spawn is offshore (%.1fm below mapped land)." % offshore_depth
-        elif not result.get("valid", false) and not str(result.get("reason", "")).is_empty():
-            result["message"] = "Spawn blocked by %s." % str(result.get("reason", "terrain"))
+func _spawn_support(x: float, z: float, saved_elevation: float) -> Dictionary:
+    var ground: float = terrain.height_at(x, z)
+    var result := {"height": ground, "structural": false}
+    if not is_finite(x) or not is_finite(z) or not is_finite(saved_elevation):
+        return result
+    var local: Vector3 = roads.world_to_local(x, z, saved_elevation)
+    var tile: Vector2i = roads.coordinates.tile_for(x, z)
+    var nearest := absf(saved_elevation - ground) if is_finite(ground) else INF
+    for dz in range(-1, 2):
+        for dx in range(-1, 2):
+            var key := "%d:%d" % [tile.x + dx, tile.y + dz]
+            var tile_root = roads._loaded.get(key)
+            if not tile_root is Node3D:
+                continue
+            var collider := tile_root.get_node_or_null("RoadStructureDeckCollision/RoadStructureDeckCollisionShape") as CollisionShape3D
+            if collider == null or not collider.shape is ConcavePolygonShape3D:
+                continue
+            var transform: Transform3D = roads.global_transform.affine_inverse() * collider.global_transform
+            var faces := (collider.shape as ConcavePolygonShape3D).get_faces()
+            for index in range(0, faces.size() - 2, 3):
+                var a: Vector3 = transform * faces[index]
+                var b: Vector3 = transform * faces[index + 1]
+                var c: Vector3 = transform * faces[index + 2]
+                var height := _triangle_height(Vector2(local.x, local.z), a, b, c)
+                if not is_finite(height):
+                    continue
+                height = roads.local_to_world(Vector3(local.x, height, local.z))[1]
+                var distance := absf(saved_elevation - height)
+                if distance > 2.0 or distance > nearest + 0.00001:
+                    continue
+                if absf(distance - nearest) < 0.00001 and result.get("structural", false) == true and height >= float(result.height):
+                    continue
+                nearest = distance
+                result = {"height": height, "structural": true}
     return result
 
 func _update_camera(delta: float) -> void:
-    if player == null or vehicle == null:
-        return
-    var look := touch.consume_look()
-    camera_yaw -= look.x * 2.4
-    camera_pitch = clamp(camera_pitch - look.y * 1.6, -0.65, 0.35)
-    var driving := player.in_vehicle
-    if driving != _camera_was_driving:
-        _camera_was_driving = driving
-        _camera_position_initialized = false
-    var profile := _active_camera_profile(driving)
-    var target: Vector3
-    if driving:
-        target = vehicle.body.global_position + Vector3.UP * float(profile.get("focus_height", 1.0))
-    else:
-        target = player.global_position + Vector3.UP * float(profile.get("focus_height", 1.30))
-    var yaw := camera_yaw
-    if driving:
-        yaw += vehicle.body.rotation.y
-    var pitch := camera_pitch * float(profile.get("pitch_scale", 0.46))
-    var distance := float(profile.get("distance", 6.2))
-    var height := float(profile.get("height", 2.45))
-    var offset_local := Vector3(0, height, distance)
-    offset_local = offset_local.rotated(Vector3.RIGHT, pitch)
-    offset_local = offset_local.rotated(Vector3.UP, yaw)
-    var ideal_position := target + offset_local
-    ideal_position.y = maxf(ideal_position.y, target.y + float(profile.get("minimum_height", 1.4)))
-    var blocked_position := _camera_collision_adjusted(target, ideal_position)
-    var smoothing := float(profile.get("smoothing", 8.0))
-    var reduced := touch.settings.reduced_motion == true
-    if not _camera_position_initialized or reduced:
-        camera.global_position = blocked_position
-        _camera_position_initialized = true
-    else:
-        var weight := 1.0 - exp(-maxf(delta, 0.0) * smoothing)
-        camera.global_position = camera.global_position.lerp(blocked_position, clampf(weight, 0.0, 1.0))
-    camera.look_at(target, Vector3.UP)
+    var subject: Node3D = car if player.in_vehicle else player
+    var pivot := subject.position + Vector3.UP * (1.5 if player.in_vehicle else 1.4)
+    var reduced_motion := touch.settings.reduced_motion == true
+    var desired_fov := (78.0 if reduced_motion else lerpf(78.0, 85.0, clampf(absf(vehicle.speed_mps) / 42.0, 0.0, 1.0))) if player.in_vehicle else 75.0
+    camera.fov = lerpf(camera.fov, desired_fov, clampf(delta * 3.0, 0.0, 1.0))
+    var distance := 7.8 if player.in_vehicle else 4.6
+    var offset := Vector3(0.0, -sin(camera_pitch) * distance + 1.4, cos(camera_pitch) * distance).rotated(Vector3.UP, camera_yaw)
+    var desired := pivot + offset
+    var query := PhysicsRayQueryParameters3D.create(pivot, desired, 1)
+    query.exclude = [car.get_rid(), player.get_rid()]
+    var hit := get_world_3d().direct_space_state.intersect_ray(query)
+    if not hit.is_empty():
+        desired = hit.position + hit.normal * 0.25
+    camera.position = camera.position.lerp(desired, clampf(delta * 8.0, 0.0, 1.0))
+    if camera.position.distance_squared_to(pivot) > 0.01:
+        camera.look_at(pivot, Vector3.UP)
 
 func restore_snapshot(snapshot: Dictionary) -> void:
-    day_hour = float(snapshot.get("day_hour", day_hour))
-    current_parish = str(snapshot.get("parish", "Saint George"))
-    var saved_offset: Array = snapshot.get("world_offset", [0.0, 0.0, 0.0])
-    var restored_offset := Vector3(float(saved_offset[0]), float(saved_offset[1]), float(saved_offset[2]))
-    var offset_delta := restored_offset - streamer.world_offset
-    if not offset_delta.is_zero_approx():
-        streamer.shift_world(offset_delta)
-        streamer.world_offset = restored_offset
-        building_streamer.shift_world(offset_delta)
-    var vehicle_pos := nav.world_from_lat_lon(float(snapshot.get("vehicle_lat", 12.056)), float(snapshot.get("vehicle_lon", -61.748))) + streamer.world_offset
-    vehicle_pos.y = float(snapshot.get("vehicle_y", vehicle_pos.y))
-    var spawn_result := _validate_spawn_position(vehicle_pos, "Saved vehicle")
-    if not spawn_result.valid:
-        vehicle_pos = spawn_result.position
-        _show_message(str(spawn_result.message))
-    vehicle.body.global_position = vehicle_pos
-    vehicle.odometer_m = float(snapshot.get("odometer_m", vehicle.odometer_m))
-    vehicle.freeze_motion()
-    var model := str(snapshot.get("vehicle_model", vehicle.model_id))
-    if model != vehicle.model_id:
-        vehicle.select_model(model)
+    if not SaveScript.valid(snapshot):
+        goto_parish(current_parish)
+        return
+    current_parish = str(snapshot.get("parish", current_parish))
+    var car_world: PackedFloat64Array = roads.coordinates.projected_to_world(float(snapshot.car.easting), float(snapshot.car.northing), float(snapshot.car.elevation))
+    var player_world: PackedFloat64Array = roads.coordinates.projected_to_world(float(snapshot.player.easting), float(snapshot.player.northing), float(snapshot.player.elevation))
+    var active := car_world if snapshot.get("in_vehicle", true) == true else player_world
+    _rebase(active[0], active[2])
+    car.position = roads.world_to_local(car_world[0], car_world[2], car_world[1])
+    _car_world = car_world.duplicate()
+    car.rotation.y = float(snapshot.car.get("heading", 0.0))
+    player.position = roads.world_to_local(player_world[0], player_world[2], player_world[1])
+    player.rotation.y = float(snapshot.player.get("heading", 0.0))
     player._set_occupied(snapshot.get("in_vehicle", true) == true)
-    if not player.in_vehicle:
-        var player_pos := nav.world_from_lat_lon(float(snapshot.get("player_lat", 12.056)), float(snapshot.get("player_lon", -61.748))) + streamer.world_offset
-        player_pos.y = float(snapshot.get("player_y", player_pos.y))
-        spawn_result = _validate_spawn_position(player_pos, "Saved player")
-        if not spawn_result.valid:
-            player_pos = spawn_result.position
-            _show_message(str(spawn_result.message))
-        player.global_position = player_pos
-        player.velocity = Vector3.ZERO
-    else:
-        player.global_position = vehicle.body.global_position
-    streamer.set_focus(vehicle.body.global_position if player.in_vehicle else player.global_position)
+    vehicle.reset_motion()
+    vehicle.odometer_m = float(snapshot.get("odometer_m", 0.0))
+    day_hour = float(snapshot.get("day_hour", 9.0))
+    var custom = snapshot.get("custom_quality", {})
+    set_quality(str(snapshot.get("quality", "Balanced")), custom if custom is Dictionary else {})
+    _select_parish()
+    _settle_spawn = true
+    _spawn_ready_frames = 0
+    world_ready = false
+    camera.position = (car.position if player.in_vehicle else player.position) + Vector3(0, 4, 8)
+    camera_yaw = car.rotation.y if player.in_vehicle else player.rotation.y
+    camera_orbit = 0.0
+    touch.clear_input()
+    _refresh_streamers()
 
 func _show_custom_settings() -> void:
-    if custom_settings == null:
-        custom_settings = CustomSettingsScript.new()
-        add_child(custom_settings)
-        custom_settings.close_requested.connect(func ():
-            custom_settings.visible = false
-        )
-        custom_settings.settings_changed.connect(func (quality: String, render_scale: float, reduced_motion: bool, shadows: bool):
-            set_quality(quality)
-            touch.set_render_scale(render_scale)
-            touch.set_reduced_motion(reduced_motion)
-            touch.set_shadows(shadows)
-            get_viewport().scaling_3d_scale = render_scale
-            if sun != null:
-                sun.shadow_enabled = shadows
-            _show_message("Display settings updated")
-        )
-    custom_settings.configure(
-        visuals.quality,
-        float(touch.settings.render_scale),
-        touch.settings.reduced_motion == true,
-        visuals.profile().shadows == true)
-    custom_settings.visible = true
+    var dialog := AcceptDialog.new()
+    dialog.title = "Custom graphics"
+    dialog.ok_button_text = "Apply"
+    var rows := VBoxContainer.new()
+    dialog.add_child(rows)
+    var inputs: Dictionary = {}
+    var profile: Dictionary = visuals.settings()
+    for setting in [["trees", "Trees per road tile", 40.0, 1800.0, 20.0, 500.0],
+            ["road_radius", "Road tile radius", 1.0, 3.0, 1.0, 2.0],
+            ["terrain_radius", "Terrain tile radius", 1.0, 2.0, 1.0, 1.0],
+            ["building_distance", "Building draw distance (metres)", 256.0, 1800.0, 64.0, 800.0],
+            ["resolution", "3D resolution scale", 0.5, 1.25, 0.05, 1.0]]:
+        var label := Label.new()
+        label.text = str(setting[1])
+        rows.add_child(label)
+        var number := SpinBox.new()
+        number.min_value = float(setting[2])
+        number.max_value = float(setting[3])
+        number.step = float(setting[4])
+        number.value = float(profile.get(setting[0], setting[5]))
+        rows.add_child(number)
+        inputs[setting[0]] = number
+    var shadows := CheckBox.new()
+    shadows.text = "Sun shadows"
+    shadows.button_pressed = profile.get("shadows", true) == true
+    rows.add_child(shadows)
+    dialog.confirmed.connect(func() -> void:
+        var custom := {"shadows": shadows.button_pressed}
+        for key in inputs:
+            custom[key] = inputs[key].value
+        set_quality("Custom", custom)
+        _save_preferences()
+        dialog.queue_free())
+    dialog.canceled.connect(dialog.queue_free)
+    dialog.min_size = Vector2i(440, 450)
+    add_child(dialog)
+    dialog.popup_centered()
