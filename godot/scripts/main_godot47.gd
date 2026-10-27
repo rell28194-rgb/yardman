@@ -140,7 +140,7 @@ func _spawn_support(x: float, z: float, saved_elevation: float) -> Dictionary:
 func _update_camera(delta: float) -> void:
     var subject: Node3D = car if player.in_vehicle else player
     var pivot := subject.position + Vector3.UP * (1.5 if player.in_vehicle else 1.4)
-    var reduced_motion := touch.settings.reduced_motion == true
+    var reduced_motion: bool = touch.settings.reduced_motion == true
     var desired_fov := (78.0 if reduced_motion else lerpf(78.0, 85.0, clampf(absf(vehicle.speed_mps) / 42.0, 0.0, 1.0))) if player.in_vehicle else 75.0
     camera.fov = lerpf(camera.fov, desired_fov, clampf(delta * 3.0, 0.0, 1.0))
     var distance := 7.8 if player.in_vehicle else 4.6
