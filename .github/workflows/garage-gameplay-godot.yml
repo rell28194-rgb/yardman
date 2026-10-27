@@ -15,6 +15,8 @@ on:
       - 'godot/scripts/touch_controls.gd'
       - 'godot/scripts/main.gd'
       - 'godot/scripts/hud.gd'
+      - 'godot/scripts/vehicle_status_hud_runtime.gd'
+      - 'godot/scripts/weather_fx_runtime_godot47.gd'
       - 'godot/scripts/system_menu_bridge.gd'
       - 'godot/scripts/remote_fleet_runtime.gd'
       - 'godot/main.tscn'
@@ -22,6 +24,7 @@ on:
       - 'godot/tests/controls_hud_test.gd'
       - 'godot/tests/mobile_on_foot_regression_test.gd'
       - 'godot/tests/vehicle_interaction_regression_test.gd'
+      - 'godot/tests/vehicle_status_hud_test.gd'
       - 'godot/tests/garage_access_runtime_test.gd'
       - 'godot/tests/remote_fleet_resume_regression_test.gd'
       - 'godot/tests/system_menu_bridge_runtime_test.gd'
@@ -88,6 +91,14 @@ jobs:
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/vehicle-interaction.log; then exit 1; fi
           grep -q 'YARDMAN_VEHICLE_INTERACTION_REGRESSION PASS' godot/build/vehicle-interaction.log
 
+      - name: Prove odometer and parked state remain visible
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/vehicle_status_hud_test.gd 2>&1 | tee godot/build/vehicle-status-hud.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/vehicle-status-hud.log; then exit 1; fi
+          grep -q 'YARDMAN_VEHICLE_STATUS_HUD_TEST PASS' godot/build/vehicle-status-hud.log
+
       - name: Prove garage is reachable before vehicle attach
         shell: bash
         run: |
@@ -140,6 +151,7 @@ jobs:
             godot/build/controls-hud.log
             godot/build/mobile-on-foot.log
             godot/build/vehicle-interaction.log
+            godot/build/vehicle-status-hud.log
             godot/build/garage-access.log
             godot/build/fleet-resume.log
             godot/build/vehicle-handling-contract.log
