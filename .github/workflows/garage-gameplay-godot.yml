@@ -38,6 +38,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 env:
   GODOT_VERSION: '4.7.2'
@@ -50,6 +51,51 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Restore exact owner-accepted Jamaica world
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          BASE_ARTIFACT=/tmp/accepted-base.zip
+          BASE_APK=/tmp/Yardman-Map-Crown-Reset-Fixed.apk
+          curl --fail --location --retry 3 --retry-all-errors \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/rell28194-rgb/yardman/actions/artifacts/12284873612/zip" \
+            -o "$BASE_ARTIFACT"
+          unzip -p "$BASE_ARTIFACT" Yardman-Map-Crown-Reset.apk > "$BASE_APK"
+          echo '1b32465d4fe09865067ae8f47f0cf4de5daca3d4ea8a7f148d826e7ac305a072  /tmp/Yardman-Map-Crown-Reset-Fixed.apk' | sha256sum -c -
+          rm -rf godot/data/roads godot/data/terrain godot/data/coast godot/data/buildings godot/data/parishes
+          python - "$BASE_APK" <<'PY'
+          import os, sys, zipfile
+          apk = sys.argv[1]
+          copied = 0
+          groups = {'roads': 0, 'terrain': 0, 'coast': 0, 'buildings': 0, 'parishes': 0}
+          with zipfile.ZipFile(apk) as zf:
+              for info in zf.infolist():
+                  if not info.filename.startswith('assets/data/') or info.is_dir():
+                      continue
+                  rel = info.filename[len('assets/'):]
+                  dst = os.path.join('godot', rel)
+                  os.makedirs(os.path.dirname(dst), exist_ok=True)
+                  with zf.open(info) as src, open(dst, 'wb') as out:
+                      out.write(src.read())
+                  copied += 1
+                  parts = rel.split('/')
+                  if len(parts) > 1 and parts[1] in groups:
+                      groups[parts[1]] += 1
+          print('YARDMAN_GAMEPLAY_WORLD_RESTORED', copied, groups)
+          if groups['roads'] < 700 or groups['terrain'] < 2500 or groups['coast'] < 2500 or groups['buildings'] < 700:
+              raise SystemExit('accepted-world payload incomplete: ' + repr(groups))
+          PY
+          test -s godot/data/roads/manifest.json
+          test -s godot/data/terrain/manifest.json
+          test -s godot/data/coast/manifest.json
+          test -s godot/data/buildings/manifest.json
+          test -s godot/data/parishes/manifest.json
 
       - name: Install Godot 4.7.2
         shell: bash
