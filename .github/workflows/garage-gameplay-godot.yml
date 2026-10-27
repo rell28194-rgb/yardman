@@ -20,6 +20,7 @@ on:
       - 'godot/main.tscn'
       - 'godot/project.godot'
       - 'godot/tests/controls_hud_test.gd'
+      - 'godot/tests/mobile_on_foot_regression_test.gd'
       - 'godot/tests/vehicle_interaction_regression_test.gd'
       - 'godot/tests/garage_access_runtime_test.gd'
       - 'godot/tests/remote_fleet_resume_regression_test.gd'
@@ -70,6 +71,14 @@ jobs:
           timeout 120 godot --headless --path godot --script tests/controls_hud_test.gd 2>&1 | tee godot/build/controls-hud.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/controls-hud.log; then exit 1; fi
           grep -q 'YARDMAN_CONTROLS_HUD_TEST PASS' godot/build/controls-hud.log
+
+      - name: Prove Android-style touch walking drives player physics
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/mobile_on_foot_regression_test.gd 2>&1 | tee godot/build/mobile-on-foot.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/mobile-on-foot.log; then exit 1; fi
+          grep -q 'YARDMAN_MOBILE_ON_FOOT_REGRESSION PASS' godot/build/mobile-on-foot.log
 
       - name: Prove profile-aware entry and safe exit geometry
         shell: bash
@@ -129,6 +138,7 @@ jobs:
           path: |
             godot/build/garage-import.log
             godot/build/controls-hud.log
+            godot/build/mobile-on-foot.log
             godot/build/vehicle-interaction.log
             godot/build/garage-access.log
             godot/build/fleet-resume.log
