@@ -1,0 +1,37 @@
+name: CarX Fusion Diagnostics Android
+
+on:
+  push:
+    branches:
+      - carx-diagnostics-build-20261028
+    paths:
+      - 'carx-diagnostics/**'
+      - '.github/workflows/carx-diagnostics-android.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: carx-diagnostics
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build diagnostic APK
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Hash APK
+        run: sha256sum app/build/outputs/apk/release/app-release.apk | tee app/build/outputs/apk/release/CarX-Fusion-Diagnostics.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CarX-Fusion-Diagnostics
+          path: |
+            carx-diagnostics/app/build/outputs/apk/release/app-release.apk
+            carx-diagnostics/app/build/outputs/apk/release/CarX-Fusion-Diagnostics.sha256
+          if-no-files-found: error
