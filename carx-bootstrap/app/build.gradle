@@ -1,0 +1,13 @@
+plugins { id 'com.android.application' }
+android {
+  namespace 'com.CarXTech.CarXDriftRacingFull'
+  compileSdk 35
+  defaultConfig {
+    applicationId 'com.carxfusion.bootstrap.compiler'
+    minSdk 21
+    targetSdk 26
+    versionCode 1
+    versionName '0.1'
+  }
+  buildTypes { release { minifyEnabled false; signingConfig signingConfigs.debug } }
+}
