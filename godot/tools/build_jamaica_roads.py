@@ -225,6 +225,12 @@ def compile_dataset(input_path: Path, out: Path, tile_size: float = DEFAULT_TILE
     return manifest
 
 
+def compile_guardrail_layer(input_path: Path, output_dir: Path, tile_size: float) -> dict:
+    """Compile explicit OSM guard rails from the same source as the road graph."""
+    from build_guardrails import write_dataset
+    return write_dataset(input_path, output_dir / "guardrails", tile_size)
+
+
 def main() -> int:
     args = parse_args()
     sampler = None
@@ -232,6 +238,18 @@ def main() -> int:
         from build_terrain import TerrainSampler
         sampler = TerrainSampler(args.terrain)
     manifest = compile_dataset(args.input_geojson, args.output_dir, args.tile_size, height_sampler=sampler)
+    guardrails = compile_guardrail_layer(args.input_geojson, args.output_dir, args.tile_size)
+    guardrail_stats = guardrails["stats"]
+    manifest["guardrails"] = {
+        "format": int(guardrails["format"]),
+        "directory": "guardrails",
+        "features": int(guardrail_stats["features"]),
+        "source_segments": int(guardrail_stats["source_segments"]),
+        "tile_pieces": int(guardrail_stats["tile_pieces"]),
+        "tiles": int(guardrail_stats["tiles"]),
+        "purpose": "explicit OSM barrier=guard_rail presentation; no inferred placement",
+    }
+    (args.output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
     if args.input_geojson.suffix.lower() == ".pbf":
         from build_parishes import compile_parishes
         parish_manifest = compile_parishes(args.input_geojson, args.output_dir.parent / "parishes")
@@ -244,6 +262,9 @@ def main() -> int:
     print("Roadside point truth: %s points / %s tiles / %s" %
           (manifest["roadside_points"]["points"], manifest["roadside_points"]["tiles"],
            manifest["roadside_points"]["by_kind"]))
+    print("Guardrail truth: %s ways / %s source segments / %s tile pieces / %s tiles" %
+          (manifest["guardrails"]["features"], manifest["guardrails"]["source_segments"],
+           manifest["guardrails"]["tile_pieces"], manifest["guardrails"]["tiles"]))
     print(f"Bounds (m): {manifest['bounds']}")
     print(f"Wrote {len(manifest['tiles'])} road tiles and persistent topology to {args.output_dir}")
     return 0
