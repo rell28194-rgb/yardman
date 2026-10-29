@@ -115,6 +115,14 @@ static func hero_scene(vehicle_id: String) -> String:
         return vehicle_id + ".glb"
     return "fleet_" + vehicle_id + ".glb"
 
+static func vehicle_id_for_hero_scene(scene_filename: String) -> String:
+    if scene_filename.is_empty():
+        return ""
+    for vehicle_id in production_ids():
+        if hero_scene(vehicle_id) == scene_filename:
+            return vehicle_id
+    return ""
+
 static func display_name(vehicle_id: String) -> String:
     var definition := Definition.load_definition(vehicle_id)
     if not definition.is_empty():
