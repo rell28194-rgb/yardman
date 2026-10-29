@@ -1,0 +1,67 @@
+{
+  "format_version": 1,
+  "updated_utc": "2026-10-29T03:40:00Z",
+  "authority": "owner_google_drive_beta1_beta2",
+  "archives": {
+    "beta1": {
+      "drive_parent": "/Google Drive/Yardman beta",
+      "pattern": "beta.7z.%03d",
+      "first_part": 1,
+      "last_part": 151,
+      "normal_part_bytes": 25165824,
+      "last_part_bytes": 18741457,
+      "status": "in_scope"
+    },
+    "beta2": {
+      "drive_parent": "/Google Drive/Yardman beta/Beta2",
+      "pattern": "beta2.7z.%03d",
+      "first_part": 1,
+      "last_part": 232,
+      "normal_part_bytes": 52428800,
+      "last_part_bytes": 15990987,
+      "status": "in_scope"
+    }
+  },
+  "legacy_inventory_evidence": {
+    "fleet64": {
+      "available_vehicle_count": 64,
+      "classification": "runtime_selector_baseline_not_high_fidelity_acceptance",
+      "source_record": "Yardman-Owner-Recovery-Private-Fleet-64-Closure.json"
+    },
+    "car_parking_multiplayer": {
+      "car_prefixed_bundles": 237,
+      "queued": 237,
+      "identity_resolved_in_old_manifest": 1,
+      "classification": "requires_catalog_and_dependency_recovery",
+      "source_record": "Yardman-Full-Fleet-Migration-Manifest-001.json"
+    },
+    "carx_drift": {
+      "root_vehicle_candidates": 174,
+      "identity_resolved_from_source_names_in_old_manifest": 135,
+      "classification": "names_are_not_dependency_closure",
+      "source_record": "Yardman-Full-Fleet-Migration-Manifest-001.json"
+    },
+    "real_racing_3_old_manifest": {
+      "logical_bytes": 6165950862,
+      "split_parts": 246,
+      "old_status": "source_container_confirmed_car_inventory_pending",
+      "classification": "superseded_in_part_by_later_family_recovery",
+      "source_record": "Yardman-Full-Fleet-Migration-Manifest-001.json"
+    }
+  },
+  "known_later_rr3_family_recovery": [
+    "2012_audi_r8_lms",
+    "2014_audi_r8spyder",
+    "2017_bmw_m4_dtm",
+    "2017_mercedes_c63_dtm",
+    "2018_audi_r8_gt4",
+    "2018_bmw_m4_gt4",
+    "2021_bmw_m4_gt3"
+  ],
+  "rules": [
+    "Do not promote a legacy hero GLB as a recovered vehicle without a dependency manifest.",
+    "Do not infer exact vehicle identity from a filename alone.",
+    "Preserve source-max masters before generating runtime LODs.",
+    "Both Beta 1 and Beta 2 are active source libraries under the 2026-10-29 owner directive."
+  ]
+}
