@@ -96,7 +96,10 @@ static func _polished_clone(source: StandardMaterial3D, kind: String) -> Standar
             material.metallic = maxf(source.metallic, 0.90)
             material.roughness = clampf(source.roughness, 0.18, 0.24)
         "wheel":
-            material.metallic = maxf(source.metallic, 0.88)
+            # Keep the accepted wheel color and texture, but give the alloy a
+            # clear enough conductor target that float storage cannot land on
+            # the test/quality boundary.
+            material.metallic = maxf(source.metallic, 0.90)
             material.roughness = clampf(source.roughness, 0.20, 0.27)
     return material
 
