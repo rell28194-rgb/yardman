@@ -1,0 +1,73 @@
+{
+  "format_version": 1,
+  "vehicle_id": "toyota_supra_rz",
+  "display_name": "Toyota Supra RZ",
+  "status": "DISCOVERED",
+  "source": {
+    "library": "beta1",
+    "game_or_package": "CarX source family",
+    "provenance": "Yardman-Vehicle-Production-002-Checkpoint.zip",
+    "lod0_source_unit": "349f6721d1e3c41e283e05e02338cf6f",
+    "lod0_sha256": "9ec14374c83c51298ebb08b574c7b1e8eff3c1580e075b863f3e8aad666fe65d",
+    "lod1_source_unit": "f554e679c67422f1bfd71cf479f1111d",
+    "lod1_sha256": "b007051416babdc1ee7699c674cd41dc96e392be120a946cd65f0c7e6e497439"
+  },
+  "runtime": {
+    "ready": false,
+    "blocked_by": [
+      "source hierarchy must replace flattened hero-GLB contract",
+      "customization/upgrade source configuration unresolved",
+      "vehicle-specific dynamics unresolved",
+      "vehicle-specific audio event relationships unresolved",
+      "source collision hierarchy not yet mapped to Godot runtime"
+    ]
+  },
+  "visual": {
+    "primary_scene": "",
+    "inspection_scene": "",
+    "source_max_required": true,
+    "legacy_glb_is_authoritative": false
+  },
+  "hierarchy_descriptor": "res://data/vehicles/toyota_supra_rz/source_hierarchy.json",
+  "dynamics": {},
+  "customization": {
+    "state": "unresolved",
+    "paint_channels": [],
+    "wheel_variants": [],
+    "body_parts": [],
+    "liveries": []
+  },
+  "upgrades": {
+    "state": "unresolved",
+    "stages": []
+  },
+  "known_source_structure": {
+    "gameobjects": 69,
+    "transforms": 69,
+    "wheel_roots": 4,
+    "camera_points": [
+      "FrontCameraPoint",
+      "RearCameraPoint",
+      "FollowCameraPoint",
+      "HoodCameraPoint",
+      "SideCameraPoint",
+      "WheelCameraPoint",
+      "BumperCameraPoint"
+    ],
+    "other_semantic_nodes": [
+      "DriverRoot",
+      "Engine",
+      "Exhaust",
+      "PopExhaust",
+      "Colliders",
+      "Obstacle",
+      "BodyH",
+      "BodyL",
+      "HD_interior",
+      "LD_interior",
+      "HD_steering_wheel",
+      "LD_steering_wheel",
+      "Stoplight"
+    ]
+  }
+}
