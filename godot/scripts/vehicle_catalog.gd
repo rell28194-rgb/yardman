@@ -1,6 +1,7 @@
 extends RefCounted
 class_name YardmanVehicleCatalog
 
+const Definition = preload("res://scripts/vehicle_definition.gd")
 const CONTRACT_PATH := "res://data/owner_fleet_pack_contract.json"
 const DEFAULT_ID := "toyota_crown"
 const FORBIDDEN_IDS := ["toyota_mark_x", "port_royal_992"]
@@ -68,22 +69,30 @@ static func _ensure_loaded() -> void:
     if _loaded:
         return
     _loaded = true
-    if not FileAccess.file_exists(CONTRACT_PATH):
-        _ids = [DEFAULT_ID]
-        return
-    var payload = JSON.parse_string(FileAccess.get_file_as_string(CONTRACT_PATH))
-    if not payload is Dictionary or int(payload.get("format_version", 0)) != 1:
-        _ids = [DEFAULT_ID]
-        return
-    for raw_id in payload.get("available_vehicle_ids", []):
-        var vehicle_id := str(raw_id)
-        if vehicle_id.is_empty() or FORBIDDEN_IDS.has(vehicle_id) or HELD_IDS.has(vehicle_id):
-            continue
-        if not _ids.has(vehicle_id):
-            _ids.append(vehicle_id)
+    _ids.clear()
+    if FileAccess.file_exists(CONTRACT_PATH):
+        var payload = JSON.parse_string(FileAccess.get_file_as_string(CONTRACT_PATH))
+        if payload is Dictionary and int(payload.get("format_version", 0)) == 1:
+            for raw_id in payload.get("available_vehicle_ids", []):
+                _add_legacy_id(str(raw_id))
+    # Source-reconciled definitions are the expansion path beyond Fleet64. Only
+    # runtime-ready definitions enter the selectable production catalog; a
+    # DISCOVERED/RECOVERED vehicle remains invisible until its own gates pass.
+    for vehicle_id in Definition.registry_ids(true):
+        _add_id(vehicle_id)
     if not _ids.has(DEFAULT_ID):
         _ids.append(DEFAULT_ID)
     _ids.sort()
+
+static func _add_legacy_id(vehicle_id: String) -> void:
+    if vehicle_id.is_empty() or FORBIDDEN_IDS.has(vehicle_id) or HELD_IDS.has(vehicle_id):
+        return
+    _add_id(vehicle_id)
+
+static func _add_id(vehicle_id: String) -> void:
+    if vehicle_id.is_empty() or _ids.has(vehicle_id):
+        return
+    _ids.append(vehicle_id)
 
 static func production_ids() -> Array[String]:
     _ensure_loaded()
@@ -94,6 +103,10 @@ static func has(vehicle_id: String) -> bool:
     return _ids.has(vehicle_id)
 
 static func hero_scene(vehicle_id: String) -> String:
+    if Definition.runtime_ready(vehicle_id):
+        var source_scene := Definition.primary_scene(vehicle_id)
+        if not source_scene.is_empty():
+            return source_scene
     if vehicle_id == DEFAULT_ID:
         return "toyota_crown_2013.glb"
     if vehicle_id == "toyota_chaser_v":
@@ -103,6 +116,11 @@ static func hero_scene(vehicle_id: String) -> String:
     return "fleet_" + vehicle_id + ".glb"
 
 static func display_name(vehicle_id: String) -> String:
+    var definition := Definition.load_definition(vehicle_id)
+    if not definition.is_empty():
+        var source_name := str(definition.get("display_name", ""))
+        if not source_name.is_empty():
+            return source_name
     if DISPLAY_OVERRIDES.has(vehicle_id):
         return str(DISPLAY_OVERRIDES[vehicle_id])
     var words := vehicle_id.replace("_source", "").replace("carx_", "").split("_")
@@ -116,8 +134,24 @@ static func display_name(vehicle_id: String) -> String:
 
 static func profile(vehicle_id: String) -> Dictionary:
     var resolved := vehicle_id if has(vehicle_id) else DEFAULT_ID
+    var definition := Definition.load_definition(resolved)
+    var source_backed := not definition.is_empty()
     return {
         "id": resolved,
         "display_name": display_name(resolved),
         "hero_scene": hero_scene(resolved),
+        "source_backed": source_backed,
+        "source_status": Definition.status(resolved),
+        "runtime_ready": Definition.runtime_ready(resolved),
+        "hierarchy_descriptor": Definition.hierarchy_path(resolved),
+        "inspection_scene": Definition.inspection_scene(resolved),
+        "dynamics": Definition.dynamics(resolved),
+        "customization": Definition.customization(resolved),
+        "upgrades": Definition.upgrades(resolved),
+        "source": Definition.source_summary(resolved),
     }
+
+static func reload() -> void:
+    Definition.clear_cache()
+    _ids.clear()
+    _loaded = false
