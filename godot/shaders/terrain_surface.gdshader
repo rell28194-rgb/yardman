@@ -63,6 +63,12 @@ void fragment() {
     float regional_dryness = 0.12 + south * 0.30 + west * south * 0.18;
     float dry = clamp(regional_dryness + (patch.g - 0.5) * 0.43 - highland * 0.17, 0.0, 0.8);
     float moisture = clamp(1.0 - dry + highland * 0.16 + (macro_patch.b - 0.5) * 0.12, 0.0, 1.0);
+    // Montane relief is material-only: no terrain geometry or geographic
+    // authority changes. Humid highlands become less bare and slightly cooler,
+    // while exposed upper slopes gain restrained rock prominence.
+    float montane = smoothstep(500.0, 1150.0, p.y);
+    float upper_montane = smoothstep(1100.0, 1900.0, p.y);
+    float humid_highland = montane * (1.0 - dry);
 
     vec3 lowland_wet = vec3(0.17, 0.37, 0.075);
     vec3 highland_wet = vec3(0.10, 0.31, 0.16);
@@ -103,9 +109,6 @@ void fragment() {
                 + texture(reference_rock, warped.xz / 8.0).rgb * blend.y
                 + texture(reference_rock, warped.xy / 8.0).rgb * blend.z;
             if (has_reference_rock_alternate && !overview) {
-                // Use one dominant-axis lookup instead of another full triplanar
-                // set: the alternate recovered rock breaks family repetition at
-                // a bounded single texture-sample cost on private builds.
                 vec2 alternate_uv = warped.xz / (10.0 * family_scale);
                 if (blend.x > blend.y && blend.x > blend.z) {
                     alternate_uv = warped.yz / (10.0 * family_scale);
@@ -121,10 +124,6 @@ void fragment() {
     }
 
     if (has_reference_soil_detail && !overview) {
-        // Direct survival-island woodsground source is restricted to the soil
-        // family. It contributes one top-projected sample only; the existing
-        // bare-soil mask still decides where it can become visible, so it gains
-        // no terrain, biome, land-cover or placement authority.
         vec3 recovered_soil = texture(reference_soil_detail,
             material_position / (9.0 * family_scale)).rgb;
         float recovered_luma = dot(recovered_soil, vec3(0.2126, 0.7152, 0.0722));
@@ -137,16 +136,23 @@ void fragment() {
     float grass_luma = dot(grass, vec3(0.2126, 0.7152, 0.0722));
     grass = clamp(mix(vec3(grass_luma), grass, 1.06) * mix(0.92, 1.02, moisture), vec3(0.0), vec3(0.95));
     grass *= mix(vec3(0.96, 1.04, 0.94), vec3(1.05, 0.96, 0.86), dry);
+    grass *= mix(vec3(1.0), vec3(0.82, 0.96, 0.86), humid_highland * 0.28);
     soil *= mix(0.87, 1.10, patch.b) * mix(vec3(0.93, 0.98, 0.94), vec3(1.08, 0.96, 0.86), dry);
+    soil *= mix(vec3(1.0), vec3(0.84, 0.89, 0.83), humid_highland * 0.22);
     rock *= mix(0.92, 1.10, detail.r);
+    float exposed_highland = clamp(montane * (0.35 + slope * 0.65), 0.0, 1.0);
+    rock *= mix(vec3(1.0), vec3(0.90, 0.95, 0.92), exposed_highland * 0.26);
 
     float pale_rock = smoothstep(0.62, 0.88, macro_patch.g) * smoothstep(0.16, 0.58, slope) * (1.0 - highland * 0.34);
     rock = mix(rock, rock * vec3(1.16, 1.15, 1.08), pale_rock * 0.46);
 
     float bare = smoothstep(0.66, 0.85, patch.g) * (0.16 + dry * 0.65);
+    bare *= mix(1.0, 0.76, humid_highland * (1.0 - slope));
     float rocky = smoothstep(0.22, 0.59, slope) * mix(0.72, 1.0, patch.b);
+    rocky = clamp(rocky + upper_montane * smoothstep(0.15, 0.55, slope) * 0.12, 0.0, 1.0);
     vec3 color = mix(mix(grass, soil, bare), rock, rocky);
     float grain = overview ? 1.0 : mix(0.90, 1.08, detail.g);
+    grain *= mix(1.0, mix(0.96, 1.04, patch.b), montane * 0.20);
     float wetness = clamp(weather_wetness, 0.0, 1.0) * (overview ? 0.35 : 1.0);
     ALBEDO = color * grain * mix(1.0, 0.73, wetness);
     ROUGHNESS = mix(mix(0.96, 0.87, rocky), 0.38, wetness);
