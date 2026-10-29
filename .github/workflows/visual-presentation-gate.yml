@@ -7,8 +7,13 @@ on:
     paths:
       - 'godot/scripts/authoritative_roadside_point_runtime.gd'
       - 'godot/scripts/authoritative_roadside_point_bootstrap.gd'
+      - 'godot/scripts/guardrail_layer.gd'
       - 'godot/scripts/crown_material_presentation_runtime.gd'
+      - 'godot/tools/build_guardrails.py'
+      - 'godot/tools/build_jamaica_roads.py'
       - 'godot/tests/authoritative_roadside_point_runtime_test.gd'
+      - 'godot/tests/guardrail_layer_test.gd'
+      - 'godot/tests/test_build_guardrails.py'
       - 'godot/tests/crown_material_presentation_test.gd'
       - 'godot/data/roads/roadside_points.json'
       - 'godot/project.godot'
@@ -41,6 +46,12 @@ jobs:
           sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
           godot --version
 
+      - name: Install guardrail compiler dependency
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --disable-pip-version-check pyproj
+
       - name: Reject visual-runtime parse errors
         shell: bash
         run: |
@@ -56,6 +67,21 @@ jobs:
           timeout 120 godot --headless --path godot --script tests/authoritative_roadside_point_runtime_test.gd 2>&1 | tee godot/build/authoritative-roadside-points.log
           if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/authoritative-roadside-points.log; then exit 1; fi
           grep -q 'YARDMAN_AUTHORITATIVE_ROADSIDE_POINT_TEST PASS' godot/build/authoritative-roadside-points.log
+
+      - name: Prove guardrail compiler contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python godot/tests/test_build_guardrails.py 2>&1 | tee godot/build/guardrail-compiler.log
+          grep -q '^OK$' godot/build/guardrail-compiler.log
+
+      - name: Prove streamed guardrail runtime contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 godot --headless --path godot --script tests/guardrail_layer_test.gd 2>&1 | tee godot/build/guardrail-runtime.log
+          if grep -E 'SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR:' godot/build/guardrail-runtime.log; then exit 1; fi
+          grep -q 'YARDMAN_GUARDRAIL_LAYER_TEST PASS' godot/build/guardrail-runtime.log
 
       - name: Prove Crown material presentation contract
         shell: bash
@@ -73,6 +99,8 @@ jobs:
           path: |
             godot/build/visual-import.log
             godot/build/authoritative-roadside-points.log
+            godot/build/guardrail-compiler.log
+            godot/build/guardrail-runtime.log
             godot/build/crown-material-presentation.log
           if-no-files-found: ignore
           retention-days: 3
