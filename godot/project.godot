@@ -26,6 +26,7 @@ VehicleGarage="*res://scripts/vehicle_selector_runtime.gd"
 VehicleStatusHUD="*res://scripts/vehicle_status_hud_runtime.gd"
 VehicleCameraPresentation="*res://scripts/vehicle_camera_runtime.gd"
 AuthoritativeRoadsidePoints="*res://scripts/authoritative_roadside_point_bootstrap.gd"
+GuardRailLayer="*res://scripts/guardrail_layer.gd"
 CrownMaterialPresentation="*res://scripts/crown_material_presentation_runtime.gd"
 
 [display]
