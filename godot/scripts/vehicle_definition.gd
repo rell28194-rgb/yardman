@@ -26,7 +26,7 @@ static func registry_ids(runtime_ready_only := false) -> Array[String]:
     return ready
 
 static func hierarchy_path(vehicle_id: String) -> String:
-    var definition := load_definition(vehicle_id)
+    var definition: Dictionary = load_definition(vehicle_id)
     if definition.is_empty():
         return ""
     return str(definition.get("hierarchy_descriptor", ""))
@@ -43,7 +43,7 @@ static func load_definition(vehicle_id: String) -> Dictionary:
     if path.is_empty() or not FileAccess.file_exists(path):
         _cache[vehicle_id] = {}
         return {}
-    var payload = JSON.parse_string(FileAccess.get_file_as_string(path))
+    var payload: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
     if not payload is Dictionary:
         push_warning("Yardman vehicle definition is not a JSON object: %s" % path)
         _cache[vehicle_id] = {}
@@ -65,62 +65,62 @@ static func load_definition(vehicle_id: String) -> Dictionary:
     return definition.duplicate(true)
 
 static func status(vehicle_id: String) -> String:
-    var definition := load_definition(vehicle_id)
+    var definition: Dictionary = load_definition(vehicle_id)
     return str(definition.get("status", "LEGACY")) if not definition.is_empty() else "LEGACY"
 
 static func runtime_ready(vehicle_id: String) -> bool:
-    var definition := load_definition(vehicle_id)
+    var definition: Dictionary = load_definition(vehicle_id)
     if definition.is_empty():
         return false
     if not RUNTIME_READY_STATUSES.has(str(definition.get("status", ""))):
         return false
-    var runtime := definition.get("runtime", {})
-    return runtime is Dictionary and bool((runtime as Dictionary).get("ready", false))
+    var runtime_value: Variant = definition.get("runtime", {})
+    return runtime_value is Dictionary and bool((runtime_value as Dictionary).get("ready", false))
 
 static func primary_scene(vehicle_id: String) -> String:
-    var definition := load_definition(vehicle_id)
+    var definition: Dictionary = load_definition(vehicle_id)
     if definition.is_empty():
         return ""
-    var visual := definition.get("visual", {})
-    if not visual is Dictionary:
+    var visual_value: Variant = definition.get("visual", {})
+    if not visual_value is Dictionary:
         return ""
-    return str((visual as Dictionary).get("primary_scene", ""))
+    return str((visual_value as Dictionary).get("primary_scene", ""))
 
 static func inspection_scene(vehicle_id: String) -> String:
-    var definition := load_definition(vehicle_id)
+    var definition: Dictionary = load_definition(vehicle_id)
     if definition.is_empty():
         return ""
-    var visual := definition.get("visual", {})
-    if not visual is Dictionary:
+    var visual_value: Variant = definition.get("visual", {})
+    if not visual_value is Dictionary:
         return ""
-    return str((visual as Dictionary).get("inspection_scene", ""))
+    return str((visual_value as Dictionary).get("inspection_scene", ""))
 
 static func dynamics(vehicle_id: String) -> Dictionary:
-    var definition := load_definition(vehicle_id)
+    var definition: Dictionary = load_definition(vehicle_id)
     if definition.is_empty():
         return {}
-    var value := definition.get("dynamics", {})
+    var value: Variant = definition.get("dynamics", {})
     return (value as Dictionary).duplicate(true) if value is Dictionary else {}
 
 static func customization(vehicle_id: String) -> Dictionary:
-    var definition := load_definition(vehicle_id)
+    var definition: Dictionary = load_definition(vehicle_id)
     if definition.is_empty():
         return {}
-    var value := definition.get("customization", {})
+    var value: Variant = definition.get("customization", {})
     return (value as Dictionary).duplicate(true) if value is Dictionary else {}
 
 static func upgrades(vehicle_id: String) -> Dictionary:
-    var definition := load_definition(vehicle_id)
+    var definition: Dictionary = load_definition(vehicle_id)
     if definition.is_empty():
         return {}
-    var value := definition.get("upgrades", {})
+    var value: Variant = definition.get("upgrades", {})
     return (value as Dictionary).duplicate(true) if value is Dictionary else {}
 
 static func source_summary(vehicle_id: String) -> Dictionary:
-    var definition := load_definition(vehicle_id)
+    var definition: Dictionary = load_definition(vehicle_id)
     if definition.is_empty():
         return {}
-    var value := definition.get("source", {})
+    var value: Variant = definition.get("source", {})
     return (value as Dictionary).duplicate(true) if value is Dictionary else {}
 
 static func clear_cache() -> void:
@@ -135,12 +135,16 @@ static func _ensure_registry() -> void:
     _registry_cache.clear()
     if not FileAccess.file_exists(INDEX_PATH):
         return
-    var payload = JSON.parse_string(FileAccess.get_file_as_string(INDEX_PATH))
+    var payload: Variant = JSON.parse_string(FileAccess.get_file_as_string(INDEX_PATH))
     if not payload is Dictionary or int((payload as Dictionary).get("format_version", 0)) != FORMAT_VERSION:
         push_warning("Yardman vehicle registry is invalid: %s" % INDEX_PATH)
         return
-    for raw_id in (payload as Dictionary).get("vehicle_ids", []):
-        var vehicle_id := str(raw_id)
+    var raw_ids: Variant = (payload as Dictionary).get("vehicle_ids", [])
+    if not raw_ids is Array:
+        push_warning("Yardman vehicle registry has no vehicle_ids array: %s" % INDEX_PATH)
+        return
+    for raw_id: Variant in raw_ids:
+        var vehicle_id: String = str(raw_id)
         if not _safe_id(vehicle_id) or _registry_cache.has(vehicle_id):
             continue
         # An index entry without a valid definition is not allowed to enter the runtime registry.
@@ -163,15 +167,15 @@ static func _safe_id(vehicle_id: String) -> bool:
 static func _definition_is_sane(definition: Dictionary) -> bool:
     if not definition.get("status", "") is String:
         return false
-    var visual := definition.get("visual", {})
-    if visual is Dictionary:
+    var visual_value: Variant = definition.get("visual", {})
+    if visual_value is Dictionary:
         for key in ["primary_scene", "inspection_scene"]:
-            var value := str((visual as Dictionary).get(key, ""))
+            var value: String = str((visual_value as Dictionary).get(key, ""))
             if value.contains("..") or value.contains("\\"):
                 return false
-    var dynamics_value := definition.get("dynamics", {})
+    var dynamics_value: Variant = definition.get("dynamics", {})
     if dynamics_value is Dictionary:
-        var top_speed := float((dynamics_value as Dictionary).get("top_speed_mps", 0.0))
+        var top_speed: float = float((dynamics_value as Dictionary).get("top_speed_mps", 0.0))
         if top_speed < 0.0 or top_speed > 180.0:
             return false
     return true
