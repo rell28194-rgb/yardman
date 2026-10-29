@@ -1,0 +1,69 @@
+name: Yardman Source Vehicle Contract
+
+on:
+  push:
+    branches:
+      - codex/yardman-vehicle-master-20261029
+    paths:
+      - 'godot/scripts/fleet_vehicle_model.gd'
+      - 'godot/scripts/vehicle_definition.gd'
+      - 'godot/scripts/vehicle_catalog.gd'
+      - 'godot/data/vehicles/**'
+      - 'godot/tests/source_vehicle_hierarchy_test.gd'
+      - '.github/workflows/source-vehicle-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: '4.7.2'
+  GODOT_CHANNEL: stable
+
+jobs:
+  source-vehicle-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout vehicle-master branch
+        uses: actions/checkout@v4
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_CHANNEL}"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64.zip" -O /tmp/godot.zip
+          rm -rf /tmp/godot-bin && mkdir -p /tmp/godot-bin
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          sudo mv "/tmp/godot-bin/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Import and parse Godot project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          timeout 300 godot --headless --path godot --editor --quit 2>&1 | tee godot/build/source-vehicle-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' godot/build/source-vehicle-import.log; then
+            exit 1
+          fi
+
+      - name: Run source vehicle hierarchy regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 180 godot --headless --path godot --script tests/source_vehicle_hierarchy_test.gd 2>&1 | tee godot/build/source-vehicle-hierarchy.log
+          grep -q 'YARDMAN_SOURCE_VEHICLE_HIERARCHY_PASS source=carx_source legacy=yardman_generated semantics=1 rest_pose=1' godot/build/source-vehicle-hierarchy.log
+
+      - name: Upload contract evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yardman-Source-Vehicle-Contract-Evidence
+          path: |
+            godot/build/source-vehicle-import.log
+            godot/build/source-vehicle-hierarchy.log
+          if-no-files-found: ignore
+          retention-days: 7
