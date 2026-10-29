@@ -42,9 +42,9 @@ func _process(delta: float) -> void:
         if touch != null:
             var settings = touch.get("settings")
             if settings is Dictionary:
-                reduced_motion = bool(settings.get("reduced_motion", false))
+                reduced_motion = settings.get("reduced_motion", false) == true
     _material.set_shader_parameter("motion_scale", 0.18 if reduced_motion else 1.0)
-    if wetness < MIN_WETNESS or game == null or not bool(game.get("world_ready")):
+    if wetness < MIN_WETNESS or game == null or game.get("world_ready") != true:
         _set_visible(0)
         return
     _clock += safe_delta
@@ -112,7 +112,7 @@ func _rebuild_nearby(game: Node, wetness: float) -> void:
     if coordinates == null:
         _set_visible(0)
         return
-    var active: Node3D = car if bool(player.get("in_vehicle")) else player
+    var active: Node3D = car if player.get("in_vehicle") == true else player
     var world: PackedFloat64Array = coordinates.local_to_world(active.position)
     if world.size() < 3:
         _set_visible(0)
