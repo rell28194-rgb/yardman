@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yardman.local/schemas/vehicle_manifest.schema.json",
+  "title": "Yardman Vehicle Dependency Manifest",
+  "type": "object",
+  "required": ["schema_version", "vehicle_id", "status", "identity", "source", "dependencies", "validation", "self_critique"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "vehicle_id": {"type": "string", "minLength": 1},
+    "status": {
+      "enum": ["DISCOVERED", "RECOVERED", "CONVERTED", "INTEGRATED", "GAME-READY", "HIGH-FIDELITY", "ACCEPTED"]
+    },
+    "identity": {
+      "type": "object",
+      "required": ["display_name", "confidence", "evidence"],
+      "properties": {
+        "display_name": {"type": "string", "minLength": 1},
+        "make": {"type": ["string", "null"]},
+        "model": {"type": ["string", "null"]},
+        "year": {"type": ["integer", "null"]},
+        "variant": {"type": ["string", "null"]},
+        "confidence": {"enum": ["confirmed", "probable", "unresolved"]},
+        "evidence": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["library", "archive_family", "game_or_package", "version", "root_refs", "hashes"],
+      "properties": {
+        "library": {"enum": ["beta1", "beta2", "owner_reference", "other_authorized"]},
+        "archive_family": {"type": "string", "minLength": 1},
+        "game_or_package": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "root_refs": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "hashes": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "required": [
+        "exterior_geometry", "interior_geometry", "lods", "wheels", "tyres", "brakes",
+        "glass", "lights", "trim", "collision", "rig", "materials", "textures",
+        "customization", "tuning", "audio", "source_config"
+      ],
+      "additionalProperties": {"$ref": "#/$defs/dependencyCategory"}
+    },
+    "neutral_master": {
+      "type": "object",
+      "properties": {
+        "geometry": {"type": "array", "items": {"type": "string"}},
+        "textures": {"type": "array", "items": {"type": "string"}},
+        "audio": {"type": "array", "items": {"type": "string"}},
+        "data": {"type": "array", "items": {"type": "string"}},
+        "report": {"type": ["string", "null"]}
+      }
+    },
+    "godot": {
+      "type": "object",
+      "properties": {
+        "scene": {"type": ["string", "null"]},
+        "inspection_scene": {"type": ["string", "null"]},
+        "runtime_lods": {"type": "array", "items": {"type": "string"}},
+        "hooks": {"type": "object"},
+        "config_resource": {"type": ["string", "null"]}
+      }
+    },
+    "validation": {
+      "type": "object",
+      "required": ["structural", "visual", "driving", "customization", "android", "owner_device"],
+      "properties": {
+        "structural": {"$ref": "#/$defs/gate"},
+        "visual": {"$ref": "#/$defs/gate"},
+        "driving": {"$ref": "#/$defs/gate"},
+        "customization": {"$ref": "#/$defs/gate"},
+        "android": {"$ref": "#/$defs/gate"},
+        "owner_device": {"$ref": "#/$defs/gate"}
+      }
+    },
+    "self_critique": {
+      "type": "object",
+      "required": ["proved", "inferred", "unresolved", "likely_owner_visible_failures"],
+      "properties": {
+        "proved": {"type": "array", "items": {"type": "string"}},
+        "inferred": {"type": "array", "items": {"type": "string"}},
+        "unresolved": {"type": "array", "items": {"type": "string"}},
+        "likely_owner_visible_failures": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  },
+  "$defs": {
+    "dependencyCategory": {
+      "type": "object",
+      "required": ["state", "items", "evidence"],
+      "properties": {
+        "state": {"enum": ["recovered", "source_absent", "not_applicable", "unresolved"]},
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["source_ref"],
+            "properties": {
+              "source_ref": {"type": "string", "minLength": 1},
+              "sha256": {"type": ["string", "null"]},
+              "role": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "evidence": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "gate": {
+      "type": "object",
+      "required": ["state", "evidence"],
+      "properties": {
+        "state": {"enum": ["pass", "fail", "not_run", "not_applicable"]},
+        "evidence": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}
