@@ -11,6 +11,7 @@ uniform bool has_surface_hd_gravel = false;
 uniform float weather_wetness : hint_range(0.0, 1.0) = 0.0;
 uniform float visibility_distance = 2600.0;
 varying float camera_distance;
+varying float road_up_alignment;
 
 float hash21(vec2 p) {
     p = fract(p * vec2(123.34, 456.21));
@@ -20,6 +21,7 @@ float hash21(vec2 p) {
 
 void vertex() {
     camera_distance = length((MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz);
+    road_up_alignment = clamp(abs(NORMAL.y), 0.0, 1.0);
     Z_CLIP_SCALE = 0.99997;
 }
 
@@ -39,12 +41,14 @@ void fragment() {
     float patch = mix(hash21(floor(UV * vec2(0.18, 0.65))), 0.5, patch_filter);
     float broad_filter = smoothstep(0.6, 1.2, max(footprint.x * 0.055, footprint.y * 0.20));
     float broad = mix(hash21(floor(UV * vec2(0.055, 0.20))), 0.5, broad_filter);
+    float aggregate_micro = 0.5;
 
     vec3 base = unpaved ? vec3(0.34, 0.275, 0.18) : vec3(0.225, 0.232, 0.236);
     base *= 0.92 + grain * 0.08 + patch * 0.055 + broad * 0.045;
     if (unpaved && has_surface_hd_gravel) {
         vec3 gravel = texture(surface_hd_gravel, UV / 3.25).rgb;
         float gravel_luma = dot(gravel, vec3(0.2126, 0.7152, 0.0722));
+        aggregate_micro = gravel_luma;
         base = mix(vec3(gravel_luma), gravel, 0.82) * (0.92 + patch * 0.12 + broad * 0.08);
     } else if (has_reference_albedo) {
         vec3 reference_color = texture(reference_albedo, UV / 8.0).rgb;
@@ -54,8 +58,8 @@ void fragment() {
             unpaved ? vec3(0.075) : vec3(0.115),
             unpaved ? vec3(0.46) : vec3(0.43));
         if (has_reference_detail) {
-            float aggregate = dot(texture(reference_detail, UV / 2.0).rgb, vec3(0.2126, 0.7152, 0.0722));
-            base *= clamp(0.86 + aggregate * 1.55, 0.88, 1.24);
+            aggregate_micro = dot(texture(reference_detail, UV / 2.0).rgb, vec3(0.2126, 0.7152, 0.0722));
+            base *= clamp(0.86 + aggregate_micro * 1.55, 0.88, 1.24);
         }
         base *= 0.965 + patch * 0.045 + broad * 0.035;
     }
@@ -98,12 +102,22 @@ void fragment() {
     }
 
     float wetness = clamp(weather_wetness, 0.0, 1.0);
+    float puddle_flatness = smoothstep(0.965, 0.998, road_up_alignment);
+    float pooled_water = unpaved ? 0.0 : smoothstep(0.54, 0.88, wetness) * puddle_flatness;
+    float puddle_mask = smoothstep(0.58, 0.86, patch) * pooled_water;
     vec3 final_color = mix(base, vec3(0.82, 0.815, 0.76), line * (0.80 + grain * 0.13));
     final_color *= mix(1.0, unpaved ? 0.72 : 0.62, wetness);
+    final_color *= mix(1.0, 0.94, puddle_mask * 0.45);
     ALBEDO = final_color;
-    float paved_roughness = mix(0.87, 0.95, max(shoulder, junction_zone * 0.35));
+
+    float micro_roughness = mix(grain, aggregate_micro, has_reference_detail ? 0.74 : 0.0);
+    float dry_road_roughness = mix(0.82, 0.94, clamp(micro_roughness, 0.0, 1.0));
+    float paved_roughness = mix(dry_road_roughness, 0.95, max(shoulder, junction_zone * 0.35));
     float dry_roughness = unpaved ? 0.98 : paved_roughness;
     ROUGHNESS = mix(dry_roughness, unpaved ? 0.56 : 0.25, wetness);
-    SPECULAR = mix(unpaved ? 0.12 : 0.18, unpaved ? 0.28 : 0.62, wetness);
+    ROUGHNESS = mix(ROUGHNESS, 0.10, puddle_mask * 0.84);
+    float dry_specular = unpaved ? 0.12 : mix(0.20, 0.28, clamp(micro_roughness, 0.0, 1.0));
+    SPECULAR = mix(dry_specular, unpaved ? 0.28 : 0.62, wetness);
+    SPECULAR = mix(SPECULAR, 0.82, puddle_mask * 0.72);
     METALLIC = 0.0;
 }
