@@ -3,9 +3,37 @@ class_name YardmanFleetVehicleModel
 
 const References = preload("res://scripts/reference_assets.gd")
 
+const SOURCE_SEMANTIC_NODE_NAMES := {
+    "engine": "Engine",
+    "exhaust": "Exhaust",
+    "pop_exhaust": "PopExhaust",
+    "driver_root": "DriverRoot",
+    "driver_assist": "DriverAssPoint",
+    "under_roof": "UnderRoofPoint",
+    "camera_front": "FrontCameraPoint",
+    "camera_rear": "RearCameraPoint",
+    "camera_follow": "FollowCameraPoint",
+    "camera_hood": "HoodCameraPoint",
+    "camera_side": "SideCameraPoint",
+    "camera_wheel": "WheelCameraPoint",
+    "camera_bumper": "BumperCameraPoint",
+    "body_high": "BodyH",
+    "body_low": "BodyL",
+    "interior_high": "HD_interior",
+    "interior_low": "LD_interior",
+    "steering_high": "HD_steering_wheel",
+    "steering_low": "LD_steering_wheel",
+    "glass": "Glass",
+    "stoplight": "ToyotaSupraRZ - Stoplights",
+    "collision_root": "Colliders",
+    "obstacle": "Obstacle",
+    "wheel_particles": "WheelsParticles",
+}
+
 var shell: Node3D
 var front_pivots: Array[Node3D] = []
 var wheels: Array[Node3D] = []
+var source_semantics: Dictionary = {}
 var is_reference_model := false
 var wheelbase_m := 2.60
 var wheel_radius_m := 0.34
@@ -13,6 +41,8 @@ var geometry_bounds := AABB(Vector3(-0.925, 0.0, -2.2), Vector3(1.85, 1.35, 4.4)
 var _wheel_rotation := 0.0
 var _shell_rest_position := Vector3.ZERO
 var _shell_rest_rotation := Vector3.ZERO
+var _wheel_rest_rotations: Dictionary = {}
+var _front_rest_rotations: Dictionary = {}
 
 func build(hero_scene_filename: String) -> void:
     if hero_scene_filename.is_empty():
@@ -47,10 +77,11 @@ func build(hero_scene_filename: String) -> void:
     _shell_rest_position = shell.position
     _shell_rest_rotation = shell.rotation
     _bind_wheels(imported)
+    _bind_source_semantics(imported)
     is_reference_model = true
     set_meta("yardman_dedicated_vehicle_mesh", true)
     set_meta("yardman_requested_hero_scene", hero_scene_filename)
-    print("YARDMAN_FLEET_VEHICLE asset=%s bounds_m=%s wheelbase_m=%.3f wheels=%d" % [hero_scene_filename, geometry_bounds.size, wheelbase_m, wheels.size()])
+    print("YARDMAN_FLEET_VEHICLE asset=%s bounds_m=%s wheelbase_m=%.3f wheels=%d source_semantics=%d" % [hero_scene_filename, geometry_bounds.size, wheelbase_m, wheels.size(), source_semantics.size()])
 
 func _load_exact_private_scene(filename: String) -> PackedScene:
     if filename.is_empty() or filename.contains("/") or filename.contains("\\") or filename.contains(".."):
@@ -133,27 +164,80 @@ func _load_runtime_gltf(path: String) -> PackedScene:
     return packed
 
 func _bind_wheels(imported: Node3D) -> void:
-    var pivots: Array[Node3D] = []
-    var spins: Array[Node3D] = []
-    for wheel_name in ["FrontWheelLeft", "FrontWheelRight", "RearWheelLeft", "RearWheelRight"]:
-        var pivot := imported.find_child(wheel_name, true, false) as Node3D
-        var spin := imported.find_child(wheel_name + "Spin", true, false) as Node3D
-        if pivot == null or spin == null:
-            pivots.clear()
-            spins.clear()
-            break
-        pivots.append(pivot)
-        spins.append(spin)
-    if pivots.size() != 4:
+    front_pivots.clear()
+    wheels.clear()
+    _wheel_rest_rotations.clear()
+    _front_rest_rotations.clear()
+
+    var conventions := [
+        {
+            "name": "yardman_generated",
+            "pivots": ["FrontWheelLeft", "FrontWheelRight", "RearWheelLeft", "RearWheelRight"],
+            "spins": ["FrontWheelLeftSpin", "FrontWheelRightSpin", "RearWheelLeftSpin", "RearWheelRightSpin"],
+        },
+        {
+            # Source-complete CarX vehicle scenes preserve these original roots.
+            # A source root carries both steering and spin until a deeper tyre/rim
+            # child is bound; rest rotations are preserved so no source pose is
+            # destroyed by the adapter.
+            "name": "carx_source",
+            "pivots": ["WheelFL", "WheelFR", "WheelRL", "WheelRR"],
+            "spins": ["WheelFL", "WheelFR", "WheelRL", "WheelRR"],
+        },
+    ]
+
+    for convention in conventions:
+        var pivots: Array[Node3D] = []
+        var spins: Array[Node3D] = []
+        var pivot_names: Array = convention["pivots"]
+        var spin_names: Array = convention["spins"]
+        var complete := true
+        for index in range(4):
+            var pivot := imported.find_child(str(pivot_names[index]), true, false) as Node3D
+            var spin := imported.find_child(str(spin_names[index]), true, false) as Node3D
+            if pivot == null or spin == null:
+                complete = false
+                break
+            pivots.append(pivot)
+            spins.append(spin)
+        if not complete:
+            continue
+
+        front_pivots.assign([pivots[0], pivots[1]])
+        wheels.assign(spins)
+        for pivot in front_pivots:
+            _front_rest_rotations[pivot.get_instance_id()] = pivot.rotation
+        for spin in wheels:
+            _wheel_rest_rotations[spin.get_instance_id()] = spin.rotation
+
+        var front_z := _relative_pose(pivots[0]).origin.z
+        var rear_z := _relative_pose(pivots[2]).origin.z
+        wheelbase_m = clampf(absf(front_z - rear_z), 1.8, 4.5)
+        var tyre_bounds := _measure_mesh_bounds(spins[0])
+        if tyre_bounds.size.length_squared() > 0.01:
+            wheel_radius_m = clampf(maxf(tyre_bounds.size.y, tyre_bounds.size.z) * 0.5, 0.20, 0.65)
+        set_meta("yardman_wheel_binding_convention", str(convention["name"]))
+        set_meta("yardman_wheel_binding_complete", true)
         return
-    front_pivots.assign([pivots[0], pivots[1]])
-    wheels.assign(spins)
-    var front_z := _relative_pose(pivots[0]).origin.z
-    var rear_z := _relative_pose(pivots[2]).origin.z
-    wheelbase_m = clampf(absf(front_z - rear_z), 1.8, 4.5)
-    var tyre_bounds := _measure_mesh_bounds(spins[0])
-    if tyre_bounds.size.length_squared() > 0.01:
-        wheel_radius_m = clampf(maxf(tyre_bounds.size.y, tyre_bounds.size.z) * 0.5, 0.20, 0.65)
+
+    set_meta("yardman_wheel_binding_convention", "unresolved")
+    set_meta("yardman_wheel_binding_complete", false)
+
+func _bind_source_semantics(imported: Node3D) -> void:
+    source_semantics.clear()
+    for role in SOURCE_SEMANTIC_NODE_NAMES:
+        var source_name := str(SOURCE_SEMANTIC_NODE_NAMES[role])
+        var node := imported.find_child(source_name, true, false) as Node3D
+        if node == null:
+            continue
+        source_semantics[str(role)] = get_path_to(node)
+    set_meta("yardman_source_semantics", source_semantics.duplicate())
+    set_meta("yardman_source_semantic_count", source_semantics.size())
+
+func semantic_node(role: String) -> Node3D:
+    if not source_semantics.has(role):
+        return null
+    return get_node_or_null(source_semantics[role]) as Node3D
 
 func update_motion(delta: float, speed: float, steering: float, braking: float, reversing: bool, running: bool, pitch: float, roll: float) -> void:
     if shell == null:
@@ -161,9 +245,15 @@ func update_motion(delta: float, speed: float, steering: float, braking: float, 
     if not wheels.is_empty():
         _wheel_rotation = fmod(_wheel_rotation - speed * delta / maxf(wheel_radius_m, 0.20), TAU)
         for wheel in wheels:
-            wheel.rotation.x = _wheel_rotation
+            var rest: Vector3 = _wheel_rest_rotations.get(wheel.get_instance_id(), wheel.rotation)
+            var rotation := wheel.rotation
+            rotation.x = rest.x + _wheel_rotation
+            wheel.rotation = rotation
         for pivot in front_pivots:
-            pivot.rotation.y = steering
+            var rest: Vector3 = _front_rest_rotations.get(pivot.get_instance_id(), pivot.rotation)
+            var rotation := pivot.rotation
+            rotation.y = rest.y + steering
+            pivot.rotation = rotation
     var response := 1.0 - exp(-delta * 8.0)
     shell.rotation.x = lerpf(shell.rotation.x, _shell_rest_rotation.x + pitch, response)
     shell.rotation.z = lerpf(shell.rotation.z, _shell_rest_rotation.z + roll, response)
