@@ -1,0 +1,87 @@
+{
+  "format_version": 1,
+  "vehicle_id": "toyota_supra_rz",
+  "source": {
+    "library": "beta1",
+    "game": "CarX Drift Racing 1.16.2",
+    "car_id": 10,
+    "source_alias": "Wanderer L30",
+    "source_identifier": "supraRZ",
+    "source_unit": "349f6721d1e3c41e283e05e02338cf6f",
+    "verified_obb_sha256": "e7fbb1ad41464a8df96d041dd9a23780d3fc26cb266e8feb3ab0b106cf6201b3"
+  },
+  "private_checkpoint": {
+    "library_path": "/Projects/Jamaica Game/Codex Handoff/Private Beta Repairs/Yardman-Toyota-SupraRZ-Source-Closure-001.zip",
+    "sha256": "9740092039bc2752c644ab57db2e7841e39ca0972a21a6769b107e0199eb8ec3"
+  },
+  "customization": {
+    "enabled_in_source": true,
+    "default_ids": {
+      "paint": 91,
+      "glass": 91,
+      "smoke": 91,
+      "wheel_cap": 74,
+      "wheel_tire": 10,
+      "rim_color": 201,
+      "spoke_color": 201
+    },
+    "paint": {"count": 13, "ids": [91,92,93,94,95,96,97,98,99,100,201,221,241]},
+    "glass": {"count": 13, "ids": [91,92,93,94,95,96,97,98,99,100,201,221,241]},
+    "smoke": {"count": 13, "ids": [91,92,93,94,95,96,97,98,99,100,201,221,241]},
+    "rim_colors": {"count": 16, "ids": [201,202,203,204,205,206,207,208,209,210,301,320,339,371,391,411]},
+    "spoke_colors": {"count": 16, "ids": [201,202,203,204,205,206,207,208,209,210,301,320,339,371,391,411]},
+    "tires": [
+      {"id":10,"name":"Tire1","friction_multiplier":1.0,"durability":5000,"left":"Tires/tire_1L","right":"Tires/tire_1R","default_locked":false},
+      {"id":58,"name":"Tire2","friction_multiplier":1.05,"durability":40000,"left":"Tires/Custom/tire_1L","right":"Tires/Custom/tire_1R","default_locked":true},
+      {"id":106,"name":"Tire5","friction_multiplier":1.10,"durability":40000,"left":"Tires/Custom/tire_4L","right":"Tires/Custom/tire_4R","default_locked":true},
+      {"id":154,"name":"Tire4","friction_multiplier":1.15,"durability":40000,"left":"Tires/Custom/tire_2L","right":"Tires/Custom/tire_2R","default_locked":true},
+      {"id":223,"name":"Tire5","friction_multiplier":1.20,"durability":40000,"left":"Tires/Custom/tire_5L","right":"Tires/Custom/tire_5R","default_locked":true}
+    ],
+    "wheel_cap_count": 46,
+    "stock_wheel_cap": {"id":74,"wheel_id":74,"name":"Stock","prefab":"Prefabs/Rims/Stock/ToyotaSupraRZ"},
+    "body_kits_or_livery_profiles": {
+      "source_evidence_found": false,
+      "note": "The same inventory explicitly contains Custom* and Livery* TextAssets for other cars. No ToyotaSupraRZCustom* or ToyotaSupraRZLivery* TextAsset was found. Do not invent a Supra body-kit/livery family without new source evidence."
+    }
+  },
+  "profiles": [
+    {"id":37,"name":"Stock","asset":"ToyotaSupraRZStock","identifier":"stock","cost":{"amount":0,"premium":false},"default_locked":false,"tunable_controller_count":0},
+    {"id":38,"name":"Turbo","asset":"ToyotaSupraRZTurbo","identifier":"gtturbo","cost":{"amount":230000,"premium":false},"default_locked":true,"tunable_controller_count":0},
+    {"id":39,"name":"Racing","asset":"ToyotaSupraRZRacing","identifier":"arcade","cost":{"amount":480000,"premium":false},"default_locked":true,"tunable_controller_count":23},
+    {"id":40,"name":"Drift","asset":"ToyotaSupraRZDrift","identifier":"drift","cost":{"amount":480000,"premium":false},"default_locked":true,"tunable_controller_count":23},
+    {"id":126,"name":"Ultimate","asset":"ToyotaSupraRZUltimate","identifier":"ultimate","cost":{"amount":0,"premium":true},"default_locked":true,"tunable_controller_count":30}
+  ],
+  "audio": {
+    "source_components": [
+      {"game_object":"Engine","component":"CARXEngineSound","references":["WandererL30~Idle","WandererL30~Onmid","EngineAS"]},
+      {"game_object":"Engine","component":"CARXTurboSound","references":["TurboAS","BlowoffAS","turbo","boff1"]},
+      {"game_object":"Engine","component":"CARXGearShiftingSound","references":["GearboxAS","gear 1"]},
+      {"game_object":"PopExhaust","component":"CarPopExhaust","references":["PopExhaustAS","pop"]},
+      {"game_object":"ToyotaSupraRZ","component":"CarTyreSound","references":["TyreAS"]},
+      {"game_object":"ToyotaSupraRZ","component":"CarCollideEffects","references":["CollideAS"]}
+    ],
+    "clips": {
+      "idle": {"asset_id":"8b6cf7d7cd28743c9a5ada0c817c9863","name":"WandererL30~Idle","sample_rate_hz":36393,"channels":1,"samples":70670,"duration_seconds":1.94185695,"wav_sha256":"d3733a9712604acc6ba5fdd871411ffb32b28a5adb26011cf6eb4472b1408bb5"},
+      "onmid": {"asset_id":"bf18e1f66788045288d26a6144bb0671","name":"WandererL30~Onmid","sample_rate_hz":37035,"channels":1,"samples":91511,"duration_seconds":2.47093290,"wav_sha256":"f56c7a2804ba4448eab74662705c86be2adf09a2a72b877e5122ffe24cbc51af"},
+      "turbo": {"asset_id":"b55e70effe4af7d41b253b44008bcf0d","name":"turbo","sample_rate_hz":26118,"channels":1,"samples":242568,"duration_seconds":9.28738801,"wav_sha256":"8fdba9259288e9dd18100f3b349353abf0e38b1321b1e85364eb941ac943481a"},
+      "blowoff": {"asset_id":"dbb81b801bf4f0e4d8c100f777bc2570","name":"boff1","sample_rate_hz":38320,"channels":1,"samples":42709,"duration_seconds":1.11453549,"wav_sha256":"c51ee35f082719dc8f8430bc0a598941c0cb8f61e48378377b5221b58378909d"},
+      "gear": {"asset_id":"f2e4e2da97d3d4819a51e54fab56a235","name":"gear 1","sample_rate_hz":39604,"channels":1,"samples":24182,"duration_seconds":0.61059489,"wav_sha256":"710c66bc8f0e68871ba91dcb9316a154fc9852d5bb13193abbc8c15c22fead50"},
+      "pop": {"asset_id":"246e7f93de4944327b0b171d4a1d981a","name":"pop","sample_rate_hz":44100,"channels":1,"samples":26459,"duration_seconds":0.59997732,"wav_sha256":"b809129244fedfedbdc7dda1eca8faba3413e10727e822d0ef29705260cedb4e"}
+    },
+    "source_encoding": "FSB5 codec 2 / PCM16",
+    "runtime_mix_complete": false
+  },
+  "closure": {
+    "catalog": true,
+    "five_source_profiles": true,
+    "customization_catalog": true,
+    "audio_clip_dependencies": true,
+    "all_69_source_nodes_classified": true,
+    "godot_source_hierarchy_scene": false,
+    "godot_material_shader_translation": false,
+    "godot_collision_mapping": false,
+    "godot_audio_behavior_mix": false,
+    "godot_customization_ui_and_application": false,
+    "runtime_ready": false
+  }
+}
