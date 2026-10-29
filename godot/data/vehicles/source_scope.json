@@ -1,0 +1,110 @@
+{
+  "format_version": 1,
+  "authority_date": "2026-10-29",
+  "scope": "all_recoverable_vehicles_from_beta1_and_beta2",
+  "policy": {
+    "representative_cohort_is_validation_only": true,
+    "single_vehicle_focus_forbidden_as_fleet_scope": true,
+    "mesh_only_import_is_not_vehicle_recovery": true,
+    "deduplicate_by_vehicle_identity_and_generation": true,
+    "prefer_richest_dependency_closure_across_sources": true,
+    "do_not_expose_until_runtime_ready": true,
+    "required_dependency_domains": [
+      "body_geometry",
+      "interior_geometry",
+      "wheels",
+      "tyres",
+      "brakes",
+      "glass",
+      "lights",
+      "materials",
+      "textures_uvs",
+      "lods",
+      "collision",
+      "camera_points",
+      "driver_seat",
+      "exit_point",
+      "exhaust_points",
+      "audio",
+      "dynamics",
+      "tuning",
+      "upgrades",
+      "customization",
+      "runtime_lifecycle"
+    ]
+  },
+  "beta1": {
+    "outer_entries": 42,
+    "streams": 40,
+    "volumes": 151,
+    "logical_bytes": 3793615057,
+    "sources": {
+      "carx_drift": {
+        "root_vehicle_candidates": 174,
+        "resolved_identities": 135,
+        "unresolved_identities": 39,
+        "status": "fleet_manifest_exists_dependency_closure_required"
+      },
+      "carx_highway": {
+        "vehicle_part_candidate_objects": 7246,
+        "status": "family_root_resolution_required"
+      },
+      "car_mechanic_21": {
+        "vehicle_part_candidate_objects": 1437,
+        "static_objects_total": 95834,
+        "status": "family_root_resolution_required"
+      },
+      "gangstar_4": {
+        "status": "vehicle_family_triage_required"
+      },
+      "gta_map_archive": {
+        "status": "world_source_rejected_vehicle_assets_not_yet_asserted"
+      }
+    }
+  },
+  "beta2": {
+    "outer_parts": 232,
+    "outer_entries": 488,
+    "logical_bytes": 12126506954,
+    "sources": {
+      "car_parking_multiplayer": {
+        "vehicle_bundles": 237,
+        "resolved_identities_in_legacy_manifest": 1,
+        "status": "catalog_identity_and_dependency_decode_required"
+      },
+      "real_racing_3": {
+        "validated_vehicle_families": 7,
+        "families": [
+          "2012_audi_r8_lms",
+          "2014_audi_r8spyder",
+          "2017_bmw_m4_dtm",
+          "2017_mercedes_c63_dtm",
+          "2018_audi_r8_gt4",
+          "2018_bmw_m4_gt4",
+          "2021_bmw_m4_gt3"
+        ],
+        "status": "exact_binary_recovery_and_godot_conversion_required"
+      },
+      "tropico": {
+        "status": "vehicle_family_inventory_required"
+      },
+      "simcity": {
+        "status": "vehicle_family_inventory_required"
+      },
+      "ucaptain": {
+        "status": "vehicle_family_inventory_required"
+      },
+      "ark": {
+        "status": "vehicle_family_inventory_required"
+      }
+    }
+  },
+  "execution_model": {
+    "lane_1": "inventory_and_identity_resolution_across_all_sources",
+    "lane_2": "dependency_graph_recovery_across_all_resolved_vehicles",
+    "lane_3": "neutral_source_max_vehicle_pack_generation",
+    "lane_4": "godot_runtime_integration_and_vehicle_specific_dynamics",
+    "lane_5": "automated_lifecycle_and_dependency_acceptance",
+    "lane_6": "visual_inspection_and_max_fidelity_promotion"
+  }
+}
