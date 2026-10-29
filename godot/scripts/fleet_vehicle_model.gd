@@ -176,11 +176,17 @@ func _bind_wheels(imported: Node3D) -> void:
             "spins": ["FrontWheelLeftSpin", "FrontWheelRightSpin", "RearWheelLeftSpin", "RearWheelRightSpin"],
         },
         {
-            # Source-complete CarX vehicle scenes preserve these original roots.
-            # A source root carries both steering and spin until a deeper tyre/rim
-            # child is bound; rest rotations are preserved so no source pose is
-            # destroyed by the adapter.
-            "name": "carx_source",
+            # Preferred source-complete contract. Original CarX steering roots
+            # remain intact while private scene reconstruction inserts dedicated
+            # spin helpers. Calipers can therefore steer without spinning.
+            "name": "carx_source_reanchored",
+            "pivots": ["WheelFL", "WheelFR", "WheelRL", "WheelRR"],
+            "spins": ["WheelFLSpin", "WheelFRSpin", "WheelRLSpin", "WheelRRSpin"],
+        },
+        {
+            # Transitional fallback for source scenes that preserve the original
+            # wheel roots but have not yet separated tyre/rim spin geometry.
+            "name": "carx_source_direct",
             "pivots": ["WheelFL", "WheelFR", "WheelRL", "WheelRR"],
             "spins": ["WheelFL", "WheelFR", "WheelRL", "WheelRR"],
         },
