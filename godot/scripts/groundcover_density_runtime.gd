@@ -18,7 +18,7 @@ func _densify_grass_cell(instance: MultiMeshInstance3D) -> bool:
         return false
     if not str(instance.name).to_lower().ends_with("_grass"):
         return false
-    if bool(instance.get_meta("groundcover_dense", false)):
+    if instance.get_meta("groundcover_dense", false) == true:
         return false
     var source := instance.multimesh
     var source_count := source.instance_count
