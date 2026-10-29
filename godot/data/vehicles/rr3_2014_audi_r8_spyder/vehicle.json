@@ -1,0 +1,57 @@
+{
+  "format_version": 1,
+  "vehicle_id": "rr3_2014_audi_r8_spyder",
+  "display_name": "2014 Audi R8 Spyder",
+  "status": "DISCOVERED",
+  "source": {
+    "library": "beta2",
+    "game_or_package": "com.ea.games.r3_row_xclipse",
+    "family": "2014_audi_r8spyder",
+    "rr3_segment": 15,
+    "recovery_manifest": "Yardman-RR3-Queued-Recovery-004.json",
+    "recovered_file_count": 35,
+    "recovered_bytes": 7760742
+  },
+  "runtime": {
+    "ready": false,
+    "blocked_by": [
+      "wheel geometry and wheel assembly semantics unresolved",
+      "tyre/brake dependency closure unresolved",
+      "M3G material/shader binding conversion unresolved",
+      "collision and vehicle physics source data unresolved",
+      "performance/upgrade/tuning source data unresolved",
+      "vehicle-specific audio source relationship unresolved",
+      "customization/equipment rules unresolved"
+    ]
+  },
+  "visual": {
+    "primary_scene": "",
+    "inspection_scene": "",
+    "source_max_required": true
+  },
+  "hierarchy_descriptor": "",
+  "dynamics": {},
+  "customization": {
+    "state": "partial",
+    "livery_count_recovered": 7,
+    "wheel_variants": [],
+    "body_parts": []
+  },
+  "upgrades": {
+    "state": "unresolved",
+    "stages": []
+  },
+  "known_source_structure": {
+    "exterior_lods": ["a", "b", "c", "d", "e", "f", "g", "h"],
+    "shared_geometry": true,
+    "interior_lods": ["int_a", "int_b"],
+    "points_data": true,
+    "dashplanes_data": true,
+    "animation_data": true,
+    "wing_animation": true,
+    "wheel_texture": true,
+    "wheel_blur_texture": true,
+    "lights_texture": true,
+    "livery_count": 7
+  }
+}
