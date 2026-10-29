@@ -12,13 +12,15 @@
     "source_display_name": "Wanderer L30",
     "source_identifier": "supraRZ",
     "source_closure": "res://data/vehicles/toyota_supra_rz/source_closure.json",
-    "private_checkpoint": "/Projects/Jamaica Game/Codex Handoff/Private Beta Repairs/Yardman-Toyota-SupraRZ-Source-Closure-001.zip",
-    "private_checkpoint_sha256": "9740092039bc2752c644ab57db2e7841e39ca0972a21a6769b107e0199eb8ec3"
+    "private_checkpoint": "/Projects/Jamaica Game/Codex Handoff/Private Beta Repairs/Yardman-Toyota-SupraRZ-Source-Closure-002.zip",
+    "private_checkpoint_sha256": "d4a6a67d3beddcce7f1a17766bef4b176f9b848a2835e0be6419b754d170c461",
+    "private_runtime_hierarchy": "runtime/source_hierarchy_runtime.json",
+    "private_runtime_hierarchy_sha256": "ad57841324424c114da893fdb9d614fd16e21aaab4149b6a860541ac7e7f85b9"
   },
   "runtime": {
     "ready": false,
     "blocked_by": [
-      "build source-hierarchy Godot scene instead of flattened hero GLB",
+      "attach recovered render meshes to the exact 69-node source hierarchy",
       "translate and verify source materials/shaders/textures",
       "map source collision hierarchy into Yardman physics",
       "map exact source dynamics profiles into validated Yardman handling",
@@ -33,6 +35,8 @@
     "source_max_required": true,
     "legacy_glb_is_authoritative": false,
     "source_gameobjects": 69,
+    "source_runtime_hierarchy_recovered": true,
+    "source_runtime_hierarchy_nodes": 69,
     "old_flattened_glb_exact_name_survivors": 13
   },
   "hierarchy_descriptor": "res://data/vehicles/toyota_supra_rz/source_hierarchy.json",
