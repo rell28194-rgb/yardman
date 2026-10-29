@@ -2,15 +2,28 @@ extends RefCounted
 class_name YardmanVehicleDefinition
 
 const ROOT := "res://data/vehicles"
+const INDEX_PATH := "res://data/vehicles/index.json"
 const FORMAT_VERSION := 1
 const RUNTIME_READY_STATUSES := ["GAME-READY", "HIGH-FIDELITY", "ACCEPTED"]
 
 static var _cache: Dictionary = {}
+static var _registry_cache: Array[String] = []
+static var _registry_loaded := false
 
 static func definition_path(vehicle_id: String) -> String:
     if not _safe_id(vehicle_id):
         return ""
     return "%s/%s/vehicle.json" % [ROOT, vehicle_id]
+
+static func registry_ids(runtime_ready_only := false) -> Array[String]:
+    _ensure_registry()
+    if not runtime_ready_only:
+        return _registry_cache.duplicate()
+    var ready: Array[String] = []
+    for vehicle_id in _registry_cache:
+        if runtime_ready(vehicle_id):
+            ready.append(vehicle_id)
+    return ready
 
 static func hierarchy_path(vehicle_id: String) -> String:
     var definition := load_definition(vehicle_id)
@@ -112,6 +125,30 @@ static func source_summary(vehicle_id: String) -> Dictionary:
 
 static func clear_cache() -> void:
     _cache.clear()
+    _registry_cache.clear()
+    _registry_loaded = false
+
+static func _ensure_registry() -> void:
+    if _registry_loaded:
+        return
+    _registry_loaded = true
+    _registry_cache.clear()
+    if not FileAccess.file_exists(INDEX_PATH):
+        return
+    var payload = JSON.parse_string(FileAccess.get_file_as_string(INDEX_PATH))
+    if not payload is Dictionary or int((payload as Dictionary).get("format_version", 0)) != FORMAT_VERSION:
+        push_warning("Yardman vehicle registry is invalid: %s" % INDEX_PATH)
+        return
+    for raw_id in (payload as Dictionary).get("vehicle_ids", []):
+        var vehicle_id := str(raw_id)
+        if not _safe_id(vehicle_id) or _registry_cache.has(vehicle_id):
+            continue
+        # An index entry without a valid definition is not allowed to enter the runtime registry.
+        if load_definition(vehicle_id).is_empty():
+            push_warning("Yardman vehicle registry points at an invalid definition: %s" % vehicle_id)
+            continue
+        _registry_cache.append(vehicle_id)
+    _registry_cache.sort()
 
 static func _safe_id(vehicle_id: String) -> bool:
     if vehicle_id.is_empty() or vehicle_id.length() > 96:
