@@ -10,6 +10,7 @@ on:
       - 'godot/scripts/vehicle_catalog.gd'
       - 'godot/data/vehicles/**'
       - 'godot/tests/source_vehicle_hierarchy_test.gd'
+      - 'Tools/vehicles/**'
       - '.github/workflows/source-vehicle-contract.yml'
   workflow_dispatch:
 
@@ -55,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 180 godot --headless --path godot --script tests/source_vehicle_hierarchy_test.gd 2>&1 | tee godot/build/source-vehicle-hierarchy.log
-          grep -q 'YARDMAN_SOURCE_VEHICLE_HIERARCHY_PASS source=carx_source legacy=yardman_generated semantics=1 rest_pose=1' godot/build/source-vehicle-hierarchy.log
+          grep -q 'YARDMAN_SOURCE_VEHICLE_HIERARCHY_PASS source=carx_source_reanchored fallback=carx_source_direct legacy=yardman_generated semantics=1 rest_pose=1' godot/build/source-vehicle-hierarchy.log
 
       - name: Upload contract evidence
         if: always()
