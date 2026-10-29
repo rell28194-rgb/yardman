@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "updated_utc": "2026-10-29T03:40:00Z",
+  "updated_utc": "2026-10-29T04:20:00Z",
   "authority": "owner_google_drive_beta1_beta2",
   "archives": {
     "beta1": {
@@ -29,8 +29,8 @@
       "source_record": "Yardman-Owner-Recovery-Private-Fleet-64-Closure.json"
     },
     "car_parking_multiplayer": {
-      "car_prefixed_bundles": 237,
-      "queued": 237,
+      "car_prefixed_bundles_old_manifest": 237,
+      "car_prefixed_bundles_newer_recovery": 239,
       "identity_resolved_in_old_manifest": 1,
       "classification": "requires_catalog_and_dependency_recovery",
       "source_record": "Yardman-Full-Fleet-Migration-Manifest-001.json"
@@ -38,7 +38,7 @@
     "carx_drift": {
       "root_vehicle_candidates": 174,
       "identity_resolved_from_source_names_in_old_manifest": 135,
-      "classification": "names_are_not_dependency_closure",
+      "classification": "legacy_names_are_not_dependency_closure",
       "source_record": "Yardman-Full-Fleet-Migration-Manifest-001.json"
     },
     "real_racing_3_old_manifest": {
@@ -47,6 +47,30 @@
       "old_status": "source_container_confirmed_car_inventory_pending",
       "classification": "superseded_in_part_by_later_family_recovery",
       "source_record": "Yardman-Full-Fleet-Migration-Manifest-001.json"
+    }
+  },
+  "source_grade_recovery": {
+    "carx_drift_1_16_2": {
+      "profile_family_count": 92,
+      "complete_stock_turbo_drift_racing_ultimate_families": 83,
+      "profile_families_matching_playercar_prefab": 87,
+      "customization_tables_verified": [
+        "PlayerCars",
+        "Profiles",
+        "CarProfileParameters",
+        "WheelTires",
+        "CarColors",
+        "GlassColors",
+        "SmokeColors",
+        "WheelCapDictionaryXML",
+        "WheelRimColorsDictionaryXML",
+        "WheelSpokeColorsDictionaryXML"
+      ],
+      "tools": [
+        "Tools/vehicle_pipeline/recover_carx_vehicle_profiles.py",
+        "Tools/vehicle_pipeline/recover_carx_customization.py"
+      ],
+      "classification": "source_catalog_and_profile_graph_recovered; geometry_dependency_closure_still_per_vehicle"
     }
   },
   "known_later_rr3_family_recovery": [
